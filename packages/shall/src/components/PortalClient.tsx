@@ -28,6 +28,25 @@ export default function PortalClient({ items }: { items: Item[] }) {
   const { recents, record } = useRecents();
   const health = useHealth();
 
+  // 用服务端注入的真实 ROOT_DOMAIN 重建子域名 url
+  // （客户端不能猜，否则 nip.io 等多级域名会出错）
+  const [rootDomain, setRootDomain] = useState<string | null>(null);
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const rd = (window as unknown as { __MEI_ROOT_DOMAIN__?: string }).__MEI_ROOT_DOMAIN__;
+      setRootDomain(rd || window.location.hostname);
+    }
+  }, []);
+
+  // 用动态根域重建每个应用的 url
+  const resolvedItems = useMemo(() => {
+    if (!rootDomain) return items;
+    return items.map((i) => ({
+      ...i,
+      url: `${window.location.protocol}//${i.plugin.subdomainPrefix || i.plugin.id}.${rootDomain}`,
+    }));
+  }, [items, rootDomain]);
+
   // 进入应用时记录最近使用
   function openApp(item: Item) {
     setActive({ plugin: item.plugin, url: item.url });
@@ -41,15 +60,15 @@ export default function PortalClient({ items }: { items: Item[] }) {
 
   // ----- 搜索过滤 -----
   const filtered = useMemo(() => {
-    if (!query.trim()) return items;
+    if (!query.trim()) return resolvedItems;
     const q = query.toLowerCase();
-    return items.filter(
+    return resolvedItems.filter(
       (i) =>
         i.plugin.name.toLowerCase().includes(q) ||
         i.plugin.id.includes(q) ||
         (i.plugin.description || '').toLowerCase().includes(q)
     );
-  }, [items, query]);
+  }, [resolvedItems, query]);
 
   const groups = useMemo(() => {
     return filtered.reduce<Record<string, Item[]>>((acc, i) => {
@@ -60,9 +79,9 @@ export default function PortalClient({ items }: { items: Item[] }) {
 
   const recentItems = useMemo(() => {
     return recents
-      .map((id) => items.find((i) => i.plugin.id === id))
+      .map((id) => resolvedItems.find((i) => i.plugin.id === id))
       .filter((x): x is Item => !!x);
-  }, [recents, items]);
+  }, [recents, resolvedItems]);
 
   // ----- 键盘快捷键 -----
   useEffect(() => {
@@ -103,10 +122,10 @@ export default function PortalClient({ items }: { items: Item[] }) {
           {/* 桌面侧栏 */}
           <div className="mei-only-desktop">
             <Sidebar
-              plugins={items.map((i) => i.plugin)}
+              plugins={resolvedItems.map((i) => i.plugin)}
               currentId={active.plugin.id}
               onPick={(p) => {
-                const found = items.find((i) => i.plugin.id === p.id);
+                const found = resolvedItems.find((i) => i.plugin.id === p.id);
                 if (found) openApp(found);
               }}
               onHome={goHome}
@@ -130,10 +149,10 @@ export default function PortalClient({ items }: { items: Item[] }) {
                 style={{ position: 'absolute', left: 0, top: 0, bottom: 0, zIndex: 41 }}
               >
                 <Sidebar
-                  plugins={items.map((i) => i.plugin)}
+                  plugins={resolvedItems.map((i) => i.plugin)}
                   currentId={active.plugin.id}
                   onPick={(p) => {
-                    const found = items.find((i) => i.plugin.id === p.id);
+                    const found = resolvedItems.find((i) => i.plugin.id === p.id);
                     if (found) {
                       openApp(found);
                       setSidebarOpen(false);

@@ -71,6 +71,9 @@ for (const dir of dirs) {
     category: manifest.category,
     weight: manifest.weight ?? 50,
     subdomainPrefix,
+    endpoint: manifest.endpoint,
+    healthPath: manifest.health?.path || '/',
+    healthExpect: manifest.health?.expect || 200,
     hasSkin: !!manifest.theme?.has_skin,
   });
 }

@@ -27,4 +27,5 @@ export interface ClientPlugin {
   category: Category;
   weight: number;
   url: string;
+  subdomainPrefix?: string; // 子域名前缀，客户端动态拼接 url 用
 }

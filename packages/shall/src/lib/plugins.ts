@@ -44,6 +44,9 @@ function loadManifests(): PluginManifest[] {
       category: Category;
       weight: number;
       subdomainPrefix: string;
+      endpoint: string;
+      healthPath?: string;
+      healthExpect?: number;
       hasSkin: boolean;
     }>;
     return raw.map((p) => ({
@@ -53,9 +56,10 @@ function loadManifests(): PluginManifest[] {
       icon: p.icon,
       category: p.category,
       weight: p.weight,
-      endpoint: '',
+      endpoint: p.endpoint,
       ingress: { mode: 'subdomain' as const, host: '' },
       subdomainPrefix: p.subdomainPrefix,
+      health: { path: p.healthPath || '/', expect: p.healthExpect || 200 },
       theme: { has_skin: p.hasSkin },
     }));
   }

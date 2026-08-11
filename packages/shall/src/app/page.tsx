@@ -26,6 +26,7 @@ export default function HomePage() {
         category: p.category,
         weight: p.weight,
         url,
+        subdomainPrefix: p.subdomainPrefix,
       },
     };
   });

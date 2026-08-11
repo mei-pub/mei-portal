@@ -6,7 +6,8 @@
 # 注意：不要 exec nginx，交给官方 entrypoint 统一启动
 
 : "${ROOT_DOMAIN:=allin.local}"
-: "${SHELL_ORIGIN:=http://shall:3000}"
+: "${SHELL_INTERNAL:=http://shall:3000}"
+: "${SHELL_ORIGIN:=http://${ROOT_DOMAIN}}"
 : "${USE_TLS:=false}"
 
 : "${SUBDOMAIN_PANEL:=panel}"
@@ -18,9 +19,9 @@
 : "${SUBDOMAIN_LINK:=link}"
 : "${SUBDOMAIN_NOVELS:=novels}"
 
-echo "[mei-allin] ROOT_DOMAIN=$ROOT_DOMAIN  SHELL_ORIGIN=$SHELL_ORIGIN  USE_TLS=$USE_TLS"
+echo "[mei-allin] ROOT_DOMAIN=$ROOT_DOMAIN  SHELL_ORIGIN=$SHELL_ORIGIN  SHELL_INTERNAL=$SHELL_INTERNAL  USE_TLS=$USE_TLS"
 
-# 0. 等待 Shell 就绪（避免网关先起来反代到未就绪的 Shell）
+# 0. 等待 Shell 就绪（用内部地址探测；避免网关先起来反代到未就绪的 Shell）
 #    仅在真正启动时执行；nginx -t / -T 等检测模式跳过（官方 entrypoint 不向脚本
 #    传 $@，故从 PID 1 的 cmdline 判断）。
 IS_TEST=0
@@ -28,9 +29,9 @@ CMDLINE=$(tr '\0' ' ' < /proc/1/cmdline 2>/dev/null || echo "")
 case "$CMDLINE" in
   *"-t "*|*" -t"|*" -T "*|*" -T"|*" --test"*) IS_TEST=1;;
 esac
-if [ "$IS_TEST" = "0" ] && [ -n "$SHELL_ORIGIN" ]; then
-  SHELL_HOST=$(echo "$SHELL_ORIGIN" | sed -E 's|^https?://||; s|[:/].*$||')
-  SHELL_PORT=$(echo "$SHELL_ORIGIN" | sed -E 's|^https?://||; s|^[^:/]+:||; s|/.*$||')
+if [ "$IS_TEST" = "0" ] && [ -n "$SHELL_INTERNAL" ]; then
+  SHELL_HOST=$(echo "$SHELL_INTERNAL" | sed -E 's|^https?://||; s|[:/].*$||')
+  SHELL_PORT=$(echo "$SHELL_INTERNAL" | sed -E 's|^https?://||; s|^[^:/]+:||; s|/.*$||')
   SHELL_PORT="${SHELL_PORT:-80}"
   echo "[mei-allin] 等待 Shell 就绪：$SHELL_HOST:$SHELL_PORT"
   for i in $(seq 1 60); do

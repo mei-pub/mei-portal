@@ -28,7 +28,11 @@ services:
       - ./certs:/etc/nginx/certs:ro
     environment:
       ROOT_DOMAIN: ${ROOT_DOMAIN:-allin.local}
-      SHELL_ORIGIN: http://shall:3000
+      # SHELL_INTERNAL: docker 内部地址，供网关就绪等待探测
+      SHELL_INTERNAL: http://shall:3000
+      # SHELL_ORIGIN: 浏览器可达的外部地址，用于注入 loader 的 src
+      # 根据 USE_TLS 选择 http/https，默认 http
+      SHELL_ORIGIN: ${SHELL_ORIGIN:-http://${ROOT_DOMAIN:-allin.local}}
       USE_TLS: ${USE_TLS:-false}
       SUBDOMAIN_PANEL: ${SUBDOMAIN_PANEL:-panel}
       SUBDOMAIN_DRAW: ${SUBDOMAIN_DRAW:-draw}
@@ -85,14 +89,14 @@ services:
 
   # ----------------------------------------------------------------- 影视门户 依赖
   kvrocks:
-    image: apache/kvrocks:2.9
+    image: apache/kvrocks:2.9.0
     container_name: mei-kvrocks
     restart: unless-stopped
     networks: [mei-net]
     expose: ["6666"]
     volumes:
       - kvrocks-data:/var/lib/kvrocks
-    command: ["kvrocks", "--dir", "/var/lib/kvrocks"]
+    # 使用镜像默认 entrypoint（已正确配置 conf/dir/bind）
 
   lunatv:
     image: ghcr.io/moontechlab/lunatv:latest

@@ -7,6 +7,9 @@
     "category": "media",
     "weight": 30,
     "subdomainPrefix": "tv",
+    "endpoint": "http://lunatv:3000",
+    "healthPath": "/",
+    "healthExpect": 200,
     "hasSkin": true
   },
   {
@@ -17,6 +20,9 @@
     "category": "media",
     "weight": 40,
     "subdomainPrefix": "music",
+    "endpoint": "http://solara:8787",
+    "healthPath": "/",
+    "healthExpect": 200,
     "hasSkin": true
   },
   {
@@ -27,6 +33,9 @@
     "category": "network",
     "weight": 70,
     "subdomainPrefix": "link",
+    "endpoint": "http://mei-link:17420",
+    "healthPath": "/healthz",
+    "healthExpect": 200,
     "hasSkin": true
   },
   {
@@ -37,6 +46,9 @@
     "category": "productivity",
     "weight": 5,
     "subdomainPrefix": "panel",
+    "endpoint": "http://sun-panel:3002",
+    "healthPath": "/",
+    "healthExpect": 200,
     "hasSkin": true
   },
   {
@@ -47,6 +59,9 @@
     "category": "productivity",
     "weight": 60,
     "subdomainPrefix": "novels",
+    "endpoint": "http://tutorial:3000",
+    "healthPath": "/",
+    "healthExpect": 200,
     "hasSkin": true
   },
   {
@@ -57,6 +72,9 @@
     "category": "utility",
     "weight": 10,
     "subdomainPrefix": "draw",
+    "endpoint": "http://ai-draw:3000",
+    "healthPath": "/",
+    "healthExpect": 200,
     "hasSkin": true
   },
   {
@@ -67,6 +85,9 @@
     "category": "utility",
     "weight": 20,
     "subdomainPrefix": "media",
+    "endpoint": "http://mediago:8899",
+    "healthPath": "/",
+    "healthExpect": 200,
     "hasSkin": true
   },
   {
@@ -77,6 +98,9 @@
     "category": "utility",
     "weight": 50,
     "subdomainPrefix": "tools",
+    "endpoint": "http://omni-tools:80",
+    "healthPath": "/",
+    "healthExpect": 200,
     "hasSkin": true
   }
 ]
