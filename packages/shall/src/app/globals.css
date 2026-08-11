@@ -47,3 +47,44 @@ a {
 ::-webkit-scrollbar-thumb:hover {
   background: var(--mei-primary-soft);
 }
+
+/* ===== 复用工具 class ===== */
+.mei-card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: var(--mei-space-4);
+}
+.mei-section-title {
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+  color: var(--mei-text-faint);
+  margin: 0 0 var(--mei-space-4);
+}
+.mei-empty {
+  text-align: center;
+  padding: var(--mei-space-8);
+  color: var(--mei-text-muted);
+}
+
+/* ===== 响应式：移动端/桌面端切换 ===== */
+/* 桌面端（>768px）：显示 .mei-only-desktop，隐藏 .mei-only-mobile */
+@media (min-width: 769px) {
+  .mei-only-mobile {
+    display: none !important;
+  }
+}
+/* 移动端（<=768px）：反之 */
+@media (max-width: 768px) {
+  .mei-only-desktop {
+    display: none !important;
+  }
+  .mei-card-grid {
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    gap: var(--mei-space-3);
+  }
+  .mei-app-card {
+    min-height: 112px !important;
+    padding: var(--mei-space-4) !important;
+  }
+}

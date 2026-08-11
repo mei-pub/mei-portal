@@ -1,21 +1,33 @@
 'use client';
-// 应用卡片 —— 门户网格单元
+// 应用卡片 —— 门户网格单元，含在线/离线徽标
 import type { ClientPlugin } from '@/lib/categories';
 import 'iconify-icon';
 
 export default function AppCard({
   plugin,
   url,
+  health,
   onClick,
 }: {
   plugin: ClientPlugin;
   url: string;
+  health?: { ok: boolean; ms: number; loading: boolean };
   onClick: () => void;
 }) {
+  const status = !health
+    ? null
+    : health.loading
+    ? { color: 'var(--mei-text-faint)', label: '检测中' }
+    : health.ok
+    ? { color: 'var(--mei-success)', label: '在线' }
+    : { color: 'var(--mei-danger)', label: '离线' };
+
   return (
     <button
       onClick={onClick}
+      className="mei-app-card"
       style={{
+        position: 'relative',
         display: 'flex',
         flexDirection: 'column',
         alignItems: 'flex-start',
@@ -44,6 +56,22 @@ export default function AppCard({
         e.currentTarget.style.boxShadow = 'var(--mei-shadow-sm)';
       }}
     >
+      {/* 健康徽标 */}
+      {status && (
+        <span
+          title={`${status.label}${health?.ms ? ` · ${health.ms}ms` : ''}`}
+          style={{
+            position: 'absolute',
+            top: 12,
+            right: 12,
+            width: 8,
+            height: 8,
+            borderRadius: '50%',
+            background: status.color,
+            boxShadow: `0 0 8px ${status.color}`,
+          }}
+        />
+      )}
       <div
         style={{
           width: 44,
@@ -55,7 +83,6 @@ export default function AppCard({
           justifyContent: 'center',
         }}
       >
-        {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
         <iconify-icon icon={plugin.icon} width="24" style={{ color: 'var(--mei-primary)' }} />
       </div>
       <div style={{ fontWeight: 600, fontSize: 16 }}>{plugin.name}</div>
