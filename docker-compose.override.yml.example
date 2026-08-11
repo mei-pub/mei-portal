@@ -1,0 +1,36 @@
+# =============================================================================
+# docker-compose 覆盖示例
+# 复制为 docker-compose.override.yml 后按需启用。docker compose 会自动合并。
+# 常见用途：暴露调试端口、挂载源码热改、临时禁用某服务。
+# =============================================================================
+
+# 示例 1：暴露各应用原始端口，便于直连调试（绕过网关）
+# services:
+#   lunatv:
+#     ports: ["3001:3000"]
+#   ai-draw:
+#     ports: ["3010:3000"]
+#   mediago:
+#     ports: ["8899:8899"]
+#   sun-panel:
+#     ports: ["3002:3002"]
+
+# 示例 2：开发时让 Shell 挂载本地源码 + 启用 dev（需 next dev）
+# services:
+#   shall:
+#     build:
+#       target: builder
+#     command: ["npm", "run", "dev"]
+#     volumes:
+#       - ./packages/shall:/app
+#       - /app/node_modules
+#       - /app/.next
+#     environment:
+#       NODE_ENV: development
+
+# 示例 3：为教程站挂载宿主字体目录
+# services:
+#   tutorial:
+#     volumes:
+#       - ${DATA_ROOT:-./data}/tutorial:/app/data
+#       - ./my-fonts:/app/data/fonts/files:ro

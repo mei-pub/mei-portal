@@ -9,13 +9,18 @@
 ## 标准部署
 
 ```bash
+git clone --recurse-submodules <repo-url> mei-allin
+cd mei-allin
 cp .env.example .env
 bash scripts/setup-ip.sh      # 自动检测 IP，写入 ROOT_DOMAIN (nip.io)
-npm run build                 # 校验清单 + 构建主题资产 + 生成 nginx 配置
+npm install && npm run build   # 校验清单 + 构建主题资产 + 生成 nginx 配置
 docker compose up -d
 ```
 
 访问 `http://<ROOT_DOMAIN>`（见 `.env`），用 `SHELL_PASSWORD` 登录。
+
+> 若 clone 时漏了 `--recurse-submodules`，补一步即可：
+> `git submodule update --init`
 
 ## 自定义域名（不用 nip.io）
 
@@ -37,6 +42,39 @@ bash scripts/setup-certs.sh   # 待补充：生成证书到 certs/
 然后在 `.env` 设 `USE_TLS=true`，compose 会挂载证书并启用 443。
 
 ## 常见问题
+
+### Q: tutorial / mei-link 容器构建失败或缺目录
+
+这两个应用是 git submodule，必须先初始化：
+
+```bash
+git submodule update --init
+ls packages/tutorial/Dockerfile            # 应存在
+ls packages/mei-link/client/docker/Dockerfile  # 应存在
+```
+
+构建：
+```bash
+docker compose build tutorial mei-link
+```
+
+### Q: HTTPS 访问报证书错误
+
+`setup-certs.sh` 用 mkcert 生成证书，根 CA 需被信任：
+
+```bash
+mkcert -install             # 在本机安装根 CA（一次性）
+bash scripts/setup-certs.sh # 重新生成证书
+docker compose restart gateway
+```
+
+手机/其他设备需导入 mkcert 的根 CA（路径：`mkcert -CAROOT` 输出的 `rootCA.pem`）。
+若不想用 HTTPS，设 `.env` 的 `USE_TLS=false` 并重启网关。
+
+### Q: 80 端口被占用 / 想换端口
+
+改 `docker-compose.yml` 的 gateway.ports，如 `"8080:80"`，然后 `http://<ROOT_DOMAIN>:8080`。
+注意子域名解析仍指向宿主机 IP，端口变化浏览器需显式带上。
 
 ### Q: 访问门户白屏 / 502
 

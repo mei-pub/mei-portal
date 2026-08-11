@@ -1,0 +1,6 @@
+[submodule "packages/tutorial"]
+	path = packages/tutorial
+	url = https://github.com/tomtrije/tutorial.git
+[submodule "packages/mei-link"]
+	path = packages/mei-link
+	url = https://github.com/tomtrije/mei-link.git

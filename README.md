@@ -20,15 +20,31 @@
 ## 快速开始
 
 ```bash
-# 1. 生成根域名（自动用 nip.io 免配置泛解析）
+# 1. 克隆（含 submodule —— tutorial / mei-link 从源码本地构建）
+git clone --recurse-submodules <repo-url> mei-allin
+cd mei-allin
+# 已克隆但缺 submodule？运行： git submodule update --init
+
+# 2. 生成根域名（自动用 nip.io 免配置泛解析）
 cp .env.example .env
 bash scripts/setup-ip.sh
 
-# 2. 启动
+# 3. 生成配置 + 主题资产
+npm install && npm run build
+
+# 4. 启动
 docker compose up -d
 
-# 3. 访问门户（域名见 .env 的 ROOT_DOMAIN）
+# 5. 访问门户（域名见 .env 的 ROOT_DOMAIN）
 #    http://<ROOT_DOMAIN>  默认密码见 .env 的 SHELL_PASSWORD
+```
+
+### HTTPS（可选）
+
+```bash
+brew install mkcert && mkcert -install   # 一次性；Linux 见 mkcert 官方文档
+bash scripts/setup-certs.sh              # 生成通配证书并设 USE_TLS=true
+docker compose up -d                      # 网关将同时监听 443 并把 80 跳转到 443
 ```
 
 ## 架构（四层抽象）
@@ -50,14 +66,21 @@ docker compose up -d
 
 ```
 mei-allin/
-├── packages/shall/        # Next.js 统一外壳（自研）
-├── plugins/               # 每应用一目录：manifest.yml + theme.css
-│   └── _schema/           # 清单 JSON Schema
-├── gateway/nginx/         # 网关配置
-├── scripts/               # setup-ip / build-theme / validate-manifests
+├── packages/
+│   ├── shall/            # Next.js 统一外壳（自研）
+│   ├── tutorial/         # git submodule —— 小说站，本地构建
+│   └── mei-link/         # git submodule —— 内网穿透，client/docker 本地构建
+├── plugins/              # 每应用一目录：manifest.yml + theme.css
+│   └── _schema/          # 清单 JSON Schema
+├── gateway/nginx/        # 网关配置（gen-nginx 自动生成 conf.d）
+├── scripts/              # setup-ip / setup-certs / build-theme / gen-nginx / validate
+├── docs/                 # 架构 / 排障 / 主题文档
 ├── docker-compose.yml
 └── .env.example
 ```
+
+> **关于镜像**：除 tutorial 与 mei-link 外，其余 6 个应用均使用官方公开镜像，无需认证。
+> tutorial（私有仓库）与 mei-link（私有仓库）通过 git submodule 从源码本地构建，零认证依赖。
 
 ## 扩展指南（加第 9 个应用）
 

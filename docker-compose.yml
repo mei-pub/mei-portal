@@ -22,9 +22,14 @@ services:
     networks: [mei-net]
     ports:
       - "80:80"
+      - "443:443"
+    volumes:
+      # HTTPS 证书（仅 USE_TLS=true 时由 entrypoint 加载；不存在则忽略）
+      - ./certs:/etc/nginx/certs:ro
     environment:
       ROOT_DOMAIN: ${ROOT_DOMAIN:-allin.local}
       SHELL_ORIGIN: http://shall:3000
+      USE_TLS: ${USE_TLS:-false}
       SUBDOMAIN_PANEL: ${SUBDOMAIN_PANEL:-panel}
       SUBDOMAIN_DRAW: ${SUBDOMAIN_DRAW:-draw}
       SUBDOMAIN_MEDIA: ${SUBDOMAIN_MEDIA:-media}
@@ -125,8 +130,12 @@ services:
     expose: ["80"]
 
   # ----------------------------------------------------------------- 内网穿透
+  # 本地构建（submodule packages/mei-link），无需 GHCR 认证
   mei-link:
-    image: ghcr.io/tomtrije/meilink-client:latest
+    build:
+      context: ./packages/mei-link/client/docker
+      dockerfile: Dockerfile
+    image: mei-allin/mei-link:local
     container_name: mei-link
     restart: unless-stopped
     networks: [mei-net]
@@ -139,8 +148,12 @@ services:
       MEILINK_WEB_PORT: "17420"
 
   # ----------------------------------------------------------------- 小说站（带纸牌伪装）
+  # 本地构建（submodule packages/tutorial），无需 GHCR 认证
   tutorial:
-    image: ghcr.io/tomtrije/tutorial:latest
+    build:
+      context: ./packages/tutorial
+      dockerfile: Dockerfile
+    image: mei-allin/tutorial:local
     container_name: mei-tutorial
     restart: unless-stopped
     networks: [mei-net]
