@@ -1,0 +1,41 @@
+/* ai-draw 协调 CSS — 由 scripts/build-theme.mjs 从 plugins/ai-draw/theme.css 生成 */
+/* ai-draw 协调 CSS
+ * 上游：React + Radix 自研组件 + Tailwind 4，CSS 变量体系
+ * 主色 logoColor 可在系统设置改，这里用 mei-tokens 覆盖深色背景与圆角。
+ */
+
+:root {
+  --background: var(--mei-bg);
+  --foreground: var(--mei-text);
+  --card: var(--mei-surface);
+  --primary: var(--mei-primary);
+  --border: var(--mei-border);
+  --radius: var(--mei-radius-sm);
+}
+
+body, [class*='app'], [class*='App'] {
+  background: var(--mei-bg) !important;
+  color: var(--mei-text) !important;
+}
+
+/* 侧栏玻璃化 */
+[class*='sidebar'], [class*='Sidebar'], aside {
+  background: var(--mei-surface) !important;
+  backdrop-filter: var(--mei-blur) !important;
+  -webkit-backdrop-filter: var(--mei-blur) !important;
+  border-right: 1px solid var(--mei-border) !important;
+}
+
+/* 顶栏 */
+[class*='header'], [class*='Header'], header {
+  background: var(--mei-surface) !important;
+  backdrop-filter: var(--mei-blur) !important;
+  -webkit-backdrop-filter: var(--mei-blur) !important;
+  border-bottom: 1px solid var(--mei-border) !important;
+}
+
+/* 按钮主色统一为渐变 */
+button[class*='primary'], [class*='btn-primary'] {
+  background: var(--mei-gradient) !important;
+  border: none !important;
+}

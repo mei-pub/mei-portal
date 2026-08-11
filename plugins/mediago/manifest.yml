@@ -1,0 +1,24 @@
+id: mediago
+name: 流媒体下载
+description: m3u8/视频流下载工具
+icon: lucide:download
+category: utility
+weight: 20
+endpoint: http://mediago:8899
+ingress:
+  mode: subdomain
+  host: ${SUBDOMAIN_MEDIA}.${ROOT_DOMAIN}
+auth:
+  strategy: independent
+embed:
+  iframe: true
+  strip_headers: [X-Frame-Options, Content-Security-Policy]
+theme:
+  has_skin: true
+  entry: /__theme/mediago.css
+health:
+  path: /
+  expect: 200
+upgrade:
+  image: caorushizi/mediago:latest
+  repo: https://github.com/mediago-dev/mediago

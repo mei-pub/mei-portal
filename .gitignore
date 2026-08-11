@@ -1,0 +1,42 @@
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Next.js
+.next/
+out/
+build/
+dist/
+
+# Production
+*.log
+
+# Environment
+.env
+.env.local
+.env.*.local
+!.env.example
+
+# IDE
+.vscode/
+.idea/
+.DS_Store
+*.swp
+
+# Docker volumes (local data)
+data/
+volumes/
+
+# Generated theme assets —— 提交到 git（Docker 构建依赖）
+# 修改 plugins/*/theme.css 或 tokens.css 后运行 npm run build:theme 重新生成
+# packages/shall/public/__theme/ 下的文件需纳入版本控制
+
+# Certificates
+certs/
+*.pem
+*.crt
+*.key
+
+# Submodule build context (optional, may be git submodule)
+packages/tutorial/

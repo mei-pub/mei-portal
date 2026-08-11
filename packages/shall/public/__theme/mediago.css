@@ -1,0 +1,35 @@
+/* mediago 协调 CSS — 由 scripts/build-theme.mjs 从 plugins/mediago/theme.css 生成 */
+/* mediago 协调 CSS
+ * 上游：React + shadcn/ui（Radix + CVA + tailwind-merge）+ Tailwind
+ * shadcn 用 --background --foreground --primary --card --border 等 CSS 变量
+ * 直接覆盖即可让整套组件跟随 mei-tokens。
+ */
+
+:root {
+  --background: var(--mei-bg);
+  --foreground: var(--mei-text);
+  --card: var(--mei-surface);
+  --card-foreground: var(--mei-text);
+  --primary: var(--mei-primary);
+  --primary-foreground: #ffffff;
+  --secondary: var(--mei-bg-elevated);
+  --muted: var(--mei-bg-elevated);
+  --muted-foreground: var(--mei-text-muted);
+  --border: var(--mei-border);
+  --input: var(--mei-bg-elevated);
+  --ring: var(--mei-primary-soft);
+  --radius: var(--mei-radius-sm);
+}
+
+body {
+  background: var(--mei-bg) !important;
+  color: var(--mei-text) !important;
+}
+
+/* 侧栏玻璃化 */
+[class*='sidebar'], aside[class*='Sidebar'] {
+  background: var(--mei-surface) !important;
+  backdrop-filter: var(--mei-blur) !important;
+  -webkit-backdrop-filter: var(--mei-blur) !important;
+  border-right: 1px solid var(--mei-border) !important;
+}

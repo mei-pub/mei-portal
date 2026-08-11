@@ -1,0 +1,42 @@
+/* omni-tools 协调 CSS（部分协调）
+ * 上游：React + MUI + Emotion。MUI 用 Emotion inline 样式，CSS 覆盖力有限。
+ * 策略：通过 MUI 的 CSS 变量基底（--mui-*）+ 高优先级选择器做配色近似，
+ * 无法做到像素级统一，仅保证整体暗色调与主色接近。
+ */
+
+/* 强制暗色背景（MUI 默认可能为亮） */
+body, [class*='MuiCssBaseline'], [class*='MuiBox-root'] {
+  background-color: var(--mei-bg) !important;
+  color: var(--mei-text) !important;
+}
+
+/* 卡片 */
+.MuiPaper-root, .MuiCard-root {
+  background-color: var(--mei-surface) !important;
+  backdrop-filter: var(--mei-blur) !important;
+  -webkit-backdrop-filter: var(--mei-blur) !important;
+  border: 1px solid var(--mei-border) !important;
+  border-radius: var(--mei-radius) !important;
+}
+
+/* 主色按钮（需 !important 压过 Emotion inline） */
+.MuiButton-containedPrimary {
+  background-color: var(--mei-primary) !important;
+  background-image: var(--mei-gradient) !important;
+}
+.MuiButton-containedPrimary:hover {
+  filter: brightness(1.1) !important;
+}
+
+/* 顶栏 AppBar */
+.MuiAppBar-root {
+  background-color: var(--mei-surface) !important;
+  backdrop-filter: var(--mei-blur) !important;
+  -webkit-backdrop-filter: var(--mei-blur) !important;
+  border-bottom: 1px solid var(--mei-border) !important;
+}
+
+/* 链接/图标主色 */
+.MuiLink-root, .MuiIconButton-root {
+  color: var(--mei-primary-soft) !important;
+}

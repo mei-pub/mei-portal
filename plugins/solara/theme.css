@@ -1,0 +1,38 @@
+/* Solara 音乐播放器协调 CSS
+ * 上游：原生 HTML/CSS/JS（css/desktop.css, mobile.css, style.css）
+ * 动态背景由后端配色算法驱动（按专辑封面），本 CSS 仅统一控件与暗色基调，
+ * 不覆盖动态背景层（保留沉浸式效果）。
+ */
+
+body {
+  font-family: var(--mei-font) !important;
+}
+
+/* 控制条 / 列表面板玻璃化 */
+.controls, .playlist, [class*='panel'], .mobile-panel {
+  background: var(--mei-surface) !important;
+  backdrop-filter: var(--mei-blur) !important;
+  -webkit-backdrop-filter: var(--mei-blur) !important;
+  border: 1px solid var(--mei-border) !important;
+  border-radius: var(--mei-radius) !important;
+}
+
+/* 输入与下拉 */
+input, select, .searchArea input {
+  background: var(--mei-bg-elevated) !important;
+  border: 1px solid var(--mei-border) !important;
+  border-radius: var(--mei-radius-full) !important;
+  color: var(--mei-text) !important;
+}
+
+/* 播放/主要按钮 */
+button[class*='play'], .play-btn, [class*='primary'] {
+  background: var(--mei-gradient) !important;
+  color: #fff !important;
+  border: none !important;
+}
+
+/* 列表项 hover */
+.playlist li:hover, [class*='song']:hover {
+  background: var(--mei-surface-hover) !important;
+}

@@ -1,0 +1,164 @@
+# =============================================================================
+# mei-allin 主编排
+# 网关 + Shell + 8 个上游应用 + LunaTV 的依赖（kvrocks）
+# 所有 service 接入 mei-net 内部网络；仅网关对外暴露 80 端口。
+# =============================================================================
+name: mei-allin
+
+networks:
+  mei-net:
+    driver: bridge
+
+volumes:
+  kvrocks-data:
+  redis-data:
+
+services:
+  # ----------------------------------------------------------------- 网关
+  gateway:
+    build: ./gateway
+    container_name: mei-gateway
+    restart: unless-stopped
+    networks: [mei-net]
+    ports:
+      - "80:80"
+    environment:
+      ROOT_DOMAIN: ${ROOT_DOMAIN:-allin.local}
+      SHELL_ORIGIN: http://shall:3000
+      SUBDOMAIN_PANEL: ${SUBDOMAIN_PANEL:-panel}
+      SUBDOMAIN_DRAW: ${SUBDOMAIN_DRAW:-draw}
+      SUBDOMAIN_MEDIA: ${SUBDOMAIN_MEDIA:-media}
+      SUBDOMAIN_TV: ${SUBDOMAIN_TV:-tv}
+      SUBDOMAIN_MUSIC: ${SUBDOMAIN_MUSIC:-music}
+      SUBDOMAIN_TOOLS: ${SUBDOMAIN_TOOLS:-tools}
+      SUBDOMAIN_LINK: ${SUBDOMAIN_LINK:-link}
+      SUBDOMAIN_NOVELS: ${SUBDOMAIN_NOVELS:-novels}
+    depends_on:
+      - shall
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1/"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  # ----------------------------------------------------------------- Shell 门户
+  shall:
+    build: ./packages/shall
+    container_name: mei-shall
+    restart: unless-stopped
+    networks: [mei-net]
+    expose: ["3000"]
+    environment:
+      NODE_ENV: production
+      SHELL_ORIGIN: http://shall:3000
+      SHELL_PASSWORD: ${SHELL_PASSWORD:-mei-allin}
+      ROOT_DOMAIN: ${ROOT_DOMAIN:-allin.local}
+
+  # ----------------------------------------------------------------- AI 绘图
+  ai-draw:
+    image: ghcr.io/stone-yu/ai-draw:latest
+    container_name: mei-ai-draw
+    restart: unless-stopped
+    networks: [mei-net]
+    expose: ["3000"]
+    volumes:
+      - ${DATA_ROOT:-./data}/ai-draw:/app/data
+    environment:
+      PORT: "3000"
+      DATA_DIR: /app/data
+      DEBUG: "false"
+
+  # ----------------------------------------------------------------- 流媒体下载
+  mediago:
+    image: caorushizi/mediago:latest
+    container_name: mei-mediago
+    restart: unless-stopped
+    networks: [mei-net]
+    expose: ["8899"]
+    volumes:
+      - ${DATA_ROOT:-./data}/mediago:/app/mediago
+
+  # ----------------------------------------------------------------- 影视门户 依赖
+  kvrocks:
+    image: apache/kvrocks:2.9
+    container_name: mei-kvrocks
+    restart: unless-stopped
+    networks: [mei-net]
+    expose: ["6666"]
+    volumes:
+      - kvrocks-data:/var/lib/kvrocks
+    command: ["kvrocks", "--dir", "/var/lib/kvrocks"]
+
+  lunatv:
+    image: ghcr.io/moontechlab/lunatv:latest
+    container_name: mei-lunatv
+    restart: unless-stopped
+    networks: [mei-net]
+    expose: ["3000"]
+    depends_on: [kvrocks]
+    environment:
+      USERNAME: ${LUNATV_USERNAME:-admin}
+      PASSWORD: ${LUNATV_PASSWORD:-admin123}
+      NEXT_PUBLIC_STORAGE_TYPE: kvrocks
+      KVROCKS_URL: redis://kvrocks:6666
+      NEXT_PUBLIC_SITE_NAME: MeiTV
+
+  # ----------------------------------------------------------------- 音乐播放
+  solara:
+    image: ghcr.io/akudamatata/solara:latest
+    container_name: mei-solara
+    restart: unless-stopped
+    networks: [mei-net]
+    expose: ["8787"]
+    volumes:
+      - ${DATA_ROOT:-./data}/solara:/data
+    environment:
+      PASSWORD: ${SOLARA_PASSWORD:-}
+      PORT: "8787"
+
+  # ----------------------------------------------------------------- 工具箱
+  omni-tools:
+    image: iib0011/omni-tools:latest
+    container_name: mei-omni-tools
+    restart: unless-stopped
+    networks: [mei-net]
+    expose: ["80"]
+
+  # ----------------------------------------------------------------- 内网穿透
+  mei-link:
+    image: ghcr.io/tomtrije/meilink-client:latest
+    container_name: mei-link
+    restart: unless-stopped
+    networks: [mei-net]
+    expose: ["17420"]
+    volumes:
+      - ${DATA_ROOT:-./data}/mei-link:/data
+    environment:
+      MEILINK_ADMIN_USER: ${MEILINK_ADMIN_USER:-admin}
+      MEILINK_ADMIN_PASSWORD: ${MEILINK_ADMIN_PASSWORD:-meilink123}
+      MEILINK_WEB_PORT: "17420"
+
+  # ----------------------------------------------------------------- 小说站（带纸牌伪装）
+  tutorial:
+    image: ghcr.io/tomtrije/tutorial:latest
+    container_name: mei-tutorial
+    restart: unless-stopped
+    networks: [mei-net]
+    expose: ["3000"]
+    volumes:
+      - ${DATA_ROOT:-./data}/tutorial:/app/data
+    environment:
+      NODE_ENV: production
+      DATA_DIR: /app/data
+
+  # ----------------------------------------------------------------- 主页面板
+  sun-panel:
+    image: hslr/sun-panel:latest
+    container_name: mei-sun-panel
+    restart: unless-stopped
+    networks: [mei-net]
+    expose: ["3002"]
+    volumes:
+      - ${DATA_ROOT:-./data}/sun-panel/conf:/app/conf
+      - ${DATA_ROOT:-./data}/sun-panel/uploads:/app/uploads
+      - ${DATA_ROOT:-./data}/sun-panel/database:/app/database

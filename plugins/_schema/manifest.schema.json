@@ -1,0 +1,102 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://mei-allin.local/manifest.schema.json",
+  "title": "mei-allin 插件清单",
+  "description": "描述一个被整合的上游应用。Shell 构建期扫描 plugins/*/manifest.yml 聚合。",
+  "type": "object",
+  "required": ["id", "name", "icon", "category", "endpoint", "ingress"],
+  "additionalProperties": false,
+  "properties": {
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9-]{1,30}$",
+      "description": "唯一标识，用于 url/subdomain/theme 文件名"
+    },
+    "name": { "type": "string", "description": "展示名（中文）" },
+    "description": { "type": "string", "description": "一句话说明" },
+    "icon": {
+      "type": "string",
+      "description": "iconify 图标标识，如 lucide:tv 或 mdi:movie"
+    },
+    "category": {
+      "type": "string",
+      "enum": ["media", "utility", "network", "game", "productivity", "other"],
+      "description": "分组类别"
+    },
+    "weight": {
+      "type": "integer",
+      "default": 50,
+      "description": "同组内排序权重，越小越靠前"
+    },
+    "endpoint": {
+      "type": "string",
+      "description": "docker 内部地址 http://<service>:<port>，网关反代目标"
+    },
+    "ingress": {
+      "type": "object",
+      "required": ["mode"],
+      "properties": {
+        "mode": {
+          "type": "string",
+          "enum": ["subdomain", "external"],
+          "description": "subdomain=网关反代；external=外部地址不反代"
+        },
+        "host": {
+          "type": "string",
+          "description": "对外 host（mode=subdomain 时）。占位 ${PREFIX} 和 ${ROOT_DOMAIN}"
+        }
+      }
+    },
+    "auth": {
+      "type": "object",
+      "properties": {
+        "strategy": {
+          "type": "string",
+          "enum": ["independent", "token_inject", "sso"],
+          "default": "independent",
+          "description": "认证策略。independent=应用自带登录；token_inject=Shell 透传 token；sso=预留"
+        }
+      }
+    },
+    "embed": {
+      "type": "object",
+      "properties": {
+        "iframe": { "type": "boolean", "default": true },
+        "strip_headers": {
+          "type": "array",
+          "items": { "type": "string" },
+          "default": ["X-Frame-Options", "Content-Security-Policy"],
+          "description": "网关需剥离的响应头，便于 iframe 嵌入"
+        }
+      }
+    },
+    "theme": {
+      "type": "object",
+      "properties": {
+        "has_skin": {
+          "type": "boolean",
+          "default": false,
+          "description": "是否提供协调 CSS（plugins/<id>/theme.css）"
+        },
+        "entry": {
+          "type": "string",
+          "description": "协调 CSS 的加载路径，通常 /__theme/<id>.css"
+        }
+      }
+    },
+    "health": {
+      "type": "object",
+      "properties": {
+        "path": { "type": "string", "default": "/" },
+        "expect": { "type": "integer", "default": 200 }
+      }
+    },
+    "upgrade": {
+      "type": "object",
+      "properties": {
+        "image": { "type": "string", "description": "官方镜像全名，便于升级时检索" },
+        "repo": { "type": "string", "description": "上游仓库地址" }
+      }
+    }
+  }
+}

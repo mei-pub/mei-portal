@@ -1,0 +1,56 @@
+/* mei-link 协调 CSS — 由 scripts/build-theme.mjs 从 plugins/mei-link/theme.css 生成 */
+/* mei-link 内网穿透客户端协调 CSS
+ * 上游是原生 HTML/CSS/JS（client/docker/web/），无框架，最易覆盖。
+ * 目标：暗色玻璃化、控件统一圆角与主色。
+ */
+
+body {
+  background: var(--mei-bg) !important;
+  color: var(--mei-text) !important;
+  font-family: var(--mei-font) !important;
+}
+
+/* 顶部标题区玻璃化 */
+header, .header, [class*='header'] {
+  background: var(--mei-surface) !important;
+  backdrop-filter: var(--mei-blur) !important;
+  -webkit-backdrop-filter: var(--mei-blur) !important;
+  border-bottom: 1px solid var(--mei-border) !important;
+}
+
+/* 卡片/面板 */
+.card, .panel, [class*='card'], [class*='panel'] {
+  background: var(--mei-surface) !important;
+  border: 1px solid var(--mei-border) !important;
+  border-radius: var(--mei-radius) !important;
+  box-shadow: var(--mei-shadow-sm) !important;
+}
+
+/* 输入控件 */
+input, select, textarea {
+  background: var(--mei-bg-elevated) !important;
+  border: 1px solid var(--mei-border) !important;
+  border-radius: var(--mei-radius-sm) !important;
+  color: var(--mei-text) !important;
+  outline: none !important;
+}
+input:focus, select:focus, textarea:focus {
+  border-color: var(--mei-primary-soft) !important;
+}
+
+/* 主按钮 */
+button, .btn, [class*='btn-primary'], input[type='submit'] {
+  background: var(--mei-gradient) !important;
+  color: #fff !important;
+  border: none !important;
+  border-radius: var(--mei-radius-sm) !important;
+  cursor: pointer !important;
+}
+button:hover, .btn:hover {
+  filter: brightness(1.1) !important;
+}
+
+/* 链接 */
+a {
+  color: var(--mei-primary-soft) !important;
+}

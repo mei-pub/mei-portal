@@ -1,0 +1,38 @@
+/* lunatv 协调 CSS — 由 scripts/build-theme.mjs 从 plugins/lunatv/theme.css 生成 */
+/* LunaTV 影视门户协调 CSS
+ * 上游：Next.js 14 + Tailwind 3 + Headless UI
+ * tailwind.config 里 primary 是蓝色色阶（primary-50..900）与 dark:#222
+ * 这里用 CSS 变量近似覆盖深色背景，并把主色调向靛蓝统一。
+ */
+
+body, [class*='bg-background'], [class*='min-h-screen'] {
+  background: var(--mei-bg) !important;
+  color: var(--mei-text) !important;
+}
+
+/* 侧栏 / 移动底栏玻璃化 */
+[class*='Sidebar'], [class*='sidebar'], aside {
+  background: var(--mei-surface) !important;
+  backdrop-filter: var(--mei-blur) !important;
+  -webkit-backdrop-filter: var(--mei-blur) !important;
+  border-right: 1px solid var(--mei-border) !important;
+}
+
+/* 影视卡片 */
+[class*='VideoCard'], [class*='video-card'], [class*='group'][class*='cursor'] {
+  border-radius: var(--mei-radius) !important;
+  overflow: hidden !important;
+}
+
+/* 主色按钮 / 标签 */
+button[class*='primary'], a[class*='primary'], [class*='bg-primary'] {
+  background-color: var(--mei-primary) !important;
+}
+[class*='text-primary'] {
+  color: var(--mei-primary-soft) !important;
+}
+
+/* 渐变强调文字（如标题） */
+h1, h2 {
+  letter-spacing: -0.01em;
+}

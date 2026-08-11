@@ -1,0 +1,24 @@
+id: mei-link
+name: 内网穿透
+description: 基于 frp 的内网穿透客户端管理
+icon: lucide:network
+category: network
+weight: 70
+endpoint: http://mei-link:17420
+ingress:
+  mode: subdomain
+  host: ${SUBDOMAIN_LINK}.${ROOT_DOMAIN}
+auth:
+  strategy: independent
+embed:
+  iframe: true
+  strip_headers: [X-Frame-Options, Content-Security-Policy]
+theme:
+  has_skin: true
+  entry: /__theme/mei-link.css
+health:
+  path: /healthz
+  expect: 200
+upgrade:
+  image: ghcr.io/tomtrije/meilink-client:latest
+  repo: https://github.com/tomtrije/mei-link

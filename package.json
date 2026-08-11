@@ -1,0 +1,17 @@
+{
+  "name": "mei-allin",
+  "version": "0.1.0",
+  "private": true,
+  "description": "把多个异构开源 Web 应用整合为统一门户的 docker-compose 项目",
+  "type": "module",
+  "scripts": {
+    "build:theme": "node scripts/build-theme.mjs",
+    "gen:nginx": "node scripts/gen-nginx.mjs",
+    "validate": "node scripts/validate-manifests.mjs",
+    "build": "npm run validate && npm run build:theme && npm run gen:nginx"
+  },
+  "dependencies": {
+    "ajv": "8.17.1",
+    "js-yaml": "4.1.0"
+  }
+}

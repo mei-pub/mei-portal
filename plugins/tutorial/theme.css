@@ -1,0 +1,42 @@
+/* tutorial 小说站协调 CSS
+ * 上游已用 CSS vars（globals.css）：--background --foreground --card-bg
+ * --border --primary --primary-hover --muted --accent
+ * tokens.css 已把这些通用名映射到 mei- 令牌，故多数组件自动跟随。
+ * 这里只做局部微调：顶栏玻璃化、卡片间距、阅读区背景。
+ */
+
+/* 顶栏 Navbar 玻璃化 */
+header, nav[class*='navbar'], [class*='Navbar'] {
+  background: var(--mei-surface) !important;
+  backdrop-filter: var(--mei-blur) !important;
+  -webkit-backdrop-filter: var(--mei-blur) !important;
+  border-bottom: 1px solid var(--mei-border) !important;
+}
+
+/* 书籍卡片：玻璃质感 + 圆角统一 */
+[class*='book'], [class*='card'], article[class*='book'] {
+  background: var(--mei-surface) !important;
+  border: 1px solid var(--mei-border) !important;
+  border-radius: var(--mei-radius) !important;
+  box-shadow: var(--mei-shadow-sm) !important;
+  transition: var(--mei-transition) !important;
+}
+[class*='book']:hover, [class*='card']:hover {
+  border-color: var(--mei-primary-soft) !important;
+  box-shadow: var(--mei-glow) !important;
+  transform: translateY(-2px) !important;
+}
+
+/* 阅读区：深色护眼 */
+[class*='reader'], [class*='Reader'], main[class*='read'] {
+  background: var(--mei-bg-elevated) !important;
+  color: var(--mei-text) !important;
+}
+
+/* 主按钮统一为渐变 */
+button[class*='primary'], a[class*='primary'], button[class*='Primary'] {
+  background: var(--mei-gradient) !important;
+  color: #fff !important;
+  border: none !important;
+  border-radius: var(--mei-radius-sm) !important;
+}
