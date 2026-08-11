@@ -49,4 +49,37 @@ for (const dir of dirs) {
   console.log(`✓ ${dir}.css`);
   count++;
 }
-console.log(`\n✓ 完成：${count} 个应用协调 CSS`);
+console.log(`✓ 完成：${count} 个应用协调 CSS`);
+
+// 4. 聚合 plugins.json —— Shell 运行时读此文件而非扫描文件系统
+//    这样 standalone Docker 容器无需打包 plugins/ 目录
+const allPlugins = [];
+for (const dir of dirs) {
+  const manifestFile = join(PLUGINS_DIR, dir, 'manifest.yml');
+  if (!existsSync(manifestFile)) continue;
+  const manifest = yaml.load(readFileSync(manifestFile, 'utf8'));
+  if (manifest.ingress?.mode !== 'subdomain') continue;
+  // 推导子域名前缀：从 host 的 ${SUBDOMAIN_X} 占位或回退到 id
+  let subdomainPrefix = manifest.id;
+  const m = (manifest.ingress.host || '').match(/\$\{SUBDOMAIN_([A-Z0-9_]+)\}/);
+  if (m) subdomainPrefix = m[1].toLowerCase();
+  allPlugins.push({
+    id: manifest.id,
+    name: manifest.name,
+    description: manifest.description || '',
+    icon: manifest.icon,
+    category: manifest.category,
+    weight: manifest.weight ?? 50,
+    subdomainPrefix,
+    hasSkin: !!manifest.theme?.has_skin,
+  });
+}
+// 排序：category → weight → name
+allPlugins.sort(
+  (a, b) =>
+    a.category.localeCompare(b.category) ||
+    (a.weight - b.weight) ||
+    a.name.localeCompare(b.name)
+);
+writeFileSync(join(THEME_OUT, 'plugins.json'), JSON.stringify(allPlugins, null, 2));
+console.log(`✓ plugins.json（${allPlugins.length} 个应用）`);

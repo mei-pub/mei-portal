@@ -24,7 +24,7 @@ const dirs = readdirSync(PLUGINS_DIR).filter((d) => {
 
 mkdirSync(CONF_DIR, { recursive: true });
 
-// WebSocket 升级映射（前置）
+// WebSocket 升级映射（前置）+ 根域 Shell server
 const header = `# 由 scripts/gen-nginx.mjs 自动生成，请勿手改。
 # 修改 plugins/*/manifest.yml 后重新运行 node scripts/gen-nginx.mjs
 
@@ -32,27 +32,55 @@ map \$http_upgrade \$connection_upgrade {
     default upgrade;
     ''      close;
 }
+
+# 根域 → Shell 门户（${'$'}{ROOT_DOMAIN} 本身）
+server {
+    listen 80 default_server;
+    server_name ${'$'}{ROOT_DOMAIN};
+
+    location / {
+        resolver 127.0.0.11 valid=30s ipv6=off;
+        set \$shell "shall";
+        proxy_pass http://\$shell:3000;
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto \$scheme;
+        proxy_set_header Upgrade \$http_upgrade;
+        proxy_set_header Connection \$connection_upgrade;
+        proxy_http_version 1.1;
+        proxy_read_timeout 300s;
+        proxy_send_timeout 300s;
+    }
+}
 `;
 
 function appServer(manifest) {
-  const { id, endpoint, ingress, theme } = manifest;
+  const { id, endpoint, ingress } = manifest;
   const host = ingress.host || `\${SUBDOMAIN_${id.toUpperCase()}}.\${ROOT_DOMAIN}`;
+  // 解析 endpoint 为 host:port，用变量延迟解析（避免 nginx 启动时 DNS 解析失败）
+  // 例 http://ai-draw:3000 → upstream_host=ai-draw upstream_port=3000
+  const m = endpoint.match(/^https?:\/\/([^/:]+)(?::(\d+))?/);
+  const upstreamHost = m ? m[1] : id;
+  const upstreamPort = m && m[2] ? m[2] : '80';
   const blocks = [
     `# ${id} — ${manifest.name || ''}`,
     `server {`,
     `    listen 80;`,
     `    server_name ${host};`,
     ``,
-    `    # theme loader 注入：剥离 iframe 头 + sub_filter`,
+    `    # theme loader 注入：剥离 iframe 头 + sub_filter（默认对 text/html 生效）`,
     `    proxy_hide_header X-Frame-Options;`,
     `    proxy_hide_header Content-Security-Policy;`,
     `    proxy_hide_header Content-Security-Policy-Report-Only;`,
-    `    sub_filter_types text/html;`,
     `    sub_filter '</head>' '<script src="\${SHELL_ORIGIN}/__theme/loader.js" data-app="${id}"></script></head>';`,
     `    sub_filter_once on;`,
     ``,
     `    location / {`,
-    `        proxy_pass ${endpoint};`,
+    `        # 用变量让 nginx 延迟到请求时解析上游（避免启动时 DNS 失败导致 emerg）`,
+    `        resolver 127.0.0.11 valid=30s ipv6=off;`,
+    `        set \$upstream "${upstreamHost}";`,
+    `        proxy_pass http://\$upstream:${upstreamPort};`,
     `        proxy_set_header Host \$host;`,
     `        proxy_set_header X-Real-IP \$remote_addr;`,
     `        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;`,

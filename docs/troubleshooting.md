@@ -76,6 +76,21 @@ docker compose restart gateway
 改 `docker-compose.yml` 的 gateway.ports，如 `"8080:80"`，然后 `http://<ROOT_DOMAIN>:8080`。
 注意子域名解析仍指向宿主机 IP，端口变化浏览器需显式带上。
 
+### Q: tutorial 容器首次启动很慢 / 一直 502
+
+tutorial（小说站）的 entrypoint 首次启动会下载约 100MB 的中文字体（Noto Serif SC / Noto Sans SC / LXGW WenKai 等 10 种）到 `/app/data/fonts/`，需要外网访问 `fonts.googleapis.com`。下载期间应用未启动，网关会返回 502（**但 sub_filter 仍正常注入 loader**，可在 502 页面源码看到 `data-app="tutorial"`）。
+
+```bash
+# 查看下载进度
+docker compose logs tutorial -f
+# 等待出现 "=== 下载完成 ===" 后再等几秒应用启动
+```
+
+字体缓存在 volume `${DATA_ROOT}/tutorial/fonts/`，**仅首次下载**，后续重启秒启。
+若下载失败（无外网），可预先在能联网的机器下载后挂载到该目录。
+
+> 已知问题：上游 `download-fonts.mjs` 在某些情况下下载完成后进程不退出，导致后续 `node server.js` 不执行。若遇到此情况，重启容器 `docker compose restart tutorial` 通常可恢复（字体已缓存，跳过下载）。此为上游行为，不影响 mei-allin 整合层。
+
 ### Q: 访问门户白屏 / 502
 
 ```bash

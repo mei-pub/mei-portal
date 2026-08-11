@@ -18,6 +18,7 @@ export interface PluginManifest {
   category: Category;
   weight: number;
   endpoint: string;
+  subdomainPrefix?: string; // 由 plugins.json 预计算，运行时优先用
   ingress: {
     mode: 'subdomain' | 'external';
     host: string;
@@ -30,7 +31,35 @@ export interface PluginManifest {
 }
 
 // 构建期：扫描仓库根的 plugins/
+// 运行时（Docker standalone）：读 public/__theme/plugins.json（由 build-theme.mjs 预生成）
 function loadManifests(): PluginManifest[] {
+  // 优先读预生成的 plugins.json（Docker 运行时唯一可用途径）
+  const jsonPath = path.join(process.cwd(), 'public', '__theme', 'plugins.json');
+  if (fs.existsSync(jsonPath)) {
+    const raw = JSON.parse(fs.readFileSync(jsonPath, 'utf8')) as Array<{
+      id: string;
+      name: string;
+      description?: string;
+      icon: string;
+      category: Category;
+      weight: number;
+      subdomainPrefix: string;
+      hasSkin: boolean;
+    }>;
+    return raw.map((p) => ({
+      id: p.id,
+      name: p.name,
+      description: p.description,
+      icon: p.icon,
+      category: p.category,
+      weight: p.weight,
+      endpoint: '',
+      ingress: { mode: 'subdomain' as const, host: '' },
+      subdomainPrefix: p.subdomainPrefix,
+      theme: { has_skin: p.hasSkin },
+    }));
+  }
+  // 回退：开发时直接扫描 plugins/ 目录
   const pluginsDir = path.join(process.cwd(), '..', '..', 'plugins');
   if (!fs.existsSync(pluginsDir)) return [];
   const entries = fs
@@ -63,6 +92,10 @@ export function getPlugins(): PluginManifest[] {
 }
 
 export function getPluginUrl(manifest: PluginManifest, rootDomain: string): string {
+  // 优先用预计算的 subdomainPrefix（plugins.json 路径）
+  if (manifest.subdomainPrefix) {
+    return `http://${manifest.subdomainPrefix}.${rootDomain}`;
+  }
   const host = manifest.ingress.host || '';
   if (host && !host.includes('${')) {
     return `http://${host}`;

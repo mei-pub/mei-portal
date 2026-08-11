@@ -21,7 +21,14 @@
 echo "[mei-allin] ROOT_DOMAIN=$ROOT_DOMAIN  SHELL_ORIGIN=$SHELL_ORIGIN  USE_TLS=$USE_TLS"
 
 # 0. 等待 Shell 就绪（避免网关先起来反代到未就绪的 Shell）
-if [ -n "$SHELL_ORIGIN" ]; then
+#    仅在真正启动时执行；nginx -t / -T 等检测模式跳过（官方 entrypoint 不向脚本
+#    传 $@，故从 PID 1 的 cmdline 判断）。
+IS_TEST=0
+CMDLINE=$(tr '\0' ' ' < /proc/1/cmdline 2>/dev/null || echo "")
+case "$CMDLINE" in
+  *"-t "*|*" -t"|*" -T "*|*" -T"|*" --test"*) IS_TEST=1;;
+esac
+if [ "$IS_TEST" = "0" ] && [ -n "$SHELL_ORIGIN" ]; then
   SHELL_HOST=$(echo "$SHELL_ORIGIN" | sed -E 's|^https?://||; s|[:/].*$||')
   SHELL_PORT=$(echo "$SHELL_ORIGIN" | sed -E 's|^https?://||; s|^[^:/]+:||; s|/.*$||')
   SHELL_PORT="${SHELL_PORT:-80}"
