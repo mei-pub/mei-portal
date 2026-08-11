@@ -3,6 +3,21 @@
 > 把多个异构开源 Web 应用，整合为一个统一门户的 docker-compose 项目。
 > **不动任何上游源码**，只做交互层「皮」的协调与统一，保留各应用完整功能。
 
+[![status](https://img.shields.io/badge/status-实测可用-brightgreen)](#实测验证) [![apps](https://img.shields.io/badge/apps-8-blue)](#整合的应用) [![license](https://img.shields.io/badge/license-Apache--2.0-lightgrey)](LICENSE)
+
+## 实测验证
+
+本项目已通过完整的浏览器端到端实测（Docker 全量启动 + Chrome 真实访问）：
+
+| 验证项 | 结果 |
+|---|---|
+| 9 服务全量启动 | ✅ 全部 Up |
+| 门户首页渲染 | ✅ 暗色玻璃拟态，8 应用卡片，健康徽标 |
+| 应用 iframe 嵌入 | ✅ tutorial/mei-link/ai-draw 实测渲染完整界面 |
+| 主题 loader 注入 | ✅ 8 应用全部注入 `data-app` |
+| 安全头剥离 | ✅ 8 应用 X-Frame-Options / CSP 全部剥离 |
+| 主题切换广播 | ✅ Shell 切换 → iframe 同步（postMessage） |
+
 ## 整合的应用
 
 | 应用 | 说明 | 上游 |
