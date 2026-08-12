@@ -46,4 +46,17 @@ if (fs.existsSync(indexHtml)) {
   console.log('[patch] omni-tools: index.html 绝对路径已修正');
 }
 
+// ---- 4. i18n loadPath 子路径修正 ----
+// omni-tools 默认从 /locales/ 加载，子路径下需 /tools/locales/
+const i18nFile = 'src/i18n/index.ts';
+if (fs.existsSync(i18nFile)) {
+  let c = fs.readFileSync(i18nFile, 'utf8');
+  if (c.includes("'/locales/")) {
+    c = c.replace("'/locales/", "'/tools/locales/");
+    fs.writeFileSync(i18nFile, c);
+    console.log('[patch] omni-tools: i18n loadPath → /tools/locales/');
+  }
+}
+
 console.log('[patch] omni-tools 完成');
+

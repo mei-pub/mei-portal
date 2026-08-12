@@ -1,0 +1,28 @@
+- generic [active] [ref=f21e1]:
+  - generic [ref=f21e2]:
+    - link "mei-allin" [ref=f21e3] [cursor=pointer]:
+      - /url: /
+    - generic [ref=f21e6]:
+      - link "小说书架" [ref=f21e7] [cursor=pointer]:
+        - /url: /novels
+      - link "内网穿透" [ref=f21e8] [cursor=pointer]:
+        - /url: /link
+      - link "影视门户" [ref=f21e9] [cursor=pointer]:
+        - /url: /tv
+      - link "工具箱" [ref=f21e10] [cursor=pointer]:
+        - /url: /tools
+    - link "admin" [ref=f21e12] [cursor=pointer]:
+      - /url: /
+  - main [ref=f21e13]:
+    - generic [ref=f21e16]:
+      - heading "Meilink" [level=1] [ref=f21e17]
+      - generic [ref=f21e18]: NAS 隧道管理
+    - generic [ref=f21e19]:
+      - generic [ref=f21e20]:
+        - generic [ref=f21e21]: 账号
+        - textbox "账号" [ref=f21e22]: admin
+      - generic [ref=f21e23]:
+        - generic [ref=f21e24]: 密码
+        - textbox "密码" [ref=f21e25]
+      - paragraph [ref=f21e26]
+      - button "登录" [ref=f21e27] [cursor=pointer]
