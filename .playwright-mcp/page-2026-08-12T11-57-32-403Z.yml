@@ -1,0 +1,20 @@
+- generic [ref=f59e2]:
+  - link "mei-allin" [ref=f59e3] [cursor=pointer]:
+    - /url: /
+  - generic [ref=f59e6]:
+    - link "小说书架" [ref=f59e7] [cursor=pointer]:
+      - /url: /novels
+    - link "内网穿透" [ref=f59e8] [cursor=pointer]:
+      - /url: /link
+    - link "影视门户" [ref=f59e9] [cursor=pointer]:
+      - /url: /tv
+    - link "工具箱" [ref=f59e10] [cursor=pointer]:
+      - /url: /tools
+    - link "AI 绘图" [ref=f59e11] [cursor=pointer]:
+      - /url: /draw
+    - link "音乐播放" [ref=f59e12] [cursor=pointer]:
+      - /url: /music
+    - link "主页面板" [ref=f59e13] [cursor=pointer]:
+      - /url: /panel
+  - link "admin" [ref=f59e15] [cursor=pointer]:
+    - /url: /

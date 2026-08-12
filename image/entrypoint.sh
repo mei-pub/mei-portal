@@ -40,6 +40,20 @@ if [ ! -d "$DATA_DIR/tutorial/fonts/css" ] && [ -f /app/apps/tutorial/scripts/do
   (cd /app/apps/tutorial && DATA_DIR="$DATA_DIR/tutorial" node scripts/download-fonts.mjs || echo "[mei-allin] 字体下载完成/跳过") &
 fi
 
+# ---- sun-panel 初始化 conf + 改端口 ----
+SUNPANEL_DIR="/app/apps/sun-panel"
+if [ -d "$SUNPANEL_DIR" ]; then
+  cd "$SUNPANEL_DIR"
+  if [ ! -f conf/conf.ini ]; then
+    ./sun-panel -config >/dev/null 2>&1 || true
+  fi
+  # 设置端口为 3006（避免与 mei-link 的 3002 冲突）
+  if [ -f conf/conf.ini ]; then
+    sed -i 's/^http_port=.*/http_port=3006/' conf/conf.ini 2>/dev/null || true
+  fi
+  cd /
+fi
+
 # ---- 启动 ----
 echo "[mei-allin] 启动 supervisord（nginx + shell + 各应用）"
 exec "$@"

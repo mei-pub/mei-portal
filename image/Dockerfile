@@ -95,8 +95,32 @@ WORKDIR /build/server
 RUN npm install --no-audit --no-fund --legacy-peer-deps
 WORKDIR /build
 
+# ---- sun-panel（Go + Gin + Vue，basePath=/panel）----
+FROM node:22-bookworm-slim AS sunpanel-web-builder
+WORKDIR /build
+RUN apt-get update && apt-get install -y --no-install-recommends git ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+RUN git clone --depth 1 https://github.com/hslr-s/sun-panel.git .
+COPY image/patches/sun-panel.mjs ./patch.mjs
+RUN node patch.mjs
+RUN corepack enable && corepack prepare pnpm@8 --activate
+RUN pnpm install --no-frozen-lockfile
+RUN pnpm run build
+FROM golang:1.21-bookworm AS sunpanel-go-builder
+WORKDIR /build
+RUN apt-get update && apt-get install -y --no-install-recommends bash gcc git musl-dev \
+    && rm -rf /var/lib/apt/lists/*
+COPY --from=sunpanel-web-builder /build /src
+WORKDIR /src/service
+RUN go env -w GO111MODULE=on \
+    && export PATH=$PATH:/go/bin \
+    && go install -a -v github.com/go-bindata/go-bindata/...@latest \
+    && go install -a -v github.com/elazarl/go-bindata-assetfs/...@latest \
+    && go-bindata-assetfs -o=assets/bindata.go -pkg=assets assets/... \
+    && go build -o /sun-panel --ldflags="-X sun-panel/global.RUNCODE=release -X sun-panel/global.ISDOCKER=docker" main.go
+
 # =============================================================================
-# ---- 运行时 ----
+# ---- 运行时（必须最后一个 FROM）----
 # =============================================================================
 FROM node:22-bookworm-slim AS runtime
 RUN apt-get update && apt-get install -y \
@@ -139,6 +163,10 @@ COPY --from=ai-draw-builder /build/node_modules ./apps/ai-draw/node_modules
 
 # ---- solara ----
 COPY --from=solara-builder /build ./apps/solara
+
+# ---- sun-panel ----
+COPY --from=sunpanel-go-builder /sun-panel ./apps/sun-panel/sun-panel
+COPY --from=sunpanel-web-builder /build/dist ./apps/sun-panel/web
 
 # ---- 配置 ----
 # 覆盖 debian nginx 默认配置：nginx.conf + conf.d/
