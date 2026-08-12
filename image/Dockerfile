@@ -82,6 +82,19 @@ RUN node patch.mjs
 RUN npm ci --no-audit --no-fund || npm install --no-audit --no-fund
 RUN npm run build
 
+# ---- solara（Node + 原生 JS 音乐播放）----
+FROM node:22-bookworm-slim AS solara-builder
+WORKDIR /build
+RUN apt-get update && apt-get install -y --no-install-recommends git ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+RUN git clone --depth 1 https://github.com/akudamatata/Solara.git .
+COPY image/patches/solara.mjs ./patch.mjs
+RUN node patch.mjs
+# solara 的 package.json 在 server/ 子目录
+WORKDIR /build/server
+RUN npm install --no-audit --no-fund --legacy-peer-deps
+WORKDIR /build
+
 # =============================================================================
 # ---- 运行时 ----
 # =============================================================================
@@ -123,6 +136,9 @@ COPY --from=ai-draw-builder /build/dist ./apps/ai-draw/dist
 COPY --from=ai-draw-builder /build/server ./apps/ai-draw/server
 COPY --from=ai-draw-builder /build/package.json ./apps/ai-draw/package.json
 COPY --from=ai-draw-builder /build/node_modules ./apps/ai-draw/node_modules
+
+# ---- solara ----
+COPY --from=solara-builder /build ./apps/solara
 
 # ---- 配置 ----
 # 覆盖 debian nginx 默认配置：nginx.conf + conf.d/

@@ -63,5 +63,18 @@
     "healthPath": "/draw/",
     "healthExpect": 200,
     "hasSkin": false
+  },
+  {
+    "id": "solara",
+    "name": "音乐播放",
+    "description": "沉浸式音乐播放器，专辑配色动态背景",
+    "icon": "lucide:music",
+    "category": "media",
+    "weight": 40,
+    "subdomainPrefix": "music",
+    "endpoint": "",
+    "healthPath": "/music/",
+    "healthExpect": 200,
+    "hasSkin": false
   }
 ]

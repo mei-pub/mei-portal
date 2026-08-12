@@ -60,9 +60,26 @@ const lunatvAdapter: AppLoginAdapter = {
   },
 };
 
+// ----- solara 适配器（单密码 cookie auth）-----
+const solaraAdapter: AppLoginAdapter = {
+  appId: 'solara',
+  async login(_username, password) {
+    try {
+      const res = await fetch('http://127.0.0.1:3005/api/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password }),
+      });
+      return { success: res.ok, cookies: extractSetCookies(res) };
+    } catch {
+      return { success: false, cookies: [] };
+    }
+  },
+};
+
 // tutorial：nginx 已注入 auth-token cookie，无需适配器
 
-const ADAPTERS: AppLoginAdapter[] = [meilinkAdapter, lunatvAdapter];
+const ADAPTERS: AppLoginAdapter[] = [meilinkAdapter, lunatvAdapter, solaraAdapter];
 
 /** 并发代理登录所有已注册应用 */
 export async function proxyLoginAll(
