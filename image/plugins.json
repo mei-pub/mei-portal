@@ -89,5 +89,18 @@
     "healthPath": "/panel",
     "healthExpect": 200,
     "hasSkin": false
+  },
+  {
+    "id": "mediago",
+    "name": "流媒体下载",
+    "description": "m3u8/视频流下载工具",
+    "icon": "lucide:download",
+    "category": "utility",
+    "weight": 20,
+    "subdomainPrefix": "media",
+    "endpoint": "",
+    "healthPath": "/media/",
+    "healthExpect": 200,
+    "hasSkin": false
   }
 ]

@@ -95,6 +95,10 @@ WORKDIR /build/server
 RUN npm install --no-audit --no-fund --legacy-peer-deps
 WORKDIR /build
 
+# ---- mediago（Go 流媒体下载，从官方镜像 COPY 二进制 + 资源）----
+FROM caorushizi/mediago:latest AS mediago-src
+# 官方镜像内含 mediago-core 二进制 + 静态资源 + 外部工具(yt-dlp 等)
+
 # ---- sun-panel（Go + Gin + Vue，basePath=/panel）----
 FROM node:22-bookworm-slim AS sunpanel-web-builder
 WORKDIR /build
@@ -167,6 +171,11 @@ COPY --from=solara-builder /build ./apps/solara
 # ---- sun-panel ----
 COPY --from=sunpanel-go-builder /sun-panel ./apps/sun-panel/sun-panel
 COPY --from=sunpanel-web-builder /build/dist ./apps/sun-panel/web
+
+# ---- mediago（从官方镜像 COPY 二进制 + 静态 + 外部工具）----
+COPY --from=mediago-src /usr/local/bin/mediago-core ./apps/mediago/mediago-core
+COPY --from=mediago-src /app/static ./apps/mediago/static
+COPY --from=mediago-src /app/deps ./apps/mediago/deps
 
 # ---- 配置 ----
 # 覆盖 debian nginx 默认配置：nginx.conf + conf.d/

@@ -23,7 +23,7 @@ fi
 echo "[mei-allin] 数据目录: $DATA_DIR  管理员: $MEI_ADMIN_USER  模式: single"
 
 # ---- 初始化各应用数据目录 ----
-mkdir -p "$DATA_DIR/tutorial" "$DATA_DIR/mei-link" "$DATA_DIR/shell"
+mkdir -p "$DATA_DIR/tutorial" "$DATA_DIR/mei-link" "$DATA_DIR/shell" "$DATA_DIR/mediago/logs" "$DATA_DIR/mediago/downloads" "$DATA_DIR/mediago"
 
 # ---- Shell 配置 ----
 export PORT="${PORT:-3000}"
@@ -38,6 +38,11 @@ fi
 if [ ! -d "$DATA_DIR/tutorial/fonts/css" ] && [ -f /app/apps/tutorial/scripts/download-fonts.mjs ]; then
   echo "[mei-allin] tutorial 字体首次下载（后台）..."
   (cd /app/apps/tutorial && DATA_DIR="$DATA_DIR/tutorial" node scripts/download-fonts.mjs || echo "[mei-allin] 字体下载完成/跳过") &
+fi
+
+# ---- mediago 端口修正（config.json 持久化会覆盖命令行）----
+if [ -f "$DATA_DIR/mediago/config.json" ]; then
+  sed -i 's/"port":[[:space:]]*[0-9]*/"port": 3007/' "$DATA_DIR/mediago/config.json" 2>/dev/null || true
 fi
 
 # ---- sun-panel 初始化 conf + 改端口 ----
