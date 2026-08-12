@@ -1,0 +1,42 @@
+- generic [active] [ref=f43e1]:
+  - generic [ref=f43e2]:
+    - link "mei-allin" [ref=f43e3] [cursor=pointer]:
+      - /url: /
+    - generic [ref=f43e6]:
+      - link "小说书架" [ref=f43e7] [cursor=pointer]:
+        - /url: /novels
+      - link "内网穿透" [ref=f43e8] [cursor=pointer]:
+        - /url: /link
+      - link "影视门户" [ref=f43e9] [cursor=pointer]:
+        - /url: /tv
+      - link "工具箱" [ref=f43e10] [cursor=pointer]:
+        - /url: /tools
+      - link "AI 绘图" [ref=f43e11] [cursor=pointer]:
+        - /url: /draw
+    - link "admin" [ref=f43e13] [cursor=pointer]:
+      - /url: /
+  - alert [ref=f43e14]
+  - navigation [ref=f43e15]:
+    - generic [ref=f43e17]:
+      - link "我的书架" [ref=f43e18] [cursor=pointer]:
+        - /url: /novels
+      - generic [ref=f43e21]:
+        - button "隐藏为纸牌游戏" [ref=f43e22]
+        - link "书架" [ref=f43e25] [cursor=pointer]:
+          - /url: /novels
+        - link "设置" [ref=f43e28] [cursor=pointer]:
+          - /url: /novels/settings
+        - link "添加" [ref=f43e32] [cursor=pointer]:
+          - /url: /novels/novels/new
+  - main [ref=f43e35]:
+    - generic [ref=f43e37]:
+      - generic [ref=f43e38]:
+        - button "默认顺序" [ref=f43e39]
+        - button "按评分排序" [ref=f43e42]
+      - button "分类" [ref=f43e46]
+      - button "标签" [ref=f43e51]
+      - textbox "搜索小说..." [ref=f43e58]
+    - generic [ref=f43e59]:
+      - paragraph [ref=f43e62]: 书架空空如也，添加第一本小说吧
+      - link "添加小说" [ref=f43e63] [cursor=pointer]:
+        - /url: /novels/novels/new

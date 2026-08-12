@@ -24,6 +24,12 @@
     'background:#fff;border-bottom:1px solid #e5e7eb;',
     'font-family:"Inter","Noto Sans SC","PingFang SC",sans-serif;font-size:13px;color:#1f2937;',
     'box-shadow:0 1px 3px rgba(0,0,0,0.05);}',
+    /* 应用 fixed 导航元素下移到顶栏下方（aside/header/nav 的 fixed）*/
+    'header[class*="fixed"],nav[class*="fixed"],aside[class*="fixed"],',
+    '[class*="Navbar"][class*="fixed"],[class*="navbar"][class*="fixed"],',
+    '[class*="Sidebar"][class*="fixed"],[class*="sidebar"][class*="fixed"],',
+    '[class*="header"][class*="fixed"],[class*="Header"][class*="fixed"]{top:48px!important;}',
+    'body{padding-top:48px!important;}',
     '#mei-topbar *{box-sizing:border-box;}',
     '#mei-topbar a{color:inherit;text-decoration:none;}',
     '#mei-topbar .mei-brand{display:flex;align-items:center;gap:8px;font-weight:700;font-size:15px;margin-right:8px;flex-shrink:0;}',
@@ -44,16 +50,7 @@
   ].join('');
   document.head.appendChild(style);
 
-  // 给 body 加 padding-top 腾出顶栏空间（用 class，可被应用覆盖）
-  function ensurePad() {
-    if (!document.getElementById('mei-body-pad')) {
-      var pad = document.createElement('style');
-      pad.id = 'mei-body-pad';
-      pad.textContent = 'body{padding-top:48px;}';
-      document.head.appendChild(pad);
-    }
-  }
-
+  // 顶栏用 position:sticky 自然占位，无需 padding-top
   function buildTopbar(plugins) {
     var bar = document.createElement('div');
     bar.id = 'mei-topbar';
@@ -132,8 +129,7 @@
       document.body.insertBefore(built.bar, document.body.firstChild);
       renderUser(built.userSlot);
     }
-    ensurePad();
-  }
+    }
   var healCount = 0;
   function healLoop() {
     ensureBar();

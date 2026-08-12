@@ -1,0 +1,180 @@
+- generic [active] [ref=f39e1]:
+  - generic [ref=f39e2]:
+    - link "mei-allin" [ref=f39e3] [cursor=pointer]:
+      - /url: /
+    - generic [ref=f39e6]:
+      - link "小说书架" [ref=f39e7] [cursor=pointer]:
+        - /url: /novels
+      - link "内网穿透" [ref=f39e8] [cursor=pointer]:
+        - /url: /link
+      - link "影视门户" [ref=f39e9] [cursor=pointer]:
+        - /url: /tv
+      - link "工具箱" [ref=f39e10] [cursor=pointer]:
+        - /url: /tools
+      - link "AI 绘图" [ref=f39e11] [cursor=pointer]:
+        - /url: /draw
+    - link "admin" [ref=f39e13] [cursor=pointer]:
+      - /url: /
+  - generic [ref=f39e14]:
+    - banner [ref=f39e15]:
+      - generic [ref=f39e16]:
+        - generic [ref=f39e17]:
+          - link [ref=f39e18] [cursor=pointer]:
+            - /url: /tools/
+          - generic [ref=f39e20]:
+            - text: v0.6.0 (
+            - link "9d80862" [ref=f39e21] [cursor=pointer]:
+              - /url: https://github.com/iib0011/omni-tools/tree/9d80862
+            - text: )
+        - generic [ref=f39e22]:
+          - generic [ref=f39e24]:
+            - combobox [ref=f39e25] [cursor=pointer]: 中文
+            - textbox: zh
+            - group
+          - img [ref=f39e26] [cursor=pointer]
+          - img [ref=f39e28] [cursor=pointer]
+          - iframe [ref=f39e30]:
+            - generic:
+              - generic:
+                - link "Star iib0011/omni-tools on GitHub" [ref=f40e1] [cursor=pointer]:
+                  - /url: https://github.com/iib0011/omni-tools
+                  - text: Star
+                - link "10,014 stargazers on GitHub" [ref=f40e3] [cursor=pointer]:
+                  - /url: https://github.com/iib0011/omni-tools/stargazers
+                  - text: 10,014
+          - button [ref=f39e31] [cursor=pointer]
+    - generic [ref=f39e38]:
+      - generic [ref=f39e39]:
+        - paragraph [ref=f39e41]:
+          - text: 快速完成工作
+          - paragraph [ref=f39e42]: OmniTools
+        - paragraph [ref=f39e43]: 使用 OmniTools 提升您的工作效率，这是一款快速完成任务的终极工具包！数千个用户友好的实用程序，可直接通过浏览器编辑图像、文本、列表和数据。
+        - generic [ref=f39e46]:
+          - combobox "搜索所有工具" [ref=f39e47]
+          - group
+        - generic [ref=f39e50]:
+          - paragraph [ref=f39e54] [cursor=pointer]: 创建透明图像
+          - paragraph [ref=f39e58] [cursor=pointer]: 美化 JSON
+          - paragraph [ref=f39e62] [cursor=pointer]: 更改 GIF 速度
+          - paragraph [ref=f39e66] [cursor=pointer]: 对列表进行排序
+          - paragraph [ref=f39e70] [cursor=pointer]: 压缩 PNG
+          - paragraph [ref=f39e74] [cursor=pointer]: 拆分文本
+          - paragraph [ref=f39e78] [cursor=pointer]: 拆分 PDF
+          - paragraph [ref=f39e82] [cursor=pointer]: 修剪视频
+          - paragraph [ref=f39e86] [cursor=pointer]: 计算数字和
+      - generic [ref=f39e88]:
+        - button "普通用户" [ref=f39e89] [cursor=pointer]
+        - button "开发人员" [ref=f39e91] [cursor=pointer]
+      - generic [ref=f39e93]:
+        - generic [ref=f39e97]:
+          - generic [ref=f39e98]:
+            - link "图像工具" [ref=f39e102] [cursor=pointer]:
+              - /url: /tools/categories/image-generic
+            - paragraph [ref=f39e103]: 处理图片的工具——压缩、调整大小、裁剪、转换为 JPG、旋转、删除背景等等。
+          - generic [ref=f39e104]:
+            - button "查看全部 图像工具" [ref=f39e106] [cursor=pointer]
+            - button "尝试 图像编辑器" [ref=f39e108] [cursor=pointer]
+        - generic [ref=f39e112]:
+          - generic [ref=f39e113]:
+            - link "PDF工具" [ref=f39e117] [cursor=pointer]:
+              - /url: /tools/categories/pdf
+            - paragraph [ref=f39e118]: 处理 PDF 文件的工具 - 从 PDF 中提取文本、将 PDF 转换为其他格式、操作 PDF 等等。
+          - generic [ref=f39e119]:
+            - button "查看全部 PDF工具" [ref=f39e121] [cursor=pointer]
+            - button "尝试 PDF编辑器" [ref=f39e123] [cursor=pointer]
+        - generic [ref=f39e127]:
+          - generic [ref=f39e128]:
+            - link "文本工具" [ref=f39e134] [cursor=pointer]:
+              - /url: /tools/categories/string
+            - paragraph [ref=f39e135]: 处理文本的工具——将文本转换为图像、查找和替换文本、将文本拆分成片段、连接文本行、重复文本等等。
+          - generic [ref=f39e136]:
+            - button "查看全部 文本工具" [ref=f39e138] [cursor=pointer]
+            - button "尝试 分裂" [ref=f39e140] [cursor=pointer]
+        - generic [ref=f39e144]:
+          - generic [ref=f39e145]:
+            - link "视频工具" [ref=f39e151] [cursor=pointer]:
+              - /url: /tools/categories/video
+            - paragraph [ref=f39e152]: 处理视频的工具——从视频中提取帧、从视频创建 GIF、将视频转换为不同的格式等等。
+          - generic [ref=f39e153]:
+            - button "查看全部 视频工具" [ref=f39e155] [cursor=pointer]
+            - button "尝试 修剪视频" [ref=f39e157] [cursor=pointer]
+        - generic [ref=f39e161]:
+          - generic [ref=f39e162]:
+            - link "时间工具" [ref=f39e166] [cursor=pointer]:
+              - /url: /tools/categories/time
+            - paragraph [ref=f39e167]: 处理时间和日期的工具——计算时差、在时区之间转换、格式化日期、生成日期序列等等。
+          - generic [ref=f39e168]:
+            - button "查看全部 时间工具" [ref=f39e170] [cursor=pointer]
+            - button "尝试 将天数转换为小时数" [ref=f39e172] [cursor=pointer]
+        - generic [ref=f39e176]:
+          - generic [ref=f39e177]:
+            - link "音频工具" [ref=f39e182] [cursor=pointer]:
+              - /url: /tools/categories/audio
+            - paragraph [ref=f39e183]: 处理音频的工具——从视频中提取音频、调整音频速度、合并多个音频文件等等。
+          - generic [ref=f39e184]:
+            - button "查看全部 音频工具" [ref=f39e186] [cursor=pointer]
+            - button "尝试 从视频中提取音频" [ref=f39e188] [cursor=pointer]
+        - generic [ref=f39e192]:
+          - generic [ref=f39e193]:
+            - link "JSON 工具" [ref=f39e197] [cursor=pointer]:
+              - /url: /tools/categories/json
+            - paragraph [ref=f39e198]: 处理 JSON 数据结构的工具——美化和缩小 JSON 对象、展平 JSON 数组、字符串化 JSON 值、分析数据等等
+          - generic [ref=f39e199]:
+            - button "查看全部 JSON 工具" [ref=f39e201] [cursor=pointer]
+            - button "尝试 验证 JSON" [ref=f39e203] [cursor=pointer]
+        - generic [ref=f39e207]:
+          - generic [ref=f39e208]:
+            - link "列表工具" [ref=f39e214] [cursor=pointer]:
+              - /url: /tools/categories/list
+            - paragraph [ref=f39e215]: 处理列表的工具——排序、反转、随机化列表、查找唯一和重复的列表项、更改列表项分隔符等等。
+          - generic [ref=f39e216]:
+            - button "查看全部 列表工具" [ref=f39e218] [cursor=pointer]
+            - button "尝试 种类" [ref=f39e220] [cursor=pointer]
+        - generic [ref=f39e224]:
+          - generic [ref=f39e225]:
+            - link "CSV 工具" [ref=f39e229] [cursor=pointer]:
+              - /url: /tools/categories/csv
+            - paragraph [ref=f39e230]: 处理 CSV 文件的工具 - 将 CSV 转换为不同的格式、操作 CSV 数据、验证 CSV 结构以及有效地处理 CSV 文件。
+          - generic [ref=f39e231]:
+            - button "查看全部 CSV 工具" [ref=f39e233] [cursor=pointer]
+            - button "尝试 将 CSV 转换为 JSON" [ref=f39e235] [cursor=pointer]
+        - generic [ref=f39e239]:
+          - generic [ref=f39e240]:
+            - link "数字工具" [ref=f39e244] [cursor=pointer]:
+              - /url: /tools/categories/number
+            - paragraph [ref=f39e245]: 处理数字的工具——生成数字序列、将数字转换为文字、将文字转换为数字、排序、舍入、因式分解等等。
+          - generic [ref=f39e246]:
+            - button "查看全部 数字工具" [ref=f39e248] [cursor=pointer]
+            - button "尝试 和" [ref=f39e250] [cursor=pointer]
+        - generic [ref=f39e254]:
+          - generic [ref=f39e255]:
+            - link "PNG工具" [ref=f39e259] [cursor=pointer]:
+              - /url: /tools/categories/png
+            - paragraph [ref=f39e260]: 处理 PNG 图像的工具 - 将 PNG 转换为 JPG、创建透明 PNG、更改 PNG 颜色、裁剪、旋转、调整 PNG 大小等等。
+          - generic [ref=f39e261]:
+            - button "查看全部 PNG工具" [ref=f39e263] [cursor=pointer]
+            - button "尝试 压缩 png" [ref=f39e265] [cursor=pointer]
+        - generic [ref=f39e269]:
+          - generic [ref=f39e270]:
+            - link "XML 工具" [ref=f39e274] [cursor=pointer]:
+              - /url: /tools/categories/xml
+            - paragraph [ref=f39e275]: 处理 XML 数据结构的工具 - 查看器、美化器、验证器等等
+          - generic [ref=f39e276]:
+            - button "查看全部 XML 工具" [ref=f39e278] [cursor=pointer]
+            - button "尝试 XML美化器" [ref=f39e280] [cursor=pointer]
+        - generic [ref=f39e284]:
+          - generic [ref=f39e285]:
+            - link "GIF工具" [ref=f39e289] [cursor=pointer]:
+              - /url: /tools/categories/gif
+            - paragraph [ref=f39e290]: 处理 GIF 动画的工具 - 创建透明 GIF、提取 GIF 帧、向 GIF 添加文本、裁剪、旋转、反转 GIF 等等。
+          - generic [ref=f39e291]:
+            - button "查看全部 GIF工具" [ref=f39e293] [cursor=pointer]
+            - button "尝试 更改 GIF 速度" [ref=f39e295] [cursor=pointer]
+        - generic [ref=f39e299]:
+          - generic [ref=f39e300]:
+            - link "转换工具" [ref=f39e307] [cursor=pointer]:
+              - /url: /tools/categories/converters
+            - paragraph [ref=f39e308]: 用于在不同格式之间转换数据的工具 — 转换图片、音频、视频、文本等。
+          - generic [ref=f39e309]:
+            - button "查看全部 转换工具" [ref=f39e311] [cursor=pointer]
+            - button "尝试 音频转换器" [ref=f39e313] [cursor=pointer]

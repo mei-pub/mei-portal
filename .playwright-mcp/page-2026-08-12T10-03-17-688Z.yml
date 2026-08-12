@@ -1,0 +1,52 @@
+- generic [active] [ref=f55e1]:
+  - generic [ref=f55e2]:
+    - link "mei-allin" [ref=f55e3] [cursor=pointer]:
+      - /url: /
+    - generic [ref=f55e6]:
+      - link "小说书架" [ref=f55e7] [cursor=pointer]:
+        - /url: /novels
+      - link "内网穿透" [ref=f55e8] [cursor=pointer]:
+        - /url: /link
+      - link "影视门户" [ref=f55e9] [cursor=pointer]:
+        - /url: /tv
+      - link "工具箱" [ref=f55e10] [cursor=pointer]:
+        - /url: /tools
+      - link "AI 绘图" [ref=f55e11] [cursor=pointer]:
+        - /url: /draw
+    - link "admin" [ref=f55e13] [cursor=pointer]:
+      - /url: /
+  - main [ref=f55e14]:
+    - generic [ref=f55e15]:
+      - generic [ref=f55e20]:
+        - heading "Meilink" [level=1] [ref=f55e21]
+        - generic [ref=f55e22]: 未配置
+      - generic [ref=f55e25]:
+        - button "连接" [ref=f55e26] [cursor=pointer]
+        - button "重启" [ref=f55e27] [cursor=pointer]
+        - button "断开" [ref=f55e28] [cursor=pointer]
+        - button "退出" [ref=f55e29] [cursor=pointer]
+    - generic [ref=f55e30]:
+      - navigation "管理页面" [ref=f55e31]:
+        - generic [ref=f55e32]: Meilink Console
+        - button [ref=f55e33] [cursor=pointer]
+        - button [ref=f55e37] [cursor=pointer]
+        - button [ref=f55e42] [cursor=pointer]
+      - generic [ref=f55e48]:
+        - generic [ref=f55e49]:
+          - generic [ref=f55e50]:
+            - heading "隧道" [level=2] [ref=f55e51]
+            - generic [ref=f55e52]: 0 / 0 个隧道已启用
+          - button [ref=f55e53] [cursor=pointer]
+        - generic [ref=f55e57]:
+          - generic [ref=f55e58]:
+            - text: 全部隧道
+            - generic [ref=f55e59]: "0"
+          - generic [ref=f55e60]:
+            - text: 已启用
+            - generic [ref=f55e61]: "0"
+          - generic [ref=f55e62]:
+            - text: 运行中
+            - generic [ref=f55e63]: "0"
+        - generic [ref=f55e65]:
+          - generic [ref=f55e70]: 还没有隧道
+          - generic [ref=f55e71]: 添加 HTTP、HTTPS、TCP 或 UDP 隧道，将 NAS 服务发布到公网。

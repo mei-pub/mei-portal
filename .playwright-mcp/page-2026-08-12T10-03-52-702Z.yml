@@ -1,0 +1,134 @@
+- generic [active] [ref=f56e1]:
+  - generic [ref=f56e2]:
+    - link "mei-allin" [ref=f56e3] [cursor=pointer]:
+      - /url: /
+    - generic [ref=f56e6]:
+      - link "小说书架" [ref=f56e7] [cursor=pointer]:
+        - /url: /novels
+      - link "内网穿透" [ref=f56e8] [cursor=pointer]:
+        - /url: /link
+      - link "影视门户" [ref=f56e9] [cursor=pointer]:
+        - /url: /tv
+      - link "工具箱" [ref=f56e10] [cursor=pointer]:
+        - /url: /tools
+      - link "AI 绘图" [ref=f56e11] [cursor=pointer]:
+        - /url: /draw
+    - link "admin" [ref=f56e13] [cursor=pointer]:
+      - /url: /
+  - generic [ref=f56e14]:
+    - generic [ref=f56e15]:
+      - complementary [ref=f56e16]:
+        - button [ref=f56e17]
+        - button "新建" [ref=f56e20]
+        - navigation [ref=f56e24]:
+          - button "系统首页" [ref=f56e25]
+          - button "文件管理" [ref=f56e30]
+          - button "个人设置" [ref=f56e34]
+        - generic [ref=f56e39]:
+          - button [ref=f56e40]
+          - link [ref=f56e45] [cursor=pointer]:
+            - /url: https://github.com/stone-yu/ai-draw
+          - button [ref=f56e49]
+          - button [ref=f56e52]
+      - main [ref=f56e57]:
+        - generic [ref=f56e58]:
+          - generic [ref=f56e59]:
+            - button "Draw.io" [ref=f56e60]
+            - generic [ref=f56e64]:
+              - link "使用手册" [ref=f56e65] [cursor=pointer]:
+                - /url: /draw/docs/manual
+              - link "更新日志" [ref=f56e66] [cursor=pointer]:
+                - /url: /draw/docs/changelog
+              - link "问题反馈" [ref=f56e67] [cursor=pointer]:
+                - /url: /draw/docs/feedback
+          - button "简体中文" [ref=f56e69]
+        - generic [ref=f56e77]:
+          - generic [ref=f56e78]:
+            - generic [ref=f56e79]:
+              - generic [ref=f56e80]: AI Draw
+              - generic [ref=f56e84]: 一句话见所想
+            - paragraph [ref=f56e85]: 与 AI 对话,让所想即刻呈现
+          - generic [ref=f56e87]:
+            - textbox "输入你的想法，开始创作吧..." [ref=f56e88]
+            - generic [ref=f56e89]:
+              - generic [ref=f56e90]:
+                - button "上传文件 可上传文档一键转化为图表，或上传截图复刻图表" [ref=f56e91]:
+                  - generic [ref=f56e94]: 上传文件
+                  - generic: 可上传文档一键转化为图表，或上传截图复刻图表
+                - button "添加链接 添加网页链接，AI将解析内容生成图表" [ref=f56e96]:
+                  - generic [ref=f56e100]: 添加链接
+                  - generic: 添加网页链接，AI将解析内容生成图表
+                - generic [ref=f56e102]: 支持粘贴图片
+                - button "系统默认" [ref=f56e107]:
+                  - generic "系统默认" [ref=f56e112]
+              - button "发送" [disabled]
+          - generic [ref=f56e116]:
+            - generic [ref=f56e118]:
+              - heading "快速开始" [level=2] [ref=f56e121]
+              - generic [ref=f56e122]:
+                - generic [ref=f56e124]:
+                  - button "创建一个用户登录流程图，使用动画线条" [ref=f56e125]
+                  - button "绘制一个商品系统架构图" [ref=f56e127]
+                  - button "绘制一个配送系统ER图" [ref=f56e129]
+                  - button "创建一个用户登录流程图，使用动画线条" [ref=f56e131]
+                  - button "绘制一个商品系统架构图" [ref=f56e133]
+                  - button "绘制一个配送系统ER图" [ref=f56e135]
+                  - button "创建一个用户登录流程图，使用动画线条" [ref=f56e137]
+                  - button "绘制一个商品系统架构图" [ref=f56e139]
+                  - button "绘制一个配送系统ER图" [ref=f56e141]
+                  - button "创建一个用户登录流程图，使用动画线条" [ref=f56e143]
+                  - button "绘制一个商品系统架构图" [ref=f56e145]
+                  - button "绘制一个配送系统ER图" [ref=f56e147]
+                - generic [ref=f56e150]:
+                  - button "复刻流程图 复刻这个流程图" [ref=f56e151]:
+                    - img "复刻流程图" [ref=f56e153]
+                    - generic [ref=f56e154]: 复刻这个流程图
+                  - button "复刻流程图 修改此图为mermaid风格" [ref=f56e155]:
+                    - img "复刻流程图" [ref=f56e157]
+                    - generic [ref=f56e158]: 修改此图为mermaid风格
+                  - button "复刻流程图 修改此图为手绘风格" [ref=f56e159]:
+                    - img "复刻流程图" [ref=f56e161]
+                    - generic [ref=f56e162]: 修改此图为手绘风格
+                  - button "复刻流程图 复刻这个流程图" [ref=f56e163]:
+                    - img "复刻流程图" [ref=f56e165]
+                    - generic [ref=f56e166]: 复刻这个流程图
+                  - button "复刻流程图 修改此图为mermaid风格" [ref=f56e167]:
+                    - img "复刻流程图" [ref=f56e169]
+                    - generic [ref=f56e170]: 修改此图为mermaid风格
+                  - button "复刻流程图 修改此图为手绘风格" [ref=f56e171]:
+                    - img "复刻流程图" [ref=f56e173]
+                    - generic [ref=f56e174]: 修改此图为手绘风格
+                  - button "复刻流程图 复刻这个流程图" [ref=f56e175]:
+                    - img "复刻流程图" [ref=f56e177]
+                    - generic [ref=f56e178]: 复刻这个流程图
+                  - button "复刻流程图 修改此图为mermaid风格" [ref=f56e179]:
+                    - img "复刻流程图" [ref=f56e181]
+                    - generic [ref=f56e182]: 修改此图为mermaid风格
+                  - button "复刻流程图 修改此图为手绘风格" [ref=f56e183]:
+                    - img "复刻流程图" [ref=f56e185]
+                    - generic [ref=f56e186]: 修改此图为手绘风格
+                  - button "复刻流程图 复刻这个流程图" [ref=f56e187]:
+                    - img "复刻流程图" [ref=f56e189]
+                    - generic [ref=f56e190]: 复刻这个流程图
+                  - button "复刻流程图 修改此图为mermaid风格" [ref=f56e191]:
+                    - img "复刻流程图" [ref=f56e193]
+                    - generic [ref=f56e194]: 修改此图为mermaid风格
+                  - button "复刻流程图 修改此图为手绘风格" [ref=f56e195]:
+                    - img "复刻流程图" [ref=f56e197]
+                    - generic [ref=f56e198]: 修改此图为手绘风格
+                - generic [ref=f56e200]:
+                  - button "画一只猫在敲代码" [ref=f56e201]
+                  - button "画一个IDE终端" [ref=f56e203]
+                  - button "绘制一个思维导图" [ref=f56e205]
+                  - button "画一只猫在敲代码" [ref=f56e207]
+                  - button "画一个IDE终端" [ref=f56e209]
+                  - button "绘制一个思维导图" [ref=f56e211]
+                  - button "画一只猫在敲代码" [ref=f56e213]
+                  - button "画一个IDE终端" [ref=f56e215]
+                  - button "绘制一个思维导图" [ref=f56e217]
+                  - button "画一只猫在敲代码" [ref=f56e219]
+                  - button "画一个IDE终端" [ref=f56e221]
+                  - button "绘制一个思维导图" [ref=f56e223]
+            - heading "最近文件" [level=2] [ref=f56e229]
+    - region "Notifications (F8)":
+      - list

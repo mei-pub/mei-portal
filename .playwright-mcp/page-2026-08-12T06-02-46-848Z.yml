@@ -1,0 +1,77 @@
+- generic [active] [ref=f38e1]:
+  - generic [ref=f38e2]:
+    - link "mei-allin" [ref=f38e3] [cursor=pointer]:
+      - /url: /
+    - generic [ref=f38e6]:
+      - link "小说书架" [ref=f38e7] [cursor=pointer]:
+        - /url: /novels
+      - link "内网穿透" [ref=f38e8] [cursor=pointer]:
+        - /url: /link
+      - link "影视门户" [ref=f38e9] [cursor=pointer]:
+        - /url: /tv
+      - link "工具箱" [ref=f38e10] [cursor=pointer]:
+        - /url: /tools
+      - link "AI 绘图" [ref=f38e11] [cursor=pointer]:
+        - /url: /draw
+  - generic [ref=f38e13]:
+    - complementary [ref=f38e15]:
+      - generic [ref=f38e16]:
+        - generic [ref=f38e17]:
+          - link "MoonTV" [ref=f38e20] [cursor=pointer]:
+            - /url: /tv
+          - button [ref=f38e22] [cursor=pointer]
+        - navigation [ref=f38e24]:
+          - link "首页" [ref=f38e25] [cursor=pointer]:
+            - /url: /tv
+          - link "搜索" [ref=f38e31] [cursor=pointer]:
+            - /url: /tv/search
+        - generic [ref=f38e38]:
+          - link "电影" [ref=f38e39] [cursor=pointer]:
+            - /url: /tv/douban?type=movie
+          - link "剧集" [ref=f38e44] [cursor=pointer]:
+            - /url: /tv/douban?type=tv
+          - link "动漫" [ref=f38e50] [cursor=pointer]:
+            - /url: /tv/douban?type=anime
+          - link "综艺" [ref=f38e56] [cursor=pointer]:
+            - /url: /tv/douban?type=show
+    - generic [ref=f38e63]:
+      - generic [ref=f38e64]:
+        - button "Toggle theme" [ref=f38e65] [cursor=pointer]
+        - button "User Menu" [ref=f38e69] [cursor=pointer]
+      - main [ref=f38e73]:
+        - generic [ref=f38e74]:
+          - generic [ref=f38e76]:
+            - button "首页" [ref=f38e78] [cursor=pointer]
+            - button "收藏夹" [ref=f38e79] [cursor=pointer]
+          - generic [ref=f38e80]:
+            - generic [ref=f38e81]:
+              - generic [ref=f38e82]:
+                - heading "热门电影" [level=2] [ref=f38e83]
+                - link "查看更多" [ref=f38e84] [cursor=pointer]:
+                  - /url: /tv/douban?type=movie
+              - button [ref=f38e122] [cursor=pointer]
+            - generic [ref=f38e125]:
+              - generic [ref=f38e126]:
+                - heading "热门剧集" [level=2] [ref=f38e127]
+                - link "查看更多" [ref=f38e128] [cursor=pointer]:
+                  - /url: /tv/douban?type=tv
+              - button [ref=f38e166] [cursor=pointer]
+            - generic [ref=f38e169]:
+              - generic [ref=f38e170]:
+                - heading "新番放送" [level=2] [ref=f38e171]
+                - link "查看更多" [ref=f38e172] [cursor=pointer]:
+                  - /url: /tv/douban?type=anime
+              - button [ref=f38e210] [cursor=pointer]
+            - generic [ref=f38e213]:
+              - generic [ref=f38e214]:
+                - heading "热门综艺" [level=2] [ref=f38e215]
+                - link "查看更多" [ref=f38e216] [cursor=pointer]:
+                  - /url: /tv/douban?type=show
+              - button [ref=f38e254] [cursor=pointer]
+        - generic [ref=f38e258]:
+          - generic [ref=f38e259]:
+            - heading "提示" [level=3] [ref=f38e260]
+            - button "关闭"
+          - paragraph [ref=f38e264]: 本网站仅提供影视信息搜索服务，所有内容均来自第三方网站。本站不存储任何视频资源，不对任何内容的准确性、合法性、完整性负责。
+          - button "我知道了" [ref=f38e265] [cursor=pointer]
+  - alert [ref=f38e266]
