@@ -1,0 +1,37 @@
+- generic [active] [ref=f30e1]:
+  - generic [ref=f30e2]:
+    - link "mei-allin" [ref=f30e3] [cursor=pointer]:
+      - /url: /
+    - generic [ref=f30e6]:
+      - link "小说书架" [ref=f30e7] [cursor=pointer]:
+        - /url: /novels
+      - link "内网穿透" [ref=f30e8] [cursor=pointer]:
+        - /url: /link
+      - link "影视门户" [ref=f30e9] [cursor=pointer]:
+        - /url: /tv
+      - link "工具箱" [ref=f30e10] [cursor=pointer]:
+        - /url: /tools
+    - link "admin" [ref=f30e12] [cursor=pointer]:
+      - /url: /
+  - alert [ref=f30e13]
+  - navigation [ref=f30e14]:
+    - generic [ref=f30e16]:
+      - link "我的书架" [ref=f30e17] [cursor=pointer]:
+        - /url: /novels
+      - generic [ref=f30e20]:
+        - button "隐藏为纸牌游戏" [ref=f30e21]
+        - link "书架" [ref=f30e24] [cursor=pointer]:
+          - /url: /novels
+        - link "设置" [ref=f30e27] [cursor=pointer]:
+          - /url: /novels/settings
+        - link "添加" [ref=f30e31] [cursor=pointer]:
+          - /url: /novels/novels/new
+  - main [ref=f30e34]:
+    - generic [ref=f30e36]:
+      - generic [ref=f30e37]:
+        - button "默认顺序" [ref=f30e38]
+        - button "按评分排序" [ref=f30e41]
+      - button "分类" [ref=f30e45]
+      - button "标签" [ref=f30e50]
+      - textbox "搜索小说..." [ref=f30e57]
+    - generic [ref=f30e58]: 加载中...

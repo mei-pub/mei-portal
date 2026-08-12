@@ -1,0 +1,173 @@
+- generic [active] [ref=f32e1]:
+  - generic [ref=f32e2]:
+    - link "mei-allin" [ref=f32e3] [cursor=pointer]:
+      - /url: /
+    - generic [ref=f32e6]:
+      - link "小说书架" [ref=f32e7] [cursor=pointer]:
+        - /url: /novels
+      - link "内网穿透" [ref=f32e8] [cursor=pointer]:
+        - /url: /link
+      - link "影视门户" [ref=f32e9] [cursor=pointer]:
+        - /url: /tv
+      - link "工具箱" [ref=f32e10] [cursor=pointer]:
+        - /url: /tools
+    - link "admin" [ref=f32e12] [cursor=pointer]:
+      - /url: /
+  - generic [ref=f32e13]:
+    - banner [ref=f32e14]:
+      - generic [ref=f32e15]:
+        - generic [ref=f32e16]:
+          - link [ref=f32e17] [cursor=pointer]:
+            - /url: /tools/
+          - generic [ref=f32e19]:
+            - text: v0.6.0 (
+            - link "9d80862" [ref=f32e20] [cursor=pointer]:
+              - /url: https://github.com/iib0011/omni-tools/tree/9d80862
+            - text: )
+        - generic [ref=f32e21]:
+          - generic [ref=f32e23]:
+            - combobox [ref=f32e24] [cursor=pointer]: 中文
+            - textbox: zh
+            - group
+          - img [ref=f32e25] [cursor=pointer]
+          - img [ref=f32e27] [cursor=pointer]
+          - iframe [ref=f32e29]:
+            - link "Star iib0011/omni-tools on GitHub" [ref=f33e1] [cursor=pointer]:
+              - /url: https://github.com/iib0011/omni-tools
+              - text: Star
+          - button [ref=f32e30] [cursor=pointer]
+    - generic [ref=f32e37]:
+      - generic [ref=f32e38]:
+        - paragraph [ref=f32e40]:
+          - text: 快速完成工作
+          - paragraph [ref=f32e41]: OmniTools
+        - paragraph [ref=f32e42]: 使用 OmniTools 提升您的工作效率，这是一款快速完成任务的终极工具包！数千个用户友好的实用程序，可直接通过浏览器编辑图像、文本、列表和数据。
+        - generic [ref=f32e45]:
+          - combobox "搜索所有工具" [ref=f32e46]
+          - group
+        - generic [ref=f32e49]:
+          - paragraph [ref=f32e53] [cursor=pointer]: 创建透明图像
+          - paragraph [ref=f32e57] [cursor=pointer]: 美化 JSON
+          - paragraph [ref=f32e61] [cursor=pointer]: 更改 GIF 速度
+          - paragraph [ref=f32e65] [cursor=pointer]: 对列表进行排序
+          - paragraph [ref=f32e69] [cursor=pointer]: 压缩 PNG
+          - paragraph [ref=f32e73] [cursor=pointer]: 拆分文本
+          - paragraph [ref=f32e77] [cursor=pointer]: 拆分 PDF
+          - paragraph [ref=f32e81] [cursor=pointer]: 修剪视频
+          - paragraph [ref=f32e85] [cursor=pointer]: 计算数字和
+      - generic [ref=f32e87]:
+        - button "普通用户" [ref=f32e88] [cursor=pointer]
+        - button "开发人员" [ref=f32e90] [cursor=pointer]
+      - generic [ref=f32e92]:
+        - generic [ref=f32e96]:
+          - generic [ref=f32e97]:
+            - link "图像工具" [ref=f32e101] [cursor=pointer]:
+              - /url: /tools/categories/image-generic
+            - paragraph [ref=f32e102]: 处理图片的工具——压缩、调整大小、裁剪、转换为 JPG、旋转、删除背景等等。
+          - generic [ref=f32e103]:
+            - button "查看全部 图像工具" [ref=f32e105] [cursor=pointer]
+            - button "尝试 图像编辑器" [ref=f32e107] [cursor=pointer]
+        - generic [ref=f32e111]:
+          - generic [ref=f32e112]:
+            - link "PDF工具" [ref=f32e116] [cursor=pointer]:
+              - /url: /tools/categories/pdf
+            - paragraph [ref=f32e117]: 处理 PDF 文件的工具 - 从 PDF 中提取文本、将 PDF 转换为其他格式、操作 PDF 等等。
+          - generic [ref=f32e118]:
+            - button "查看全部 PDF工具" [ref=f32e120] [cursor=pointer]
+            - button "尝试 PDF编辑器" [ref=f32e122] [cursor=pointer]
+        - generic [ref=f32e126]:
+          - generic [ref=f32e127]:
+            - link "文本工具" [ref=f32e133] [cursor=pointer]:
+              - /url: /tools/categories/string
+            - paragraph [ref=f32e134]: 处理文本的工具——将文本转换为图像、查找和替换文本、将文本拆分成片段、连接文本行、重复文本等等。
+          - generic [ref=f32e135]:
+            - button "查看全部 文本工具" [ref=f32e137] [cursor=pointer]
+            - button "尝试 分裂" [ref=f32e139] [cursor=pointer]
+        - generic [ref=f32e143]:
+          - generic [ref=f32e144]:
+            - link "视频工具" [ref=f32e150] [cursor=pointer]:
+              - /url: /tools/categories/video
+            - paragraph [ref=f32e151]: 处理视频的工具——从视频中提取帧、从视频创建 GIF、将视频转换为不同的格式等等。
+          - generic [ref=f32e152]:
+            - button "查看全部 视频工具" [ref=f32e154] [cursor=pointer]
+            - button "尝试 修剪视频" [ref=f32e156] [cursor=pointer]
+        - generic [ref=f32e160]:
+          - generic [ref=f32e161]:
+            - link "时间工具" [ref=f32e165] [cursor=pointer]:
+              - /url: /tools/categories/time
+            - paragraph [ref=f32e166]: 处理时间和日期的工具——计算时差、在时区之间转换、格式化日期、生成日期序列等等。
+          - generic [ref=f32e167]:
+            - button "查看全部 时间工具" [ref=f32e169] [cursor=pointer]
+            - button "尝试 将天数转换为小时数" [ref=f32e171] [cursor=pointer]
+        - generic [ref=f32e175]:
+          - generic [ref=f32e176]:
+            - link "音频工具" [ref=f32e181] [cursor=pointer]:
+              - /url: /tools/categories/audio
+            - paragraph [ref=f32e182]: 处理音频的工具——从视频中提取音频、调整音频速度、合并多个音频文件等等。
+          - generic [ref=f32e183]:
+            - button "查看全部 音频工具" [ref=f32e185] [cursor=pointer]
+            - button "尝试 从视频中提取音频" [ref=f32e187] [cursor=pointer]
+        - generic [ref=f32e191]:
+          - generic [ref=f32e192]:
+            - link "JSON 工具" [ref=f32e196] [cursor=pointer]:
+              - /url: /tools/categories/json
+            - paragraph [ref=f32e197]: 处理 JSON 数据结构的工具——美化和缩小 JSON 对象、展平 JSON 数组、字符串化 JSON 值、分析数据等等
+          - generic [ref=f32e198]:
+            - button "查看全部 JSON 工具" [ref=f32e200] [cursor=pointer]
+            - button "尝试 验证 JSON" [ref=f32e202] [cursor=pointer]
+        - generic [ref=f32e206]:
+          - generic [ref=f32e207]:
+            - link "列表工具" [ref=f32e213] [cursor=pointer]:
+              - /url: /tools/categories/list
+            - paragraph [ref=f32e214]: 处理列表的工具——排序、反转、随机化列表、查找唯一和重复的列表项、更改列表项分隔符等等。
+          - generic [ref=f32e215]:
+            - button "查看全部 列表工具" [ref=f32e217] [cursor=pointer]
+            - button "尝试 种类" [ref=f32e219] [cursor=pointer]
+        - generic [ref=f32e223]:
+          - generic [ref=f32e224]:
+            - link "CSV 工具" [ref=f32e228] [cursor=pointer]:
+              - /url: /tools/categories/csv
+            - paragraph [ref=f32e229]: 处理 CSV 文件的工具 - 将 CSV 转换为不同的格式、操作 CSV 数据、验证 CSV 结构以及有效地处理 CSV 文件。
+          - generic [ref=f32e230]:
+            - button "查看全部 CSV 工具" [ref=f32e232] [cursor=pointer]
+            - button "尝试 将 CSV 转换为 JSON" [ref=f32e234] [cursor=pointer]
+        - generic [ref=f32e238]:
+          - generic [ref=f32e239]:
+            - link "数字工具" [ref=f32e243] [cursor=pointer]:
+              - /url: /tools/categories/number
+            - paragraph [ref=f32e244]: 处理数字的工具——生成数字序列、将数字转换为文字、将文字转换为数字、排序、舍入、因式分解等等。
+          - generic [ref=f32e245]:
+            - button "查看全部 数字工具" [ref=f32e247] [cursor=pointer]
+            - button "尝试 和" [ref=f32e249] [cursor=pointer]
+        - generic [ref=f32e253]:
+          - generic [ref=f32e254]:
+            - link "PNG工具" [ref=f32e258] [cursor=pointer]:
+              - /url: /tools/categories/png
+            - paragraph [ref=f32e259]: 处理 PNG 图像的工具 - 将 PNG 转换为 JPG、创建透明 PNG、更改 PNG 颜色、裁剪、旋转、调整 PNG 大小等等。
+          - generic [ref=f32e260]:
+            - button "查看全部 PNG工具" [ref=f32e262] [cursor=pointer]
+            - button "尝试 压缩 png" [ref=f32e264] [cursor=pointer]
+        - generic [ref=f32e268]:
+          - generic [ref=f32e269]:
+            - link "XML 工具" [ref=f32e273] [cursor=pointer]:
+              - /url: /tools/categories/xml
+            - paragraph [ref=f32e274]: 处理 XML 数据结构的工具 - 查看器、美化器、验证器等等
+          - generic [ref=f32e275]:
+            - button "查看全部 XML 工具" [ref=f32e277] [cursor=pointer]
+            - button "尝试 XML美化器" [ref=f32e279] [cursor=pointer]
+        - generic [ref=f32e283]:
+          - generic [ref=f32e284]:
+            - link "GIF工具" [ref=f32e288] [cursor=pointer]:
+              - /url: /tools/categories/gif
+            - paragraph [ref=f32e289]: 处理 GIF 动画的工具 - 创建透明 GIF、提取 GIF 帧、向 GIF 添加文本、裁剪、旋转、反转 GIF 等等。
+          - generic [ref=f32e290]:
+            - button "查看全部 GIF工具" [ref=f32e292] [cursor=pointer]
+            - button "尝试 更改 GIF 速度" [ref=f32e294] [cursor=pointer]
+        - generic [ref=f32e298]:
+          - generic [ref=f32e299]:
+            - link "转换工具" [ref=f32e306] [cursor=pointer]:
+              - /url: /tools/categories/converters
+            - paragraph [ref=f32e307]: 用于在不同格式之间转换数据的工具 — 转换图片、音频、视频、文本等。
+          - generic [ref=f32e308]:
+            - button "查看全部 转换工具" [ref=f32e310] [cursor=pointer]
+            - button "尝试 音频转换器" [ref=f32e312] [cursor=pointer]

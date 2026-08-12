@@ -16,7 +16,8 @@ export MEI_MODE="single"
 
 # 用单镜像专属插件清单覆盖（只含已接入应用）
 if [ -f /etc/mei-plugins.json ]; then
-  cp /etc/mei-plugins.json /app/public/__theme/plugins.json
+  mkdir -p /app/public/__theme
+  cp /etc/mei-plugins.json /app/public/__theme/plugins.json 2>/dev/null || echo "[mei-allin] plugins.json 拷贝跳过"
 fi
 
 echo "[mei-allin] 数据目录: $DATA_DIR  管理员: $MEI_ADMIN_USER  模式: single"

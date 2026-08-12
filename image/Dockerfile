@@ -71,13 +71,26 @@ RUN node patch.mjs
 RUN npm ci --no-audit --no-fund || npm install --no-audit --no-fund
 RUN npm run build
 
+# ---- ai-draw（Vite + React + Express，basePath=/draw，sqlite3）----
+FROM node:22-bookworm-slim AS ai-draw-builder
+WORKDIR /build
+RUN apt-get update && apt-get install -y --no-install-recommends git ca-certificates python3 make g++ \
+    && rm -rf /var/lib/apt/lists/*
+RUN git clone --depth 1 https://github.com/stone-yu/ai-draw.git .
+COPY image/patches/ai-draw.mjs ./patch.mjs
+RUN node patch.mjs
+RUN npm ci --no-audit --no-fund || npm install --no-audit --no-fund
+RUN npm run build
+
 # =============================================================================
 # ---- 运行时 ----
 # =============================================================================
 FROM node:22-bookworm-slim AS runtime
-RUN apt-get update && apt-get install -y --no-install-recommends \
-        nginx supervisor gettext-base ca-certificates curl \
-    && rm -rf /var/lib/apt/lists/* /etc/nginx/sites-enabled/default
+RUN apt-get update && apt-get install -y \
+        nginx gettext-base ca-certificates curl python3 python3-pip python3-venv \
+    && rm -rf /var/lib/apt/lists/* /etc/nginx/sites-enabled/default \
+    && python3 -m pip install --no-cache-dir --break-system-packages supervisor \
+    && which supervisord
 
 WORKDIR /app
 
@@ -105,6 +118,12 @@ COPY --from=lunatv-builder /build/public ./apps/lunatv/public
 # ---- omni-tools（静态文件）----
 COPY --from=omni-tools-builder /build/dist ./apps/omni-tools
 
+# ---- ai-draw（Express + dist）----
+COPY --from=ai-draw-builder /build/dist ./apps/ai-draw/dist
+COPY --from=ai-draw-builder /build/server ./apps/ai-draw/server
+COPY --from=ai-draw-builder /build/package.json ./apps/ai-draw/package.json
+COPY --from=ai-draw-builder /build/node_modules ./apps/ai-draw/node_modules
+
 # ---- 配置 ----
 # 覆盖 debian nginx 默认配置：nginx.conf + conf.d/
 COPY image/nginx/nginx.conf /etc/nginx/nginx.conf
@@ -112,6 +131,7 @@ COPY image/nginx/conf.d/ /etc/nginx/conf.d/
 RUN rm -rf /etc/nginx/sites-enabled
 COPY image/plugins.json /etc/mei-plugins.json
 COPY image/supervisord.conf /etc/supervisor/conf.d/mei-allin.conf
+RUN mkdir -p /etc/supervisor && ln -sf /etc/supervisor/conf.d/mei-allin.conf /etc/supervisor/supervisord.conf
 COPY image/entrypoint.sh /entrypoint.sh
 COPY image/services/ /etc/mei-services/
 RUN chmod +x /entrypoint.sh
@@ -121,4 +141,4 @@ VOLUME ["/data"]
 ENV NODE_ENV=production TZ=Asia/Shanghai
 EXPOSE 7777
 ENTRYPOINT ["/entrypoint.sh"]
-CMD ["supervisord", "-n", "-c", "/etc/supervisor/supervisord.conf"]
+CMD ["supervisord", "-n", "-c", "/etc/supervisor/conf.d/mei-allin.conf"]

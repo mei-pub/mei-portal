@@ -1,0 +1,38 @@
+- generic [active] [ref=f29e1]:
+  - generic [ref=f29e2]:
+    - banner [ref=f29e3]:
+      - link "mei-allin" [ref=f29e4] [cursor=pointer]:
+        - /url: /
+      - textbox "搜索应用…" [ref=f29e7]
+    - main [ref=f29e8]:
+      - heading "欢迎来到 mei-allin" [level=1] [ref=f29e9]
+      - paragraph [ref=f29e10]: 统一门户 · 4 个应用 · 点击卡片进入
+      - generic [ref=f29e11]:
+        - heading "效率" [level=2] [ref=f29e12]
+        - link [ref=f29e14] [cursor=pointer]:
+          - /url: /novels
+          - button "小说书架 个人小说库，带蜘蛛纸牌游戏伪装" [ref=f29e15]:
+            - generic [ref=f29e20]: 小说书架
+            - generic [ref=f29e21]: 个人小说库，带蜘蛛纸牌游戏伪装
+      - generic [ref=f29e22]:
+        - heading "网络" [level=2] [ref=f29e23]
+        - link [ref=f29e25] [cursor=pointer]:
+          - /url: /link
+          - button "内网穿透 基于 frp 的内网穿透客户端管理" [ref=f29e26]:
+            - generic [ref=f29e35]: 内网穿透
+            - generic [ref=f29e36]: 基于 frp 的内网穿透客户端管理
+      - generic [ref=f29e37]:
+        - heading "影音" [level=2] [ref=f29e38]
+        - link [ref=f29e40] [cursor=pointer]:
+          - /url: /tv
+          - button "影视门户 豆瓣式影视聚合与播放" [ref=f29e41]:
+            - generic [ref=f29e48]: 影视门户
+            - generic [ref=f29e49]: 豆瓣式影视聚合与播放
+      - generic [ref=f29e50]:
+        - heading "工具" [level=2] [ref=f29e51]
+        - link [ref=f29e53] [cursor=pointer]:
+          - /url: /tools
+          - button "工具箱 隐私优先的本地工具集合（图片/PDF/文本等）" [ref=f29e54]:
+            - generic [ref=f29e56]: 工具箱
+            - generic [ref=f29e57]: 隐私优先的本地工具集合（图片/PDF/文本等）
+  - alert [ref=f29e58]

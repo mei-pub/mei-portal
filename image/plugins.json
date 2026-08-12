@@ -50,5 +50,18 @@
     "healthPath": "/tools/",
     "healthExpect": 200,
     "hasSkin": false
+  },
+  {
+    "id": "ai-draw",
+    "name": "AI 绘图",
+    "description": "AI 驱动的绘图工具，支持 Excalidraw/Mermaid/Drawio",
+    "icon": "lucide:pen-tool",
+    "category": "utility",
+    "weight": 10,
+    "subdomainPrefix": "draw",
+    "endpoint": "",
+    "healthPath": "/draw/",
+    "healthExpect": 200,
+    "hasSkin": false
   }
 ]
