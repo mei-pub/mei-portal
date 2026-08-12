@@ -37,5 +37,18 @@
     "healthPath": "/tv",
     "healthExpect": 200,
     "hasSkin": false
+  },
+  {
+    "id": "omni-tools",
+    "name": "工具箱",
+    "description": "隐私优先的本地工具集合（图片/PDF/文本等）",
+    "icon": "lucide:wrench",
+    "category": "utility",
+    "weight": 50,
+    "subdomainPrefix": "tools",
+    "endpoint": "",
+    "healthPath": "/tools/",
+    "healthExpect": 200,
+    "hasSkin": false
   }
 ]

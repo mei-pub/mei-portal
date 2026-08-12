@@ -60,6 +60,17 @@ RUN corepack enable && corepack prepare pnpm@10.14.0 --activate
 RUN pnpm install --no-frozen-lockfile
 RUN pnpm run build
 
+# ---- omni-tools（Vite + React + MUI，纯静态，basePath=/tools）----
+FROM node:22-bookworm-slim AS omni-tools-builder
+WORKDIR /build
+RUN apt-get update && apt-get install -y --no-install-recommends git ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+RUN git clone --depth 1 https://github.com/iib0011/omni-tools.git .
+COPY image/patches/omni-tools.mjs ./patch.mjs
+RUN node patch.mjs
+RUN npm ci --no-audit --no-fund || npm install --no-audit --no-fund
+RUN npm run build
+
 # =============================================================================
 # ---- 运行时 ----
 # =============================================================================
@@ -90,6 +101,9 @@ COPY --from=meilink-builder /build ./apps/mei-link
 COPY --from=lunatv-builder /build/.next/standalone ./apps/lunatv/
 COPY --from=lunatv-builder /build/.next/static ./apps/lunatv/.next/static
 COPY --from=lunatv-builder /build/public ./apps/lunatv/public
+
+# ---- omni-tools（静态文件）----
+COPY --from=omni-tools-builder /build/dist ./apps/omni-tools
 
 # ---- 配置 ----
 # 覆盖 debian nginx 默认配置：nginx.conf + conf.d/
