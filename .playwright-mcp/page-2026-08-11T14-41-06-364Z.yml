@@ -1,0 +1,26 @@
+- generic [active] [ref=e1]:
+  - alert [ref=e2]
+  - navigation [ref=e3]:
+    - generic [ref=e5]:
+      - link "我的书架" [ref=e6] [cursor=pointer]:
+        - /url: /novels
+      - generic [ref=e9]:
+        - button "隐藏为纸牌游戏" [ref=e10]
+        - link "书架" [ref=e13] [cursor=pointer]:
+          - /url: /novels
+        - link "设置" [ref=e16] [cursor=pointer]:
+          - /url: /novels/settings
+        - link "添加" [ref=e20] [cursor=pointer]:
+          - /url: /novels/novels/new
+  - main [ref=e23]:
+    - generic [ref=e25]:
+      - generic [ref=e26]:
+        - button "默认顺序" [ref=e27]
+        - button "按评分排序" [ref=e30]
+      - button "分类" [ref=e34]
+      - button "标签" [ref=e39]
+      - textbox "搜索小说..." [ref=e46]
+    - generic [ref=e47]:
+      - paragraph [ref=e50]: 书架空空如也，添加第一本小说吧
+      - link "添加小说" [ref=e51] [cursor=pointer]:
+        - /url: /novels/novels/new

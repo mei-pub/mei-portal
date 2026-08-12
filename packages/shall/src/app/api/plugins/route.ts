@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getPlugins, getPluginUrl } from '@/lib/plugins';
 
-export const dynamic = 'force-static';
+export const dynamic = 'force-dynamic';
 
 export async function GET() {
   const plugins = getPlugins();

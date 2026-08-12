@@ -3,97 +3,100 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 
 export default function LoginClient() {
-  const [pw, setPw] = useState('');
+  const [username, setUsername] = useState('admin');
+  const [password, setPassword] = useState('');
   const [err, setErr] = useState('');
+  const [loading, setLoading] = useState(false);
   const router = useRouter();
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setErr('');
-    const res = await fetch('/api/login', {
+    setLoading(true);
+    const res = await fetch('/api/auth/login', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ password: pw }),
+      body: JSON.stringify({ username, password }),
     });
+    setLoading(false);
     if (res.ok) {
       router.push('/');
       router.refresh();
     } else {
-      setErr('密码错误');
+      const d = await res.json().catch(() => ({}));
+      setErr(d.error || '登录失败');
     }
   }
 
   return (
-    <div
-      style={{
-        minHeight: '100vh',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-      }}
-    >
+    <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
       <form
         onSubmit={submit}
         style={{
-          width: 320,
+          width: 340,
           padding: 'var(--mei-space-8)',
           background: 'var(--mei-surface)',
-          backdropFilter: 'var(--mei-blur)',
-          WebkitBackdropFilter: 'var(--mei-blur)',
           border: '1px solid var(--mei-border)',
           borderRadius: 'var(--mei-radius-lg)',
           boxShadow: 'var(--mei-shadow)',
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 24 }}>
-          <div
-            style={{
-              width: 40,
-              height: 40,
-              borderRadius: 'var(--mei-radius-sm)',
-              background: 'var(--mei-gradient)',
-            }}
-          />
-          <div style={{ fontWeight: 700, fontSize: 20 }}>mei-allin</div>
+          <div style={{ width: 40, height: 40, borderRadius: 'var(--mei-radius-sm)', background: 'var(--mei-gradient)' }} />
+          <div>
+            <div style={{ fontWeight: 700, fontSize: 20 }}>mei-allin</div>
+            <div style={{ fontSize: 12, color: 'var(--mei-text-muted)' }}>统一应用门户</div>
+          </div>
         </div>
         <input
-          type="password"
-          value={pw}
-          onChange={(e) => setPw(e.target.value)}
-          placeholder="入口密码"
+          value={username}
+          onChange={(e) => setUsername(e.target.value)}
+          placeholder="用户名"
           autoFocus
-          style={{
-            width: '100%',
-            padding: '12px 14px',
-            background: 'var(--mei-bg-elevated)',
-            border: '1px solid var(--mei-border)',
-            borderRadius: 'var(--mei-radius-sm)',
-            color: 'var(--mei-text)',
-            outline: 'none',
-            fontSize: 15,
-            marginBottom: 12,
-          }}
+          style={inputStyle}
         />
-        {err && (
-          <div style={{ color: 'var(--mei-danger)', fontSize: 13, marginBottom: 12 }}>{err}</div>
-        )}
+        <input
+          type="password"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          placeholder="密码"
+          style={{ ...inputStyle, marginBottom: 12 }}
+        />
+        {err && <div style={{ color: 'var(--mei-danger)', fontSize: 13, marginBottom: 12 }}>{err}</div>}
         <button
           type="submit"
+          disabled={loading}
           style={{
             width: '100%',
-            padding: '12px',
+            padding: 12,
             background: 'var(--mei-gradient)',
             border: 'none',
             borderRadius: 'var(--mei-radius-sm)',
             color: '#fff',
             fontWeight: 600,
             fontSize: 15,
-            cursor: 'pointer',
+            cursor: loading ? 'wait' : 'pointer',
+            opacity: loading ? 0.7 : 1,
           }}
         >
-          进入
+          {loading ? '登录中…' : '登录'}
         </button>
+        <div style={{ fontSize: 12, color: 'var(--mei-text-faint)', marginTop: 16, textAlign: 'center' }}>
+          初始账户 admin / mei-allin
+        </div>
       </form>
     </div>
   );
 }
+
+const inputStyle: React.CSSProperties = {
+  width: '100%',
+  padding: '12px 14px',
+  background: 'var(--mei-bg)',
+  border: '1px solid var(--mei-border)',
+  borderRadius: 'var(--mei-radius-sm)',
+  color: 'var(--mei-text)',
+  outline: 'none',
+  fontSize: 15,
+  marginBottom: 12,
+};

@@ -14,7 +14,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   // 避免客户端猜测根域（nip.io 等多级域名会猜错）
   const rootDomain = process.env.ROOT_DOMAIN || 'allin.local';
   return (
-    <html lang="zh-CN" data-mei-theme="dark">
+    <html lang="zh-CN">
       <body suppressHydrationWarning>
         <script
           dangerouslySetInnerHTML={{

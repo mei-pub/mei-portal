@@ -1,7 +1,5 @@
 'use client';
-// 门户顶栏：品牌 + 搜索 + 主题控件
-import ThemeControls from './ThemeControls';
-
+// 门户顶栏：品牌 + 搜索（亮色，无主题切换控件）
 export default function TopBar({
   query,
   onSearch,
@@ -22,8 +20,6 @@ export default function TopBar({
         gap: 'var(--mei-space-4)',
         padding: 'var(--mei-space-3) var(--mei-space-6)',
         background: 'var(--mei-surface)',
-        backdropFilter: 'var(--mei-blur)',
-        WebkitBackdropFilter: 'var(--mei-blur)',
         borderBottom: '1px solid var(--mei-border)',
       }}
     >
@@ -47,12 +43,12 @@ export default function TopBar({
         ref={searchRef}
         value={query}
         onChange={(e) => onSearch(e.target.value)}
-        placeholder="搜索应用…  (⌘K)"
+        placeholder="搜索应用…"
         style={{
           flex: 1,
           maxWidth: 360,
           padding: '8px 14px',
-          background: 'var(--mei-bg-elevated)',
+          background: 'var(--mei-bg)',
           border: '1px solid var(--mei-border)',
           borderRadius: 'var(--mei-radius-full)',
           color: 'var(--mei-text)',
@@ -62,8 +58,6 @@ export default function TopBar({
       />
 
       <div style={{ flex: 1 }} />
-
-      <ThemeControls />
     </header>
   );
 }

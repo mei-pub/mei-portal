@@ -95,10 +95,15 @@ export function getPlugins(): PluginManifest[] {
   return global.__meiPluginsCache;
 }
 
-export function getPluginUrl(manifest: PluginManifest, rootDomain: string): string {
-  // 优先用预计算的 subdomainPrefix（plugins.json 路径）
+export function getPluginUrl(manifest: PluginManifest, _rootDomain: string): string {
+  // 单镜像模式：url 为同源子路径（/novels, /link 等）
+  if (process.env.MEI_MODE === 'single') {
+    const path = manifest.subdomainPrefix || manifest.id;
+    return `/${path}`;
+  }
+  // 多容器模式：url 为子域名
   if (manifest.subdomainPrefix) {
-    return `http://${manifest.subdomainPrefix}.${rootDomain}`;
+    return `http://${manifest.subdomainPrefix}.${_rootDomain}`;
   }
   const host = manifest.ingress.host || '';
   if (host && !host.includes('${')) {
@@ -106,7 +111,7 @@ export function getPluginUrl(manifest: PluginManifest, rootDomain: string): stri
   }
   const prefix = (host.match(/\$\{SUBDOMAIN_([A-Z0-9_]+)\}/) || [])[1];
   const sub = prefix ? prefix.toLowerCase() : manifest.id;
-  return `http://${sub}.${rootDomain}`;
+  return `http://${sub}.${_rootDomain}`;
 }
 
 void CATEGORY_LABELS;

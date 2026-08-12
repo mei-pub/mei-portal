@@ -1,12 +1,13 @@
 import { getPlugins, getPluginUrl } from '@/lib/plugins';
 import type { ClientPlugin } from '@/lib/categories';
-import { isLoggedIn, isAuthOpen } from '@/lib/auth';
+import { isLoggedIn, initUserIfNeeded } from '@/lib/auth';
 import { redirect } from 'next/navigation';
 import PortalClient from '@/components/PortalClient';
 
 export default function HomePage() {
   // 门禁
-  if (!isAuthOpen() && !isLoggedIn()) {
+  initUserIfNeeded();
+  if (!isLoggedIn()) {
     redirect('/login');
   }
 

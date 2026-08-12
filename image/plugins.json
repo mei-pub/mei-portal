@@ -1,0 +1,41 @@
+[
+  {
+    "id": "tutorial",
+    "name": "小说书架",
+    "description": "个人小说库，带蜘蛛纸牌游戏伪装",
+    "icon": "lucide:book-open",
+    "category": "productivity",
+    "weight": 60,
+    "subdomainPrefix": "novels",
+    "endpoint": "",
+    "healthPath": "/novels",
+    "healthExpect": 200,
+    "hasSkin": true
+  },
+  {
+    "id": "mei-link",
+    "name": "内网穿透",
+    "description": "基于 frp 的内网穿透客户端管理",
+    "icon": "lucide:network",
+    "category": "network",
+    "weight": 70,
+    "subdomainPrefix": "link",
+    "endpoint": "",
+    "healthPath": "/link/",
+    "healthExpect": 200,
+    "hasSkin": true
+  },
+  {
+    "id": "lunatv",
+    "name": "影视门户",
+    "description": "豆瓣式影视聚合与播放",
+    "icon": "lucide:tv",
+    "category": "media",
+    "weight": 30,
+    "subdomainPrefix": "tv",
+    "endpoint": "",
+    "healthPath": "/tv",
+    "healthExpect": 200,
+    "hasSkin": false
+  }
+]

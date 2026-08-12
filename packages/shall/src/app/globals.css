@@ -18,15 +18,15 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
-/* 动态背景：渐变光斑 */
+/* 动态背景：柔和渐变光斑（亮色） */
 body::before {
   content: '';
   position: fixed;
   inset: 0;
   z-index: -1;
   background:
-    radial-gradient(800px circle at 15% 10%, rgba(99, 102, 241, 0.18), transparent 40%),
-    radial-gradient(700px circle at 85% 90%, rgba(124, 58, 237, 0.16), transparent 40%),
+    radial-gradient(800px circle at 15% 10%, rgba(99, 102, 241, 0.08), transparent 40%),
+    radial-gradient(700px circle at 85% 90%, rgba(124, 58, 237, 0.06), transparent 40%),
     var(--mei-bg);
 }
 

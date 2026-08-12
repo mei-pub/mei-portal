@@ -1,0 +1,31 @@
+- generic [active] [ref=f13e1]:
+  - alert [ref=f13e13]: mei-allin
+  - generic [ref=f13e14]:
+    - banner [ref=f13e15]:
+      - link "mei-allin" [ref=f13e16] [cursor=pointer]:
+        - /url: /
+      - textbox "搜索应用…" [ref=f13e19]
+    - main [ref=f13e20]:
+      - heading "欢迎来到 mei-allin" [level=1] [ref=f13e21]
+      - paragraph [ref=f13e22]: 统一门户 · 3 个应用 · 点击卡片进入
+      - generic [ref=f13e23]:
+        - heading "效率" [level=2] [ref=f13e24]
+        - link [ref=f13e26] [cursor=pointer]:
+          - /url: http://novels.allin.local
+          - button "小说书架 个人小说库，带蜘蛛纸牌游戏伪装" [ref=f13e27]:
+            - generic [ref=f13e32]: 小说书架
+            - generic [ref=f13e33]: 个人小说库，带蜘蛛纸牌游戏伪装
+      - generic [ref=f13e34]:
+        - heading "网络" [level=2] [ref=f13e35]
+        - link [ref=f13e37] [cursor=pointer]:
+          - /url: http://link.allin.local
+          - button "内网穿透 基于 frp 的内网穿透客户端管理" [ref=f13e38]:
+            - generic [ref=f13e47]: 内网穿透
+            - generic [ref=f13e48]: 基于 frp 的内网穿透客户端管理
+      - generic [ref=f13e49]:
+        - heading "影音" [level=2] [ref=f13e50]
+        - link [ref=f13e52] [cursor=pointer]:
+          - /url: http://tv.allin.local
+          - button "影视门户 豆瓣式影视聚合与播放" [ref=f13e53]:
+            - generic [ref=f13e60]: 影视门户
+            - generic [ref=f13e61]: 豆瓣式影视聚合与播放

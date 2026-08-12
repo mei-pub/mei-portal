@@ -1,35 +1,35 @@
 /* =============================================================================
- * mei-allin 设计令牌
- * 全局视觉语言：暗色玻璃拟态 + 靛蓝紫渐变主色 + 亮色备选
- * 所有协调 CSS（plugins/<id>/theme.css）都引用这些变量，改这里=全局焕新。
- * 同时供 Shell 自身使用（通过 :root[data-shell] 作用域）。
+ * mei-allin 设计令牌 —— 统一亮色风格
+ * 所有变量用 --mei- 前缀，不映射通用名（--primary/--background 等），
+ * 避免污染各应用自身的 CSS 变量。各应用协调 CSS 用 !important 显式引用 --mei-*。
  * ========================================================================== */
 
 :root {
-  /* 主题模式标记，由 loader 根据用户偏好切换；默认暗色 */
-  color-scheme: dark;
+  color-scheme: light;
 
   /* ----- 主色（靛蓝→紫渐变） ----- */
-  --mei-primary: #6366f1;          /* indigo-500 */
-  --mei-primary-hover: #4f46e5;    /* indigo-600 */
-  --mei-primary-soft: #818cf8;     /* indigo-400 */
-  --mei-accent: #7c3aed;           /* violet-600 */
+  --mei-primary: #6366f1;
+  --mei-primary-hover: #4f46e5;
+  --mei-primary-soft: #818cf8;
+  --mei-accent: #7c3aed;
   --mei-gradient: linear-gradient(135deg, #6366f1 0%, #7c3aed 100%);
-  --mei-gradient-soft: linear-gradient(135deg, rgba(99,102,241,0.15) 0%, rgba(124,58,237,0.15) 100%);
+  --mei-gradient-soft: linear-gradient(135deg, rgba(99,102,241,0.10) 0%, rgba(124,58,237,0.10) 100%);
+
+  /* ----- 亮色表面 ----- */
+  --mei-bg: #f5f6f9;
+  --mei-bg-elevated: #ffffff;
+  --mei-surface: #ffffff;
+  --mei-surface-hover: #f9fafb;
+  --mei-overlay: rgba(245, 246, 249, 0.7);
 
   /* ----- 文本 ----- */
-  --mei-text: #e5e7eb;             /* gray-200 */
-  --mei-text-muted: #9ca3af;       /* gray-400 */
-  --mei-text-faint: #6b7280;       /* gray-500 */
+  --mei-text: #1f2937;
+  --mei-text-muted: #6b7280;
+  --mei-text-faint: #9ca3af;
 
-  /* ----- 暗色表面（玻璃拟态） ----- */
-  --mei-bg: #0f1117;
-  --mei-bg-elevated: #1c1f2a;
-  --mei-surface: rgba(28, 31, 42, 0.72);   /* 玻璃卡片 */
-  --mei-surface-hover: rgba(40, 44, 58, 0.82);
-  --mei-overlay: rgba(15, 17, 23, 0.65);   /* 背景遮罩 */
-  --mei-border: rgba(255, 255, 255, 0.08);
-  --mei-border-strong: rgba(255, 255, 255, 0.16);
+  /* ----- 边框 ----- */
+  --mei-border: #e5e7eb;
+  --mei-border-strong: #d1d5db;
 
   /* ----- 功能色 ----- */
   --mei-success: #10b981;
@@ -39,17 +39,16 @@
 
   /* ----- 形状 ----- */
   --mei-radius-sm: 8px;
-  --mei-radius: 16px;
-  --mei-radius-lg: 24px;
+  --mei-radius: 14px;
+  --mei-radius-lg: 20px;
   --mei-radius-full: 9999px;
 
-  /* ----- 阴影（玻璃感） ----- */
-  --mei-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
-  --mei-shadow: 0 8px 32px rgba(0, 0, 0, 0.35);
-  --mei-shadow-lg: 0 16px 48px rgba(0, 0, 0, 0.45);
-  --mei-glow: 0 0 0 1px var(--mei-border-strong), 0 8px 32px rgba(99, 102, 241, 0.15);
+  /* ----- 阴影 ----- */
+  --mei-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
+  --mei-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+  --mei-shadow-lg: 0 12px 32px rgba(0, 0, 0, 0.12);
 
-  /* ----- 间距节奏 ----- */
+  /* ----- 间距 ----- */
   --mei-space-1: 4px;
   --mei-space-2: 8px;
   --mei-space-3: 12px;
@@ -60,47 +59,7 @@
   /* ----- 字体 ----- */
   --mei-font: "Inter", "Noto Sans SC", "PingFang SC", "Microsoft YaHei",
     -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-  --mei-font-mono: "JetBrains Mono", "Fira Code", ui-monospace, "SF Mono", monospace;
-
-  /* ----- 模糊（玻璃效果） ----- */
-  --mei-blur: blur(20px) saturate(180%);
-  --mei-blur-light: blur(12px) saturate(150%);
 
   /* ----- 过渡 ----- */
-  --mei-transition: 180ms cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-/* ----- 亮色主题（Shell 顶栏切换或跟随系统时生效） ----- */
-:root[data-mei-theme="light"] {
-  color-scheme: light;
-
-  --mei-text: #1f2937;
-  --mei-text-muted: #6b7280;
-  --mei-text-faint: #9ca3af;
-
-  --mei-bg: #f5f6f9;
-  --mei-bg-elevated: #ffffff;
-  --mei-surface: rgba(255, 255, 255, 0.78);
-  --mei-surface-hover: rgba(255, 255, 255, 0.92);
-  --mei-overlay: rgba(245, 246, 249, 0.7);
-  --mei-border: rgba(0, 0, 0, 0.08);
-  --mei-border-strong: rgba(0, 0, 0, 0.16);
-
-  --mei-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.06);
-  --mei-shadow: 0 8px 32px rgba(0, 0, 0, 0.08);
-  --mei-shadow-lg: 0 16px 48px rgba(0, 0, 0, 0.12);
-
-  --mei-gradient-soft: linear-gradient(135deg, rgba(99,102,241,0.08) 0%, rgba(124,58,237,0.08) 100%);
-}
-
-/* ----- 兼容：把 mei- 前缀变量映射到通用名，便于协调 CSS 引用 ----- */
-:root {
-  --primary: var(--mei-primary);
-  --accent: var(--mei-accent);
-  --background: var(--mei-bg);
-  --foreground: var(--mei-text);
-  --muted: var(--mei-text-muted);
-  --card-bg: var(--mei-surface);
-  --border: var(--mei-border);
-  --radius: var(--mei-radius);
+  --mei-transition: 150ms cubic-bezier(0.4, 0, 0.2, 1);
 }
