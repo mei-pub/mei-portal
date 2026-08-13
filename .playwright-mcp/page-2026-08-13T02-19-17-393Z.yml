@@ -1,0 +1,26 @@
+- generic [active] [ref=f67e1]:
+  - generic [ref=f67e4]:
+    - generic [ref=f67e8]:
+      - generic [ref=f67e10]:
+        - generic [ref=f67e11]: Sun-Panel
+        - generic [ref=f67e12]: "|"
+        - generic [ref=f67e14]:
+          - text: 10:19
+          - generic [ref=f67e15]: 8-13星期四
+      - generic [ref=f67e17]:
+        - text: Powered By
+        - link "Sun-Panel" [ref=f67e18] [cursor=pointer]:
+          - /url: https://github.com/hslr-s/sun-panel
+    - group [ref=f67e20]:
+      - button "切换为内网模式" [ref=f67e21] [cursor=pointer]
+      - button [ref=f67e25] [cursor=pointer]
+  - generic:
+    - generic [ref=f67e30]:
+      - generic [ref=f67e37]: 网络错误，请稍后重试
+      - button "close" [ref=f67e38] [cursor=pointer]
+    - generic [ref=f67e45]:
+      - generic [ref=f67e52]: 网络错误，请稍后重试
+      - button "close" [ref=f67e53] [cursor=pointer]
+    - generic [ref=f67e60]:
+      - generic [ref=f67e67]: 网络错误，请稍后重试
+      - button "close" [ref=f67e68] [cursor=pointer]

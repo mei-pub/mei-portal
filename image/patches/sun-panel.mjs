@@ -28,15 +28,17 @@ if (fs.existsSync(routerFile)) {
   }
 }
 
-// ---- 2. Vite base（支持对象和函数两种 defineConfig 写法）----
+// ---- 2. Vite base（sun-panel 用 defineConfig((env) => { ... return { ... } })）----
 const vf = 'vite.config.ts';
 if (fs.existsSync(vf)) {
   let c = fs.readFileSync(vf, 'utf8');
   if (!c.includes("base:")) {
-    // 对象形式: defineConfig({
-    c = c.replace(/(defineConfig\(\s*\{)/, `$1\n  base: '${BASE}/',`);
-    // 函数形式: defineConfig(({ mode }) => ({ 或 defineConfig((env) => ({
-    c = c.replace(/(defineConfig\(\([^)]*\)\s*=>\s*\(\s*\{)/, `$1\n  base: '${BASE}/',`);
+    // 函数体 return { 后加 base
+    c = c.replace(/(return\s*\{)/, `$1\n    base: '${BASE}/',`);
+    // 兜底：对象形式 defineConfig({
+    if (!c.includes("base:")) {
+      c = c.replace(/(defineConfig\(\s*\{)/, `$1\n  base: '${BASE}/',`);
+    }
     fs.writeFileSync(vf, c);
     console.log('[patch] sun-panel: vite base=' + BASE + '/');
   }
