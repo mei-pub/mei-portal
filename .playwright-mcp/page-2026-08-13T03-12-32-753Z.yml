@@ -1,0 +1,13 @@
+- main [ref=f76e2]:
+  - generic [ref=f76e7]:
+    - heading "Meilink" [level=1] [ref=f76e8]
+    - generic [ref=f76e9]: NAS 隧道管理
+  - generic [ref=f76e10]:
+    - generic [ref=f76e11]:
+      - generic [ref=f76e12]: 账号
+      - textbox "账号" [ref=f76e13]: admin
+    - generic [ref=f76e14]:
+      - generic [ref=f76e15]: 密码
+      - textbox "密码" [ref=f76e16]
+    - paragraph [ref=f76e17]
+    - button "登录" [ref=f76e18] [cursor=pointer]

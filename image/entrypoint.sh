@@ -40,10 +40,28 @@ if [ ! -d "$DATA_DIR/tutorial/fonts/css" ] && [ -f /app/apps/tutorial/scripts/do
   (cd /app/apps/tutorial && DATA_DIR="$DATA_DIR/tutorial" node scripts/download-fonts.mjs || echo "[mei-allin] 字体下载完成/跳过") &
 fi
 
-# ---- mediago 端口修正（config.json 持久化会覆盖命令行）----
+# ---- mediago 端口修正 + 自动 setup ----
 if [ -f "$DATA_DIR/mediago/config.json" ]; then
   sed -i 's/"port":[[:space:]]*[0-9]*/"port": 3007/' "$DATA_DIR/mediago/config.json" 2>/dev/null || true
 fi
+
+# mediago 首次 setup（后台等待启动后自动设置密码）
+(
+  for i in $(seq 1 30); do
+    sleep 2
+    STATUS=$(curl -s http://127.0.0.1:3000/api/auth/status 2>/dev/null)
+    if echo "$STATUS" | grep -q '"setuped":false'; then
+      curl -s -X POST http://127.0.0.1:3000/api/auth/setup \
+        -H 'Content-Type: application/json' \
+        -d "{\"password\":\"${MEI_ADMIN_PASSWORD}\"}" >/dev/null 2>&1
+      echo "[mei-allin] mediago setup 完成"
+      break
+    elif echo "$STATUS" | grep -q '"setuped":true'; then
+      echo "[mei-allin] mediago 已 setup"
+      break
+    fi
+  done
+) &
 
 # ---- sun-panel 初始化 conf + 改端口 ----
 SUNPANEL_DIR="/app/apps/sun-panel"

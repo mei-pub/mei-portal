@@ -1,0 +1,10 @@
+- generic [ref=f74e1]:
+  - generic [ref=f74e3]:
+    - generic [ref=f74e6]:
+      - generic [ref=f74e7]: mei-allin
+      - generic [ref=f74e8]: 统一应用门户
+    - textbox "用户名" [active] [ref=f74e9]: admin
+    - textbox "密码" [ref=f74e10]
+    - button "登录" [ref=f74e11] [cursor=pointer]
+    - generic [ref=f74e12]: 初始账户 admin / mei-allin
+  - alert [ref=f74e13]

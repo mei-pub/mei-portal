@@ -102,9 +102,31 @@ const sunpanelAdapter: AppLoginAdapter = {
   },
 };
 
+// ----- mediago 适配器（API key + localStorage）-----
+const mediagoAdapter: AppLoginAdapter = {
+  appId: 'mediago',
+  async login(_u, password) {
+    try {
+      const res = await fetch('http://127.0.0.1:3000/api/auth/signin', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password }),
+      });
+      const data = await res.json();
+      const apiKey = data?.data;
+      if (apiKey) {
+        return { success: true, cookies: [], token: apiKey };
+      }
+      return { success: false, cookies: [] };
+    } catch {
+      return { success: false, cookies: [] };
+    }
+  },
+};
+
 // tutorial：nginx 已注入 auth-token cookie，无需适配器
 
-const ADAPTERS: AppLoginAdapter[] = [meilinkAdapter, lunatvAdapter, solaraAdapter, sunpanelAdapter];
+const ADAPTERS: AppLoginAdapter[] = [meilinkAdapter, lunatvAdapter, solaraAdapter, sunpanelAdapter, mediagoAdapter];
 
 /** 并发代理登录所有已注册应用 */
 export async function proxyLoginAll(

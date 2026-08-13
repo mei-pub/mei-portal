@@ -1,0 +1,38 @@
+- generic [active] [ref=f85e1]:
+  - generic [ref=f85e2]:
+    - link "mei-allin" [ref=f85e3] [cursor=pointer]:
+      - /url: /
+    - generic [ref=f85e6]:
+      - link "小说书架" [ref=f85e7] [cursor=pointer]:
+        - /url: /novels
+      - link "内网穿透" [ref=f85e8] [cursor=pointer]:
+        - /url: /link
+      - link "影视门户" [ref=f85e9] [cursor=pointer]:
+        - /url: /tv
+      - link "工具箱" [ref=f85e10] [cursor=pointer]:
+        - /url: /tools
+      - link "AI 绘图" [ref=f85e11] [cursor=pointer]:
+        - /url: /draw
+      - link "音乐播放" [ref=f85e12] [cursor=pointer]:
+        - /url: /music
+      - link "主页面板" [ref=f85e13] [cursor=pointer]:
+        - /url: /panel
+      - link "流媒体下载" [ref=f85e14] [cursor=pointer]:
+        - /url: /media
+    - link "admin" [ref=f85e16] [cursor=pointer]:
+      - /url: /
+  - generic [ref=f85e19]:
+    - generic [ref=f85e20]:
+      - generic [ref=f85e22]:
+        - generic [ref=f85e23]: Media Go
+        - generic [ref=f85e24]: v3.5.0
+      - button "使用帮助" [ref=f85e28] [cursor=pointer]
+    - generic [ref=f85e32]:
+      - generic [ref=f85e34]:
+        - link "下载列表" [ref=f85e35] [cursor=pointer]:
+          - /url: /
+        - link "下载完成" [ref=f85e41] [cursor=pointer]:
+          - /url: /done
+        - link "软件设置" [ref=f85e46] [cursor=pointer]:
+          - /url: /settings
+      - generic [ref=f85e51]: "404"
