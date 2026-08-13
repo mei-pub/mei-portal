@@ -63,6 +63,28 @@ fi
   done
 ) &
 
+# sun-panel 自动登录获取 token，注入 nginx header（后台）
+(
+  for i in $(seq 1 30); do
+    sleep 2
+    SP_RESP=$(curl -s -X POST http://127.0.0.1:3006/panel/api/login \
+      -H 'Content-Type: application/json' \
+      -d '{"username":"admin@sun.cc","password":"12345678"}' 2>/dev/null)
+    SP_TOKEN=$(echo "$SP_RESP" | grep -oE '"token":"[^"]*"' | sed 's/"token":"//;s/"//')
+    if [ -n "$SP_TOKEN" ]; then
+      # 生成 nginx 配置给 sun-panel API 注入 token header
+      cat > /etc/nginx/conf.d/01-sunpanel-token.conf <<EOF
+# sun-panel token 注入（自动生成，请勿手改）
+EOF
+      # 在 sun-panel 的 location /panel/api/ 块里注入 proxy_set_header token
+      sed -i '/location \/panel\/api\//,/}/ s/proxy_pass http:\/\/mei_sunpanel;/proxy_pass http:\/\/mei_sunpanel;\n        proxy_set_header token "'"$SP_TOKEN"'";/' /etc/nginx/conf.d/00-main.conf 2>/dev/null
+      nginx -s reload 2>/dev/null
+      echo "[mei-allin] sun-panel token 注入完成: ${SP_TOKEN:0:8}..."
+      break
+    fi
+  done
+) &
+
 # ---- sun-panel 初始化 conf + 改端口 ----
 SUNPANEL_DIR="/app/apps/sun-panel"
 if [ -d "$SUNPANEL_DIR" ]; then
