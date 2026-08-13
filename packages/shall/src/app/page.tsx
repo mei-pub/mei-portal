@@ -28,6 +28,7 @@ export default function HomePage() {
         weight: p.weight,
         url,
         subdomainPrefix: p.subdomainPrefix,
+        disguise: p.disguise,
       },
     };
   });

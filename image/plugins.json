@@ -10,7 +10,12 @@
     "endpoint": "",
     "healthPath": "/novels",
     "healthExpect": 200,
-    "hasSkin": true
+    "hasSkin": true,
+    "disguise": {
+      "name": "蜘蛛纸牌",
+      "icon": "lucide:squares",
+      "url": "/novels/games/spider"
+    }
   },
   {
     "id": "mei-link",

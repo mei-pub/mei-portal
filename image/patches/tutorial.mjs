@@ -82,6 +82,22 @@ if (fs.existsSync(authPath)) {
   console.log('[patch] tutorial: 移除 AuthProvider 401 reload 死循环');
 }
 
+// ---- 2.7 隐藏模式同步：Navbar 的"隐藏为纸牌游戏"按钮设置 localStorage['mei-disguise'] ----
+const navFiles = ['src/components/Navbar.tsx', 'src/components/Navbar.jsx'];
+for (const nf of navFiles) {
+  if (!fs.existsSync(nf)) continue;
+  let nav = fs.readFileSync(nf, 'utf8');
+  if (nav.includes('mei-disguise')) break;
+  // 在隐藏逻辑里同步设置 localStorage
+  nav = nav.replace(
+    /(window\.location|router\.push|router\.replace|navigate)\s*\(\s*['"`]\/games\/(spider|poker)/,
+    `try{localStorage.setItem('mei-disguise','true');}catch(e){}\n      $1('/games/$2`
+  );
+  fs.writeFileSync(nf, nav);
+  console.log('[patch] tutorial: 隐藏模式同步 localStorage mei-disguise');
+  break;
+}
+
 // ---- 3. 修正 manifest.json / favicon 等根绝对路径（layout 里的 metadata）----
 const layoutPath = 'src/app/layout.tsx';
 if (fs.existsSync(layoutPath)) {

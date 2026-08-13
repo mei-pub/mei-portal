@@ -14,6 +14,11 @@ interface Item {
 export default function PortalClient({ items }: { items: Item[] }) {
   const [query, setQuery] = useState('');
   const searchRef = useRef<HTMLInputElement>(null);
+  const [disguised, setDisguised] = useState(false);
+
+  useEffect(() => {
+    try { setDisguised(localStorage.getItem('mei-disguise') === 'true'); } catch {}
+  }, []);
 
   // 单镜像模式：url 已是子路径（/novels /link），直接用 items
   // 多容器模式：用浏览器 hostname 重建子域名 url
@@ -25,12 +30,27 @@ export default function PortalClient({ items }: { items: Item[] }) {
   }, []);
 
   const resolvedItems = useMemo(() => {
-    if (process.env.NEXT_PUBLIC_MEI_MODE === 'single' || !rootDomain) return items;
-    return items.map((i) => ({
-      ...i,
-      url: `${window.location.protocol}//${i.plugin.subdomainPrefix || i.plugin.id}.${rootDomain}`,
-    }));
-  }, [items, rootDomain]);
+    let base = items;
+    if (process.env.NEXT_PUBLIC_MEI_MODE !== 'single' && rootDomain) {
+      base = items.map((i) => ({
+        ...i,
+        url: `${window.location.protocol}//${i.plugin.subdomainPrefix || i.plugin.id}.${rootDomain}`,
+      }));
+    }
+    // 应用隐藏模式伪装
+    if (disguised) {
+      base = base.map((i) => {
+        if (i.plugin.disguise) {
+          return {
+            plugin: { ...i.plugin, name: i.plugin.disguise.name, icon: i.plugin.disguise.icon, category: 'game' as const },
+            url: i.plugin.disguise.url,
+          };
+        }
+        return i;
+      });
+    }
+    return base;
+  }, [items, rootDomain, disguised]);
 
   const filtered = useMemo(() => {
     if (!query.trim()) return resolvedItems;

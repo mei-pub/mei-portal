@@ -1,0 +1,61 @@
+- generic [active] [ref=f88e1]:
+  - generic [ref=f88e2]:
+    - banner [ref=f88e3]:
+      - link "mei-allin" [ref=f88e4] [cursor=pointer]:
+        - /url: /
+      - textbox "搜索应用…" [ref=f88e7]
+    - main [ref=f88e8]:
+      - heading "欢迎来到 mei-allin" [level=1] [ref=f88e9]
+      - paragraph [ref=f88e10]: 统一门户 · 8 个应用 · 点击卡片进入
+      - generic [ref=f88e11]:
+        - heading "效率" [level=2] [ref=f88e12]
+        - generic [ref=f88e13]:
+          - link [ref=f88e14] [cursor=pointer]:
+            - /url: /novels
+            - button "小说书架 个人小说库，带蜘蛛纸牌游戏伪装" [ref=f88e15]:
+              - generic [ref=f88e20]: 小说书架
+              - generic [ref=f88e21]: 个人小说库，带蜘蛛纸牌游戏伪装
+          - link [ref=f88e22] [cursor=pointer]:
+            - /url: /panel
+            - button "主页面板 导航启动器面板（含自定义 JS/CSS）" [ref=f88e23]:
+              - generic [ref=f88e32]: 主页面板
+              - generic [ref=f88e33]: 导航启动器面板（含自定义 JS/CSS）
+      - generic [ref=f88e34]:
+        - heading "网络" [level=2] [ref=f88e35]
+        - link [ref=f88e37] [cursor=pointer]:
+          - /url: /link
+          - button "内网穿透 基于 frp 的内网穿透客户端管理" [ref=f88e38]:
+            - generic [ref=f88e47]: 内网穿透
+            - generic [ref=f88e48]: 基于 frp 的内网穿透客户端管理
+      - generic [ref=f88e49]:
+        - heading "影音" [level=2] [ref=f88e50]
+        - generic [ref=f88e51]:
+          - link [ref=f88e52] [cursor=pointer]:
+            - /url: /tv
+            - button "影视门户 豆瓣式影视聚合与播放" [ref=f88e53]:
+              - generic [ref=f88e60]: 影视门户
+              - generic [ref=f88e61]: 豆瓣式影视聚合与播放
+          - link [ref=f88e62] [cursor=pointer]:
+            - /url: /music
+            - button "音乐播放 沉浸式音乐播放器，专辑配色动态背景" [ref=f88e63]:
+              - generic [ref=f88e71]: 音乐播放
+              - generic [ref=f88e72]: 沉浸式音乐播放器，专辑配色动态背景
+      - generic [ref=f88e73]:
+        - heading "工具" [level=2] [ref=f88e74]
+        - generic [ref=f88e75]:
+          - link [ref=f88e76] [cursor=pointer]:
+            - /url: /tools
+            - button "工具箱 隐私优先的本地工具集合（图片/PDF/文本等）" [ref=f88e77]:
+              - generic [ref=f88e79]: 工具箱
+              - generic [ref=f88e80]: 隐私优先的本地工具集合（图片/PDF/文本等）
+          - link [ref=f88e81] [cursor=pointer]:
+            - /url: /draw
+            - button "AI 绘图 AI 驱动的绘图工具，支持 Excalidraw/Mermaid/Drawio" [ref=f88e82]:
+              - generic [ref=f88e84]: AI 绘图
+              - generic [ref=f88e85]: AI 驱动的绘图工具，支持 Excalidraw/Mermaid/Drawio
+          - link [ref=f88e86] [cursor=pointer]:
+            - /url: /media
+            - button "流媒体下载 m3u8/视频流下载工具" [ref=f88e87]:
+              - generic [ref=f88e89]: 流媒体下载
+              - generic [ref=f88e90]: m3u8/视频流下载工具
+  - alert [ref=f88e91]

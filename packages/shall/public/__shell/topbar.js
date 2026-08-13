@@ -9,6 +9,23 @@
 
   var APP_ID = (document.currentScript && document.currentScript.getAttribute('data-app')) || '';
 
+  // ---- 隐藏模式（蜘蛛纸牌伪装）----
+  function isDisguised() {
+    try { return localStorage.getItem('mei-disguise') === 'true'; } catch (e) { return false; }
+  }
+  // 根据 disguise 配置调整 plugin 显示
+  function applyDisguise(plugins) {
+    var disguised = isDisguised();
+    return plugins.map(function (p) {
+      if (p.disguise) {
+        return disguised
+          ? { id: p.id, name: p.disguise.name, icon: p.disguise.icon, url: p.disguise.url, category: 'game', weight: p.weight }
+          : { id: p.id, name: p.name, icon: p.icon, url: p.url, category: p.category, weight: p.weight };
+      }
+      return p;
+    });
+  }
+
   // ---- 注入主题令牌（仅 --mei-* 前缀，不污染应用）----
   var link = document.createElement('link');
   link.rel = 'stylesheet';
@@ -142,7 +159,7 @@
   fetch('/api/plugins', { credentials: 'include' })
     .then(function (r) { return r.json(); })
     .then(function (plugins) {
-      render(Array.isArray(plugins) ? plugins : []);
+      render(Array.isArray(plugins) ? applyDisguise(plugins) : []);
     })
     .catch(function () { render([]); });
 

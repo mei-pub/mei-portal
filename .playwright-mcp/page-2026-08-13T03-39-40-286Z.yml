@@ -1,0 +1,62 @@
+- generic [active] [ref=f89e1]:
+  - generic [ref=f89e2]:
+    - banner [ref=f89e3]:
+      - link "mei-allin" [ref=f89e4] [cursor=pointer]:
+        - /url: /
+      - textbox "搜索应用…" [ref=f89e7]
+    - main [ref=f89e8]:
+      - heading "欢迎来到 mei-allin" [level=1] [ref=f89e9]
+      - paragraph [ref=f89e10]: 统一门户 · 8 个应用 · 点击卡片进入
+      - generic [ref=f89e11]:
+        - heading "游戏" [level=2] [ref=f89e12]
+        - link [ref=f89e14] [cursor=pointer]:
+          - /url: /novels/games/spider
+          - button "蜘蛛纸牌 个人小说库，带蜘蛛纸牌游戏伪装" [ref=f89e15]:
+            - generic [ref=f89e17]: 蜘蛛纸牌
+            - generic [ref=f89e18]: 个人小说库，带蜘蛛纸牌游戏伪装
+      - generic [ref=f89e19]:
+        - heading "网络" [level=2] [ref=f89e20]
+        - link [ref=f89e22] [cursor=pointer]:
+          - /url: /link
+          - button "内网穿透 基于 frp 的内网穿透客户端管理" [ref=f89e23]:
+            - generic [ref=f89e32]: 内网穿透
+            - generic [ref=f89e33]: 基于 frp 的内网穿透客户端管理
+      - generic [ref=f89e34]:
+        - heading "影音" [level=2] [ref=f89e35]
+        - generic [ref=f89e36]:
+          - link [ref=f89e37] [cursor=pointer]:
+            - /url: /tv
+            - button "影视门户 豆瓣式影视聚合与播放" [ref=f89e38]:
+              - generic [ref=f89e45]: 影视门户
+              - generic [ref=f89e46]: 豆瓣式影视聚合与播放
+          - link [ref=f89e47] [cursor=pointer]:
+            - /url: /music
+            - button "音乐播放 沉浸式音乐播放器，专辑配色动态背景" [ref=f89e48]:
+              - generic [ref=f89e56]: 音乐播放
+              - generic [ref=f89e57]: 沉浸式音乐播放器，专辑配色动态背景
+      - generic [ref=f89e58]:
+        - heading "工具" [level=2] [ref=f89e59]
+        - generic [ref=f89e60]:
+          - link [ref=f89e61] [cursor=pointer]:
+            - /url: /tools
+            - button "工具箱 隐私优先的本地工具集合（图片/PDF/文本等）" [ref=f89e62]:
+              - generic [ref=f89e64]: 工具箱
+              - generic [ref=f89e65]: 隐私优先的本地工具集合（图片/PDF/文本等）
+          - link [ref=f89e66] [cursor=pointer]:
+            - /url: /draw
+            - button "AI 绘图 AI 驱动的绘图工具，支持 Excalidraw/Mermaid/Drawio" [ref=f89e67]:
+              - generic [ref=f89e69]: AI 绘图
+              - generic [ref=f89e70]: AI 驱动的绘图工具，支持 Excalidraw/Mermaid/Drawio
+          - link [ref=f89e71] [cursor=pointer]:
+            - /url: /media
+            - button "流媒体下载 m3u8/视频流下载工具" [ref=f89e72]:
+              - generic [ref=f89e74]: 流媒体下载
+              - generic [ref=f89e75]: m3u8/视频流下载工具
+      - generic [ref=f89e76]:
+        - heading "效率" [level=2] [ref=f89e77]
+        - link [ref=f89e79] [cursor=pointer]:
+          - /url: /panel
+          - button "主页面板 导航启动器面板（含自定义 JS/CSS）" [ref=f89e80]:
+            - generic [ref=f89e82]: 主页面板
+            - generic [ref=f89e83]: 导航启动器面板（含自定义 JS/CSS）
+  - alert [ref=f89e84]
