@@ -1,0 +1,23 @@
+- generic [active] [ref=f72e1]:
+  - alert [ref=f72e2]
+  - navigation [ref=f72e3]:
+    - generic [ref=f72e5]:
+      - link "我的书架" [ref=f72e6] [cursor=pointer]:
+        - /url: /novels
+      - generic [ref=f72e9]:
+        - button "隐藏为纸牌游戏" [ref=f72e10]
+        - link "书架" [ref=f72e13] [cursor=pointer]:
+          - /url: /novels
+        - link "设置" [ref=f72e16] [cursor=pointer]:
+          - /url: /novels/settings
+        - link "添加" [ref=f72e20] [cursor=pointer]:
+          - /url: /novels/novels/new
+  - main [ref=f72e23]:
+    - generic [ref=f72e25]:
+      - generic [ref=f72e26]:
+        - button "默认顺序" [ref=f72e27]
+        - button "按评分排序" [ref=f72e30]
+      - button "分类" [ref=f72e34]
+      - button "标签" [ref=f72e39]
+      - textbox "搜索小说..." [ref=f72e46]
+    - generic [ref=f72e47]: 加载中...

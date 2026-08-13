@@ -1,0 +1,15 @@
+- generic [ref=f71e4]:
+  - generic [ref=f71e8]:
+    - generic [ref=f71e10]:
+      - generic [ref=f71e11]: Sun-Panel
+      - generic [ref=f71e12]: "|"
+      - generic [ref=f71e14]:
+        - text: 10:58
+        - generic [ref=f71e15]: 8-13星期四
+    - generic [ref=f71e17]:
+      - text: Powered By
+      - link "Sun-Panel" [ref=f71e18] [cursor=pointer]:
+        - /url: https://github.com/hslr-s/sun-panel
+  - group [ref=f71e20]:
+    - button "切换为内网模式" [ref=f71e21] [cursor=pointer]
+    - button [ref=f71e25] [cursor=pointer]

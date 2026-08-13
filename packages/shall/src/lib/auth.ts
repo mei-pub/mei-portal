@@ -99,3 +99,22 @@ export function getUsername(): string | null {
 export function isInitialized(): boolean {
   return loadUser() !== null;
 }
+
+// ---- Token 类应用的凭证存储（sun-panel 等用 token header + localStorage）----
+const TOKENS_FILE = path.join(DATA_DIR, 'shell', 'app-tokens.json');
+
+export function setSessionTokens(tokens: Record<string, string>): void {
+  try {
+    fs.mkdirSync(path.dirname(TOKENS_FILE), { recursive: true });
+    fs.writeFileSync(TOKENS_FILE, JSON.stringify(tokens, null, 2));
+  } catch {}
+}
+
+export function getSessionTokens(): Record<string, string> {
+  try {
+    if (!fs.existsSync(TOKENS_FILE)) return {};
+    return JSON.parse(fs.readFileSync(TOKENS_FILE, 'utf8'));
+  } catch {
+    return {};
+  }
+}

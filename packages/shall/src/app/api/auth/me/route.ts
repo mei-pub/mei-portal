@@ -1,12 +1,14 @@
 import { NextResponse } from 'next/server';
-import { isLoggedIn, getUsername, isInitialized } from '@/lib/auth';
+import { isLoggedIn, getUsername, isInitialized, getSessionTokens } from '@/lib/auth';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET() {
+  const loggedIn = isLoggedIn();
   return NextResponse.json({
     initialized: isInitialized(),
-    loggedIn: isLoggedIn(),
-    username: isLoggedIn() ? getUsername() : null,
+    loggedIn,
+    username: loggedIn ? getUsername() : null,
+    tokens: loggedIn ? getSessionTokens() : {},
   });
 }

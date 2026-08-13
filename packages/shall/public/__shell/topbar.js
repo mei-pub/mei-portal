@@ -145,4 +145,27 @@
       render(Array.isArray(plugins) ? plugins : []);
     })
     .catch(function () { render([]); });
+
+  // 注入 token 类应用的凭证到 localStorage（sun-panel 等）
+  fetch('/api/auth/me', { credentials: 'include' })
+    .then(function (r) { return r.json(); })
+    .then(function (d) {
+      if (d.loggedIn && d.tokens) {
+        // sun-panel: token 存 AUTH_TOKEN key（与前端 store 一致）
+        if (d.tokens['sun-panel']) {
+          try {
+            // sun-panel 的 auth store 用 persist，key=AUTH_TOKEN，value=加密 JSON
+            // 但实际 token 放在 userInfo.token 里，前端请求时 headers.token = token
+            // 直接注入到 sun-panel 期望的 localStorage 格式
+            var existing = localStorage.getItem('AUTH_TOKEN');
+            var parsed = existing ? JSON.parse(existing) : {};
+            parsed.token = d.tokens['sun-panel'];
+            localStorage.setItem('AUTH_TOKEN', JSON.stringify(parsed));
+          } catch (e) {
+            localStorage.setItem('AUTH_TOKEN', JSON.stringify({ token: d.tokens['sun-panel'] }));
+          }
+        }
+      }
+    })
+    .catch(function () {});
 })();
