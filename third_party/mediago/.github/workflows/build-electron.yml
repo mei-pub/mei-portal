@@ -1,0 +1,72 @@
+# build.yml
+
+# Workflow's name
+name: Build MediaGo App
+
+# Workflow's trigger
+on:
+  workflow_dispatch:
+
+# Workflow's jobs
+jobs:
+  # job's id
+  release:
+    # job's name
+    name: build and release electron app
+
+    # the type of machine to run the job on
+    runs-on: ${{ matrix.os }}
+
+    # create a build matrix for jobs
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest, macos-15-intel, ubuntu-latest]
+
+    # create steps
+    steps:
+      - name: Check out git repository
+        uses: actions/checkout@v6
+
+      - uses: pnpm/action-setup@v5
+        with:
+          version: "10.15.0"
+          run_install: false
+
+      - name: Install Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: "24.14.0"
+          cache: "pnpm"
+
+      - name: Install Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.10"
+
+      - name: Setup Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: "1.25.0"
+          cache-dependency-path: |
+            apps/core/go.sum
+
+      - name: Install swag
+        run: go install github.com/swaggo/swag/cmd/swag@latest
+
+      - name: Install dependencies
+        run: pnpm install
+
+      - name: Download third-party deps
+        run: pnpm deps:download
+
+      - name: Build  & release app
+        run: pnpm release:electron
+        env:
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+          APP_TD_APPID: ${{ secrets.APP_TD_APPID }}
+
+      - uses: actions/upload-artifact@v6
+        with:
+          name: mediago-${{ matrix.os }}
+          path: apps/electron/release/mediago-*

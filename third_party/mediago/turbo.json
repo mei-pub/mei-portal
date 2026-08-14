@@ -1,0 +1,35 @@
+{
+  "$schema": "https://turbo.build/schema.json",
+  "ui": "stream",
+  "globalEnv": ["APP_TARGET", "MEDIAGO_CORE_BIN"],
+  "tasks": {
+    "dev": {
+      "cache": false,
+      "persistent": true,
+      "dependsOn": ["^build"]
+    },
+    "build": {
+      "cache": true,
+      "persistent": false,
+      "outputs": ["build/**", "dist/**"],
+      "dependsOn": ["^build"],
+      "env": ["NODE_ENV"]
+    },
+    "lint": {
+      "cache": true,
+      "outputs": [],
+      "inputs": ["src/**/*.{ts,tsx,js,jsx}", "../../.oxlintrc.json"]
+    },
+    "type:check": {
+      "cache": true,
+      "persistent": false,
+      "outputs": [],
+      "dependsOn": ["^build"]
+    },
+    "clean": {
+      "cache": false,
+      "persistent": false,
+      "outputs": []
+    }
+  }
+}

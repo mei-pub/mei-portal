@@ -1,0 +1,23 @@
+{
+  "name": "@mediago/server",
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "cross-env NODE_ENV=development tsdown --watch ./src",
+    "build": "cross-env NODE_ENV=production tsdown",
+    "type:check": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@mediago/service-runner": "workspace:*",
+    "reflect-metadata": "^0.2.2"
+  },
+  "devDependencies": {
+    "@types/node": "^24.7.2",
+    "cross-env": "^10.1.0",
+    "dotenv-flow": "^4.1.0",
+    "tsdown": "^0.15.9",
+    "typescript": "^6.0.2"
+  },
+  "author": "caorushizi",
+  "license": "MIT"
+}

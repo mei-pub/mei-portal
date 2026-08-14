@@ -8,11 +8,13 @@ export default function AppCard({
   url,
   health,
   onClick,
+  disabled,
 }: {
   plugin: ClientPlugin;
   url: string;
   health?: { ok: boolean; ms: number; loading: boolean };
   onClick: () => void;
+  disabled?: boolean;
 }) {
   const status = !health
     ? null
@@ -24,26 +26,28 @@ export default function AppCard({
 
   return (
     <button
-      onClick={onClick}
+      onClick={disabled ? undefined : onClick}
       className="mei-app-card"
       style={{
         position: 'relative',
         display: 'flex',
         flexDirection: 'column',
         alignItems: 'flex-start',
-        gap: 'var(--mei-space-3)',
-        padding: 'var(--mei-space-6)',
+        gap: 'var(--mei-space-2)',
+        padding: 'var(--mei-space-4)',
         background: 'var(--mei-surface)',
         backdropFilter: 'var(--mei-blur)',
         WebkitBackdropFilter: 'var(--mei-blur)',
         border: '1px solid var(--mei-border)',
-        borderRadius: 'var(--mei-radius)',
-        cursor: 'pointer',
+        borderRadius: 'var(--mei-radius-sm)',
+        opacity: disabled ? 0.45 : undefined,
+        cursor: disabled ? 'not-allowed' : 'pointer',
         textAlign: 'left',
         color: 'var(--mei-text)',
         boxShadow: 'var(--mei-shadow-sm)',
         transition: 'var(--mei-transition)',
-        minHeight: 132,
+        minHeight: 120,
+        width: '100%',
       }}
       onMouseEnter={(e) => {
         e.currentTarget.style.transform = 'translateY(-2px)';
@@ -62,20 +66,20 @@ export default function AppCard({
           title={`${status.label}${health?.ms ? ` · ${health.ms}ms` : ''}`}
           style={{
             position: 'absolute',
-            top: 12,
-            right: 12,
-            width: 8,
-            height: 8,
+            top: 10,
+            right: 10,
+            width: 7,
+            height: 7,
             borderRadius: '50%',
             background: status.color,
-            boxShadow: `0 0 8px ${status.color}`,
+            boxShadow: `0 0 6px ${status.color}`,
           }}
         />
       )}
       <div
         style={{
-          width: 44,
-          height: 44,
+          width: 36,
+          height: 36,
           borderRadius: 'var(--mei-radius-sm)',
           background: 'var(--mei-gradient-soft)',
           display: 'flex',
@@ -83,11 +87,28 @@ export default function AppCard({
           justifyContent: 'center',
         }}
       >
-        <iconify-icon icon={plugin.icon} width="24" style={{ color: 'var(--mei-primary)' }} />
+        <iconify-icon icon={plugin.icon} width="20" style={{ color: 'var(--mei-primary)' }} />
       </div>
-      <div style={{ fontWeight: 600, fontSize: 16 }}>{plugin.name}</div>
+      {disabled && (
+        <span
+          title="已在设置中关闭此应用"
+          style={{
+            position: 'absolute',
+            top: 8,
+            right: 8,
+            padding: '1px 6px',
+            fontSize: 10,
+            borderRadius: 'var(--mei-radius-full)',
+            background: 'var(--mei-text-faint)',
+            color: '#fff',
+          }}
+        >
+          已禁用
+        </span>
+      )}
+      <div style={{ fontWeight: 600, fontSize: 14, lineHeight: 1.3 }}>{plugin.name}</div>
       {plugin.description && (
-        <div style={{ color: 'var(--mei-text-muted)', fontSize: 13, lineHeight: 1.5 }}>
+        <div style={{ color: 'var(--mei-text-muted)', fontSize: 12, lineHeight: 1.4, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
           {plugin.description}
         </div>
       )}

@@ -1,0 +1,10 @@
+{
+  "extends": "../../tsconfig.node.json",
+  "compilerOptions": {
+    "declaration": true,
+    "declarationDir": "./types",
+    "outDir": "app/output/build/main"
+  },
+  "include": ["src"],
+  "references": []
+}

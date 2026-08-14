@@ -23,7 +23,7 @@ fi
 echo "[mei-allin] 数据目录: $DATA_DIR  管理员: $MEI_ADMIN_USER  模式: single"
 
 # ---- 初始化各应用数据目录 ----
-mkdir -p "$DATA_DIR/tutorial" "$DATA_DIR/mei-link" "$DATA_DIR/shell" "$DATA_DIR/mediago/logs" "$DATA_DIR/mediago/downloads" "$DATA_DIR/mediago"
+mkdir -p "$DATA_DIR/tutorial" "$DATA_DIR/mei-link" "$DATA_DIR/shell" "$DATA_DIR/mediago/logs" "$DATA_DIR/mediago/downloads" "$DATA_DIR/mediago" "$DATA_DIR/pansou/cache" "$DATA_DIR/pansou/logs"
 
 # ---- Shell 配置 ----
 export PORT="${PORT:-3000}"
@@ -42,7 +42,7 @@ fi
 
 # ---- mediago 端口修正 + 自动 setup ----
 if [ -f "$DATA_DIR/mediago/config.json" ]; then
-  sed -i 's/"port":[[:space:]]*[0-9]*/"port": 3007/' "$DATA_DIR/mediago/config.json" 2>/dev/null || true
+  sed -i 's/"port":[[:space:]]*[0-9]*/"port": 3000/' "$DATA_DIR/mediago/config.json" 2>/dev/null || true
 fi
 
 # mediago 首次 setup（后台等待启动后自动设置密码）
@@ -95,6 +95,12 @@ if [ -d "$SUNPANEL_DIR" ]; then
   # 设置端口为 3006（避免与 mei-link 的 3002 冲突）
   if [ -f conf/conf.ini ]; then
     sed -i 's/^http_port=.*/http_port=3006/' conf/conf.ini 2>/dev/null || true
+  fi
+  # 上传文件持久化：source_path 保持默认 ./uploads（Go router.Static 用它作为路由前缀 /uploads）
+  # 但把 ./uploads 做成软链接到 /data/sun-panel/uploads，文件持久化到数据卷
+  mkdir -p "$DATA_DIR/sun-panel/uploads" "$DATA_DIR/sun-panel/temp"
+  if [ ! -e uploads ]; then
+    ln -sf "$DATA_DIR/sun-panel/uploads" uploads
   fi
   cd /
 fi

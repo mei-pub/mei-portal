@@ -1,8 +1,22 @@
 [
   {
+    "id": "spider",
+    "name": "蜘蛛纸牌",
+    "description": "经典单人纸牌游戏，输入书架密码可解锁隐藏书架",
+    "icon": "game-icons:spider",
+    "category": "game",
+    "weight": 100,
+    "subdomainPrefix": "games",
+    "url": "/games/spider",
+    "endpoint": "",
+    "healthPath": "/games/spider",
+    "healthExpect": 200,
+    "hasSkin": false
+  },
+  {
     "id": "tutorial",
     "name": "小说书架",
-    "description": "个人小说库，带蜘蛛纸牌游戏伪装",
+    "description": "个人小说库",
     "icon": "lucide:book-open",
     "category": "productivity",
     "weight": 60,
@@ -10,12 +24,7 @@
     "endpoint": "",
     "healthPath": "/novels",
     "healthExpect": 200,
-    "hasSkin": true,
-    "disguise": {
-      "name": "蜘蛛纸牌",
-      "icon": "lucide:squares",
-      "url": "/novels/games/spider"
-    }
+    "hasSkin": true
   },
   {
     "id": "mei-link",
@@ -72,7 +81,7 @@
   {
     "id": "solara",
     "name": "音乐播放",
-    "description": "沉浸式音乐播放器，专辑配色动态背景",
+    "description": "Mei Music 沉浸式音乐播放器",
     "icon": "lucide:music",
     "category": "media",
     "weight": 40,
@@ -105,6 +114,19 @@
     "subdomainPrefix": "media",
     "endpoint": "",
     "healthPath": "/media/",
+    "healthExpect": 200,
+    "hasSkin": false
+  },
+  {
+    "id": "pansou",
+    "name": "网盘搜索",
+    "description": "聚合网盘资源搜索（TG频道 + 多插件）",
+    "icon": "lucide:search",
+    "category": "utility",
+    "weight": 25,
+    "subdomainPrefix": "search",
+    "endpoint": "",
+    "healthPath": "/search/api/health",
     "healthExpect": 200,
     "hasSkin": false
   }

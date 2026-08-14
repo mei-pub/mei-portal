@@ -1,0 +1,60 @@
+name: Deploy MediaGo Docs
+
+on:
+  push:
+    paths:
+      - "docs/**"
+      - ".github/workflows/build-docs.yml"
+    branches: ["master"]
+
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
+
+env:
+  BUCKET: downloader-docs
+  ENDPOINT: oss-cn-beijing.aliyuncs.com
+  ACCESS_KEY: LTAI5tDrRjFUAvufpCJioz3b
+  ACCESS_KEY_SECRET: ${{ secrets.ACCESS_KEY_SECRET }}
+
+jobs:
+  build:
+    name: Build Docs
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - uses: pnpm/action-setup@v5
+        with:
+          version: "10.15.0"
+          run_install: false
+          standalone: true
+
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: "24.14.0"
+          cache: "pnpm"
+
+      - name: Install dependencies
+        run: pnpm install
+
+      - name: Build with Vitepress
+        run: pnpm docs:build
+
+      - name: Install Alibaba Cloud ossutil
+        run: wget http://gosspublic.alicdn.com/ossutil/1.6.10/ossutil64 && chmod +x ossutil64
+
+      - name: Configure Alibaba Cloud ossutil
+        run: ./ossutil64 config -i ${ACCESS_KEY} -k ${ACCESS_KEY_SECRET} -e ${ENDPOINT} -c .ossutilconfig
+
+      - name: Upload the web folder to the chosen OSS bucket
+        run: ./ossutil64 --config-file .ossutilconfig cp ${{ github.workspace }}/docs/.vitepress/dist oss://${BUCKET} -r -f

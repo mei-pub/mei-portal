@@ -38,6 +38,11 @@ certs/
 *.crt
 *.key
 
+# Agent tooling metadata (not part of the project)
+.codeflicker/
+.reasonix/
+.zcode/
+
 # Submodule build contexts (git submodules)
 # 不忽略 packages/tutorial 与 packages/mei-link —— 需追踪其 .gitlink
 # submodule 内部文件由各自仓库管理

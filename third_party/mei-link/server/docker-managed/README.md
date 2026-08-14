@@ -1,0 +1,108 @@
+# Meilink Server Docker
+
+一个镜像同时运行 frps 和 Meilink 服务端管理页。管理页账号、密码只从 Docker 环境变量读取，不写入数据卷。
+
+## 快速开始
+
+```bash
+# 构建镜像 + 启动
+docker compose up -d
+
+# 查看日志
+docker compose logs -f meilink-server
+```
+
+## 预构建镜像（GitHub Releases）
+
+每次发布都会推送多架构（`linux/amd64` + `linux/arm64`）镜像到 GHCR：
+
+```bash
+docker pull ghcr.io/<owner>/meilink-server:latest
+docker run -d --name meilink-server --restart unless-stopped \
+  --network host \
+  -v /volume1/docker/meilink-server:/data \
+  -e MEILINK_ADMIN_USER=admin \
+  -e MEILINK_ADMIN_PASSWORD='replace-with-a-strong-password' \
+  -e MEILINK_FRPS_TOKEN='replace-with-a-long-frp-token' \
+  -e MEILINK_DOMAIN_API_TOKEN='replace-with-a-bootstrap-token' \
+  ghcr.io/<owner>/meilink-server:latest
+```
+
+> 仓库名以小写为准：`ghcr.io/<owner>/meilink-server:<version>|latest`。
+
+### 国内加速
+
+- **阿里云 ACR**（若 CI 配置了 `ALIYUN_ACR_USERNAME` / `ALIYUN_ACR_PASSWORD` secrets 与 `ACR_REGISTRY` / `ACR_NAMESPACE` variables）：发布时会同步推送 `$ACR_REGISTRY/$ACR_NAMESPACE/meilink-server:<version>`，国内直连最快。
+- **GHCR 加速站**（镜像需 public）：把 `ghcr.io` 换成加速站前缀即可，如 `ghcr.nju.edu.cn/<owner>/meilink-server:<version>`。首次拉取加速站会回源 ghcr.io（较慢），之后缓存命中就快；发布时 CI 也会 best-effort 预热。
+- 离线导入：Release 附带的 `meilink-server-<ver>.oci.tar`，`docker load -i` 免网络。
+
+> 阿里云 `*.mirror.aliyuncs.com` 镜像加速器只对 Docker Hub 生效，对 ghcr.io 无效。
+
+首次启动后浏览器打开 `http://服务器IP:17500`（若 17500 绑了 127.0.0.1，先用 SSH 端口转发：`ssh -L 17500:127.0.0.1:17500 user@vps`），使用环境变量中的账号密码登录，并在页面维护 frps 端口和域名目录。
+
+## 网络模式：host
+
+默认使用 host 网络模式：容器直接复用宿主机网络栈，管理页修改 frps 端口后立即生效，无需重建容器。frps 监听的 7000/8080/8443 和管理页 17500 直接暴露在宿主机上。
+
+**安全注意事项**：
+- 端口隔离消失：管理页 17500 默认对公网开放。**务必用强密码**（`openssl rand -base64 24`），必要时用 ufw/iptables 加 IP 白名单。
+- 必须手动放行防火墙 / 云厂商安全组的端口（host 模式不会自动放行）。
+- 宿主机 7000/8080/8443/17500 不能被其他进程占用。
+
+```bash
+docker compose up -d          # 构建镜像 + 启动
+docker compose build && docker compose up -d   # 改完代码或环境变量后重建
+```
+
+## 特权端口（80/443）
+
+镜像已对 `/usr/local/bin/frps` 设置 `cap_net_bind_service=+ep`（file capability）。frps 虽以非 root 的 `meilink` 用户运行，但能绑定 < 1024 的特权端口。
+
+- **host 模式**：管理页直接把 HTTP 端口填 `80`、HTTPS 填 `443`，保存即生效，无需 Nginx 或其他前置反代。
+- **升级须知**：此修复**之前**构建的旧镜像没有 setcap，必须重建镜像才生效，仅 `restart` / `up -d`（不重建）无效：
+  ```bash
+  docker compose build && docker compose up -d
+  ```
+- 若你在 compose 显式写了 `cap_drop: [ALL]`，或 NAS 平台默认 drop 了 `NET_BIND_SERVICE`，file capability 会失效。默认 compose 无 `cap_drop`，不受影响。
+
+## NAS / Docker 直接运行（不依赖 compose）
+
+```bash
+docker run -d --name meilink-server --restart unless-stopped \
+  --network host \
+  -v /volume1/docker/meilink-server:/data \
+  -e MEILINK_ADMIN_USER=admin \
+  -e MEILINK_ADMIN_PASSWORD='replace-with-a-strong-password' \
+  -e MEILINK_FRPS_TOKEN='replace-with-a-long-frp-token' \
+  -e MEILINK_DOMAIN_API_TOKEN='replace-with-a-bootstrap-token' \
+  meilink-server:latest
+```
+
+## 域名与泛域名
+
+- **主域名**：写入 frps 的 `subDomainHost`（例如 `tunnel.example.com`），并在 DNS 将 `*.tunnel.example.com` 泛解析到服务器。
+- **额外域名**：例如 `photo.example.com`，DNS 解析到服务器，作为 HTTP/HTTPS 隧道的“自定义域名”。
+- **泛域名**：例如 `*.apps.example.com`，DNS 添加同名泛解析，作为自定义域名使用。
+
+frp 只支持一个 `subDomainHost`，因此不能把 `*.tunnel.example.com` 再作为自定义泛域名添加；管理页会拒绝与主域名重叠的配置。额外域名和泛域名需使用不同域名空间（例如主域名 `tunnel.example.com` 配 `*.apps.example.com`）。
+
+客户端侧的域名填写与安装见 [`client/docker/README.md`](../../client/docker/README.md) 与 GitHub [Releases](https://github.com/tomtrije/mei-link/releases) 下载页。
+
+## 环境变量
+
+> 下表变量已在 Dockerfile 中声明为 `ENV`，在 NAS 容器 UI / docker 管理工具创建容器时会直接显示。密码与 Token 默认值为空，**必须填写**。
+
+| 变量 | 必填 | 用途 |
+|---|---:|---|
+| `MEILINK_ADMIN_USER` | 是 | 管理页登录用户名，默认 `admin` |
+| `MEILINK_ADMIN_PASSWORD` | 是 | 管理页登录密码（默认空，必须设置）|
+| `MEILINK_FRPS_TOKEN` | 建议 | 首次启动时的 frps Token；也可在管理页面首次保存 |
+| `MEILINK_WEB_PORT` | 否 | 管理页端口，默认 `17500` |
+| `MEILINK_FRPS_BIND_PORT` | 否 | 客户端连接端口，默认 `7000` |
+| `MEILINK_FRPS_HTTP_PORT` | 否 | HTTP vhost 端口，默认 `8080` |
+| `MEILINK_FRPS_HTTPS_PORT` | 否 | HTTPS vhost 端口，默认 `8443` |
+| `MEILINK_PRIMARY_DOMAIN` | 否 | 首次启动时的主域名 |
+| `MEILINK_DOMAIN_API_TOKEN` | **推荐** | 配置后启用 `GET /api/bootstrap` + `GET /api/domains`，供客户端自动拉取 frps 地址/端口/Token/子域名基域（Bearer token 访问，独立于管理页账号）。客户端用法见 [`client/docker/README.md`](../../client/docker/README.md) |
+| `MEILINK_DASHBOARD_USER` | 否 | frps 内置 dashboard 用户名，默认 `admin`（仅容器内 127.0.0.1，外部访问不到；管理页「隧道状态」Tab 用它拉代理列表）|
+| `MEILINK_DASHBOARD_PASSWORD` | 否 | frps 内置 dashboard 密码，默认 `admin` |
+| `MEILINK_DASHBOARD_PORT` | 否 | frps dashboard 端口，默认 `7500` |

@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <link rel="icon" type="image/png" href="/tools/favicon-96x96.png" sizes="96x96" />
+  <link rel="icon" type="image/svg+xml" href="/tools/favicon.svg" />
+  <link rel="shortcut icon" href="/tools/favicon.ico" />
+  <link rel="apple-touch-icon" sizes="180x180" href="/tools/apple-touch-icon.png" />
+  <meta name="apple-mobile-web-app-title" content="OmniTools" />
+  <link rel="manifest" href="/tools/site.webmanifest" />
+  <link href="/tools/assets/fonts/quicksand/quick-sand.css" rel="stylesheet" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>OmniTools</title>
+
+<style>
+/* 隐藏顶部 header（OmniTools 的 Logo 栏），保留面包屑 */
+.omni-header, .omni-header-wrapper, header.omni-header, [class*="OmniHeader"], .header-container, header:not([class*="breadcrumb"]):not([class*="Breadcrumb"]) { display: none !important; }
+/* 锁死浅色主题：强制 light，忽略 dark class */
+:root, :root[data-theme="dark"], .dark, [data-theme="dark"] {
+  color-scheme: light !important;
+  --bg-color: #fff !important;
+  --text-color: #1f2937 !important;
+  background-color: #fff !important;
+}
+/* 防止 dark mode class 影响 */
+html.dark, body.dark, .dark { background: #fff !important; color: #1f2937 !important; }
+</style>
+<script>
+// 锁死语言为中文
+try {
+  localStorage.setItem('i18nextLng', 'zh-CN');
+  localStorage.setItem('language', 'zh-CN');
+  localStorage.setItem('lang', 'zh-CN');
+} catch (e) {}
+// 锁死浅色主题
+try {
+  localStorage.setItem('theme', 'light');
+  localStorage.setItem('color-scheme', 'light');
+  document.documentElement.classList.remove('dark');
+  document.documentElement.setAttribute('data-theme', 'light');
+  document.documentElement.style.colorScheme = 'light';
+} catch (e) {}
+// MutationObserver：React 渲染后动态移除 dark class 和隐藏 header
+var __meiObs = new MutationObserver(function() {
+  // 移除 dark 主题
+  if (document.documentElement.classList.contains('dark')) {
+    document.documentElement.classList.remove('dark');
+  }
+  document.documentElement.setAttribute('data-theme', 'light');
+  document.documentElement.style.colorScheme = 'light';
+  // 隐藏顶部 header（保留面包屑 breadcrumb）
+  var headers = document.querySelectorAll('header');
+  headers.forEach(function(h) {
+    // 仅隐藏包含 Logo 或标题的 header，保留面包屑导航
+    var hasBreadcrumb = h.querySelector('[class*="readcrumb"], nav[class*="readcrumb"], [class*="readcrumb"]');
+    var hasLogo = h.querySelector('img[src*="logo"], [class*="Logo"], h1, .logo');
+    if (!hasBreadcrumb && (hasLogo || h.querySelector('a[href="/tools/"], a[href="/tools"]'))) {
+      h.style.display = 'none';
+    }
+  });
+});
+__meiObs.observe(document.documentElement, { attributes: true, attributeFilter: ['class', 'data-theme'] });
+if (document.body) {
+  __meiObs.observe(document.body, { childList: true, subtree: true });
+}
+</script>
+</head>
+<body>
+<div id="root"></div>
+<script type="module" src="/src/index.tsx"></script>
+</body>
+</html>

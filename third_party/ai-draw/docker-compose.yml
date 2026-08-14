@@ -1,0 +1,19 @@
+version: '3.8'
+
+services:
+  ai-draw:
+    build: .
+    image: ghcr.io/stone-yu/ai-draw:latest
+    container_name: ai-draw
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    volumes:
+      # Map local data directory to container data directory
+      # On NAS, change ./data to your actual path, e.g., /volume1/docker/aidraw/data
+      - ./data/aidraw:/app/data
+    environment:
+      - PORT=3000
+      - DATA_DIR=/app/data
+      - DEBUG=false
+

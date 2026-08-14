@@ -1,0 +1,18 @@
+packages:
+  - app
+  - docs
+  - apps/*
+  - packages/**
+  - "!**/test/**"
+  - "!**/release/**"
+
+onlyBuiltDependencies:
+  - "@parcel/watcher"
+  - "@sentry-internal/node-cpu-profiler"
+  - "@swc/core"
+  - "@tailwindcss/oxide"
+  - core-js
+  - electron
+  - electron-winstaller
+  - es5-ext
+  - esbuild

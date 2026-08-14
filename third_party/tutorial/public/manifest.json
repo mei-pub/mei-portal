@@ -1,0 +1,20 @@
+{
+  "name": "小说书架",
+  "short_name": "书架",
+  "description": "小说阅读与管理平台",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#4f46e5",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/favicon.ico",
+      "sizes": "any",
+      "type": "image/x-icon",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["books", "entertainment"],
+  "lang": "zh-CN"
+}

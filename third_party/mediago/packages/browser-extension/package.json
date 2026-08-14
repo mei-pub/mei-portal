@@ -1,0 +1,28 @@
+{
+  "name": "@mediago/browser-extension",
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "tsdown --watch ./src",
+    "build": "tsdown",
+    "lint": "oxlint .",
+    "type:check": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@mediago/shared-common": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^24.7.2",
+    "typescript": "^6.0.2",
+    "tsdown": "^0.15.9"
+  },
+  "main": "./build/index.js",
+  "module": "./build/index.js",
+  "types": "./build/index.d.ts",
+  "exports": {
+    ".": "./build/index.js",
+    "./package.json": "./package.json"
+  },
+  "author": "caorushizi",
+  "license": "MIT"
+}

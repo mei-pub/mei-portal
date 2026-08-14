@@ -1,7 +1,5 @@
-# syntax=docker/dockerfile:1
-# =============================================================================
-# mei-allin 单镜像
-# 渐进式：先 Shell + nginx + 已有 submodule 应用，架构预留扩展点
+# mei-allin 单镜像（全源码本地构建版）
+# 所有应用源码 vendored 在 third_party/ 引用项目目录，构建期不依赖官方镜像/git clone
 # 新增应用 = 加一个 builder stage + COPY 产物 + nginx location + supervisor 服务
 # =============================================================================
 
@@ -14,20 +12,18 @@ COPY packages/shall/ ./
 ENV NEXT_PUBLIC_MEI_MODE=single
 RUN npm run build
 
-# ---- tutorial（Next.js，basePath=/novels）从 submodule ----
+# ---- tutorial（Next.js，basePath=/novels，vendored）----
 FROM node:22-bookworm-slim AS tutorial-builder
 WORKDIR /build
 RUN apt-get update && apt-get install -y --no-install-recommends python3 make g++ \
     && rm -rf /var/lib/apt/lists/*
-COPY packages/tutorial/ ./
-COPY image/patches/tutorial.mjs ./patch.mjs
-RUN node patch.mjs
-RUN npm ci --no-audit --no-fund || npm install --no-audit --no-fund
+COPY third_party/tutorial/ ./
 # 字体下载脚本首次启动会跑，构建时跳过
 ENV SKIP_FONT_DOWNLOAD=1
+RUN npm ci --no-audit --no-fund || npm install --no-audit --no-fund
 RUN npm run build
 
-# ---- mei-link（Node + 原生 JS，从 submodule docker client）----
+# ---- mei-link（Node + 原生 JS，vendored，frpc 外部工具 Release 下载）----
 # 用 alpine 基础（su-exec 在 alpine 有），只下载 frpc 二进制
 FROM node:22-alpine AS meilink-builder
 WORKDIR /build
@@ -44,74 +40,101 @@ RUN set -eux; \
     tar -xzf /tmp/frp.tgz --strip-components=1 -C /usr/local/bin "frp_${FRP_VERSION}_linux_${TARGETARCH}/frpc"; \
     rm /tmp/frp.tgz; \
     frpc --version
-COPY packages/mei-link/client/docker/ ./
+COPY third_party/mei-link/client/docker/ ./
 
-# ---- lunatv（Next.js 14，basePath=/tv，单密码模式）----
+# ---- lunatv（Next.js 14，basePath=/tv，单密码模式，vendored）----
 FROM node:22-bookworm-slim AS lunatv-builder
 WORKDIR /build
 RUN apt-get update && apt-get install -y --no-install-recommends git ca-certificates \
     && rm -rf /var/lib/apt/lists/*
-RUN git clone --depth 1 https://github.com/MoonTechLab/LunaTV.git .
-COPY image/patches/lunatv.mjs ./patch.mjs
+COPY third_party/lunatv/ ./
 # localstorage 单密码模式（零外部依赖），密码由运行时 env 设
 ENV NEXT_PUBLIC_STORAGE_TYPE=localstorage
-RUN node patch.mjs
 RUN corepack enable && corepack prepare pnpm@10.14.0 --activate
 RUN pnpm install --no-frozen-lockfile
 RUN pnpm run build
 
-# ---- omni-tools（Vite + React + MUI，纯静态，basePath=/tools）----
+# ---- omni-tools（Vite + React + MUI，纯静态，basePath=/tools，vendored）----
 FROM node:22-bookworm-slim AS omni-tools-builder
 WORKDIR /build
-RUN apt-get update && apt-get install -y --no-install-recommends git ca-certificates \
-    && rm -rf /var/lib/apt/lists/*
-RUN git clone --depth 1 https://github.com/iib0011/omni-tools.git .
-COPY image/patches/omni-tools.mjs ./patch.mjs
-RUN node patch.mjs
+COPY third_party/omni-tools/ ./
 RUN npm ci --no-audit --no-fund || npm install --no-audit --no-fund
 RUN npm run build
 
-# ---- ai-draw（Vite + React + Express，basePath=/draw，sqlite3）----
+# ---- ai-draw（Vite + React + Express，basePath=/draw，sqlite3，vendored）----
 FROM node:22-bookworm-slim AS ai-draw-builder
 WORKDIR /build
-RUN apt-get update && apt-get install -y --no-install-recommends git ca-certificates python3 make g++ \
+RUN apt-get update && apt-get install -y --no-install-recommends python3 make g++ \
     && rm -rf /var/lib/apt/lists/*
-RUN git clone --depth 1 https://github.com/stone-yu/ai-draw.git .
-COPY image/patches/ai-draw.mjs ./patch.mjs
-RUN node patch.mjs
+COPY third_party/ai-draw/ ./
 RUN npm ci --no-audit --no-fund || npm install --no-audit --no-fund
 RUN npm run build
 
-# ---- solara（Node + 原生 JS 音乐播放）----
+# ---- solara（Node + 原生 JS 音乐播放，vendored）----
 FROM node:22-bookworm-slim AS solara-builder
 WORKDIR /build
-RUN apt-get update && apt-get install -y --no-install-recommends git ca-certificates \
-    && rm -rf /var/lib/apt/lists/*
-RUN git clone --depth 1 https://github.com/akudamatata/Solara.git .
-COPY image/patches/solara.mjs ./patch.mjs
-RUN node patch.mjs
+COPY third_party/solara/ ./
 # solara 的 package.json 在 server/ 子目录
 WORKDIR /build/server
 RUN npm install --no-audit --no-fund --legacy-peer-deps
 WORKDIR /build
 
-# ---- mediago（Go 流媒体下载，从官方镜像 COPY 二进制 + 资源）----
-FROM caorushizi/mediago:latest AS mediago-src
-# 官方镜像内含 mediago-core 二进制 + 静态资源 + 外部工具(yt-dlp 等)
+# ---- pansou 网盘搜索（Go 后端 + Vue 前端，vendored 本地编译）----
+FROM golang:1.25-bookworm AS pansou-builder
+WORKDIR /build
+ENV GOPROXY=https://goproxy.cn,direct
+COPY third_party/pansou/ ./
+RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/pansou .
+FROM node:22-bookworm-slim AS pansou-web-builder
+WORKDIR /build
+COPY third_party/pansou-web/ ./
+RUN npm ci --no-audit --no-fund || npm install --no-audit --no-fund
+RUN npm run build
 
-# ---- sun-panel（Go + Gin + Vue，basePath=/panel）----
+# ---- mediago 流媒体下载（Go core + React UI + 外部下载工具，vendored 本地编译）----
+# 参考官方 Dockerfile 结构，全部从 vendored 源码构建
+FROM node:22-bookworm-slim AS mediago-node-builder
+WORKDIR /src
+RUN apt-get update && apt-get install -y --no-install-recommends unzip \
+    && rm -rf /var/lib/apt/lists/*
+RUN corepack enable && corepack prepare pnpm@10.15.0 --activate
+ARG TARGETARCH
+RUN if [ "$TARGETARCH" = "amd64" ]; then \
+      echo "linux-x64" > /tmp/deps-platform; \
+    else \
+      echo "linux-${TARGETARCH}" > /tmp/deps-platform; \
+    fi
+COPY third_party/mediago/ ./
+RUN pnpm install --frozen-lockfile || pnpm install
+# 构建 player-ui（嵌入 Go core）
+RUN pnpm --filter @mediago/player-ui run build
+# 构建 web UI（server 模式静态产物）
+ENV APP_TARGET=server
+ENV NODE_ENV=production
+RUN pnpm build:web
+# 下载第三方下载工具（yt-dlp/ffmpeg/N_m3u8DL-RE/BBDown/aria2 等，GitHub Release + in-tree 本地源）
+RUN pnpm deps:download --platform $(cat /tmp/deps-platform)
+FROM golang:1.25-bookworm AS mediago-go-builder
+WORKDIR /src
+ENV GOPROXY=https://goproxy.cn,direct
+COPY third_party/mediago/apps/core/go.mod third_party/mediago/apps/core/go.sum apps/core/
+RUN cd apps/core && go mod download
+COPY third_party/mediago/apps/core/ apps/core/
+COPY --from=mediago-node-builder /src/apps/player-ui/dist apps/core/assets/player/
+RUN cd apps/core && go mod download
+RUN cd apps/core && CGO_ENABLED=0 GOOS=linux GOARCH=${TARGETARCH} \
+    go build -trimpath -ldflags="-s -w" -o /out/mediago-core ./cmd/server
+
+# ---- sun-panel（Go + Gin + Vue，basePath=/panel，vendored）----
 FROM node:22-bookworm-slim AS sunpanel-web-builder
 WORKDIR /build
-RUN apt-get update && apt-get install -y --no-install-recommends git ca-certificates \
-    && rm -rf /var/lib/apt/lists/*
-RUN git clone --depth 1 https://github.com/hslr-s/sun-panel.git .
-COPY image/patches/sun-panel.mjs ./patch.mjs
-RUN node patch.mjs
+COPY third_party/sun-panel/ ./
 RUN corepack enable && corepack prepare pnpm@8 --activate
 RUN pnpm install --no-frozen-lockfile
 RUN pnpm run build
 FROM golang:1.21-bookworm AS sunpanel-go-builder
 WORKDIR /build
+ENV GOPROXY=https://goproxy.cn,direct
 RUN apt-get update && apt-get install -y --no-install-recommends bash gcc git musl-dev \
     && rm -rf /var/lib/apt/lists/*
 COPY --from=sunpanel-web-builder /build /src
@@ -168,14 +191,23 @@ COPY --from=ai-draw-builder /build/node_modules ./apps/ai-draw/node_modules
 # ---- solara ----
 COPY --from=solara-builder /build ./apps/solara
 
+# ---- pansou（本地编译 Go 二进制 + Vue 前端 dist）----
+COPY --from=pansou-builder /out/pansou ./apps/pansou/pansou
+COPY --from=pansou-web-builder /build/dist ./apps/pansou/frontend/dist
+
+# ---- mediago（本地编译 core + 前端静态 + 下载工具）----
+COPY --from=mediago-go-builder /out/mediago-core ./apps/mediago/mediago-core
+COPY --from=mediago-node-builder /src/apps/ui/build/server ./apps/mediago/static
+ARG TARGETARCH
+COPY --from=mediago-node-builder /src/.deps/linux-* /app/deps-tmp/
+RUN mkdir -p /app/apps/mediago/deps && \
+    find /app/deps-tmp -type f -exec cp {} /app/apps/mediago/deps/ \; && \
+    chmod +x /app/apps/mediago/deps/* && \
+    rm -rf /app/deps-tmp
+
 # ---- sun-panel ----
 COPY --from=sunpanel-go-builder /sun-panel ./apps/sun-panel/sun-panel
 COPY --from=sunpanel-web-builder /build/dist ./apps/sun-panel/web
-
-# ---- mediago（从官方镜像 COPY 二进制 + 静态 + 外部工具）----
-COPY --from=mediago-src /usr/local/bin/mediago-core ./apps/mediago/mediago-core
-COPY --from=mediago-src /app/static ./apps/mediago/static
-COPY --from=mediago-src /app/deps ./apps/mediago/deps
 
 # ---- 配置 ----
 # 覆盖 debian nginx 默认配置：nginx.conf + conf.d/

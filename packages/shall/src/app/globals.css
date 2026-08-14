@@ -49,17 +49,24 @@ a {
 }
 
 /* ===== 复用工具 class ===== */
+/* 卡片网格：固定列数，保证卡片宽度统一，更紧凑 */
 .mei-card-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-  gap: var(--mei-space-4);
+  /* 6 列固定（桌面），避免 auto-fill 导致不同分类行卡片宽度不一 */
+  grid-template-columns: repeat(6, 1fr);
+  gap: var(--mei-space-3);
+}
+.mei-app-card {
+  width: 100% !important;
+  min-height: 120px !important;
+  padding: var(--mei-space-4) !important;
 }
 .mei-section-title {
-  font-size: 13px;
+  font-size: 12px;
   text-transform: uppercase;
   letter-spacing: 1.5px;
   color: var(--mei-text-faint);
-  margin: 0 0 var(--mei-space-4);
+  margin: 0 0 var(--mei-space-3);
 }
 .mei-empty {
   text-align: center;
@@ -68,23 +75,25 @@ a {
 }
 
 /* ===== 响应式：移动端/桌面端切换 ===== */
-/* 桌面端（>768px）：显示 .mei-only-desktop，隐藏 .mei-only-mobile */
-@media (min-width: 769px) {
-  .mei-only-mobile {
-    display: none !important;
+/* 桌面端（>1024px）：6 列 */
+@media (min-width: 1025px) {
+  .mei-only-mobile { display: none !important; }
+}
+/* 中等屏（769-1024px）：4 列 */
+@media (min-width: 769px) and (max-width: 1024px) {
+  .mei-card-grid {
+    grid-template-columns: repeat(4, 1fr);
   }
 }
-/* 移动端（<=768px）：反之 */
+/* 移动端（<=768px）：2 列，更紧凑 */
 @media (max-width: 768px) {
-  .mei-only-desktop {
-    display: none !important;
-  }
+  .mei-only-desktop { display: none !important; }
   .mei-card-grid {
-    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
-    gap: var(--mei-space-3);
+    grid-template-columns: repeat(2, 1fr);
+    gap: var(--mei-space-2);
   }
   .mei-app-card {
-    min-height: 112px !important;
-    padding: var(--mei-space-4) !important;
+    min-height: 100px !important;
+    padding: var(--mei-space-3) !important;
   }
 }

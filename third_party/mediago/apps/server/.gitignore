@@ -1,0 +1,12 @@
+.bin
+node_modules
+build
+dist
+bin/Logs
+release
+log
+bin
+logs
+
+types/*
+.mediago-server

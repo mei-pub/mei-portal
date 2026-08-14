@@ -1,0 +1,41 @@
+@import "tailwindcss";
+
+/* Modern Design System - Custom Theme */
+@theme {
+  /* Colors */
+  --color-pure-black: #000000;
+  --color-deep-gray: #1a1a1a;
+  --color-background-warm: #FAF9F7;
+  --color-pure-white: #FFFFFF;
+  --color-border-light: #EAEAEA;
+  --color-text-muted: #888888;
+  --color-accent-orange: #FF6B35;
+  --color-accent-orange-light: #FFF4EE;
+
+  /* Semantic Color Mapping */
+  --color-primary: var(--color-deep-gray);
+  --color-secondary: var(--color-deep-gray);
+  --color-background: var(--color-background-warm);
+  --color-surface: var(--color-pure-white);
+  --color-border: var(--color-border-light);
+  --color-muted: var(--color-text-muted);
+  --color-accent: var(--color-accent-orange);
+  --color-accent-light: var(--color-accent-orange-light);
+}
+
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  background-color: var(--color-background);
+  color: var(--color-primary);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+#root {
+  min-height: 100vh;
+}

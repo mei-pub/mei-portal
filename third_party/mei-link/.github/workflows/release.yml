@@ -1,0 +1,410 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "版本号（如 1.2.0）。留空则用最近 git tag 或输入新版本号"
+        required: false
+        default: ""
+
+permissions:
+  contents: write
+
+jobs:
+  # -----------------------------------------------------------------------
+  # Job 1: Tauri 桌面客户端（macOS / Windows / Linux 并行）
+  # -----------------------------------------------------------------------
+  tauri-desktop:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-14
+            label: darwin-arm64
+            rust_target: aarch64-apple-darwin
+          - os: windows-latest
+            label: windows-amd64
+            rust_target: x86_64-pc-windows-msvc
+          - os: ubuntu-22.04
+            label: linux-amd64
+            rust_target: x86_64-unknown-linux-gnu
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Setup Node
+        uses: actions/setup-node@v5
+        with:
+          node-version: "22"
+
+      - name: Setup Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: "1.22"
+          cache-dependency-path: client/desktop/sidecar/go.sum
+
+      - name: Setup Rust (Tauri)
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.rust_target }}
+
+      - name: Install Linux deps
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf libssl-dev
+
+      - name: Install frontend deps
+        working-directory: client/desktop
+        run: npm install
+
+      - name: Resolve version
+        id: ver
+        shell: bash
+        run: |
+          v="${{ github.event.inputs.version || github.ref_name }}"
+          v="${v#v}"
+          echo "APP_VERSION=$v" >> "$GITHUB_OUTPUT"
+
+      - name: Build Tauri desktop client
+        shell: bash
+        run: bash scripts/build/build-desktop.sh --copy "${{ steps.ver.outputs.APP_VERSION }}"
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v6
+        with:
+          name: meilink-desktop-${{ matrix.label }}
+          path: release/client/desktop/meilink-desktop-*
+
+  # -----------------------------------------------------------------------
+  # Job 2: Swift 原生客户端（仅 macOS）
+  # -----------------------------------------------------------------------
+  swift-native:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Setup Go (for go-cross-compile of frpc if needed later)
+        uses: actions/setup-go@v6
+        with:
+          go-version: "1.22"
+          cache-dependency-path: client/desktop/sidecar/go.sum
+
+      - name: Resolve version
+        id: ver
+        shell: bash
+        run: |
+          v="${{ github.event.inputs.version || github.ref_name }}"
+          v="${v#v}"
+          echo "APP_VERSION=$v" >> "$GITHUB_OUTPUT"
+
+      - name: Build Swift binary via SwiftPM
+        shell: bash
+        run: |
+          set +e
+          echo "=== swift --version ==="
+          swift --version
+          echo "=== swift build -c release (full output) ==="
+          swift build -c release 2>&1
+          SWIFT_RC=$?
+          echo "swift build exit code: $SWIFT_RC"
+          if [ $SWIFT_RC -ne 0 ]; then
+            echo "! swift build failed"
+            exit 1
+          fi
+          BIN_PATH="$(swift build -c release --show-bin-path)/Meilink"
+          echo "binary at: $BIN_PATH"
+          if [ ! -f "$BIN_PATH" ]; then
+            echo "! binary not found at $BIN_PATH"
+            ls -la "$(swift build -c release --show-bin-path)" 2>&1
+            exit 1
+          fi
+          ls -lh "$BIN_PATH"
+          file "$BIN_PATH"
+          echo "✓ Swift binary built"
+
+      - name: Package Swift .app + DMG
+        shell: bash
+        run: |
+          set -e
+          VERSION="${{ steps.ver.outputs.APP_VERSION }}"
+          mkdir -p release/client/macos-native
+
+          # 构建 .app bundle
+          BIN_PATH="$(swift build -c release --show-bin-path)/Meilink"
+          APP_BUNDLE="build/Meilink.app"
+          rm -rf "$APP_BUNDLE"
+          mkdir -p "$APP_BUNDLE/Contents/MacOS" "$APP_BUNDLE/Contents/Resources"
+
+          # 复制二进制
+          cp "$BIN_PATH" "$APP_BUNDLE/Contents/MacOS/Meilink"
+
+          # 下载 frpc。download-frpc.sh 用 Xcode 构建变量决定输出目录，
+          # SwiftPM 路径下这些变量未设，会解析成 /MacOS（只读）而失败。
+          # 显式导出指向 bundle，让 frpc 直接下到 .app/Contents/MacOS/。
+          BUILT_PRODUCTS_DIR="$APP_BUNDLE/Contents" CONTENTS_FOLDER_PATH="" \
+            bash scripts/assets/download-frpc.sh
+
+          # 生成 Info.plist（用 printf 避免 heredoc 在 YAML 中解析问题）
+          /usr/libexec/PlistBuddy -c "Add :CFBundleExecutable string Meilink" \
+            -c "Add :CFBundleIdentifier string pub.mei.meilink" \
+            -c "Add :CFBundleName string Meilink" \
+            -c "Add :CFBundleDisplayName string Meilink" \
+            -c "Add :CFBundleVersion string 1.0" \
+            -c "Add :CFBundleShortVersionString string $VERSION" \
+            -c "Add :CFBundlePackageType string APPL" \
+            -c "Add :LSMinimumSystemVersion string 13.0" \
+            -c "Add :LSUIElement bool true" \
+            "$APP_BUNDLE/Contents/Info.plist" 2>/dev/null || true
+
+          # 复制 AppIcon（如果存在）
+          if [ -f "client/macos-native/Resources/AppIcon.icns" ]; then
+            cp "client/macos-native/Resources/AppIcon.icns" "$APP_BUNDLE/Contents/Resources/"
+          fi
+
+          echo "=== .app bundle contents ==="
+          find "$APP_BUNDLE" -maxdepth 3 -type f
+
+          # Build DMG
+          STAGE="/tmp/dmg-staging-$"
+          rm -rf "$STAGE" && mkdir -p "$STAGE"
+          cp -R "$APP_BUNDLE" "$STAGE/"
+          ln -s /Applications "$STAGE/Applications"
+          echo "=== staging contents ==="
+          ls -la "$STAGE"
+          hdiutil create -volname "Meilink" -srcfolder "$STAGE" \
+            -ov -fs HFS+ -format UDZO "release/client/macos-native/meilink-${VERSION}-macos-native.dmg"
+          rm -rf "$STAGE"
+          echo "=== final DMG ==="
+          ls -lh "release/client/macos-native/meilink-${VERSION}-macos-native.dmg"
+          echo "✓ Swift native DMG built"
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v6
+        with:
+          name: meilink-swift-native
+          path: release/client/macos-native/meilink-*-macos-native.dmg
+
+  # -----------------------------------------------------------------------
+  # Job 3: 服务端 setup 工具（Linux amd64 + arm64 交叉编译，任意平台可跑）
+  # -----------------------------------------------------------------------
+  server-setup:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Setup Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: "1.22"
+          cache-dependency-path: server/setup/go.sum
+
+      - name: Resolve version
+        id: ver
+        shell: bash
+        run: |
+          v="${{ github.event.inputs.version || github.ref_name }}"
+          v="${v#v}"
+          echo "APP_VERSION=$v" >> "$GITHUB_OUTPUT"
+
+      - name: Build setup tool
+        shell: bash
+        run: |
+          cd server/setup
+          VERSION="${{ steps.ver.outputs.APP_VERSION }}"
+          mkdir -p "$GITHUB_WORKSPACE/release/server"
+          for goarch in amd64 arm64; do
+            outname="meilink-setup-${VERSION}-linux-${goarch}"
+            stagedir="/tmp/$outname"
+            rm -rf "$stagedir" && mkdir -p "$stagedir"
+            CGO_ENABLED=0 GOOS=linux GOARCH="$goarch" \
+              go build -ldflags "-s -w" -o "$stagedir/meilink-setup" .
+            tar -czf "$GITHUB_WORKSPACE/release/server/${outname}.tar.gz" -C /tmp "$outname"
+            echo "✓ ${outname}.tar.gz"
+          done
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v6
+        with:
+          name: meilink-server-setup
+          path: release/server/meilink-setup-*
+
+  # -----------------------------------------------------------------------
+  # Job 4: Docker 镜像（Docker 客户端 + Docker 服务端一体镜像）
+  #   - 推送到 GHCR（ghcr.io/<owner>/meilink-client / meilink-server）
+  #   - 同时导出 OCI 离线包（linux/amd64 + linux/arm64）作为 Release 附件，
+  #     供 NAS 等无法在线构建镜像的环境离线导入
+  # -----------------------------------------------------------------------
+  docker-images:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: client
+            context: client/docker
+            image: meilink-client
+            oci: meilink-docker-client
+            dest: release/client/docker
+          - name: server
+            context: server/docker-managed
+            image: meilink-server
+            oci: meilink-server
+            dest: release/server
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Login to Aliyun ACR (optional)
+        if: env.ALIYUN_ACR_USERNAME != '' && vars.ACR_REGISTRY != ''
+        env:
+          ALIYUN_ACR_USERNAME: ${{ secrets.ALIYUN_ACR_USERNAME }}
+          ALIYUN_ACR_PASSWORD: ${{ secrets.ALIYUN_ACR_PASSWORD }}
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ vars.ACR_REGISTRY }}
+          username: ${{ secrets.ALIYUN_ACR_USERNAME }}
+          password: ${{ secrets.ALIYUN_ACR_PASSWORD }}
+
+      - name: Resolve version
+        id: ver
+        shell: bash
+        run: |
+          v="${{ github.event.inputs.version || github.ref_name }}"
+          v="${v#v}"
+          echo "APP_VERSION=$v" >> "$GITHUB_OUTPUT"
+
+      - name: Compute image tags
+        id: tags
+        shell: bash
+        run: |
+          v="${{ steps.ver.outputs.APP_VERSION }}"
+          ghcr="ghcr.io/${{ github.repository_owner }}/${{ matrix.image }}"
+          tags="$ghcr:$v,$ghcr:latest"
+          if [ -n "${{ secrets.ALIYUN_ACR_USERNAME }}" ] && [ -n "${{ vars.ACR_REGISTRY }}" ]; then
+            acr="${{ vars.ACR_REGISTRY }}/${{ vars.ACR_NAMESPACE }}/${{ matrix.image }}"
+            tags="$tags,$acr:$v,$acr:latest"
+          fi
+          echo "tags=$tags" >> "$GITHUB_OUTPUT"
+
+      - name: Build and push multi-arch image
+        uses: docker/build-push-action@v6
+        env:
+          # 禁用 build record 自动上传：*.dockerbuild 产物只含构建元数据，
+          # 对发布无价值，且会让 download-artifact 全量下载时失败
+          DOCKER_BUILD_RECORD_UPLOAD: "false"
+        with:
+          context: ${{ matrix.context }}
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.tags.outputs.tags }}
+          labels: |
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+
+      - name: Export OCI offline archive
+        shell: bash
+        run: |
+          set -e
+          mkdir -p "${{ matrix.dest }}"
+          docker buildx build \
+            --platform linux/amd64,linux/arm64 \
+            --output type=oci,dest="$GITHUB_WORKSPACE/${{ matrix.dest }}/${{ matrix.oci }}-${{ steps.ver.outputs.APP_VERSION }}.oci.tar" \
+            "${{ matrix.context }}"
+          ls -lh "${{ matrix.dest }}/"
+
+      - name: Warm GHCR mirror caches (best-effort)
+        # 拉取公共 GHCR 镜像的常见国内加速站，触发回源缓存，国内用户后续拉取更快。
+        # 镜像需为 public，否则加速站回源 401。失败不影响发布。
+        # 矩阵只跑一次（server 实例），拉 client + server 两个镜像。
+        if: matrix.name == 'server'
+        continue-on-error: true
+        shell: bash
+        run: |
+          v="${{ steps.ver.outputs.APP_VERSION }}"
+          for mirror in ghcr.nju.edu.cn ghcr.m.daocloud.io ghcr.dockerproxy.net; do
+            for img in "${{ github.repository_owner }}/meilink-client" "${{ github.repository_owner }}/meilink-server"; do
+              echo "==> warming $mirror/$img:$v"
+              docker pull "$mirror/$img:$v" || echo "!! warm failed for $mirror/$img:$v"
+            done
+          done
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v6
+        with:
+          name: meilink-docker-${{ matrix.name }}
+          path: ${{ matrix.dest }}/${{ matrix.oci }}-${{ steps.ver.outputs.APP_VERSION }}.oci.tar
+
+  # -----------------------------------------------------------------------
+  # Job 5: 汇总所有产物到 Release
+  # -----------------------------------------------------------------------
+  publish-release:
+    needs: [tauri-desktop, swift-native, server-setup, docker-images]
+    runs-on: ubuntu-22.04
+    if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v7
+        with:
+          path: artifacts
+          # 排除 build-push-action 自动上传的 *.dockerbuild 构建记录产物
+          # （无该过滤时默认下载全部产物，dockerbuild 元数据会导致下载/解压失败）
+          pattern: "!*.dockerbuild"
+
+      - name: Organize release files
+        shell: bash
+        run: |
+          mkdir -p release/client/macos-native release/client/desktop release/client/docker release/server
+          # 清理 checkout 带入的陈旧发布产物（如被误提交/本地残留的 .dmg/.tar.gz）。
+          # 上传内容必须全部来自本次下载的 artifacts，避免旧包混入 Release 附件。
+          # .gitkeep / RELEASE_NOTES.md 不受影响。
+          find release -type f \( -name '*.dmg' -o -name '*.tar.gz' -o -name '*.oci.tar' -o -name '*.msi' -o -name '*.zip' \) -delete
+          # 按产物名前缀分发到对应子目录
+          find artifacts -type f | while read -r f; do
+            base="$(basename "$f")"
+            case "$base" in
+              meilink-setup-*)          cp "$f" release/server/ ;;
+              meilink-docker-client-*)  cp "$f" release/client/docker/ ;;
+              meilink-server-*.oci.tar) cp "$f" release/server/ ;;
+              meilink-desktop-*)        cp "$f" release/client/desktop/ ;;
+              meilink-*-macos-native*) cp "$f" release/client/macos-native/ ;;
+              *)                        cp "$f" release/ ;;
+            esac
+          done
+          # 剔除 0 字节文件（如 .gitkeep 占位文件）：GitHub Release API 拒绝
+          # 上传空文件（size must be >= 1）。一次性清掉所有空文件，不逐个排除。
+          find release -type f -size 0 -delete
+
+          echo "=== release/ 结构 ==="
+          find release -type f | sort
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v3
+        with:
+          tag_name: ${{ github.event.inputs.version || github.ref_name }}
+          name: Meilink ${{ github.event.inputs.version || github.ref_name }}
+          generate_release_notes: true
+          files: |
+            release/client/macos-native/*
+            release/client/desktop/*
+            release/client/docker/*
+            release/server/*

@@ -124,9 +124,35 @@ const mediagoAdapter: AppLoginAdapter = {
   },
 };
 
+// ----- ai-draw 适配器（JWT Bearer + localStorage auth-storage）-----
+// admin 用户密码用 MEI_ADMIN_PASSWORD（patch 改造后），token 存 localStorage["auth-storage"]
+// zustand-persist 格式：{state: {user, token}, version: 0}
+// 直接调 Express（127.0.0.1:3004/api/auth/login），不走 nginx（无需 /draw 前缀）
+const aidrawAdapter: AppLoginAdapter = {
+  appId: 'ai-draw',
+  async login(username, password) {
+    try {
+      const res = await fetch('http://127.0.0.1:3004/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: username || 'admin', password }),
+      });
+      if (!res.ok) return { success: false, cookies: [] };
+      const data = await res.json();
+      const token = data?.token;
+      if (token) {
+        return { success: true, cookies: [], token };
+      }
+      return { success: false, cookies: [] };
+    } catch {
+      return { success: false, cookies: [] };
+    }
+  },
+};
+
 // tutorial：nginx 已注入 auth-token cookie，无需适配器
 
-const ADAPTERS: AppLoginAdapter[] = [meilinkAdapter, lunatvAdapter, solaraAdapter, sunpanelAdapter, mediagoAdapter];
+const ADAPTERS: AppLoginAdapter[] = [meilinkAdapter, lunatvAdapter, solaraAdapter, sunpanelAdapter, mediagoAdapter, aidrawAdapter];
 
 /** 并发代理登录所有已注册应用 */
 export async function proxyLoginAll(

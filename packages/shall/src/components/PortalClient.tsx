@@ -5,19 +5,32 @@ import type { ClientPlugin } from '@/lib/categories';
 import { CATEGORY_LABELS } from '@/lib/categories';
 import TopBar from './TopBar';
 import AppCard from './AppCard';
+import { isSwitchable, isAppEnabled } from '@/lib/app-toggles';
 
 interface Item {
   plugin: ClientPlugin;
   url: string;
 }
 
+interface ResolvedItem extends Item {
+  disabled?: boolean;
+}
+
 export default function PortalClient({ items }: { items: Item[] }) {
   const [query, setQuery] = useState('');
   const searchRef = useRef<HTMLInputElement>(null);
   const [disguised, setDisguised] = useState(false);
+  const [enabledTick, setEnabledTick] = useState(0);
 
   useEffect(() => {
     try { setDisguised(localStorage.getItem('mei-disguise') === 'true'); } catch {}
+  }, []);
+
+  // 应用开关变化时刷新（TopBar 下拉切换后 reload，此处兜底）
+  useEffect(() => {
+    const onStore = () => setEnabledTick((t) => t + 1);
+    window.addEventListener('storage', onStore);
+    return () => window.removeEventListener('storage', onStore);
   }, []);
 
   // 单镜像模式：url 已是子路径（/novels /link），直接用 items
@@ -29,28 +42,27 @@ export default function PortalClient({ items }: { items: Item[] }) {
     setRootDomain(rd || window.location.hostname);
   }, []);
 
-  const resolvedItems = useMemo(() => {
-    let base = items;
+  const resolvedItems = useMemo<ResolvedItem[]>(() => {
+    let base: ResolvedItem[] = items;
     if (process.env.NEXT_PUBLIC_MEI_MODE !== 'single' && rootDomain) {
       base = items.map((i) => ({
         ...i,
         url: `${window.location.protocol}//${i.plugin.subdomainPrefix || i.plugin.id}.${rootDomain}`,
       }));
     }
-    // 应用隐藏模式伪装
+    // 隐藏模式：仅显示蜘蛛纸牌（spider），隐藏其他所有应用
+    // spider 是 Shell 框架级独立入口，始终保留；其他应用在隐藏时不可见
+    // 用户可在蜘蛛纸牌游戏中输入书架密码解锁对应书架
     if (disguised) {
-      base = base.map((i) => {
-        if (i.plugin.disguise) {
-          return {
-            plugin: { ...i.plugin, name: i.plugin.disguise.name, icon: i.plugin.disguise.icon, category: 'game' as const },
-            url: i.plugin.disguise.url,
-          };
-        }
-        return i;
-      });
+      base = base.filter((i) => i.plugin.id === 'spider');
     }
-    return base;
-  }, [items, rootDomain, disguised]);
+    // 应用开关：可开关且被关闭的应用 → 卡片置灰不可点击
+    return base.map((i) => {
+      const disabled = isSwitchable(i.plugin.id) && !isAppEnabled(i.plugin.id);
+      return disabled ? { ...i, disabled: true } : i;
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [items, rootDomain, disguised, enabledTick]);
 
   const filtered = useMemo(() => {
     if (!query.trim()) return resolvedItems;
@@ -64,7 +76,7 @@ export default function PortalClient({ items }: { items: Item[] }) {
   }, [resolvedItems, query]);
 
   const groups = useMemo(() => {
-    return filtered.reduce<Record<string, Item[]>>((acc, i) => {
+    return filtered.reduce<Record<string, ResolvedItem[]>>((acc, i) => {
       (acc[i.plugin.category] = acc[i.plugin.category] || []).push(i);
       return acc;
     }, {});
@@ -88,16 +100,16 @@ export default function PortalClient({ items }: { items: Item[] }) {
       <TopBar query={query} onSearch={setQuery} searchRef={searchRef} />
       <main
         style={{
-          maxWidth: 1200,
+          maxWidth: 1280,
           margin: '0 auto',
-          padding: 'var(--mei-space-8) var(--mei-space-6)',
+          padding: 'var(--mei-space-5) var(--mei-space-5) var(--mei-space-8)',
         }}
       >
         <h1
           style={{
-            fontSize: 28,
+            fontSize: 22,
             fontWeight: 700,
-            margin: '0 0 var(--mei-space-2)',
+            margin: '0 0 var(--mei-space-1)',
             background: 'var(--mei-gradient)',
             WebkitBackgroundClip: 'text',
             WebkitTextFillColor: 'transparent',
@@ -105,21 +117,27 @@ export default function PortalClient({ items }: { items: Item[] }) {
         >
           欢迎来到 mei-allin
         </h1>
-        <p style={{ color: 'var(--mei-text-muted)', margin: '0 0 var(--mei-space-8)' }}>
+        <p style={{ color: 'var(--mei-text-muted)', margin: '0 0 var(--mei-space-5)', fontSize: 13 }}>
           统一门户 · {resolvedItems.length} 个应用 · 点击卡片进入
         </p>
 
         {Object.entries(groups).map(([cat, list]) => (
-          <section key={cat} style={{ marginBottom: 'var(--mei-space-8)' }}>
+          <section key={cat} style={{ marginBottom: 'var(--mei-space-6)' }}>
             <h2 className="mei-section-title">
               {CATEGORY_LABELS[cat as keyof typeof CATEGORY_LABELS] || cat}
             </h2>
             <div className="mei-card-grid">
-              {list.map(({ plugin, url }) => (
-                <a key={plugin.id} href={url} style={{ textDecoration: 'none' }}>
-                  <AppCard plugin={plugin} url={url} onClick={() => {}} />
-                </a>
-              ))}
+              {list.map(({ plugin, url, disabled }) =>
+                disabled ? (
+                  <div key={plugin.id} style={{ textDecoration: 'none' }}>
+                    <AppCard plugin={plugin} url={url} disabled onClick={() => {}} />
+                  </div>
+                ) : (
+                  <a key={plugin.id} href={url} style={{ textDecoration: 'none' }}>
+                    <AppCard plugin={plugin} url={url} onClick={() => {}} />
+                  </a>
+                )
+              )}
             </div>
           </section>
         ))}
