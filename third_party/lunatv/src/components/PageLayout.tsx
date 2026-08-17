@@ -2,8 +2,6 @@ import { BackButton } from './BackButton';
 import MobileBottomNav from './MobileBottomNav';
 import MobileHeader from './MobileHeader';
 import Sidebar from './Sidebar';
-import { ThemeToggle } from './ThemeToggle';
-import { UserMenu } from './UserMenu';
 
 interface PageLayoutProps {
   children: React.ReactNode;
@@ -32,11 +30,7 @@ const PageLayout = ({ children, activePath = '/' }: PageLayoutProps) => {
             </div>
           )}
 
-          {/* 桌面端顶部按钮 */}
-          <div className='absolute top-2 right-4 z-20 hidden md:flex items-center gap-2'>
-            <ThemeToggle />
-            <UserMenu />
-          </div>
+          {/* 桌面端顶部按钮已移除（人头/界面风格入口迁移到门户设置集成页） */}
 
           {/* 主内容 */}
           <main

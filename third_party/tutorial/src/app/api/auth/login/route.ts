@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
-import { getLibraryById, getLibrariesWithPasswords } from '@/lib/db';
-import { buildAuthToken, isMasterPassword, applyUnlockCookie } from '@/lib/auth';
+import { getHiddenLibraries, getLibraryById, getLibrariesWithPasswords } from '@/lib/db';
+import { buildAuthToken, isMasterPassword, applyUnlockCookie, authCookieHeader } from '@/lib/auth';
 
 const AUTH_COOKIE = 'auth-token';
 
@@ -18,19 +18,19 @@ export async function POST(request: Request) {
       const libs = getLibrariesWithPasswords();
       for (const lib of libs) {
         if (lib.password && lib.password === nickname) {
-          const token = buildAuthToken(lib.id, lib.password);
           const res = NextResponse.json({ matched: true, success: true, libraryId: lib.id, libraryName: lib.name });
-          res.headers.append(
-            'Set-Cookie',
-            `${AUTH_COOKIE}=${encodeURIComponent(token)}; Path=/; Max-Age=${7 * 24 * 3600}; SameSite=Lax`
-          );
+          res.headers.append('Set-Cookie', authCookieHeader(lib.id, lib.password));
           return res;
         }
       }
-      // 主密码解锁：昵称==主密码 → 静默下发解锁 cookie，继续游戏（matched:false）
+      // 主密码解锁：昵称==主密码 → 静默下发解锁 cookie（激活第一个隐藏书架），继续游戏（matched:false）
       if (isMasterPassword(nickname)) {
         const res = NextResponse.json({ matched: false, unlocked: true });
-        applyUnlockCookie(res);
+        const firstHidden = getHiddenLibraries()[0];
+        // 同时下发 auth cookie：nginx 对无 auth-token 的浏览器会整体替换 Cookie 头（丢失 mei-unlock），
+        // 让浏览器持有 auth-token 后即可原样透传全部 cookie
+        res.headers.append('Set-Cookie', authCookieHeader(firstHidden ? firstHidden.id : 1, ''));
+        applyUnlockCookie(res, firstHidden?.id);
         return res;
       }
       // No match — not a password, treat as normal game nickname
@@ -49,18 +49,18 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Library not found' }, { status: 404 });
     }
 
-    // 主密码打开隐藏书架
+    // 主密码打开隐藏书架：同时下发 auth cookie（激活态由 unlock cookie 记录）
     if (library.hidden && isMasterPassword(password)) {
       const res = NextResponse.json({ success: true, libraryId: library.id, libraryName: library.name, unlocked: true });
-      applyUnlockCookie(res);
+      res.headers.append('Set-Cookie', authCookieHeader(library.id, ''));
+      applyUnlockCookie(res, library.id);
       return res;
     }
 
     // No password set on library = always allowed
     if (!library.password) {
-      const token = buildAuthToken(library.id, '');
       const res = NextResponse.json({ success: true, libraryId: library.id, libraryName: library.name });
-      res.headers.append('Set-Cookie', `${AUTH_COOKIE}=${encodeURIComponent(token)}; Path=/; SameSite=Lax`);
+      res.headers.append('Set-Cookie', `${AUTH_COOKIE}=${encodeURIComponent(buildAuthToken(library.id, ''))}; Path=/; SameSite=Lax`);
       return res;
     }
 
@@ -69,12 +69,8 @@ export async function POST(request: Request) {
     }
 
     // Set auth cookie (valid for 7 days)
-    const token = buildAuthToken(library.id, password);
     const res = NextResponse.json({ success: true, libraryId: library.id, libraryName: library.name });
-    res.headers.append(
-      'Set-Cookie',
-      `${AUTH_COOKIE}=${encodeURIComponent(token)}; Path=/; Max-Age=${7 * 24 * 3600}; SameSite=Lax`
-    );
+    res.headers.append('Set-Cookie', authCookieHeader(library.id, password));
     return res;
   } catch (error) {
     console.error('Auth login failed:', error);

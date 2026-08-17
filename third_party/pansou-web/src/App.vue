@@ -41,7 +41,6 @@ const thirdSearchTimeout = ref<number | null>(null);
 const fourthSearchTimeout = ref<number | null>(null);
 const lastSearchParams = ref<SearchParams | null>(null);
 const showExportModal = ref(false);
-const navHeaderRef = ref<HTMLElement | null>(null);
 const mainContentRef = ref<HTMLElement | null>(null);
 const footerRef = ref<HTMLElement | null>(null);
 const searchResultsBlockRef = ref<HTMLElement | null>(null);
@@ -110,14 +109,6 @@ const hasAccountServices = computed(() => {
 });
 
 // 页面切换
-const switchToStatus = () => {
-  currentPage.value = 'status';
-};
-
-const switchToDocs = () => {
-  currentPage.value = 'docs';
-};
-
 const switchToAccounts = () => {
   currentPage.value = 'accounts';
 };
@@ -1336,71 +1327,6 @@ onUnmounted(() => {
   opacity: 0.1;
 }
 
-.nav-header {
-  position: sticky;
-  top: 0;
-  z-index: 50;
-}
-
-/* 导航按钮样式 */
-.nav-button {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.5rem 1rem;
-  background: transparent;
-  color: hsl(var(--muted-foreground));
-  border: 1px solid hsl(var(--border));
-  border-radius: 0.375rem;
-  font-size: 0.875rem;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.nav-button:hover {
-  background: hsl(var(--accent));
-  color: hsl(var(--accent-foreground));
-  border-color: hsl(var(--accent));
-}
-
-.nav-button.active {
-  background: hsl(var(--primary));
-  color: hsl(var(--primary-foreground));
-  border-color: hsl(var(--primary));
-}
-
-.logout-button {
-  border-color: hsl(0, 84%, 60%);
-  color: hsl(0, 84%, 60%);
-}
-
-.logout-button:hover {
-  background: hsl(0, 84%, 95%);
-  border-color: hsl(0, 84%, 60%);
-  color: hsl(0, 84%, 50%);
-}
-
-@media (prefers-color-scheme: dark) {
-  .logout-button:hover {
-    background: hsl(0, 84%, 20%);
-    color: hsl(0, 84%, 90%);
-  }
-}
-
-
-
-.nav-icon {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-}
-
-.nav-text {
-  white-space: nowrap;
-}
-
 /* 页面切换动画 */
 .search-page, .status-page {
   animation: fadeIn 0.3s ease-in-out;
@@ -1492,19 +1418,6 @@ onUnmounted(() => {
   .container {
     padding-left: 1rem;
     padding-right: 1rem;
-  }
-  
-  /* 移动端按钮样式 - 只显示图标 */
-  .nav-button {
-    padding: 0.5rem;
-    font-size: 0.8rem;
-    min-width: 2.5rem;
-    justify-content: center;
-  }
-  
-  /* 移动端隐藏按钮文字 */
-  .nav-text {
-    display: none;
   }
 }
 

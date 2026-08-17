@@ -32,8 +32,6 @@ function SpiderGameContent() {
           // 匹配到书架密码 → 自动登录，跳转到书架
           if (data.matched && data.success) {
             setLoggingIn(true);
-            // 取消伪装标记（若用户曾通过 Navbar hide 开启过）
-            try { localStorage.setItem("mei-disguise", "false"); } catch {}
             router.push(`/novels?lib=${data.libraryId}`);
           }
           // 未匹配：当作普通游戏昵称，继续游玩

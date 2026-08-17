@@ -1,18 +1,21 @@
 import { NextResponse } from 'next/server';
-import { getLibraries, getLibraryById, updateLibrary } from '@/lib/db';
-import { requireAuth, verifyAuth, isUnlocked } from '@/lib/auth';
+import { getLibrariesWithPasswords, getLibraryById, updateLibrary } from '@/lib/db';
+import { requireAuth, verifyAuth, isUnlocked, getActiveHiddenId } from '@/lib/auth';
 
-// GET /api/settings — returns info about all libraries (public, no passwords)
+// GET /api/settings — returns info about all libraries (public; 不返回密码本体，仅 hasPassword)
 export async function GET(request: Request) {
   try {
     const unlocked = isUnlocked(request);
-    const libraries = getLibraries().filter(l => !l.hidden || unlocked);
+    const libraries = getLibrariesWithPasswords()
+      .filter(l => !l.hidden || unlocked)
+      .map(({ password, ...rest }) => ({ ...rest, hasPassword: !!password }));
     const authedLibraryId = verifyAuth(request);
 
     return NextResponse.json({
       libraries,
       authenticatedLibraryId: authedLibraryId,
       unlocked,
+      activeHiddenId: getActiveHiddenId(request),
     });
   } catch (error) {
     console.error('Failed to get settings:', error);

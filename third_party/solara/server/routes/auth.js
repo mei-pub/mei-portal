@@ -43,8 +43,9 @@ module.exports = function createAuthMiddleware(password) {
     // 公开路径直接放行
     if (isPublicPath(req.path)) return next();
 
-    // 验证 cookie（与 Cloudflare 版本完全一致：cookie auth = btoa(password)）
-    const cookieAuth = req.cookies && req.cookies.auth;
+    // 验证 cookie（cookie solara-auth = btoa(password)）
+    // mei-allin：原名 auth 与 lunatv 在同源下同名冲突（互相覆盖），改为 solara-auth
+    const cookieAuth = req.cookies && req.cookies['solara-auth'];
     const expected = Buffer.from(password).toString('base64'); // 等价于 btoa(password)
     if (cookieAuth && cookieAuth === expected) return next();
 

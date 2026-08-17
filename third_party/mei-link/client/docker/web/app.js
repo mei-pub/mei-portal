@@ -182,7 +182,12 @@ async function saveConfig(connectAfterSave = false) {
 async function copyText(value, success) { if (!value) throw new Error("没有可复制的内容"); if (navigator.clipboard?.writeText) await navigator.clipboard.writeText(value); else { const area = document.createElement("textarea"); area.value = value; document.body.append(area); area.select(); document.execCommand("copy"); area.remove(); } notify(success); }
 
 $("#loginForm").addEventListener("submit", async event => { event.preventDefault(); $("#loginError").textContent = ""; try { await api("/api/login", { method: "POST", body: JSON.stringify({ user: formValue(event.target, "user"), password: formValue(event.target, "password") }) }); $("#loginView").classList.add("hidden"); $("#appView").classList.remove("hidden"); await load(); beginPolling(); } catch (error) { $("#loginError").textContent = error.message; } });
-document.querySelectorAll("[data-view]").forEach(item => item.addEventListener("click", () => setView(item.dataset.view)));
+// mei-allin 集成：Console 侧栏已移除，主界面锁死隧道管理页（默认 tunnels）。
+// 门户设置集成页通过 ?meiView=settings|logs 深链打开对应面板。
+{
+  const meiView = new URLSearchParams(location.search).get("meiView");
+  if (meiView === "settings" || meiView === "logs" || meiView === "tunnels") setView(meiView);
+}
 $("#configForm").addEventListener("submit", async event => { event.preventDefault(); const button = event.submitter; setBusy(button, true); try { await saveConfig(); } catch (error) { notify(error.message, true); } finally { setBusy(button, false); } });
 $("#saveAndConnectButton").addEventListener("click", async event => { setBusy(event.currentTarget, true); try { await saveConfig(true); } catch (error) { notify(error.message, true); } finally { setBusy(event.currentTarget, false); } });
 $("#fetchBootstrapButton").addEventListener("click", async event => {

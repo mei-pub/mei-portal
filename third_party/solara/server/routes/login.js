@@ -28,7 +28,8 @@ module.exports = function createLoginRouter(password) {
       const isHttps = req.secure || req.headers['x-forwarded-proto'] === 'https';
 
       const cookieParts = [
-        `auth=${encoded}`,
+        // mei-allin：原名 auth 与 lunatv 同源同名冲突，改为 solara-auth
+        `solara-auth=${encoded}`,
         `Max-Age=${MAX_AGE_SECONDS}`,
         'Path=/',
         'SameSite=Lax',

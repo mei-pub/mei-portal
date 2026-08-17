@@ -1,7 +1,8 @@
 'use client';
-// 门户顶栏：品牌 + 搜索 + 隐藏模式开关 + 设置下拉
+// 门户顶栏：品牌 + 搜索 + 开关集成设置下拉（应用开关 / 主页内网模式开关）
 import { useEffect, useRef, useState } from 'react';
 import AppToggles from './AppToggles';
+import PanelNetModeToggle from './PanelNetModeToggle';
 
 export default function TopBar({
   query,
@@ -12,14 +13,9 @@ export default function TopBar({
   onSearch: (q: string) => void;
   searchRef?: React.RefObject<HTMLInputElement>;
 }) {
-  const [disguised, setDisguised] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [loggedIn, setLoggedIn] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    try { setDisguised(localStorage.getItem('mei-disguise') === 'true'); } catch {}
-  }, []);
 
   useEffect(() => {
     fetch('/api/auth/me', { credentials: 'include' })
@@ -38,12 +34,6 @@ export default function TopBar({
     document.addEventListener('mousedown', onDocClick);
     return () => document.removeEventListener('mousedown', onDocClick);
   }, []);
-
-  function toggleDisguise() {
-    const next = !disguised;
-    try { localStorage.setItem('mei-disguise', next ? 'true' : 'false'); } catch {}
-    window.location.reload();
-  }
 
   function logout() {
     fetch('/api/auth/logout', { method: 'POST', credentials: 'include' })
@@ -100,33 +90,12 @@ export default function TopBar({
 
       <div style={{ flex: 1 }} />
 
-      {/* 隐藏模式开关 */}
-      <button
-        onClick={toggleDisguise}
-        title={disguised ? '退出隐藏模式' : '进入隐藏模式'}
-        style={{
-          display: 'inline-flex',
-          alignItems: 'center',
-          gap: 6,
-          padding: '8px 12px',
-          background: disguised ? 'var(--mei-primary-soft)' : 'transparent',
-          border: `1px solid ${disguised ? 'var(--mei-primary)' : 'var(--mei-border)'}`,
-          borderRadius: 'var(--mei-radius-full)',
-          color: disguised ? 'var(--mei-primary)' : 'var(--mei-text-muted)',
-          cursor: 'pointer',
-          fontSize: 13,
-          transition: 'var(--mei-transition)',
-        }}
-      >
-        {disguised ? '🃏 已隐藏' : '🃏 隐藏'}
-      </button>
-
-      {/* 设置齿轮下拉 */}
+      {/* 开关集成设置齿轮下拉 */}
       <div ref={menuRef} style={{ position: 'relative' }}>
         <button
           onClick={() => setMenuOpen((v) => !v)}
-          title="设置"
-          aria-label="设置"
+          title="开关集成设置"
+          aria-label="开关集成设置"
           style={{
             display: 'inline-flex',
             alignItems: 'center',
@@ -177,6 +146,24 @@ export default function TopBar({
                 margin: '6px 0',
               }}
             />
+            <div
+              style={{
+                padding: '8px 10px',
+                fontSize: 12,
+                color: 'var(--mei-text-muted)',
+                fontWeight: 600,
+              }}
+            >
+              集成开关
+            </div>
+            <PanelNetModeToggle />
+            <div
+              style={{
+                height: 1,
+                background: 'var(--mei-border)',
+                margin: '6px 0',
+              }}
+            />
             <a
               href="/settings"
               style={{
@@ -192,27 +179,8 @@ export default function TopBar({
               }}
               onClick={() => setMenuOpen(false)}
             >
-              ⚙️ 设置
+              ⚙️ 设置集成页
             </a>
-            <button
-              onClick={() => { setMenuOpen(false); toggleDisguise(); }}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 8,
-                width: '100%',
-                padding: '8px 10px',
-                border: 'none',
-                background: 'transparent',
-                borderRadius: 'var(--mei-radius-sm)',
-                color: 'var(--mei-text)',
-                cursor: 'pointer',
-                fontSize: 13,
-                textAlign: 'left',
-              }}
-            >
-              🃏 {disguised ? '退出隐藏模式' : '进入隐藏模式'}
-            </button>
             {loggedIn && (
               <button
                 onClick={() => { setMenuOpen(false); logout(); }}

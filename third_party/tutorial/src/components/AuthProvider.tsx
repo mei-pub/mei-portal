@@ -156,8 +156,7 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
   async function hide() {
     setAuthenticated(false);
     setLibraryId(null);
-    // 同步开启 Shell 门户伪装（顶栏 + 首页显示"蜘蛛纸牌"）
-    try { localStorage.setItem('mei-disguise', 'true'); } catch {}
+    // mei-allin：门户伪装开关已移除，隐藏书架由设置集成页「小说书架管理」统一管理
     try {
       await fetch("/novels/api/auth/login", { method: "DELETE" });
     } catch {}
@@ -178,8 +177,6 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
           setAuthenticated(true);
           setLibraryId(data.libraryId);
           setLibraryName(data.libraryName || "小说书架");
-          // 取消 Shell 门户伪装（恢复正常显示）
-          try { localStorage.setItem('mei-disguise', 'false'); } catch {}
         }
         // If not matched, the game just continues normally as a game nickname
       }

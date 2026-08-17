@@ -19,6 +19,12 @@ export const useStorageModeStore = create<StorageModeState>()(
     }),
     {
       name: 'storage-mode',
+      // mei-allin 集成：存储模式锁死本地，忽略旧持久化的 'cloud' 值
+      merge: (persisted, current) => ({
+        ...current,
+        ...(persisted as Partial<StorageModeState>),
+        mode: 'local',
+      }),
     }
   )
 )

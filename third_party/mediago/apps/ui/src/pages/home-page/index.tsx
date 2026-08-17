@@ -1,8 +1,8 @@
 import { QrcodeOutlined } from "@ant-design/icons";
 import { DownloadFilter } from "@mediago/shared-common";
 import { useMemoizedFn } from "ahooks";
-import { Pagination, Popover, QRCode } from "antd";
-import { type FC, useId, useRef } from "react";
+import { Modal, Pagination, Popover, QRCode } from "antd";
+import { type FC, useId, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useShallow } from "zustand/react/shallow";
 import { FolderIcon } from "@/assets/svg";
@@ -29,6 +29,8 @@ interface Props {
 
 const HomePage: FC<Props> = ({ filter = DownloadFilter.list }) => {
   const { shell } = usePlatform();
+  // 弹层打开"下载完成"页（同一组件按 done 过滤渲染，无路由依赖）
+  const [doneOpen, setDoneOpen] = useState(false);
   const appStore = useAppStore(useShallow(appStoreSelector));
   const { t } = useTranslation();
   const newFormRef = useRef<DownloadFormRef>(null);
@@ -101,7 +103,10 @@ const HomePage: FC<Props> = ({ filter = DownloadFilter.list }) => {
               </Popover>
             )}
           {filter === DownloadFilter.list && (
-            <HomeDownloadButton onClick={handleOpenForm} />
+            <>
+              <Button onClick={() => setDoneOpen(true)}>{t("downloadComplete")}</Button>
+              <HomeDownloadButton onClick={handleOpenForm} />
+            </>
           )}
         </div>
       }
@@ -123,6 +128,20 @@ const HomePage: FC<Props> = ({ filter = DownloadFilter.list }) => {
         destroyOnClose
         onConfirm={handleConfirm}
       />
+
+      <Modal
+        open={doneOpen}
+        onCancel={() => setDoneOpen(false)}
+        footer={null}
+        title={t("downloadComplete")}
+        width="78%"
+        styles={{ body: { height: "70vh", overflow: "auto" } }}
+        destroyOnHidden
+      >
+        <div className="h-full">
+          <HomePage filter={DownloadFilter.done} />
+        </div>
+      </Modal>
     </PageContainer>
   );
 };

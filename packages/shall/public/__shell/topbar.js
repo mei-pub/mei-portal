@@ -19,21 +19,6 @@
   }
   var EMBED = isEmbedMode();
 
-  // ---- 隐藏模式（蜘蛛纸牌伪装）----
-  function isDisguised() {
-    try { return localStorage.getItem('mei-disguise') === 'true'; } catch (e) { return false; }
-  }
-  function toggleDisguise() {
-    var next = !isDisguised();
-    try { localStorage.setItem('mei-disguise', next ? 'true' : 'false'); } catch (e) {}
-    window.location.reload();
-  }
-  // 隐藏模式：仅显示蜘蛛纸牌（spider），隐藏其他应用
-  function applyDisguise(plugins) {
-    if (!isDisguised()) return plugins;
-    return plugins.filter(function (p) { return p.id === 'spider'; });
-  }
-
   // ---- 应用开关（localStorage mei-enabled，仅当前浏览器）----
   var SWITCHABLE = [
     ['ai-draw', 'AI 绘图'],
@@ -50,6 +35,25 @@
     var m = readEnabled();
     m[id] = !!on;
     try { localStorage.setItem('mei-enabled', JSON.stringify(m)); } catch (e) {}
+  }
+
+  // ---- 主页内网模式开关（sun-panel localStorage panelStorage，0=内网 lan、1=外网 wan）----
+  function isLanMode() {
+    try {
+      var p = JSON.parse(localStorage.getItem('panelStorage') || 'null');
+      return !!(p && p.data && p.data.networkMode === 0);
+    } catch (e) { return false; }
+  }
+  function setLanMode(on) {
+    try {
+      var p = JSON.parse(localStorage.getItem('panelStorage') || '{}');
+      if (!p.data || typeof p.data !== 'object') p.data = {};
+      p.data.networkMode = on ? 0 : 1;
+      p.expire = null;
+      localStorage.setItem('panelStorage', JSON.stringify(p));
+    } catch (e) {}
+    // 面板页面内切换时需重载才生效
+    if (window.location.pathname.indexOf('/panel') === 0) window.location.reload();
   }
 
   // 非嵌入模式才注入顶栏
@@ -97,11 +101,6 @@
       'background:#f3f4f6;color:#4b5563;font-size:13px;flex-shrink:0;cursor:pointer;text-decoration:none;}',
       '#mei-topbar .mei-user:hover{background:#e5e7eb;color:#1f2937;}',
       '#mei-topbar .mei-login{padding:6px 14px;border-radius:8px;background:linear-gradient(135deg,#6366f1,#7c3aed);color:#fff;font-size:13px;flex-shrink:0;cursor:pointer;text-decoration:none;}',
-      '#mei-topbar .mei-hide-btn{display:inline-flex;align-items:center;gap:4px;padding:6px 12px;border-radius:8px;',
-      'border:1px solid #e5e7eb;background:transparent;color:#6b7280;font-size:13px;flex-shrink:0;cursor:pointer;',
-      'transition:all .15s;margin-right:4px;}',
-      '#mei-topbar .mei-hide-btn:hover{background:#f3f4f6;color:#1f2937;border-color:#d1d5db;}',
-      '#mei-topbar .mei-hide-btn.active{background:#ede9fe;color:#6366f1;border-color:#c4b5fd;}',
       /* 设置齿轮下拉 */
       '#mei-topbar .mei-gear-wrap{position:relative;flex-shrink:0;}',
       '#mei-topbar .mei-gear{display:inline-flex;align-items:center;justify-content:center;width:34px;height:34px;',
@@ -160,14 +159,6 @@
       spacer.className = 'mei-spacer';
       bar.appendChild(spacer);
 
-      // 隐藏模式开关（🃏 按钮）
-      var hideBtn = document.createElement('button');
-      hideBtn.className = 'mei-hide-btn' + (isDisguised() ? ' active' : '');
-      hideBtn.title = isDisguised() ? '退出隐藏模式' : '进入隐藏模式';
-      hideBtn.textContent = isDisguised() ? '🃏 已隐藏' : '🃏 隐藏';
-      hideBtn.onclick = function () { toggleDisguise(); };
-      bar.appendChild(hideBtn);
-
       // 设置齿轮下拉
       var gearWrap = document.createElement('div');
       gearWrap.className = 'mei-gear-wrap';
@@ -221,17 +212,39 @@
       sep.className = 'mei-menu-sep';
       menu.appendChild(sep);
 
+      // 集成开关：主页内网模式
+      var title2 = document.createElement('div');
+      title2.className = 'mei-menu-title';
+      title2.textContent = '集成开关';
+      menu.appendChild(title2);
+      var lanRow = document.createElement('button');
+      lanRow.className = 'mei-switch' + (isLanMode() ? '' : ' off');
+      var lanLabel = document.createElement('span');
+      lanLabel.className = 'mei-switch-label';
+      lanLabel.textContent = '主页内网模式';
+      var lanTrack = document.createElement('span');
+      lanTrack.className = 'mei-track' + (isLanMode() ? ' on' : '');
+      lanTrack.innerHTML = '<span class="mei-knob"></span>';
+      lanRow.appendChild(lanLabel);
+      lanRow.appendChild(lanTrack);
+      lanRow.onclick = function (e) {
+        e.stopPropagation();
+        var next = !isLanMode();
+        setLanMode(next);
+        lanRow.classList.toggle('off', !next);
+        lanTrack.classList.toggle('on', next);
+      };
+      menu.appendChild(lanRow);
+
+      var sep2 = document.createElement('div');
+      sep2.className = 'mei-menu-sep';
+      menu.appendChild(sep2);
+
       var settings = document.createElement('a');
       settings.className = 'mei-menu-link';
       settings.href = '/settings';
-      settings.textContent = '⚙️ 设置';
+      settings.textContent = '⚙️ 设置集成页';
       menu.appendChild(settings);
-
-      var hideLink = document.createElement('button');
-      hideLink.className = 'mei-menu-link';
-      hideLink.textContent = isDisguised() ? '🃏 退出隐藏模式' : '🃏 进入隐藏模式';
-      hideLink.onclick = function () { toggleDisguise(); };
-      menu.appendChild(hideLink);
 
       gearWrap.appendChild(gear);
       gearWrap.appendChild(menu);
@@ -301,7 +314,7 @@
     fetch('/api/plugins', { credentials: 'include' })
       .then(function (r) { return r.json(); })
       .then(function (plugins) {
-        render(Array.isArray(plugins) ? applyDisguise(plugins) : []);
+        render(Array.isArray(plugins) ? plugins : []);
       })
       .catch(function () { render([]); });
   }
@@ -324,18 +337,17 @@
             localStorage.setItem('AUTH_TOKEN', JSON.stringify({ token: d.tokens['sun-panel'] }));
           }
         }
-        // mediago: apiKey 存 zustand persist localStorage
+        // mediago: apiKey 存 zustand persist localStorage（key=appstore-storage，state 为扁平字段）
         if (d.tokens['mediago']) {
           try {
-            var mgExisting = localStorage.getItem('app-store');
+            var mgExisting = localStorage.getItem('appstore-storage');
             var mgParsed = mgExisting ? JSON.parse(mgExisting) : {};
-            if (!mgParsed.state) mgParsed.state = {};
-            if (!mgParsed.state.app) mgParsed.state.app = {};
-            mgParsed.state.app.apiKey = d.tokens['mediago'];
+            if (!mgParsed.state || typeof mgParsed.state !== 'object') mgParsed.state = {};
+            mgParsed.state.apiKey = d.tokens['mediago'];
             mgParsed.version = mgParsed.version || 0;
-            localStorage.setItem('app-store', JSON.stringify(mgParsed));
+            localStorage.setItem('appstore-storage', JSON.stringify(mgParsed));
           } catch (e) {
-            localStorage.setItem('app-store', JSON.stringify({ state: { app: { apiKey: d.tokens['mediago'] } }, version: 0 }));
+            localStorage.setItem('appstore-storage', JSON.stringify({ state: { apiKey: d.tokens['mediago'] }, version: 0 }));
           }
         }
         // ai-draw: JWT token 存 zustand-persist localStorage["auth-storage"]

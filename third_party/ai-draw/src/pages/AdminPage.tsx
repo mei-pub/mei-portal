@@ -29,8 +29,7 @@ import {
   Pencil,
   Settings2,
   Trash2,
-  User,
-  Users
+  User
 } from 'lucide-react'
 import {useNavigate} from 'react-router-dom'
 import {useAuthStore} from '@/stores/authStore'
@@ -38,11 +37,12 @@ import {type I18nTexts, useSystemStore} from '@/stores/systemStore'
 import {ENGINES} from '@/constants'
 import type {EngineType} from '@/types'
 import {UsageStatistics} from './AdminUsageStatsPage'
-import {UserManagementTabs} from './AdminUserManagement'
 
+// mei-allin 集成：用户管理入口已移除（管理后台仅保留系统级设置），默认打开基础设置
 export function AdminPage() {
   const [activeTab, setActiveTab] = useState(() => {
-    return localStorage.getItem('admin_active_tab') || 'users'
+    const stored = localStorage.getItem('admin_active_tab')
+    return !stored || stored === 'users' ? 'basic' : stored
   })
   const user = useAuthStore((state) => state.user)
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false)
@@ -89,17 +89,6 @@ export function AdminPage() {
               {/* 左侧 Tab */}
               <div className="w-64 border-r border-border bg-surface/50 p-4 overflow-y-auto">
                 <nav className="space-y-1">
-                  <button
-                    onClick={() => setActiveTab('users')}
-                    className={`flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm transition-colors ${
-                      activeTab === 'users'
-                        ? 'bg-primary text-surface'
-                        : 'text-muted hover:bg-background hover:text-primary'
-                    }`}
-                  >
-                    <Users className="h-4 w-4" />
-                    <span>{i18nTexts.adminUsers[language]}</span>
-                  </button>
                   <button
                     onClick={() => setActiveTab('basic')}
                     className={`flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm transition-colors ${
@@ -171,13 +160,6 @@ export function AdminPage() {
 
               {/* 右侧内容区 */}
               <div className="flex-1 bg-surface p-6 overflow-y-auto">
-                {activeTab === 'users' && (
-                  <>
-                    <h2 className="mb-6 text-lg font-medium text-primary">{i18nTexts.adminUsers[language]}</h2>
-                    <UserManagementTabs />
-                  </>
-                )}
-
                 {activeTab === 'basic' && (
                   <>
                     <h2 className="mb-6 text-lg font-medium text-primary">{i18nTexts.adminBasicSettings[language]}</h2>

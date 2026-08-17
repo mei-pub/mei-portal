@@ -80,7 +80,6 @@ const dom = {
     settingsModal: document.getElementById("settingsModal"),
     closeSettingsBtn: document.getElementById("closeSettingsBtn"),
     saveSettingsBtn: document.getElementById("saveSettingsBtn"),
-    openSettingsBtn: document.getElementById("openSettingsBtn"),
     radarGenreList: document.getElementById("radarGenreList"),
     logo: document.querySelector(".header h1"),
 };
@@ -6385,26 +6384,6 @@ function initSettings() {
     // 渲染风格列表
     renderGenreList();
 
-    // 绑定 Logo 双击事件
-    if (dom.logo) {
-        dom.logo.addEventListener("dblclick", openSettingsModal);
-    }
-    
-    // 移动端双击标题或图标打开设置 (优化移动端双击兼容性)
-    let lastToolbarClick = 0;
-    const handleDoubleTap = (e) => {
-        const now = Date.now();
-        if (now - lastToolbarClick < 300) {
-            e.preventDefault();
-            openSettingsModal();
-        }
-        lastToolbarClick = now;
-    };
-
-    if (dom.mobileToolbarTitle) {
-        dom.mobileToolbarTitle.addEventListener("click", handleDoubleTap);
-    }
-
     // 绑定按钮事件
     if (dom.closeSettingsBtn) {
         dom.closeSettingsBtn.addEventListener("click", closeSettingsModal);
@@ -6412,16 +6391,18 @@ function initSettings() {
     if (dom.saveSettingsBtn) {
         dom.saveSettingsBtn.addEventListener("click", saveSettings);
     }
-    // 绑定齿轮图标按钮
-    const openBtn = dom.openSettingsBtn || document.getElementById("openSettingsBtn");
-    if (openBtn) {
-        openBtn.addEventListener("click", openSettingsModal);
-    }
     if (dom.settingsModal) {
         dom.settingsModal.addEventListener("click", (e) => {
             if (e.target === dom.settingsModal) closeSettingsModal();
         });
     }
+
+    // mei-allin 集成：设置入口迁移到门户设置集成页，URL 带 ?meiSettings=1 时自动打开设置弹窗
+    try {
+        if (new URLSearchParams(window.location.search).get("meiSettings") === "1") {
+            openSettingsModal();
+        }
+    } catch (e) { /* 忽略 */ }
 
     // 加载设置
     loadSettings();

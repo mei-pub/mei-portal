@@ -19,12 +19,7 @@ interface ResolvedItem extends Item {
 export default function PortalClient({ items }: { items: Item[] }) {
   const [query, setQuery] = useState('');
   const searchRef = useRef<HTMLInputElement>(null);
-  const [disguised, setDisguised] = useState(false);
   const [enabledTick, setEnabledTick] = useState(0);
-
-  useEffect(() => {
-    try { setDisguised(localStorage.getItem('mei-disguise') === 'true'); } catch {}
-  }, []);
 
   // 应用开关变化时刷新（TopBar 下拉切换后 reload，此处兜底）
   useEffect(() => {
@@ -50,19 +45,14 @@ export default function PortalClient({ items }: { items: Item[] }) {
         url: `${window.location.protocol}//${i.plugin.subdomainPrefix || i.plugin.id}.${rootDomain}`,
       }));
     }
-    // 隐藏模式：仅显示蜘蛛纸牌（spider），隐藏其他所有应用
-    // spider 是 Shell 框架级独立入口，始终保留；其他应用在隐藏时不可见
-    // 用户可在蜘蛛纸牌游戏中输入书架密码解锁对应书架
-    if (disguised) {
-      base = base.filter((i) => i.plugin.id === 'spider');
-    }
     // 应用开关：可开关且被关闭的应用 → 卡片置灰不可点击
+    // 蜘蛛纸牌（spider）为框架级独立入口，始终保留，用于输入密码解锁隐藏书架
     return base.map((i) => {
       const disabled = isSwitchable(i.plugin.id) && !isAppEnabled(i.plugin.id);
       return disabled ? { ...i, disabled: true } : i;
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [items, rootDomain, disguised, enabledTick]);
+  }, [items, rootDomain, enabledTick]);
 
   const filtered = useMemo(() => {
     if (!query.trim()) return resolvedItems;

@@ -25,7 +25,6 @@ function SpiderGameContent() {
         const data = await res.json();
         if (data.matched && data.success) {
           setLoggingIn(true);
-          try { localStorage.setItem("mei-disguise", "false"); } catch {}
           window.location.href = `/novels?lib=${data.libraryId}`;
         }
         // 未匹配：当作普通游戏昵称，继续游玩

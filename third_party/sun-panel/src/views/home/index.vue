@@ -43,7 +43,10 @@ const dropdownShow = ref(false)
 const currentRightSelectItem = ref<Panel.ItemInfo | null>(null)
 const currentAddItenIconGroupId = ref<number | undefined>()
 
-const settingModalShow = ref(false)
+// mei-allin 集成：仅当 URL 带 ?meiPanel=setting（设置集成页 iframe）时提供设置入口并自动弹出
+// 主页面板的日常页面不再显示设置悬浮按钮（入口已迁移到门户设置集成页）
+const meiSettingEntry = new URLSearchParams(window.location.search).get('meiPanel') === 'setting'
+const settingModalShow = ref(meiSettingEntry)
 
 const items = ref<ItemGroup[]>([])
 const filterItems = ref<ItemGroup[]>([])
@@ -179,15 +182,6 @@ function onClickoutside() {
 
 function handleEditSuccess(item: Panel.ItemInfo) {
   getList()
-}
-
-function handleChangeNetwork(mode: PanelStateNetworkModeEnum) {
-  panelState.setNetworkMode(mode)
-  if (mode === PanelStateNetworkModeEnum.lan)
-    ms.success(t('panelHome.changeToLanModelSuccess'))
-
-  else
-    ms.success(t('panelHome.changeToWanModelSuccess'))
 }
 
 // 结束拖拽
@@ -505,26 +499,8 @@ function handleAddItem(itemIconGroupId?: number) {
     <!-- 悬浮按钮 -->
     <div class="fixed-element shadow-[0_0_10px_2px_rgba(0,0,0,0.2)]">
       <NButtonGroup vertical>
-        <!-- 网络模式切换按钮组 -->
-        <NButton
-          v-if="panelState.networkMode === PanelStateNetworkModeEnum.lan && panelState.panelConfig.netModeChangeButtonShow" color="#2a2a2a6b"
-          :title="t('panelHome.changeToWanModel')" @click="handleChangeNetwork(PanelStateNetworkModeEnum.wan)"
-        >
-          <template #icon>
-            <SvgIcon class="text-white font-xl" icon="material-symbols:lan-outline-rounded" />
-          </template>
-        </NButton>
-
-        <NButton
-          v-if="panelState.networkMode === PanelStateNetworkModeEnum.wan && panelState.panelConfig.netModeChangeButtonShow" color="#2a2a2a6b"
-          :title="t('panelHome.changeToLanModel')" @click="handleChangeNetwork(PanelStateNetworkModeEnum.lan)"
-        >
-          <template #icon>
-            <SvgIcon class="text-white font-xl" icon="mdi:wan" />
-          </template>
-        </NButton>
-
-        <NButton v-if="authStore.visitMode === VisitMode.VISIT_MODE_LOGIN" color="#2a2a2a6b" @click="settingModalShow = !settingModalShow">
+        <!-- 网络模式切换已迁移到门户"开关集成设置"（主页内网模式开关） -->
+        <NButton v-if="meiSettingEntry && authStore.visitMode === VisitMode.VISIT_MODE_LOGIN" color="#2a2a2a6b" @click="settingModalShow = !settingModalShow">
           <template #icon>
             <SvgIcon class="text-white font-xl" icon="majesticons-applications" />
           </template>

@@ -28,7 +28,17 @@ interface AuthInfo {
   role?: 'owner' | 'admin' | 'user';
 }
 
-export const UserMenu: React.FC = () => {
+interface UserMenuProps {
+  /** mei-allin 集成：挂载后自动打开设置面板（设置集成页 iframe 使用） */
+  autoOpenSettings?: boolean;
+  /** mei-allin 集成：隐藏头像触发按钮（仅作为设置面板宿主） */
+  hideTrigger?: boolean;
+}
+
+export const UserMenu: React.FC<UserMenuProps> = ({
+  autoOpenSettings = false,
+  hideTrigger = false,
+}) => {
   const router = useRouter();
   const [isOpen, setIsOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -37,6 +47,13 @@ export const UserMenu: React.FC = () => {
   const [authInfo, setAuthInfo] = useState<AuthInfo | null>(null);
   const [storageType, setStorageType] = useState<string>('localstorage');
   const [mounted, setMounted] = useState(false);
+
+  // mei-allin 集成：autoOpenSettings 时挂载完成后直接打开设置面板
+  useEffect(() => {
+    if (autoOpenSettings && mounted) {
+      setIsSettingsOpen(true);
+    }
+  }, [autoOpenSettings, mounted]);
 
   // Body 滚动锁定 - 使用 overflow 方式避免布局问题
   useEffect(() => {
@@ -1092,18 +1109,20 @@ export const UserMenu: React.FC = () => {
 
   return (
     <>
-      <div className='relative'>
-        <button
-          onClick={handleMenuClick}
-          className='w-10 h-10 p-2 rounded-full flex items-center justify-center text-gray-600 hover:bg-gray-200/50 dark:text-gray-300 dark:hover:bg-gray-700/50 transition-colors'
-          aria-label='User Menu'
-        >
-          <User className='w-full h-full' />
-        </button>
-        {updateStatus === UpdateStatus.HAS_UPDATE && (
-          <div className='absolute top-[2px] right-[2px] w-2 h-2 bg-yellow-500 rounded-full'></div>
-        )}
-      </div>
+      {!hideTrigger && (
+        <div className='relative'>
+          <button
+            onClick={handleMenuClick}
+            className='w-10 h-10 p-2 rounded-full flex items-center justify-center text-gray-600 hover:bg-gray-200/50 dark:text-gray-300 dark:hover:bg-gray-700/50 transition-colors'
+            aria-label='User Menu'
+          >
+            <User className='w-full h-full' />
+          </button>
+          {updateStatus === UpdateStatus.HAS_UPDATE && (
+            <div className='absolute top-[2px] right-[2px] w-2 h-2 bg-yellow-500 rounded-full'></div>
+          )}
+        </div>
+      )}
 
       {/* 使用 Portal 将菜单面板渲染到 document.body */}
       {isOpen && mounted && createPortal(menuPanel, document.body)}

@@ -4,8 +4,6 @@ import Link from 'next/link';
 
 import { BackButton } from './BackButton';
 import { useSite } from './SiteProvider';
-import { ThemeToggle } from './ThemeToggle';
-import { UserMenu } from './UserMenu';
 
 interface MobileHeaderProps {
   showBackButton?: boolean;
@@ -40,11 +38,7 @@ const MobileHeader = ({ showBackButton = false }: MobileHeaderProps) => {
           {showBackButton && <BackButton />}
         </div>
 
-        {/* 右侧按钮 */}
-        <div className='flex items-center gap-2'>
-          <ThemeToggle />
-          <UserMenu />
-        </div>
+        {/* 右侧按钮已移除（人头/界面风格入口迁移到门户设置集成页） */}
       </div>
 
       {/* 中间：Logo（绝对居中） */}

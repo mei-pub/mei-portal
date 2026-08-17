@@ -14,20 +14,25 @@ export async function GET(request: Request) {
   }
 }
 
-// POST /api/libraries — create a new library (requires auth)
+// POST /api/libraries — create a new library (requires auth; 创建隐藏书架需主密码解锁)
 export async function POST(request: Request) {
   const authResult = requireAuth(request);
   if (authResult instanceof NextResponse) return authResult;
   try {
     const body = await request.json();
-    const { name, password } = body;
+    const { name, password, hidden } = body;
 
     if (!name || typeof name !== 'string' || !name.trim()) {
       return NextResponse.json({ error: 'Library name is required' }, { status: 400 });
     }
 
-    const library = createLibrary({ name: name.trim(), password: password || '' });
-    return NextResponse.json({ id: library.id, name: library.name }, { status: 201 });
+    const wantHidden = !!hidden;
+    if (wantHidden && !isUnlocked(request)) {
+      return NextResponse.json({ error: 'Master unlock required' }, { status: 403 });
+    }
+
+    const library = createLibrary({ name: name.trim(), password: password || '', hidden: wantHidden });
+    return NextResponse.json({ id: library.id, name: library.name, hidden: wantHidden }, { status: 201 });
   } catch (error) {
     console.error('Failed to create library:', error);
     return NextResponse.json({ error: 'Failed to create library' }, { status: 500 });

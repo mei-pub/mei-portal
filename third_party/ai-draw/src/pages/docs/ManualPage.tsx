@@ -4,9 +4,9 @@ import {useSystemStore} from '@/stores/systemStore'
 
 const MANUAL_DATA = {
   zh: `
-## 欢迎使用 AI Draw
+## 欢迎使用 Mei Draw
 
-AI Draw 是一个智能绘图平台，通过自然语言对话形式，即可快速生成流程图、时序图、架构图等各类图表。无需复杂的拖拽操作，让创意即刻呈现。
+Mei Draw 是一个智能绘图平台，通过自然语言对话形式，即可快速生成流程图、时序图、架构图等各类图表。无需复杂的拖拽操作，让创意即刻呈现。
 
 ## 快速开始
 
@@ -34,9 +34,9 @@ AI Draw 是一个智能绘图平台，通过自然语言对话形式，即可快
 - **导入导出**: 支持导入现有文件进行编辑，支持导出多种格式。
 `,
   en: `
-## Welcome to AI Draw
+## Welcome to Mei Draw
 
-AI Draw is an intelligent drawing platform that allows you to quickly generate flowcharts, sequence diagrams, architecture diagrams, and various other charts through natural language dialogue. No complex drag-and-drop operations required - bring your ideas to life instantly.
+Mei Draw is an intelligent drawing platform that allows you to quickly generate flowcharts, sequence diagrams, architecture diagrams, and various other charts through natural language dialogue. No complex drag-and-drop operations required - bring your ideas to life instantly.
 
 ## Quick Start
 

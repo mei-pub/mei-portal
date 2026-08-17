@@ -7,7 +7,7 @@ import { useAuth } from "@/components/AuthProvider";
 import { showToast } from "@/components/Toast";
 
 export default function SettingsPage() {
-  const { libraryId, libraryName, libraries } = useAuth();
+  const { libraryId, libraryName } = useAuth();
   const [name, setName] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -19,10 +19,7 @@ export default function SettingsPage() {
   const [importing, setImporting] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // New library form
-  const [showNewLibrary, setShowNewLibrary] = useState(false);
-  const [newLibName, setNewLibName] = useState("");
-  const [newLibPassword, setNewLibPassword] = useState("");
+  // 书库管理（列表/新建/删除/隐藏切换）已迁移到门户设置集成页的「小说书架管理」(/manage)
 
   useEffect(() => {
     setName(libraryName || "");
@@ -81,76 +78,6 @@ export default function SettingsPage() {
       setConfirmPassword("");
     } catch {
       setMessage("操作失败");
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  async function handleCreateLibrary() {
-    if (!newLibName.trim()) {
-      showToast("请输入书库名称", "error");
-      return;
-    }
-    setSaving(true);
-    try {
-      const res = await fetch("/novels/api/libraries", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: newLibName.trim(), password: newLibPassword }),
-      });
-      if (res.ok) {
-        showToast("书库创建成功", "success");
-        setShowNewLibrary(false);
-        setNewLibName("");
-        setNewLibPassword("");
-        setTimeout(() => window.location.reload(), 500);
-      } else {
-        const data = await res.json();
-        showToast(data.error || "创建失败", "error");
-      }
-    } catch {
-      showToast("创建失败", "error");
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  async function handleDeleteLibrary(libId: number, libName: string) {
-    if (!confirm(`确定要删除书库「${libName}」吗？该书库下的所有书籍和章节都会被删除。`)) return;
-    setSaving(true);
-    try {
-      const res = await fetch(`/novels/api/libraries?id=${libId}`, { method: "DELETE" });
-      if (res.ok) {
-        showToast("书库已删除", "success");
-        setTimeout(() => window.location.reload(), 500);
-      } else {
-        const data = await res.json();
-        showToast(data.error || "删除失败", "error");
-      }
-    } catch {
-      showToast("删除失败", "error");
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  async function handleToggleHidden(libId: number, currentlyHidden: boolean) {
-    setSaving(true);
-    try {
-      const res = await fetch("/novels/api/libraries/visibility", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id: libId, hidden: !currentlyHidden }),
-      });
-      if (res.ok) {
-        showToast(currentlyHidden ? "书库已显示" : "书库已隐藏", "success");
-        setTimeout(() => window.location.reload(), 300);
-      } else {
-        const data = await res.json();
-        showToast(data.error || "操作失败", "error");
-      }
-    } catch {
-      showToast("操作失败", "error");
     } finally {
       setSaving(false);
     }
@@ -305,86 +232,6 @@ export default function SettingsPage() {
             )}
           </form>
         )}
-
-        {/* Library Management */}
-        <div className="mt-6 bg-white rounded-xl border border-[var(--border)] p-5 space-y-4">
-          <div className="flex items-center justify-between">
-            <h2 className="font-semibold text-sm">书库管理</h2>
-            <button
-              onClick={() => setShowNewLibrary(!showNewLibrary)}
-              className="px-4 py-1.5 text-sm text-[var(--primary)] border border-[var(--primary)] rounded-lg hover:bg-[var(--accent)] transition-colors"
-            >
-              {showNewLibrary ? "取消" : "新建书库"}
-            </button>
-          </div>
-
-          {/* New Library Form */}
-          {showNewLibrary && (
-            <div className="p-4 bg-gray-50 rounded-lg space-y-3">
-              <div>
-                <label className="block text-sm font-medium mb-1">书库名称</label>
-                <input
-                  type="text"
-                  value={newLibName}
-                  onChange={e => setNewLibName(e.target.value)}
-                  className="w-full px-3 py-2 text-sm rounded-lg border border-[var(--border)] bg-white focus:outline-none focus:ring-2 focus:ring-[var(--primary)]"
-                  placeholder="输入书库名称"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium mb-1">访问密码（可选）</label>
-                <input
-                  type="password"
-                  value={newLibPassword}
-                  onChange={e => setNewLibPassword(e.target.value)}
-                  className="w-full px-3 py-2 text-sm rounded-lg border border-[var(--border)] bg-white focus:outline-none focus:ring-2 focus:ring-[var(--primary)]"
-                  placeholder="留空则不设密码"
-                />
-              </div>
-              <button
-                onClick={handleCreateLibrary}
-                disabled={saving}
-                className="w-full py-2 bg-[var(--primary)] text-white text-sm font-medium rounded-lg hover:bg-[var(--primary-hover)] transition-colors disabled:opacity-50"
-              >
-                {saving ? "创建中..." : "创建书库"}
-              </button>
-            </div>
-          )}
-
-          {/* Library List */}
-          <div className="space-y-2">
-            {libraries.map(lib => (
-              <div key={lib.id} className="flex items-center justify-between px-4 py-3 bg-gray-50 rounded-lg">
-                <div className="flex items-center gap-2">
-                  <span className="text-sm font-medium">{lib.name}</span>
-                  {!!lib.hidden && (
-                    <span className="px-2 py-0.5 bg-amber-100 text-amber-700 text-xs rounded-full">隐藏</span>
-                  )}
-                  {lib.id === libraryId && (
-                    <span className="px-2 py-0.5 bg-[var(--primary)] text-white text-xs rounded-full">当前</span>
-                  )}
-                </div>
-                <div className="flex items-center gap-3">
-                  <button
-                    onClick={() => handleToggleHidden(lib.id, !!lib.hidden)}
-                    disabled={saving}
-                    className="text-xs text-[var(--primary)] hover:text-[var(--primary-hover)] transition-colors"
-                  >
-                    {!!lib.hidden ? "显示" : "隐藏"}
-                  </button>
-                  {lib.id !== libraryId && (
-                    <button
-                      onClick={() => handleDeleteLibrary(lib.id, lib.name)}
-                      className="text-xs text-[var(--muted)] hover:text-red-500 transition-colors"
-                    >
-                      删除
-                    </button>
-                  )}
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
 
         {/* Backup & Restore */}
         {libraryId && (
