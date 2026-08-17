@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getHiddenLibraries, getLibraryById } from './db';
+import { getHiddenLibraries, getLibraries, getLibraryById } from './db';
 
 const AUTH_COOKIE = 'auth-token';
 const UNLOCK_COOKIE = 'mei-unlock';
@@ -56,11 +56,12 @@ function readUnlockValue(request: Request): string {
 
 /**
  * 当前激活（已打开）的隐藏书架 id：cookie 值对应书架必须存在且仍处于隐藏状态。
+ * 值 '0' = 已解锁但未激活任何隐藏书架（解锁 ≠ 打开，门户自动解锁用）。
  * 同一时间仅允许一个隐藏书架打开（cookie 只存一个 id）。
  */
 export function getActiveHiddenId(request: Request): number | null {
   const value = readUnlockValue(request);
-  if (!value) return null;
+  if (!value || value === '0') return null;
   const hidden = getHiddenLibraries();
   if (hidden.length === 0) return null;
   if (value === '1') return hidden[0].id; // 旧值兼容
@@ -91,8 +92,15 @@ export function verifyAuth(request: Request): number | null {
     if (!library.password) return parsed.libraryId;
     if (parsed.password === library.password) return parsed.libraryId;
   }
-  // 主密码解锁：授予当前激活的隐藏书架访问权
-  return getActiveHiddenId(request);
+  // 主密码解锁：授予当前激活的隐藏书架访问权；仅解锁未激活时回落默认公开书架
+  // （覆盖门户登录自动解锁的场景：浏览器可能尚无 auth-token，nginx 整体透传 cookie）
+  if (isUnlocked(request)) {
+    const active = getActiveHiddenId(request);
+    if (active !== null) return active;
+    const fallback = getLibraries().find(l => !l.hidden);
+    if (fallback) return fallback.id;
+  }
+  return null;
 }
 
 /**
@@ -102,6 +110,15 @@ export function verifyAuth(request: Request): number | null {
 export function applyUnlockCookie(res: NextResponse, libraryId?: number): NextResponse {
   const value = libraryId ? String(libraryId) : '1';
   res.headers.append('Set-Cookie', `${UNLOCK_COOKIE}=${value}; Path=/; Max-Age=${7 * 24 * 3600}; SameSite=Lax`);
+  return res;
+}
+
+/**
+ * 解锁但不激活任何隐藏书架（unlock=0，解锁 ≠ 打开）。
+ * 用于门户登录自动解锁 / 管理页解锁：隐藏书架可见、可由用户显式打开。
+ */
+export function applyUnlockOnlyCookie(res: NextResponse): NextResponse {
+  res.headers.append('Set-Cookie', `${UNLOCK_COOKIE}=0; Path=/; Max-Age=${7 * 24 * 3600}; SameSite=Lax`);
   return res;
 }
 

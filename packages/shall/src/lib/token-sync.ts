@@ -26,6 +26,14 @@ export async function syncAppTokens(): Promise<void> {
     const d = (await res.json()) as AuthMe;
     if (!d.loggedIn || !d.tokens) return;
 
+    // 已登录会话若尚未解锁书架（如部署自动解锁前的旧会话），触发 repenetrate 补发
+    // （repenetrate 会用环境凭据重跑各适配器，含 tutorial 主密码自动解锁）
+    if (!document.cookie.includes('mei-unlock=')) {
+      try {
+        await fetch('/api/auth/repenetrate', { method: 'POST', credentials: 'include' });
+      } catch {}
+    }
+
     if (d.tokens['sun-panel']) {
       mergeJson('AUTH_TOKEN', (p) => {
         p.token = d.tokens!['sun-panel'];

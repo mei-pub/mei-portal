@@ -146,7 +146,7 @@ export default function ManagePage() {
     }
   }
 
-  // 管理页内解锁：输入主密码（与蜘蛛纸牌新游戏昵称同一通道）
+  // 管理页内解锁：输入主密码（仅解锁不激活书架，解锁 ≠ 打开；蜘蛛纸牌通道仍为解锁即读）
   async function handleUnlock() {
     if (!unlockInput.trim()) {
       setUnlockHint("请输入主密码");
@@ -154,13 +154,12 @@ export default function ManagePage() {
     }
     setBusy(true);
     try {
-      const res = await fetch(`${API}/auth/login`, {
+      const res = await fetch(`${API}/auth/unlock`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ nickname: unlockInput.trim() }),
+        body: JSON.stringify({ password: unlockInput.trim() }),
       });
-      const body = await res.json().catch(() => ({}));
-      if (body.unlocked || body.matched) {
+      if (res.ok) {
         showToast("已解锁，隐藏书架可见", "success");
         setUnlockInput("");
         setUnlockHint("");

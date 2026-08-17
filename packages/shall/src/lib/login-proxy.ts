@@ -150,9 +150,31 @@ const aidrawAdapter: AppLoginAdapter = {
   },
 };
 
-// tutorial：nginx 已注入 auth-token cookie，无需适配器
+// ----- tutorial 主密码自动解锁 -----
+// 书架主密码未单独配置（MEI_HIDDEN_LIBRARY_PASSWORD 缺省回落 MEI_ADMIN_PASSWORD）时，
+// 门户登录即解锁书架管理（unlock=0，解锁≠打开），免去重复输入同一个密码；
+// 单独配置了主密码则跳过，保留手动解锁作为有意义的第二层验证。
+// 注：tutorial 构建时带 basePath=/novels，直连 3001 需带前缀
+const tutorialUnlockAdapter: AppLoginAdapter = {
+  appId: 'tutorial',
+  async login(_u, password) {
+    if (process.env.MEI_HIDDEN_LIBRARY_PASSWORD) {
+      return { success: true, cookies: [] }; // 主密码独立：不自动解锁
+    }
+    try {
+      const res = await fetch('http://127.0.0.1:3001/novels/api/auth/unlock', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password }),
+      });
+      return { success: res.ok, cookies: extractSetCookies(res) };
+    } catch {
+      return { success: false, cookies: [] };
+    }
+  },
+};
 
-const ADAPTERS: AppLoginAdapter[] = [meilinkAdapter, lunatvAdapter, solaraAdapter, sunpanelAdapter, mediagoAdapter, aidrawAdapter];
+const ADAPTERS: AppLoginAdapter[] = [meilinkAdapter, lunatvAdapter, solaraAdapter, sunpanelAdapter, mediagoAdapter, aidrawAdapter, tutorialUnlockAdapter];
 
 /** 并发代理登录所有已注册应用 */
 export async function proxyLoginAll(
