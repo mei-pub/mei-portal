@@ -237,12 +237,7 @@ function resetPanelConfig() {
       </div>
 
       <NGrid cols="2">
-        <NGridItem span="12 400:12">
-          <div class="flex items-center mt-[5px]">
-            <span class="mr-[10px]">{{ $t('apps.baseSettings.netModeChangeButtonShow') }}</span>
-            <NSwitch v-model:value="panelState.panelConfig.netModeChangeButtonShow" />
-          </div>
-        </NGridItem>
+        <!-- mei-allin：网络模式切换按钮已迁移到门户"开关集成设置"，此开关移除 -->
 
         <NGridItem span="12 400:12">
           <div class="flex items-center mt-[10px]">

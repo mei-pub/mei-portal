@@ -28,5 +28,4 @@ export interface ClientPlugin {
   weight: number;
   url: string;
   subdomainPrefix?: string;
-  disguise?: { name: string; icon: string; url: string };
 }

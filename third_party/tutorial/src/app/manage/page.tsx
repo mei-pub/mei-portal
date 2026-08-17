@@ -243,6 +243,16 @@ export default function ManagePage() {
                     )}
                   </div>
                   <div className="flex items-center gap-3">
+                    {isCurrent && (
+                      <a
+                        href="/novels"
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-sm text-[var(--primary)] transition-colors hover:text-[var(--primary-hover)]"
+                      >
+                        阅读
+                      </a>
+                    )}
                     {!isCurrent && (
                       <button
                         onClick={() => (lib.hidden ? handleOpen(lib) : lib.hasPassword ? (setPasswordFor(lib), setOpenPassword("")) : handleOpen(lib))}

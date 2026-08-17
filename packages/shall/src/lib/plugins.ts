@@ -29,7 +29,6 @@ export interface PluginManifest {
   theme?: { has_skin: boolean; entry?: string };
   health?: { path: string; expect: number };
   upgrade?: { image?: string; repo?: string };
-  disguise?: { name: string; icon: string; url: string };
 }
 
 // 构建期：扫描仓库根的 plugins/
@@ -65,7 +64,6 @@ function loadManifests(): PluginManifest[] {
       url: p.url, // 透传显式 URL
       health: { path: p.healthPath || '/', expect: p.healthExpect || 200 },
       theme: { has_skin: p.hasSkin },
-      disguise: (p as { disguise?: { name: string; icon: string; url: string } }).disguise,
     }));
   }
   // 回退：开发时直接扫描 plugins/ 目录
