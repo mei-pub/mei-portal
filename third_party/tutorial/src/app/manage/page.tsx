@@ -38,6 +38,10 @@ export default function ManagePage() {
   const [passwordFor, setPasswordFor] = useState<LibraryRow | null>(null);
   const [openPassword, setOpenPassword] = useState("");
 
+  // 管理页内直接输入主密码解锁（免绕道蜘蛛纸牌）
+  const [unlockInput, setUnlockInput] = useState("");
+  const [unlockHint, setUnlockHint] = useState("");
+
   const reload = useCallback(async () => {
     try {
       const res = await fetch(`${API}/settings`);
@@ -53,6 +57,19 @@ export default function ManagePage() {
 
   useEffect(() => {
     reload();
+  }, [reload]);
+
+  // 从蜘蛛纸牌等其他标签页解锁回来时自动刷新解锁状态（带节流，避免抖动）
+  useEffect(() => {
+    let last = Date.now();
+    const onVisible = () => {
+      if (document.visibilityState !== "visible") return;
+      if (Date.now() - last < 3000) return;
+      last = Date.now();
+      reload();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => document.removeEventListener("visibilitychange", onVisible);
   }, [reload]);
 
   async function handleOpen(lib: LibraryRow, password?: string) {
@@ -74,6 +91,36 @@ export default function ManagePage() {
       await reload();
     } catch {
       showToast("打开失败", "error");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  // 管理页内解锁：输入主密码（与蜘蛛纸牌新游戏昵称同一通道）
+  async function handleUnlock() {
+    if (!unlockInput.trim()) {
+      setUnlockHint("请输入主密码");
+      return;
+    }
+    setBusy(true);
+    try {
+      const res = await fetch(`${API}/auth/login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ nickname: unlockInput.trim() }),
+      });
+      const body = await res.json().catch(() => ({}));
+      if (body.unlocked || body.matched) {
+        showToast("已解锁，隐藏书架可见", "success");
+        setUnlockInput("");
+        setUnlockHint("");
+        setShowCreate(true);
+        await reload();
+      } else {
+        setUnlockHint("密码不正确");
+      }
+    } catch {
+      setUnlockHint("解锁失败，请重试");
     } finally {
       setBusy(false);
     }
@@ -163,7 +210,7 @@ export default function ManagePage() {
             <p className="mt-1 text-xs text-[var(--muted)]">
               {data?.unlocked
                 ? "已解锁：列表包含隐藏书架（隐藏书架仅当前浏览器可访问，同一时间只能打开一个）"
-                : "仅展示公开书架；在蜘蛛纸牌中输入主密码后可查看隐藏书架"}
+                : "仅展示公开书架；解锁后可查看隐藏书架并创建隐藏书架"}
             </p>
           </div>
           <button
@@ -173,6 +220,36 @@ export default function ManagePage() {
             {showCreate ? "取消" : "新建书架"}
           </button>
         </div>
+
+        {/* 未解锁：页内直接输入主密码解锁（也可在蜘蛛纸牌中输入） */}
+        {!loading && data && !data.unlocked && (
+          <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 p-4">
+            <div className="text-sm font-medium text-amber-800">🔒 隐藏书架已锁定</div>
+            <p className="mt-1 text-xs text-amber-700">
+              输入主密码解锁后，列表将显示隐藏书架，并可在新建书架时勾选「创建为隐藏书架」。
+            </p>
+            <div className="mt-3 flex items-center gap-2">
+              <input
+                type="password"
+                value={unlockInput}
+                onChange={(e) => setUnlockInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") handleUnlock();
+                }}
+                className="w-56 rounded-lg border border-amber-300 bg-white px-3 py-1.5 text-sm focus:ring-2 focus:ring-amber-400 focus:outline-none"
+                placeholder="输入主密码"
+              />
+              <button
+                onClick={handleUnlock}
+                disabled={busy}
+                className="rounded-lg bg-amber-600 px-4 py-1.5 text-sm font-medium text-white transition-colors hover:bg-amber-700 disabled:opacity-50"
+              >
+                {busy ? "解锁中…" : "解锁"}
+              </button>
+              {unlockHint && <span className="text-xs text-red-600">{unlockHint}</span>}
+            </div>
+          </div>
+        )}
 
         {showCreate && (
           <div className="mb-4 space-y-3 rounded-xl border border-[var(--border)] bg-white p-4">
@@ -203,7 +280,10 @@ export default function ManagePage() {
                 onChange={(e) => setNewHidden(e.target.checked)}
                 disabled={!data?.unlocked}
               />
-              创建为隐藏书架{!data?.unlocked && "（需先在蜘蛛纸牌输入主密码）"}
+              创建为隐藏书架
+              {!data?.unlocked && (
+                <span className="text-xs text-[var(--muted)]">（需先解锁：上方输入主密码，或在蜘蛛纸牌中输入）</span>
+              )}
             </label>
             <button
               onClick={handleCreate}
