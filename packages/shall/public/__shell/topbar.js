@@ -151,6 +151,7 @@
         b.className = 'mei-btn' + (isActive ? ' active' : '') + (isAppOn(p.id) ? '' : ' off');
         b.href = p.url;
         b.textContent = p.name;
+        b.title = p.name + (isAppOn(p.id) ? '' : '（已关闭）');
         apps.appendChild(b);
       });
       bar.appendChild(apps);
@@ -178,6 +179,13 @@
       document.addEventListener('click', function () {
         menu.style.display = 'none';
         gear.classList.remove('open');
+      });
+      // ESC 关闭下拉
+      document.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape') {
+          menu.style.display = 'none';
+          gear.classList.remove('open');
+        }
       });
 
       // 应用开关

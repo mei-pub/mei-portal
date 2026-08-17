@@ -133,11 +133,12 @@ const HomePage: FC<Props> = ({ filter = DownloadFilter.list }) => {
         open={doneOpen}
         onCancel={() => setDoneOpen(false)}
         footer={null}
-        title={t("downloadComplete")}
+        title={null}
         width="78%"
-        styles={{ body: { height: "70vh", overflow: "auto" } }}
+        styles={{ body: { height: "70vh", overflow: "auto", paddingTop: 8 } }}
         destroyOnHidden
       >
+        {/* 标题由内嵌 HomePage 的 PageContainer 提供（downloadComplete），避免重复 */}
         <div className="h-full">
           <HomePage filter={DownloadFilter.done} />
         </div>

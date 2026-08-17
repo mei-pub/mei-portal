@@ -8,10 +8,12 @@ export default function TopBar({
   query,
   onSearch,
   searchRef,
+  showSearch = true,
 }: {
   query: string;
   onSearch: (q: string) => void;
   searchRef?: React.RefObject<HTMLInputElement>;
+  showSearch?: boolean;
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [loggedIn, setLoggedIn] = useState(false);
@@ -24,15 +26,22 @@ export default function TopBar({
       .catch(() => {});
   }, []);
 
-  // 点击外部关闭下拉
+  // 点击外部 / ESC 关闭下拉
   useEffect(() => {
     function onDocClick(e: MouseEvent) {
       if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
         setMenuOpen(false);
       }
     }
+    function onKey(e: KeyboardEvent) {
+      if (e.key === 'Escape') setMenuOpen(false);
+    }
     document.addEventListener('mousedown', onDocClick);
-    return () => document.removeEventListener('mousedown', onDocClick);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onDocClick);
+      document.removeEventListener('keydown', onKey);
+    };
   }, []);
 
   function logout() {
@@ -69,24 +78,26 @@ export default function TopBar({
         <span style={{ fontSize: 18 }}>mei-allin</span>
       </a>
 
-      {/* 搜索 */}
-      <input
-        ref={searchRef}
-        value={query}
-        onChange={(e) => onSearch(e.target.value)}
-        placeholder="搜索应用…"
-        style={{
-          flex: 1,
-          maxWidth: 360,
-          padding: '8px 14px',
-          background: 'var(--mei-bg)',
-          border: '1px solid var(--mei-border)',
-          borderRadius: 'var(--mei-radius-full)',
-          color: 'var(--mei-text)',
-          outline: 'none',
-          fontSize: 14,
-        }}
-      />
+      {/* 搜索（无搜索功能的页面隐藏） */}
+      {showSearch && (
+        <input
+          ref={searchRef}
+          value={query}
+          onChange={(e) => onSearch(e.target.value)}
+          placeholder="搜索应用…"
+          style={{
+            flex: 1,
+            maxWidth: 360,
+            padding: '8px 14px',
+            background: 'var(--mei-bg)',
+            border: '1px solid var(--mei-border)',
+            borderRadius: 'var(--mei-radius-full)',
+            color: 'var(--mei-text)',
+            outline: 'none',
+            fontSize: 14,
+          }}
+        />
+      )}
 
       <div style={{ flex: 1 }} />
 
