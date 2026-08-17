@@ -38,6 +38,13 @@ export default function ManagePage() {
   const [passwordFor, setPasswordFor] = useState<LibraryRow | null>(null);
   const [openPassword, setOpenPassword] = useState("");
 
+  // 修改书架（名称 / 密码 / 隐藏状态）
+  const [editFor, setEditFor] = useState<LibraryRow | null>(null);
+  const [editName, setEditName] = useState("");
+  const [editPassword, setEditPassword] = useState("");
+  const [editClearPassword, setEditClearPassword] = useState(false);
+  const [editHidden, setEditHidden] = useState(false);
+
   // 管理页内直接输入主密码解锁（免绕道蜘蛛纸牌）
   const [unlockInput, setUnlockInput] = useState("");
   const [unlockHint, setUnlockHint] = useState("");
@@ -91,6 +98,49 @@ export default function ManagePage() {
       await reload();
     } catch {
       showToast("打开失败", "error");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function openEdit(lib: LibraryRow) {
+    setEditFor(lib);
+    setEditName(lib.name);
+    setEditPassword("");
+    setEditClearPassword(false);
+    setEditHidden(lib.hidden);
+  }
+
+  async function handleEdit() {
+    if (!editFor) return;
+    if (!editName.trim()) {
+      showToast("书架名称不能为空", "error");
+      return;
+    }
+    setBusy(true);
+    try {
+      const payload: Record<string, unknown> = {
+        id: editFor.id,
+        name: editName.trim(),
+        hidden: editHidden,
+      };
+      if (editClearPassword) payload.clearPassword = true;
+      else if (editPassword) payload.password = editPassword;
+      const res = await fetch(`${API}/libraries/update`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        showToast(body.error === "Master unlock required" ? "需先解锁才能修改隐藏状态" : body.error || "保存失败", "error");
+        return;
+      }
+      showToast("书架已更新", "success");
+      setEditFor(null);
+      await reload();
+    } catch {
+      showToast("保存失败", "error");
     } finally {
       setBusy(false);
     }
@@ -360,6 +410,13 @@ export default function ManagePage() {
                         删除
                       </button>
                     )}
+                    <button
+                      onClick={() => openEdit(lib)}
+                      disabled={busy}
+                      className="text-sm text-[var(--muted)] transition-colors hover:text-[var(--primary)] disabled:opacity-50"
+                    >
+                      编辑
+                    </button>
                   </div>
                 </div>
               );
@@ -405,6 +462,84 @@ export default function ManagePage() {
                   className="rounded-lg bg-[var(--primary)] px-3 py-1.5 text-sm text-white disabled:opacity-50"
                 >
                   打开
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* 修改书架弹窗：名称 / 密码 / 隐藏状态 */}
+        {editFor && (
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+            onClick={() => setEditFor(null)}
+          >
+            <div
+              className="w-96 max-w-full rounded-xl bg-white p-5 shadow-xl"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <h2 className="mb-3 text-sm font-semibold">修改书架「{editFor.name}」</h2>
+              <div className="space-y-3">
+                <div>
+                  <label className="mb-1 block text-sm font-medium">书架名称</label>
+                  <input
+                    type="text"
+                    autoFocus
+                    value={editName}
+                    onChange={(e) => setEditName(e.target.value)}
+                    className="w-full rounded-lg border border-[var(--border)] px-3 py-2 text-sm focus:ring-2 focus:ring-[var(--primary)] focus:outline-none"
+                    placeholder="输入书架名称"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-sm font-medium">
+                    访问密码{editFor.hasPassword ? "（已设置）" : "（未设置）"}
+                  </label>
+                  <input
+                    type="password"
+                    value={editPassword}
+                    onChange={(e) => setEditPassword(e.target.value)}
+                    className="w-full rounded-lg border border-[var(--border)] px-3 py-2 text-sm focus:ring-2 focus:ring-[var(--primary)] focus:outline-none"
+                    placeholder={editClearPassword ? "将移除密码" : "留空则不修改"}
+                    disabled={editClearPassword}
+                  />
+                  {editFor.hasPassword && (
+                    <label className="mt-1.5 flex items-center gap-2 text-xs text-[var(--muted)]">
+                      <input
+                        type="checkbox"
+                        checked={editClearPassword}
+                        onChange={(e) => setEditClearPassword(e.target.checked)}
+                      />
+                      移除访问密码
+                    </label>
+                  )}
+                </div>
+                <label className="flex items-center gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={editHidden}
+                    onChange={(e) => setEditHidden(e.target.checked)}
+                    disabled={!data?.unlocked}
+                  />
+                  隐藏书架
+                  {!data?.unlocked && (
+                    <span className="text-xs text-[var(--muted)]">（需先解锁才能修改）</span>
+                  )}
+                </label>
+              </div>
+              <div className="mt-4 flex justify-end gap-2">
+                <button
+                  onClick={() => setEditFor(null)}
+                  className="rounded-lg border border-[var(--border)] px-3 py-1.5 text-sm text-[var(--muted)]"
+                >
+                  取消
+                </button>
+                <button
+                  onClick={handleEdit}
+                  disabled={busy}
+                  className="rounded-lg bg-[var(--primary)] px-4 py-1.5 text-sm text-white disabled:opacity-50"
+                >
+                  {busy ? "保存中…" : "保存"}
                 </button>
               </div>
             </div>
