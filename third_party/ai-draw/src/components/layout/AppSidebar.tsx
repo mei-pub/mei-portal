@@ -1,14 +1,9 @@
 import {useLocation, useNavigate} from 'react-router-dom'
-import {ChevronLeft, ChevronRight, LogOut, Plus, User} from 'lucide-react'
+import {ChevronLeft, ChevronRight, Plus} from 'lucide-react'
 import {NAV_ITEMS} from '@/constants'
 import {useSystemStore} from '@/stores/systemStore'
 import {useAuthStore} from '@/stores/authStore'
-import {authService} from '@/services/authService'
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
   Logo,
   Tooltip,
   TooltipContent,
@@ -23,6 +18,7 @@ interface AppSidebarProps {
 // mei-allin 集成：
 // - GitHub 入口已移除；存储模式锁死本地（storageModeStore 强制 local），不再提供切换入口
 // - 个人设置/管理后台入口迁移到门户设置集成页，侧栏不再显示（路由保留供集成页 iframe 直达）
+// - 左下角用户头像/退出登录浮动入口已移除（登录态由门户统一管理）
 export function AppSidebar({ onCreateProject }: AppSidebarProps) {
   const navigate = useNavigate()
   const location = useLocation()
@@ -33,11 +29,6 @@ export function AppSidebar({ onCreateProject }: AppSidebarProps) {
   const language = useSystemStore((state) => state.language)
   const i18nTexts = useSystemStore((state) => state.i18nTexts)
   const user = useAuthStore((state) => state.user)
-
-  const handleLogout = () => {
-    authService.logout()
-    navigate('/')
-  }
 
   return (
     <TooltipProvider delayDuration={0}>
@@ -133,46 +124,7 @@ export function AppSidebar({ onCreateProject }: AppSidebarProps) {
             <TooltipContent side="right">{isCollapsed ? i18nTexts.expandMenu[language] : i18nTexts.collapseMenu[language]}</TooltipContent>
           </Tooltip>
 
-          {/* User Avatar & Actions - Always show for easy login access */}
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <button className="flex h-10 w-10 items-center justify-center rounded-full transition-all hover:bg-muted/50 focus:outline-none">
-                {user ? (
-                  <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10 text-xs font-medium text-primary ring-2 ring-background transition-shadow hover:ring-primary/20">
-                    {(user.nickname || user.username).slice(0, 2).toUpperCase()}
-                  </div>
-                ) : (
-                  <div className="flex h-8 w-8 items-center justify-center rounded-full bg-muted text-muted-foreground ring-2 ring-background">
-                    <User className="h-4 w-4" />
-                  </div>
-                )}
-              </button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="start" side="right" className="w-56 ml-2">
-              {user ? (
-                <>
-                  <div className="flex items-center gap-2 p-2">
-                    <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10 text-xs font-medium text-primary">
-                      {(user.nickname || user.username).slice(0, 2).toUpperCase()}
-                    </div>
-                    <div className="flex flex-col space-y-0.5">
-                      <p className="text-sm font-medium">{user.nickname || user.username}</p>
-                      <p className="text-xs text-muted-foreground capitalize">{user.role}</p>
-                    </div>
-                  </div>
-                  <DropdownMenuItem onClick={handleLogout} className="text-red-600 focus:text-red-600">
-                    <LogOut className="mr-2 h-4 w-4" />
-                    <span>{i18nTexts.userLogout[language]}</span>
-                  </DropdownMenuItem>
-                </>
-              ) : (
-                <DropdownMenuItem onClick={() => navigate('/login')}>
-                  <User className="mr-2 h-4 w-4" />
-                  <span>{i18nTexts.userLogin[language]}</span>
-                </DropdownMenuItem>
-              )}
-            </DropdownMenuContent>
-          </DropdownMenu>
+          {/* mei-allin：左下角用户头像/退出登录浮动入口已移除（登录态由门户统一管理） */}
         </div>
       </aside>
     </TooltipProvider>
