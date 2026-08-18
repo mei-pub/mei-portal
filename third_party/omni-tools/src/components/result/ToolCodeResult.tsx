@@ -38,7 +38,7 @@ export default function ToolCodeResult({
   };
 
   const handleDownload = () => {
-    const filename = `output-omni-tools.${extension}`;
+    const filename = `output-meitools.${extension}`;
 
     const mimeType = mime.getType(extension) || 'text/plain';
 

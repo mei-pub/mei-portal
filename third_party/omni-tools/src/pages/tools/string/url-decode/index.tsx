@@ -14,8 +14,8 @@ const exampleCards: CardExampleType<typeof initialValues>[] = [
     title: 'Decode an actual URL',
     description:
       'This example decodes a URL-encoded string back to its readable URL form.',
-    sampleText: 'https%3A%2F%2Fomnitools.app%2F',
-    sampleResult: 'https://omnitools.app/',
+    sampleText: 'https%3A%2F%2Fmeitools.app%2F',
+    sampleResult: 'https://meitools.app/',
     sampleOptions: initialValues
   },
   {

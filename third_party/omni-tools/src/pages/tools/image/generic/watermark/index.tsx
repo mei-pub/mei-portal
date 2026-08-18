@@ -20,7 +20,7 @@ import { getFileExtension } from '@utils/file';
 
 const initialValues: InitialValuesType = {
   filename: true,
-  watermark: 'OMNITOOLS',
+  watermark: 'MEITOOLS',
   watermarkOpacity: 0.35,
   fontSize: 32,
   position: 'bottom-right',
