@@ -180,7 +180,7 @@ export default function PortalClient({ items }: { items: Item[] }) {
               fontVariantNumeric: 'tabular-nums',
               lineHeight: 1.15,
               color: 'var(--mei-text)',
-              textShadow: '0 0 40px rgba(129,140,248,0.35)',
+              textShadow: '0 2px 24px rgba(99,102,241,0.18)',
             }}
           >
             {clock.hh}
@@ -247,7 +247,7 @@ export default function PortalClient({ items }: { items: Item[] }) {
                 fontSize: 11,
                 padding: '3px 9px',
                 color: 'var(--mei-text-faint)',
-                background: 'rgba(255,255,255,0.05)',
+                background: 'rgba(23,32,56,0.04)',
                 border: '1px solid var(--mei-border)',
                 borderRadius: 'var(--mei-radius-sm)',
                 pointerEvents: 'none',

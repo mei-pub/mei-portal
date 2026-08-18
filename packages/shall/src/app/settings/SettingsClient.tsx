@@ -118,14 +118,14 @@ export default function SettingsClient() {
         .mei-settings-group-title{display:flex;align-items:center;gap:8px;padding:6px 8px;font-size:11px;font-weight:700;letter-spacing:1.2px;color:var(--mei-text-faint);}
         .mei-settings-group-title.active{color:var(--mei-primary);}
         .mei-settings-item{width:100%;display:flex;align-items:center;gap:8px;padding:8px 10px;background:transparent;border:1px solid transparent;border-radius:var(--mei-radius-sm);color:var(--mei-text);cursor:pointer;font-size:13px;text-align:left;transition:var(--mei-transition);}
-        .mei-settings-item:hover{background:rgba(255,255,255,0.06);}
+        .mei-settings-item:hover{background:rgba(23,32,56,0.05);}
         .mei-settings-item.active{background:var(--mei-gradient-soft);border-color:rgba(129,140,248,0.4);}
         .mei-settings-main{flex:1;min-width:0;display:flex;flex-direction:column;padding:var(--mei-space-4);gap:var(--mei-space-3);}
         .mei-settings-content-head{display:flex;align-items:center;justify-content:space-between;flex-shrink:0;padding:0 4px;}
         .mei-settings-content-title{font-size:14px;font-weight:650;color:var(--mei-text);letter-spacing:0.3px;}
         .mei-settings-open{font-size:12px;color:var(--mei-primary);text-decoration:none;}
         .mei-settings-open:hover{text-decoration:underline;}
-        .mei-settings-frame{flex:1;min-height:0;background:rgba(255,255,255,0.04);backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);border:1px solid var(--mei-border);border-radius:var(--mei-radius-lg);overflow:hidden;box-shadow:var(--mei-shadow);}
+        .mei-settings-frame{flex:1;min-height:0;background:rgba(255,255,255,0.78);backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);border:1px solid rgba(255,255,255,0.9);border-radius:var(--mei-radius-lg);overflow:hidden;box-shadow:var(--mei-shadow),inset 0 1px 0 rgba(255,255,255,0.9);}
         .mei-settings-loading{height:100%;display:flex;align-items:center;justify-content:center;color:var(--mei-text-muted);font-size:13px;}
         @media(max-width:760px){
           .mei-settings-body{flex-direction:column;}

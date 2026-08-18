@@ -1,41 +1,41 @@
 /* =============================================================================
- * mei-allin 设计令牌 —— 深空玻璃（Aurora Glass）
+ * mei-allin 设计令牌 —— 浅色极光玻璃（Light Aurora Glass）
  * 所有变量用 --mei- 前缀，不映射通用名（--primary/--background 等），
  * 避免污染各应用自身的 CSS 变量。各应用协调 CSS 用 !important 显式引用 --mei-*。
  * ========================================================================== */
 
 :root {
-  color-scheme: dark;
+  color-scheme: light;
 
   /* ----- 主色（靛蓝→紫→品红极光渐变） ----- */
-  --mei-primary: #818cf8;
-  --mei-primary-hover: #a5b4fc;
+  --mei-primary: #6366f1;
+  --mei-primary-hover: #4f46e5;
   --mei-primary-soft: #818cf8;
-  --mei-accent: #c084fc;
-  --mei-gradient: linear-gradient(135deg, #6366f1 0%, #a855f7 50%, #ec4899 100%);
-  --mei-gradient-soft: linear-gradient(135deg, rgba(99,102,241,0.16) 0%, rgba(168,85,247,0.16) 50%, rgba(236,72,153,0.16) 100%);
+  --mei-accent: #a855f7;
+  --mei-gradient: linear-gradient(135deg, #6366f1 0%, #a855f7 55%, #ec4899 100%);
+  --mei-gradient-soft: linear-gradient(135deg, rgba(99,102,241,0.10) 0%, rgba(168,85,247,0.10) 55%, rgba(236,72,153,0.10) 100%);
 
-  /* ----- 深空表面 ----- */
-  --mei-bg: #070a13;
-  --mei-bg-elevated: #0d1220;
-  --mei-surface: rgba(255, 255, 255, 0.045);
-  --mei-surface-hover: rgba(255, 255, 255, 0.08);
-  --mei-overlay: rgba(7, 10, 19, 0.65);
+  /* ----- 浅色表面 ----- */
+  --mei-bg: #f4f6fb;
+  --mei-bg-elevated: #ffffff;
+  --mei-surface: rgba(255, 255, 255, 0.66);
+  --mei-surface-hover: rgba(255, 255, 255, 0.9);
+  --mei-overlay: rgba(244, 246, 251, 0.72);
 
   /* ----- 文本 ----- */
-  --mei-text: #e7eaf3;
-  --mei-text-muted: #8b93a7;
-  --mei-text-faint: #5a6275;
+  --mei-text: #1c2333;
+  --mei-text-muted: #5d6778;
+  --mei-text-faint: #9aa3b8;
 
   /* ----- 边框 ----- */
-  --mei-border: rgba(255, 255, 255, 0.09);
-  --mei-border-strong: rgba(255, 255, 255, 0.16);
+  --mei-border: rgba(23, 32, 56, 0.10);
+  --mei-border-strong: rgba(23, 32, 56, 0.18);
 
   /* ----- 功能色 ----- */
-  --mei-success: #34d399;
-  --mei-warning: #fbbf24;
-  --mei-danger: #f87171;
-  --mei-info: #60a5fa;
+  --mei-success: #10b981;
+  --mei-warning: #f59e0b;
+  --mei-danger: #ef4444;
+  --mei-info: #3b82f6;
 
   /* ----- 形状 ----- */
   --mei-radius-sm: 12px;
@@ -43,11 +43,11 @@
   --mei-radius-lg: 22px;
   --mei-radius-full: 9999px;
 
-  /* ----- 阴影（深空发光） ----- */
-  --mei-shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.32);
-  --mei-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
-  --mei-shadow-lg: 0 16px 48px rgba(0, 0, 0, 0.55);
-  --mei-glow: 0 0 0 1px rgba(129, 140, 248, 0.35), 0 8px 32px rgba(99, 102, 241, 0.25);
+  /* ----- 阴影（柔和悬浮） ----- */
+  --mei-shadow-sm: 0 2px 10px rgba(23, 32, 56, 0.06);
+  --mei-shadow: 0 8px 28px rgba(23, 32, 56, 0.10);
+  --mei-shadow-lg: 0 18px 52px rgba(23, 32, 56, 0.14);
+  --mei-glow: 0 0 0 3px rgba(99, 102, 241, 0.14), 0 8px 28px rgba(99, 102, 241, 0.16);
 
   /* ----- 间距 ----- */
   --mei-space-1: 4px;
