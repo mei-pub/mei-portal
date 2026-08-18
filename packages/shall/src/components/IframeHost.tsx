@@ -1,23 +1,28 @@
 'use client';
 // iframe 宿主 —— 嵌入上游应用，全屏占满主区
-// 8 秒未上报 ready 时不再无声隐藏 loading，改为顶部非阻断提示条（应用可能仍在启动）
+// 8 秒仍未完成加载（onLoad 未触发）时，解除全屏 loading 改为顶部非阻断提示条
 import { useEffect, useRef, useState } from 'react';
 
 export default function IframeHost({ url, name }: { url: string; name: string }) {
   const ref = useRef<HTMLIFrameElement>(null);
+  // 本次加载是否已完成（onLoad 或 ready postMessage 任一先到即算完成）
+  const loadedRef = useRef(false);
   const [loading, setLoading] = useState(true);
   const [slow, setSlow] = useState(false);
   const [error, setError] = useState(false);
   const [reloadTick, setReloadTick] = useState(0);
 
   useEffect(() => {
+    loadedRef.current = false;
     setLoading(true);
     setSlow(false);
     setError(false);
     const t = setTimeout(() => {
-      // 长时间未 ready（跨域可能收不到 postMessage）：解除全屏 loading，改提示条
-      setLoading(false);
-      setSlow(true);
+      // 仅在确实未完成加载时提示（已完成则什么都不做）
+      if (!loadedRef.current) {
+        setLoading(false);
+        setSlow(true);
+      }
     }, 8000);
     return () => clearTimeout(t);
   }, [url, reloadTick]);
@@ -27,6 +32,7 @@ export default function IframeHost({ url, name }: { url: string; name: string })
     function onMsg(ev: MessageEvent) {
       const d = ev.data || {};
       if (d.source === 'mei-iframe' && d.type === 'ready') {
+        loadedRef.current = true;
         setLoading(false);
         setSlow(false);
       }
@@ -122,6 +128,7 @@ export default function IframeHost({ url, name }: { url: string; name: string })
         src={url}
         title={name}
         onLoad={() => {
+          loadedRef.current = true;
           setLoading(false);
           setError(false);
         }}
