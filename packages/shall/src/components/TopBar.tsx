@@ -1,5 +1,6 @@
 'use client';
-// 门户顶栏：品牌 + 搜索 + 开关集成设置下拉（应用开关 / 主页内网模式开关）
+// Shell 顶栏：品牌 + 搜索 + 开关集成设置齿轮下拉
+// transparent 模式用于首页（浮于极光背景之上，无底色边框）
 import { useEffect, useRef, useState } from 'react';
 import AppToggles from './AppToggles';
 import PanelNetModeToggle from './PanelNetModeToggle';
@@ -9,11 +10,13 @@ export default function TopBar({
   onSearch,
   searchRef,
   showSearch = true,
+  transparent = false,
 }: {
   query: string;
   onSearch: (q: string) => void;
   searchRef?: React.RefObject<HTMLInputElement>;
   showSearch?: boolean;
+  transparent?: boolean;
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [loggedIn, setLoggedIn] = useState(false);
@@ -58,9 +61,13 @@ export default function TopBar({
         display: 'flex',
         alignItems: 'center',
         gap: 'var(--mei-space-4)',
-        padding: 'var(--mei-space-3) var(--mei-space-6)',
-        background: 'var(--mei-surface)',
-        borderBottom: '1px solid var(--mei-border)',
+        padding: transparent
+          ? 'var(--mei-space-3) var(--mei-space-6)'
+          : 'var(--mei-space-3) var(--mei-space-6)',
+        background: transparent ? 'transparent' : 'var(--mei-overlay)',
+        backdropFilter: transparent ? undefined : 'blur(20px) saturate(1.4)',
+        WebkitBackdropFilter: transparent ? undefined : 'blur(20px) saturate(1.4)',
+        borderBottom: transparent ? 'none' : '1px solid var(--mei-border)',
       }}
     >
       {/* 品牌 */}
@@ -69,13 +76,14 @@ export default function TopBar({
           style={{
             width: 28,
             height: 28,
-            borderRadius: 'var(--mei-radius-sm)',
+            borderRadius: 9,
             background: 'var(--mei-gradient)',
+            boxShadow: '0 0 16px rgba(129,140,248,0.45), inset 0 1px 0 rgba(255,255,255,0.3)',
             display: 'inline-block',
             flexShrink: 0,
           }}
         />
-        <span style={{ fontSize: 18 }}>mei-allin</span>
+        <span style={{ fontSize: 17, letterSpacing: 0.5, color: 'var(--mei-text)' }}>mei-allin</span>
       </a>
 
       {/* 搜索（无搜索功能的页面隐藏） */}
@@ -89,7 +97,7 @@ export default function TopBar({
             flex: 1,
             maxWidth: 360,
             padding: '8px 14px',
-            background: 'var(--mei-bg)',
+            background: 'var(--mei-surface)',
             border: '1px solid var(--mei-border)',
             borderRadius: 'var(--mei-radius-full)',
             color: 'var(--mei-text)',
@@ -114,11 +122,14 @@ export default function TopBar({
             width: 36,
             height: 36,
             borderRadius: 'var(--mei-radius-full)',
-            background: menuOpen ? 'var(--mei-primary-soft)' : 'transparent',
+            background: menuOpen ? 'var(--mei-surface-hover)' : 'var(--mei-surface)',
             border: '1px solid var(--mei-border)',
+            backdropFilter: 'blur(16px)',
+            WebkitBackdropFilter: 'blur(16px)',
             color: 'var(--mei-text-muted)',
             cursor: 'pointer',
-            fontSize: 16,
+            fontSize: 15,
+            transition: 'var(--mei-transition)',
           }}
         >
           ⚙️
@@ -129,12 +140,14 @@ export default function TopBar({
             style={{
               position: 'absolute',
               right: 0,
-              top: 'calc(100% + 6px)',
-              width: 260,
-              background: 'var(--mei-surface)',
-              border: '1px solid var(--mei-border)',
-              borderRadius: 'var(--mei-radius)',
-              boxShadow: 'var(--mei-shadow-md)',
+              top: 'calc(100% + 8px)',
+              width: 268,
+              background: 'rgba(13, 18, 32, 0.88)',
+              backdropFilter: 'blur(28px) saturate(1.6)',
+              WebkitBackdropFilter: 'blur(28px) saturate(1.6)',
+              border: '1px solid var(--mei-border-strong)',
+              borderRadius: 'var(--mei-radius-lg)',
+              boxShadow: 'var(--mei-shadow-lg), 0 0 0 1px rgba(129,140,248,0.12)',
               padding: 'var(--mei-space-2)',
               zIndex: 999,
             }}
@@ -142,39 +155,29 @@ export default function TopBar({
             <div
               style={{
                 padding: '8px 10px',
-                fontSize: 12,
-                color: 'var(--mei-text-muted)',
-                fontWeight: 600,
+                fontSize: 11,
+                color: 'var(--mei-text-faint)',
+                fontWeight: 700,
+                letterSpacing: 1.5,
               }}
             >
               应用开关
             </div>
             <AppToggles reloadOnChange />
-            <div
-              style={{
-                height: 1,
-                background: 'var(--mei-border)',
-                margin: '6px 0',
-              }}
-            />
+            <div style={{ height: 1, background: 'var(--mei-border)', margin: '6px 0' }} />
             <div
               style={{
                 padding: '8px 10px',
-                fontSize: 12,
-                color: 'var(--mei-text-muted)',
-                fontWeight: 600,
+                fontSize: 11,
+                color: 'var(--mei-text-faint)',
+                fontWeight: 700,
+                letterSpacing: 1.5,
               }}
             >
               集成开关
             </div>
             <PanelNetModeToggle />
-            <div
-              style={{
-                height: 1,
-                background: 'var(--mei-border)',
-                margin: '6px 0',
-              }}
-            />
+            <div style={{ height: 1, background: 'var(--mei-border)', margin: '6px 0' }} />
             <a
               href="/settings"
               style={{
@@ -204,7 +207,7 @@ export default function TopBar({
                   border: 'none',
                   background: 'transparent',
                   borderRadius: 'var(--mei-radius-sm)',
-                  color: 'var(--mei-text)',
+                  color: 'var(--mei-danger)',
                   cursor: 'pointer',
                   fontSize: 13,
                   textAlign: 'left',

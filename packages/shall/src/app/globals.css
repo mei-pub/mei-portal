@@ -1,4 +1,4 @@
-/* Shell 自身样式 —— 复用 tokens.css 的变量，保证外壳与各应用视觉一致 */
+/* Shell 自身样式 —— 深空玻璃（Aurora Glass）主题 */
 
 /* 引入设计令牌（构建时由 public/__theme 提供，dev 时直接相对引用） */
 @import '../../src/theme/tokens.css';
@@ -18,27 +18,199 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
-/* 动态背景：柔和渐变光斑（亮色） */
-body::before {
-  content: '';
+/* ===== 极光动态背景：三团流动渐变 + 星点 + 颗粒噪点 ===== */
+.mei-aurora {
   position: fixed;
   inset: 0;
-  z-index: -1;
-  background:
-    radial-gradient(800px circle at 15% 10%, rgba(99, 102, 241, 0.08), transparent 40%),
-    radial-gradient(700px circle at 85% 90%, rgba(124, 58, 237, 0.06), transparent 40%),
-    var(--mei-bg);
+  z-index: -2;
+  overflow: hidden;
+  pointer-events: none;
+}
+.mei-aurora::before {
+  /* 颗粒噪点，消除渐变色带 */
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  opacity: 0.5;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 0.04 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+.mei-aurora .blob {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(90px);
+  will-change: transform;
+}
+.mei-aurora .blob-1 {
+  width: 55vmax;
+  height: 55vmax;
+  left: -12vmax;
+  top: -18vmax;
+  background: radial-gradient(circle at 30% 30%, rgba(99, 102, 241, 0.34), transparent 65%);
+  animation: mei-drift-1 26s ease-in-out infinite alternate;
+}
+.mei-aurora .blob-2 {
+  width: 48vmax;
+  height: 48vmax;
+  right: -14vmax;
+  top: 6vmax;
+  background: radial-gradient(circle at 60% 40%, rgba(168, 85, 247, 0.28), transparent 65%);
+  animation: mei-drift-2 32s ease-in-out infinite alternate;
+}
+.mei-aurora .blob-3 {
+  width: 42vmax;
+  height: 42vmax;
+  left: 24vmax;
+  bottom: -20vmax;
+  background: radial-gradient(circle at 50% 50%, rgba(34, 211, 238, 0.16), transparent 65%);
+  animation: mei-drift-3 38s ease-in-out infinite alternate;
+}
+@keyframes mei-drift-1 {
+  to { transform: translate(9vmax, 7vmax) scale(1.12); }
+}
+@keyframes mei-drift-2 {
+  to { transform: translate(-8vmax, 10vmax) scale(0.92); }
+}
+@keyframes mei-drift-3 {
+  to { transform: translate(-10vmax, -6vmax) scale(1.18); }
 }
 
-a {
-  color: inherit;
+/* ===== 玻璃面板 ===== */
+.mei-glass {
+  background: var(--mei-surface);
+  backdrop-filter: blur(22px) saturate(1.5);
+  -webkit-backdrop-filter: blur(22px) saturate(1.5);
+  border: 1px solid var(--mei-border);
+}
+
+/* ===== 卡片网格 ===== */
+.mei-card-grid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: var(--mei-space-3);
+}
+/* 外层链接撑满网格单元，内部卡片再撑满链接 → 同一行卡片高度完全一致 */
+.mei-card-grid > a,
+.mei-card-grid > div {
+  display: flex;
   text-decoration: none;
 }
 
-/* 滚动条 */
+/* ===== 应用卡片（玻璃 + 悬浮光效 + 顶部高光扫过） ===== */
+.mei-app-card {
+  position: relative;
+  width: 100% !important;
+  height: 100% !important;
+  min-height: 132px !important;
+  padding: var(--mei-space-4) !important;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--mei-space-2);
+  overflow: hidden;
+  cursor: pointer;
+  text-align: left;
+  color: var(--mei-text);
+  background: linear-gradient(160deg, rgba(255, 255, 255, 0.07), rgba(255, 255, 255, 0.02));
+  backdrop-filter: blur(18px) saturate(1.4);
+  -webkit-backdrop-filter: blur(18px) saturate(1.4);
+  border: 1px solid var(--mei-border);
+  border-radius: var(--mei-radius);
+  box-shadow: var(--mei-shadow-sm);
+  transition:
+    transform 220ms cubic-bezier(0.34, 1.56, 0.64, 1),
+    border-color var(--mei-transition),
+    box-shadow var(--mei-transition);
+}
+.mei-app-card::before {
+  /* hover 时顶部扫过的高光 */
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: linear-gradient(120deg, transparent 30%, rgba(255, 255, 255, 0.08) 50%, transparent 70%);
+  transform: translateX(-120%);
+  transition: transform 600ms ease;
+  pointer-events: none;
+}
+.mei-app-card:hover {
+  transform: translateY(-5px);
+  border-color: rgba(129, 140, 248, 0.45);
+  box-shadow:
+    0 0 0 1px rgba(129, 140, 248, 0.22),
+    0 18px 44px rgba(0, 0, 0, 0.5),
+    0 6px 28px rgba(99, 102, 241, 0.28);
+}
+.mei-app-card:hover::before {
+  transform: translateX(120%);
+}
+.mei-app-card:active {
+  transform: translateY(-2px) scale(0.985);
+}
+.mei-app-card[data-disabled='true'] {
+  opacity: 0.38;
+  cursor: not-allowed;
+  filter: saturate(0.4);
+}
+.mei-app-card[data-disabled='true']:hover {
+  transform: none;
+  border-color: var(--mei-border);
+  box-shadow: var(--mei-shadow-sm);
+}
+
+/* 卡片内的图标砖 */
+.mei-app-card .mei-icon-tile {
+  width: 42px;
+  height: 42px;
+  border-radius: 13px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  transition: transform 220ms cubic-bezier(0.34, 1.56, 0.64, 1);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.25), 0 4px 14px rgba(0, 0, 0, 0.4);
+}
+.mei-app-card:hover .mei-icon-tile {
+  transform: scale(1.1) rotate(-4deg);
+}
+
+/* ===== 旧 section 标题（保留定义防引用缺失） ===== */
+.mei-section-title {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+  color: var(--mei-text-faint);
+  margin: 0 0 var(--mei-space-3);
+}
+
+.mei-empty {
+  text-align: center;
+  padding: var(--mei-space-8);
+  color: var(--mei-text-muted);
+}
+
+/* ===== 响应式 ===== */
+@media (min-width: 1281px) {
+  .mei-card-grid { grid-template-columns: repeat(5, 1fr); }
+}
+@media (min-width: 1025px) and (max-width: 1280px) {
+  .mei-card-grid { grid-template-columns: repeat(4, 1fr); }
+}
+@media (min-width: 769px) and (max-width: 1024px) {
+  .mei-card-grid { grid-template-columns: repeat(3, 1fr); }
+}
+@media (max-width: 768px) {
+  .mei-card-grid { grid-template-columns: repeat(2, 1fr); gap: var(--mei-space-2); }
+  .mei-app-card { min-height: 112px !important; padding: var(--mei-space-3) !important; }
+}
+
+/* ===== 滚动条 ===== */
 ::-webkit-scrollbar {
   width: 10px;
   height: 10px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
 }
 ::-webkit-scrollbar-thumb {
   background: var(--mei-border-strong);
@@ -48,60 +220,20 @@ a {
   background: var(--mei-primary-soft);
 }
 
-/* ===== 复用工具 class ===== */
-/* 卡片网格：固定列数，保证卡片宽度统一，更紧凑 */
-.mei-card-grid {
-  display: grid;
-  /* 6 列固定（桌面），避免 auto-fill 导致不同行卡片宽度不一 */
-  grid-template-columns: repeat(6, 1fr);
-  gap: var(--mei-space-3);
-}
-/* 外层链接撑满网格单元，内部卡片再撑满链接 → 同一行卡片高度完全一致 */
-.mei-card-grid > a,
-.mei-card-grid > div {
-  display: flex;
+a {
+  color: inherit;
   text-decoration: none;
 }
-.mei-app-card {
-  width: 100% !important;
-  height: 100% !important;
-  box-sizing: border-box;
-  min-height: 120px !important;
-  padding: var(--mei-space-4) !important;
-}
-.mei-section-title {
-  font-size: 12px;
-  text-transform: uppercase;
-  letter-spacing: 1.5px;
-  color: var(--mei-text-faint);
-  margin: 0 0 var(--mei-space-3);
-}
-.mei-empty {
-  text-align: center;
-  padding: var(--mei-space-8);
-  color: var(--mei-text-muted);
+
+::selection {
+  background: rgba(129, 140, 248, 0.35);
 }
 
-/* ===== 响应式：移动端/桌面端切换 ===== */
-/* 桌面端（>1024px）：6 列 */
-@media (min-width: 1025px) {
-  .mei-only-mobile { display: none !important; }
-}
-/* 中等屏（769-1024px）：4 列 */
-@media (min-width: 769px) and (max-width: 1024px) {
-  .mei-card-grid {
-    grid-template-columns: repeat(4, 1fr);
-  }
-}
-/* 移动端（<=768px）：2 列，更紧凑 */
-@media (max-width: 768px) {
-  .mei-only-desktop { display: none !important; }
-  .mei-card-grid {
-    grid-template-columns: repeat(2, 1fr);
-    gap: var(--mei-space-2);
-  }
-  .mei-app-card {
-    min-height: 100px !important;
-    padding: var(--mei-space-3) !important;
+/* 减少动效偏好 */
+@media (prefers-reduced-motion: reduce) {
+  .mei-aurora .blob,
+  .mei-app-card::before {
+    animation: none !important;
+    transition: none !important;
   }
 }

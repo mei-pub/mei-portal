@@ -1,7 +1,27 @@
 'use client';
-// 应用卡片 —— 门户网格单元，含在线/离线徽标
+// 应用卡片 —— 玻璃拟态 + 每应用专属渐变图标砖 + 悬浮光效（样式主体在 globals.css .mei-app-card）
 import type { ClientPlugin } from '@/lib/categories';
 import 'iconify-icon';
+
+// 按应用 id 生成专属渐变（同 id 恒定不变）
+const GRADIENTS = [
+  'linear-gradient(135deg,#6366f1,#a855f7)',
+  'linear-gradient(135deg,#0ea5e9,#6366f1)',
+  'linear-gradient(135deg,#10b981,#0ea5e9)',
+  'linear-gradient(135deg,#f59e0b,#ef4444)',
+  'linear-gradient(135deg,#ec4899,#a855f7)',
+  'linear-gradient(135deg,#14b8a6,#84cc16)',
+  'linear-gradient(135deg,#f43f5e,#f59e0b)',
+  'linear-gradient(135deg,#8b5cf6,#ec4899)',
+  'linear-gradient(135deg,#3b82f6,#14b8a6)',
+  'linear-gradient(135deg,#a855f7,#f43f5e)',
+];
+
+function hashGradient(id: string): string {
+  let h = 0;
+  for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) >>> 0;
+  return GRADIENTS[h % GRADIENTS.length];
+}
 
 export default function AppCard({
   plugin,
@@ -28,37 +48,8 @@ export default function AppCard({
     <button
       onClick={disabled ? undefined : onClick}
       className="mei-app-card"
-      style={{
-        position: 'relative',
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'flex-start',
-        gap: 'var(--mei-space-2)',
-        padding: 'var(--mei-space-4)',
-        background: 'var(--mei-surface)',
-        backdropFilter: 'var(--mei-blur)',
-        WebkitBackdropFilter: 'var(--mei-blur)',
-        border: '1px solid var(--mei-border)',
-        borderRadius: 'var(--mei-radius-sm)',
-        opacity: disabled ? 0.45 : undefined,
-        cursor: disabled ? 'not-allowed' : 'pointer',
-        textAlign: 'left',
-        color: 'var(--mei-text)',
-        boxShadow: 'var(--mei-shadow-sm)',
-        transition: 'var(--mei-transition)',
-        minHeight: 120,
-        width: '100%',
-      }}
-      onMouseEnter={(e) => {
-        e.currentTarget.style.transform = 'translateY(-2px)';
-        e.currentTarget.style.borderColor = 'var(--mei-primary-soft)';
-        e.currentTarget.style.boxShadow = 'var(--mei-glow)';
-      }}
-      onMouseLeave={(e) => {
-        e.currentTarget.style.transform = '';
-        e.currentTarget.style.borderColor = 'var(--mei-border)';
-        e.currentTarget.style.boxShadow = 'var(--mei-shadow-sm)';
-      }}
+      data-disabled={disabled ? 'true' : undefined}
+      type="button"
     >
       {/* 健康徽标 */}
       {status && (
@@ -66,52 +57,66 @@ export default function AppCard({
           title={`${status.label}${health?.ms ? ` · ${health.ms}ms` : ''}`}
           style={{
             position: 'absolute',
-            top: 10,
-            right: 10,
+            top: 12,
+            right: 12,
             width: 7,
             height: 7,
             borderRadius: '50%',
             background: status.color,
-            boxShadow: `0 0 6px ${status.color}`,
+            boxShadow: `0 0 8px ${status.color}`,
           }}
         />
       )}
-      <div
-        style={{
-          width: 36,
-          height: 36,
-          borderRadius: 'var(--mei-radius-sm)',
-          background: 'var(--mei-gradient-soft)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-        }}
-      >
-        <iconify-icon icon={plugin.icon} width="20" style={{ color: 'var(--mei-primary)' }} />
-      </div>
       {disabled && (
         <span
-          title="已在设置中关闭此应用"
+          title="已在开关集成设置中关闭此应用"
           style={{
             position: 'absolute',
-            top: 8,
-            right: 8,
-            padding: '1px 6px',
+            top: 9,
+            right: 9,
+            padding: '1px 7px',
             fontSize: 10,
             borderRadius: 'var(--mei-radius-full)',
-            background: 'var(--mei-text-faint)',
-            color: '#fff',
+            background: 'rgba(0,0,0,0.55)',
+            border: '1px solid var(--mei-border)',
+            color: 'var(--mei-text-muted)',
           }}
         >
           已禁用
         </span>
       )}
-      <div style={{ fontWeight: 600, fontSize: 14, lineHeight: 1.3 }}>{plugin.name}</div>
+      <div className="mei-icon-tile" style={{ background: hashGradient(plugin.id) }}>
+        <iconify-icon icon={plugin.icon} width="22" />
+      </div>
+      <div style={{ fontWeight: 650, fontSize: 14, lineHeight: 1.3, letterSpacing: 0.2 }}>{plugin.name}</div>
       {plugin.description && (
-        <div style={{ color: 'var(--mei-text-muted)', fontSize: 12, lineHeight: 1.4, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+        <div
+          style={{
+            color: 'var(--mei-text-muted)',
+            fontSize: 12,
+            lineHeight: 1.45,
+            display: '-webkit-box',
+            WebkitLineClamp: 2,
+            WebkitBoxOrient: 'vertical',
+            overflow: 'hidden',
+          }}
+        >
           {plugin.description}
         </div>
       )}
+      {/* 底部微弱的应用域名提示，增加层次 */}
+      <span
+        style={{
+          marginTop: 'auto',
+          paddingTop: 6,
+          fontSize: 10.5,
+          letterSpacing: 0.6,
+          color: 'var(--mei-text-faint)',
+          opacity: 0.85,
+        }}
+      >
+        {plugin.subdomainPrefix ? `/${plugin.subdomainPrefix}` : url}
+      </span>
     </button>
   );
 }
