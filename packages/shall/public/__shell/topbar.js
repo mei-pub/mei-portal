@@ -88,7 +88,7 @@
       '[class*="toast"],[class*="Toast"],[class*="notification"],[class*="Notification"]{z-index:10000!important;}',
       '#mei-topbar .mei-brand{display:flex;align-items:center;gap:8px;font-weight:700;font-size:15px;margin-right:8px;flex-shrink:0;}',
       '#mei-topbar .mei-logo{width:24px;height:24px;border-radius:6px;background:linear-gradient(135deg,#6366f1,#7c3aed);flex-shrink:0;}',
-      '#mei-topbar .mei-apps{display:flex;align-items:center;gap:2px;overflow-x:auto;scrollbar-width:none;flex:1;}',
+      '#mei-topbar .mei-apps{display:flex;align-items:center;gap:2px;overflow-x:auto;scrollbar-width:none;flex:1;min-width:0;}',
       '#mei-topbar .mei-apps::-webkit-scrollbar{display:none;}',
       '#mei-topbar .mei-btn{display:inline-flex;align-items:center;gap:6px;padding:6px 12px;border-radius:8px;',
       'cursor:pointer;border:1px solid transparent;background:transparent;color:#4b5563;',
@@ -96,7 +96,8 @@
       '#mei-topbar .mei-btn:hover{background:#f3f4f6;color:#1f2937;}',
       '#mei-topbar .mei-btn.active{background:linear-gradient(135deg,#6366f1,#7c3aed);color:#fff;}',
       '#mei-topbar .mei-btn.off{opacity:.5;}',
-      '#mei-topbar .mei-spacer{flex:1;}',
+      /* spacer 不再 flex:1：否则与 .mei-apps 平分空间，应用按钮只分到一半宽度被裁 */
+      '#mei-topbar .mei-spacer{flex:0 0 8px;}',
       '#mei-topbar .mei-user{display:flex;align-items:center;gap:6px;padding:6px 12px;border-radius:8px;',
       'background:#f3f4f6;color:#4b5563;font-size:13px;flex-shrink:0;cursor:pointer;text-decoration:none;}',
       '#mei-topbar .mei-user:hover{background:#e5e7eb;color:#1f2937;}',

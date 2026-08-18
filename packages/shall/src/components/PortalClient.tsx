@@ -2,7 +2,6 @@
 // 门户首页：亮色卡片网格，点击直接跳转到应用子路径（顶栏由各应用自身注入）
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { ClientPlugin } from '@/lib/categories';
-import { CATEGORY_LABELS } from '@/lib/categories';
 import TopBar from './TopBar';
 import AppCard from './AppCard';
 import { isSwitchable, isAppEnabled } from '@/lib/app-toggles';
@@ -65,11 +64,11 @@ export default function PortalClient({ items }: { items: Item[] }) {
     );
   }, [resolvedItems, query]);
 
-  const groups = useMemo(() => {
-    return filtered.reduce<Record<string, ResolvedItem[]>>((acc, i) => {
-      (acc[i.plugin.category] = acc[i.plugin.category] || []).push(i);
-      return acc;
-    }, {});
+  // 应用数量不多：不做分类，统一按名称排序平铺（分类分组曾导致各分组行高不齐、布局零散）
+  const sorted = useMemo(() => {
+    return [...filtered].sort((a, b) =>
+      a.plugin.name.localeCompare(b.plugin.name, 'zh-Hans-CN')
+    );
   }, [filtered]);
 
   // Cmd/Ctrl+K 聚焦搜索
@@ -111,26 +110,19 @@ export default function PortalClient({ items }: { items: Item[] }) {
           统一门户 · {resolvedItems.length} 个应用 · 点击卡片进入
         </p>
 
-        {Object.entries(groups).map(([cat, list]) => (
-          <section key={cat} style={{ marginBottom: 'var(--mei-space-6)' }}>
-            <h2 className="mei-section-title">
-              {CATEGORY_LABELS[cat as keyof typeof CATEGORY_LABELS] || cat}
-            </h2>
-            <div className="mei-card-grid">
-              {list.map(({ plugin, url, disabled }) =>
-                disabled ? (
-                  <div key={plugin.id} style={{ textDecoration: 'none' }}>
-                    <AppCard plugin={plugin} url={url} disabled onClick={() => {}} />
-                  </div>
-                ) : (
-                  <a key={plugin.id} href={url} style={{ textDecoration: 'none' }}>
-                    <AppCard plugin={plugin} url={url} onClick={() => {}} />
-                  </a>
-                )
-              )}
-            </div>
-          </section>
-        ))}
+        <div className="mei-card-grid">
+          {sorted.map(({ plugin, url, disabled }) =>
+            disabled ? (
+              <div key={plugin.id} style={{ textDecoration: 'none' }}>
+                <AppCard plugin={plugin} url={url} disabled onClick={() => {}} />
+              </div>
+            ) : (
+              <a key={plugin.id} href={url} style={{ textDecoration: 'none' }}>
+                <AppCard plugin={plugin} url={url} onClick={() => {}} />
+              </a>
+            )
+          )}
+        </div>
 
         {filtered.length === 0 && (
           <div className="mei-empty">没有匹配「{query}」的应用</div>

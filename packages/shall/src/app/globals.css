@@ -52,12 +52,20 @@ a {
 /* 卡片网格：固定列数，保证卡片宽度统一，更紧凑 */
 .mei-card-grid {
   display: grid;
-  /* 6 列固定（桌面），避免 auto-fill 导致不同分类行卡片宽度不一 */
+  /* 6 列固定（桌面），避免 auto-fill 导致不同行卡片宽度不一 */
   grid-template-columns: repeat(6, 1fr);
   gap: var(--mei-space-3);
 }
+/* 外层链接撑满网格单元，内部卡片再撑满链接 → 同一行卡片高度完全一致 */
+.mei-card-grid > a,
+.mei-card-grid > div {
+  display: flex;
+  text-decoration: none;
+}
 .mei-app-card {
   width: 100% !important;
+  height: 100% !important;
+  box-sizing: border-box;
   min-height: 120px !important;
   padding: var(--mei-space-4) !important;
 }
