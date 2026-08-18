@@ -41,7 +41,7 @@ export const en = {
     import: 'Import',
   },
   home: {
-    title: 'AI Draw',
+    title: 'Mei Draw',
     subtitle: 'AI-Powered Diagram Generator',
     startDrawing: 'Start Drawing',
     recentProjects: 'Recent Projects',

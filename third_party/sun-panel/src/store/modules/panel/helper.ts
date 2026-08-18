@@ -3,7 +3,8 @@ import { PanelPanelConfigStyleEnum, PanelStateNetworkModeEnum } from '@/enums'
 import defaultBackground from '@/assets/defaultBackground.webp'
 const LOCAL_NAME = 'panelStorage'
 
-const defaultFooterHtml = '<div class="flex justify-center text-slate-300" style="margin-top:100px">Powered By <a href="https://github.com/hslr-s/sun-panel" target="_blank" class="ml-[5px]">Mei-Panel</a></div>'
+// mei-allin：默认页脚留空（不再显示 Powered By 字样）
+const defaultFooterHtml = ''
 
 export function defaultStatePanelConfig(): Panel.panelConfig {
   return {

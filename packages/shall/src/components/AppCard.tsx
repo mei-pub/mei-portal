@@ -1,7 +1,7 @@
 'use client';
 // 应用卡片 —— 玻璃拟态 + 每应用专属渐变图标砖 + 悬浮光效（样式主体在 globals.css .mei-app-card）
 import type { ClientPlugin } from '@/lib/categories';
-import 'iconify-icon';
+import MeiIcon from './MeiIcon';
 
 // 按应用 id 生成专属渐变（同 id 恒定不变）
 const GRADIENTS = [
@@ -86,7 +86,7 @@ export default function AppCard({
         </span>
       )}
       <div className="mei-icon-tile" style={{ background: hashGradient(plugin.id) }}>
-        <iconify-icon icon={plugin.icon} width="22" />
+        <MeiIcon icon={plugin.icon} size={22} />
       </div>
       <div style={{ fontWeight: 650, fontSize: 14, lineHeight: 1.3, letterSpacing: 0.2 }}>{plugin.name}</div>
       {plugin.description && (

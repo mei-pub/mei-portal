@@ -8,7 +8,7 @@ export function AboutPage() {
   return (
     <div className="flex min-h-screen bg-background">
       <AppSidebar onCreateProject={() => setIsCreateDialogOpen(true)} />
-      <main className="flex flex-1 flex-col pl-[72px]">
+      <main className="flex flex-1 flex-col">
         <div className="flex flex-1 items-start justify-center p-8">
           <div className="w-full max-w-3xl space-y-8">
             {/* 开源信息 */}

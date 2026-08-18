@@ -29,7 +29,7 @@ export default function Home() {
       justifyContent={'center'}
       width={'100%'}
     >
-      <Helmet title={'MeiTools'} />
+      <Helmet title={'Mei Tools'} />
       <Hero />
       <Box my={3}>
         <UserTypeFilter

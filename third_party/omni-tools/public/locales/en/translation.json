@@ -93,8 +93,8 @@
     }
   },
   "hero": {
-    "brand": "MeiTools",
-    "description": "Boost your productivity with MeiTools, the ultimate toolkit for getting things done quickly! Access thousands of user-friendly utilities for editing images, text, lists, and data, all directly from your browser.",
+    "brand": "Mei Tools",
+    "description": "Boost your productivity with Mei Tools, the ultimate toolkit for getting things done quickly! Access thousands of user-friendly utilities for editing images, text, lists, and data, all directly from your browser.",
     "examples": {
       "calculateNumberSum": "Calculate number sum",
       "changeGifSpeed": "Change GIF speed",

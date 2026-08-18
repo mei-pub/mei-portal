@@ -1071,7 +1071,7 @@ export function ProfilePage() {
   return (
     <div className="flex h-screen bg-background overflow-hidden">
       <AppSidebar onCreateProject={() => setIsCreateDialogOpen(true)} />
-      <main className="flex flex-1 flex-col pl-[72px] h-full">
+      <main className="flex flex-1 flex-col h-full">
         <div className="flex flex-1 w-full bg-background overflow-hidden">
             <div className="flex h-full w-full">
               {/* 左侧 Tab */}

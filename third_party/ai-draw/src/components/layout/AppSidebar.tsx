@@ -1,132 +1,115 @@
 import {useLocation, useNavigate} from 'react-router-dom'
-import {ChevronLeft, ChevronRight, Plus} from 'lucide-react'
-import {NAV_ITEMS} from '@/constants'
-import {useSystemStore} from '@/stores/systemStore'
-import {useAuthStore} from '@/stores/authStore'
-import {
-  Logo,
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger
-} from '@/components/ui'
+import {useEffect, useState} from 'react'
+import {Dialog, DialogContent} from '@/components/ui'
+import {ProjectsPage} from '@/pages/ProjectsPage'
 
 interface AppSidebarProps {
   onCreateProject?: () => void
 }
 
-// mei-allin 集成：
-// - GitHub 入口已移除；存储模式锁死本地（storageModeStore 强制 local），不再提供切换入口
-// - 个人设置/管理后台入口迁移到门户设置集成页，侧栏不再显示（路由保留供集成页 iframe 直达）
-// - 左下角用户头像/退出登录浮动入口已移除（登录态由门户统一管理）
+// mei-allin 集成：原 72px 固定侧栏改为左侧中段可折叠浮动小面板
+// 三个行动：系统首页 / 新建 / 文件管理（弹层打开 ProjectsPage）
 export function AppSidebar({ onCreateProject }: AppSidebarProps) {
   const navigate = useNavigate()
   const location = useLocation()
-  const showAbout = useSystemStore((state) => state.showAbout)
-  const isCollapsed = useSystemStore((state) => state.sidebarCollapsed)
-  const setSidebarCollapsed = useSystemStore((state) => state.setSidebarCollapsed)
-  const logoColor = useSystemStore((state) => state.logoColor)
-  const language = useSystemStore((state) => state.language)
-  const i18nTexts = useSystemStore((state) => state.i18nTexts)
-  const user = useAuthStore((state) => state.user)
+  const [open, setOpen] = useState(false)
+  const [projectsOpen, setProjectsOpen] = useState(false)
+
+  // 路由变化（如从文件管理里进入编辑器）时收起面板并关闭弹层
+  useEffect(() => {
+    setOpen(false)
+    setProjectsOpen(false)
+  }, [location.pathname])
+
+  const stroke = {
+    fill: 'none',
+    stroke: 'currentColor',
+    strokeWidth: 2,
+    strokeLinecap: 'round',
+    strokeLinejoin: 'round',
+  } as const
+
+  const actions = [
+    {
+      label: '首页',
+      title: '系统首页',
+      icon: (
+        <svg className="h-[18px] w-[18px]" viewBox="0 0 24 24" {...stroke}>
+          <path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
+          <path d="M9 22V12h6v10"/>
+        </svg>
+      ),
+      onClick: () => navigate('/'),
+    },
+    {
+      label: '新建',
+      title: '新建项目',
+      icon: (
+        <svg className="h-[18px] w-[18px]" viewBox="0 0 24 24" {...stroke}>
+          <path d="M12 5v14M5 12h14"/>
+        </svg>
+      ),
+      onClick: () => (onCreateProject ? onCreateProject() : setProjectsOpen(true)),
+    },
+    {
+      label: '文件',
+      title: '文件管理',
+      icon: (
+        <svg className="h-[18px] w-[18px]" viewBox="0 0 24 24" {...stroke}>
+          <path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2z"/>
+        </svg>
+      ),
+      onClick: () => setProjectsOpen(true),
+    },
+  ]
 
   return (
-    <TooltipProvider delayDuration={0}>
-      <aside className="fixed left-0 top-0 z-40 flex h-screen w-[72px] flex-col items-center border-r border-border bg-surface py-4 transition-all duration-300">
-        {/* Logo */}
-        <Tooltip>
-          <TooltipTrigger asChild>
+    <>
+      <div className="fixed left-3 top-1/2 -translate-y-1/2 z-40 flex flex-col items-center gap-1 p-1.5 rounded-2xl bg-white/75 dark:bg-gray-900/70 backdrop-blur-xl border border-black/10 dark:border-white/10 shadow-lg">
+        {!open ? (
+          <button
+            onClick={() => setOpen(true)}
+            title="展开菜单"
+            className="w-10 h-10 rounded-xl flex items-center justify-center text-gray-500 hover:bg-gray-900/5 hover:text-indigo-600 dark:text-gray-400 dark:hover:bg-white/10 transition-colors"
+          >
+            <svg className="h-5 w-5" viewBox="0 0 24 24" {...stroke}>
+              <path d="M3 7h18M3 12h18M3 17h18"/>
+            </svg>
+          </button>
+        ) : (
+          <>
+            {actions.map(a => (
+              <button
+                key={a.label}
+                onClick={a.onClick}
+                title={a.title}
+                className="w-10 h-11 rounded-xl flex flex-col items-center justify-center text-gray-500 hover:bg-gray-900/5 hover:text-indigo-600 dark:text-gray-400 dark:hover:bg-white/10 transition-colors"
+              >
+                {a.icon}
+                <span className="text-[9px] leading-none mt-0.5">{a.label}</span>
+              </button>
+            ))}
             <button
-              onClick={() => navigate('/')}
-              className="mb-6 flex h-10 w-10 items-center justify-center rounded-xl shadow-sm transition-transform hover:scale-105 active:scale-95"
-              style={{ backgroundColor: logoColor }}
+              onClick={() => setOpen(false)}
+              title="收起"
+              className="w-10 h-8 rounded-xl flex items-center justify-center text-gray-400 hover:bg-gray-900/5 dark:hover:bg-white/10 transition-colors"
             >
-              <Logo className="h-6 w-6" style={{ color: 'white' }} />
+              <svg className="h-4 w-4" viewBox="0 0 24 24" {...stroke}>
+                <path d="m15 18-6-6 6-6"/>
+              </svg>
             </button>
-          </TooltipTrigger>
-          <TooltipContent side="right">{i18nTexts.btnBackHome[language]}</TooltipContent>
-        </Tooltip>
-
-        {/* New Project Button */}
-        {onCreateProject && (
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <button
-                onClick={onCreateProject}
-                className="group mb-6 flex flex-col items-center justify-center gap-1"
-              >
-                <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-dashed border-border bg-background transition-all group-hover:border-primary group-hover:text-primary">
-                  <Plus className="h-5 w-5 text-muted-foreground group-hover:text-primary" />
-                </div>
-                {!isCollapsed && <span className="text-[10px] font-medium text-muted-foreground group-hover:text-primary">{language === 'zh' ? '新建' : 'New'}</span>}
-              </button>
-            </TooltipTrigger>
-            <TooltipContent side="right">{i18nTexts.btnNewProject[language]}</TooltipContent>
-          </Tooltip>
+          </>
         )}
+      </div>
 
-        {/* Navigation Items */}
-        <nav className="flex flex-1 flex-col items-center gap-4 w-full px-2">
-          {NAV_ITEMS.map((item, index) => {
-            if (item.path === '/about' && !showAbout) return null
-            if ('adminOnly' in item && item.adminOnly && user?.role !== 'admin') return null
-            // 个人设置/管理后台 → 门户设置集成页
-            if (item.path === '/profile' || item.path === '/admin') return null
-
-            const isActive = location.pathname === item.path
-
-            // Get translated label
-            let label = item.label
-            if (item.path === '/') label = i18nTexts.menuHome[language]
-            else if (item.path === '/projects') label = i18nTexts.menuProjects[language]
-            else if (item.path === '/profile') label = i18nTexts.menuProfile[language]
-            else if (item.path === '/admin') label = i18nTexts.menuAdmin[language]
-            else if (item.path === '/about') label = i18nTexts.menuAbout[language]
-
-            return (
-              <Tooltip key={index}>
-                <TooltipTrigger asChild>
-                  <button
-                    onClick={() => navigate(item.path)}
-                    className={`group flex w-full flex-col items-center justify-center gap-1 rounded-xl py-2 transition-all ${
-                      isActive
-                        ? 'bg-primary/10 text-primary'
-                        : 'text-muted-foreground hover:bg-muted/50 hover:text-primary'
-                    }`}
-                  >
-                    <item.icon className={`h-5 w-5 ${isActive ? 'text-primary' : 'text-muted-foreground group-hover:text-primary'}`} />
-                    {!isCollapsed && (
-                      <span className={`text-[10px] font-medium ${isActive ? 'text-primary' : 'text-muted-foreground group-hover:text-primary'}`}>
-                        {label}
-                      </span>
-                    )}
-                  </button>
-                </TooltipTrigger>
-                {isCollapsed && <TooltipContent side="right">{label}</TooltipContent>}
-              </Tooltip>
-            )
-          })}
-        </nav>
-
-        {/* Bottom Actions */}
-        <div className="mt-auto flex flex-col items-center gap-4 w-full px-2 pb-2">
-
-          {/* Collapse Toggle */}
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <button
-                onClick={() => setSidebarCollapsed(!isCollapsed)}
-                className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted/50 hover:text-primary"
-              >
-                {isCollapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
-              </button>
-            </TooltipTrigger>
-            <TooltipContent side="right">{isCollapsed ? i18nTexts.expandMenu[language] : i18nTexts.collapseMenu[language]}</TooltipContent>
-          </Tooltip>
-
-          {/* mei-allin：左下角用户头像/退出登录浮动入口已移除（登录态由门户统一管理） */}
-        </div>
-      </aside>
-    </TooltipProvider>
+      {/* 文件管理：弹层打开 */}
+      <Dialog open={projectsOpen} onOpenChange={setProjectsOpen}>
+        <DialogContent className="max-w-6xl w-[94vw] h-[86vh] p-0 overflow-hidden flex flex-col gap-0">
+          <div className="flex-1 min-h-0 overflow-auto">
+            <ProjectsPage embedded />
+          </div>
+        </DialogContent>
+      </Dialog>
+    </>
   )
 }

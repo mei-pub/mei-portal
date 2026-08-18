@@ -306,7 +306,7 @@ export function EditorPage({ mode = 'normal' }: EditorPageProps) {
 
   return (
     <TooltipProvider>
-    <div className="flex h-screen flex-col bg-background pl-[72px]">
+    <div className="flex h-screen flex-col bg-background">
       <AppSidebar onCreateProject={handleNewProject} />
       {/* Toolbar */}
       <header className="flex h-14 items-center justify-between border-b border-border bg-surface px-4">

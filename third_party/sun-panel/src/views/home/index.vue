@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { VueDraggable } from 'vue-draggable-plus'
 import { NBackTop, NButton, NButtonGroup, NDropdown, NModal, NSkeleton, NSpin, useDialog, useMessage } from 'naive-ui'
-import { nextTick, onMounted, ref } from 'vue'
+import { computed, nextTick, onMounted, ref } from 'vue'
 import { AppIcon, AppStarter, EditItem } from './components'
 import { Clock, SearchBox, SystemMonitor } from '@/components/deskModule'
 import { SvgIcon } from '@/components/common'
@@ -46,6 +46,11 @@ const currentAddItenIconGroupId = ref<number | undefined>()
 // mei-allin 集成：仅当 URL 带 ?meiPanel=setting（设置集成页 iframe）时提供设置入口并自动弹出
 // 主页面板的日常页面不再显示设置悬浮按钮（入口已迁移到门户设置集成页）
 const meiSettingEntry = new URLSearchParams(window.location.search).get('meiPanel') === 'setting'
+// 默认 Powered By 页脚（含历史持久化值）不渲染，仅显示用户自定义页脚
+const panelFooterVisible = computed(() => {
+  const html = (panelState.panelConfig.footerHtml || '').trim()
+  return !!html && !/powered\s*by/i.test(html)
+})
 const settingModalShow = ref(meiSettingEntry)
 
 const items = ref<ItemGroup[]>([])
@@ -317,7 +322,13 @@ function handleAddItem(itemIconGroupId?: number) {
 </script>
 
 <template>
-  <div class="w-full h-full sun-main">
+  <!-- mei-allin：meiPanel=setting（设置集成页 iframe）时只渲染设置弹层，不渲染面板主内容 -->
+  <div v-if="meiSettingEntry" class="w-full h-full sun-main">
+    <div class="absolute z-[999] w-full">
+      <AppStarter v-model:visible="settingModalShow" />
+    </div>
+  </div>
+  <div v-else class="w-full h-full sun-main">
     <div
       class="cover wallpaper" :style="{
         filter: `blur(${panelState.panelConfig.backgroundBlur}px)`,
@@ -486,7 +497,8 @@ function handleAddItem(itemIconGroupId?: number) {
             </div>
           </div>
         </div>
-        <div class="mt-5 footer" v-html="panelState.panelConfig.footerHtml" />
+        <!-- mei-allin：不再显示 Powered By 默认页脚；用户自定义页脚仍生效 -->
+        <div v-if="panelFooterVisible" class="mt-5 footer" v-html="panelState.panelConfig.footerHtml" />
       </div>
     </div>
 
@@ -513,7 +525,7 @@ function handleAddItem(itemIconGroupId?: number) {
         </NButton>
       </NButtonGroup>
 
-      <AppStarter v-model:visible="settingModalShow" />
+      <!-- 设置弹层已移至 meiSettingEntry 分支 -->
       <!-- <Setting v-model:visible="settingModalShow" /> -->
     </div>
 
@@ -586,7 +598,10 @@ html {
 }
 
 .cover {
-  position: absolute;
+  /* mei-allin：改为 fixed 铺满整个视口（含门户胶囊顶栏让出的 padding 条带），
+     避免胶囊与壁纸之间露出 body 深色背景 */
+  position: fixed;
+  inset: 0;
   width: 100%;
   height: 100%;
   overflow: hidden;

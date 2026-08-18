@@ -41,7 +41,7 @@ import {buildPptSrcDoc} from '@/lib/htmlPpt/srcdocBuilder'
 import {sanitizeHtml} from '@/lib/validators/html'
 import {useSystemStore} from '@/stores/systemStore'
 
-export function ProjectsPage() {
+export function ProjectsPage({ embedded = false }: { embedded?: boolean } = {}) {
   const navigate = useNavigate()
   const location = useLocation()
   const language = useSystemStore((state) => state.language)
@@ -251,12 +251,12 @@ export function ProjectsPage() {
   }
 
   return (
-    <div className="flex min-h-screen bg-white overflow-hidden">
+    <div className={embedded ? "flex h-full bg-white overflow-hidden" : "flex min-h-screen bg-white overflow-hidden"}>
       {/* Floating Sidebar Navigation */}
-      <AppSidebar onCreateProject={() => setIsCreateDialogOpen(true)} />
+      {!embedded && <AppSidebar onCreateProject={() => setIsCreateDialogOpen(true)} />}
 
       {/* Main Content */}
-      <main className="flex flex-1 pl-[72px] h-screen">
+      <main className={embedded ? "flex flex-1 h-full min-h-0" : "flex flex-1 h-screen pt-16"}>
         {/* Middle Column: Groups & Search */}
         <div className="flex w-64 flex-col border-r border-border bg-surface/50">
           {/* Header */}

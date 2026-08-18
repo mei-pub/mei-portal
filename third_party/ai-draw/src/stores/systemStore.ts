@@ -304,7 +304,7 @@ interface SystemState {
 }
 
 export const useSystemStore = create<SystemState>((set) => ({
-  systemName: (window as any)._ENV_?.SYSTEM_NAME || 'AI Draw',
+  systemName: (window as any)._ENV_?.SYSTEM_NAME || 'Mei Draw',
   showAbout: (window as any)._ENV_?.SHOW_ABOUT !== false, // Default to true if not set
   sidebarCollapsed: localStorage.getItem('sidebarCollapsed') === 'true',
   defaultEngine: (localStorage.getItem('defaultEngine') as EngineType) || (window as any)._ENV_?.DEFAULT_ENGINE || 'drawio',

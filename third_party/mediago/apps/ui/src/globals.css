@@ -9,8 +9,9 @@ body {
   width: 100vw;
 }
 
+/* mei-allin：门户胶囊顶栏占用 --mei-topbar-space（topbar.js 注入，独立部署缺省 0） */
 #root {
-  height: 100vh;
+  height: calc(100vh - var(--mei-topbar-space, 0px));
   width: 100vw;
 }
 

@@ -4,6 +4,7 @@
 import { useEffect, useRef, useState } from 'react';
 import AppToggles from './AppToggles';
 import PanelNetModeToggle from './PanelNetModeToggle';
+import MeiIcon from './MeiIcon';
 
 export default function TopBar({
   query,
@@ -132,7 +133,7 @@ export default function TopBar({
             transition: 'var(--mei-transition)',
           }}
         >
-          ⚙️
+          <MeiIcon icon="lucide:settings" size={17} />
         </button>
 
         {menuOpen && (
@@ -193,7 +194,8 @@ export default function TopBar({
               }}
               onClick={() => setMenuOpen(false)}
             >
-              ⚙️ 设置集成页
+              <MeiIcon icon="lucide:settings" size={15} />
+              设置集成页
             </a>
             {loggedIn && (
               <button

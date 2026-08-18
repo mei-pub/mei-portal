@@ -62,7 +62,7 @@ export default function ToolLayout({
       sx={{ backgroundColor: 'background.default' }}
     >
       <Helmet>
-        <title>{`${toolTitle} - MeiTools`}</title>
+        <title>{`${toolTitle} - Mei Tools`}</title>
       </Helmet>
       <Box width={'85%'}>
         <ToolHeader

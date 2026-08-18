@@ -773,31 +773,31 @@ export default function SpiderSolitaire({ onNewGameNickname }: Props) {
   const stockDeals = Math.ceil(game.stock.length / 10);
 
   const gameContent = (
-    <div className="h-dvh select-none flex flex-col overflow-hidden" style={{ background: "linear-gradient(180deg, #1a6b30 0%, #0e4a1e 100%)" }}>
+    <div className="h-dvh select-none flex flex-col overflow-hidden" style={{ background: "linear-gradient(180deg, #eef6f1 0%, #d9ecdf 100%)" }}>
       {/* ─── Header Bar ─── */}
-      <div className="bg-[#1b5e2e] border-b border-green-900/60 px-2 sm:px-3 py-1 sm:py-1.5 flex items-center justify-between shrink-0">
+      <div className="bg-white/75 border-b border-slate-900/10 backdrop-blur-md px-2 sm:px-3 py-1 sm:py-1.5 flex items-center justify-between shrink-0">
         <div className="flex items-center gap-1 sm:gap-2">
-          <span className="text-white text-sm sm:text-base mr-0.5 sm:mr-1">♠</span>
-          <span className="text-white font-bold text-xs sm:text-sm hidden sm:inline">蜘蛛纸牌</span>
+          <span className="text-slate-700 text-sm sm:text-base mr-0.5 sm:mr-1">♠</span>
+          <span className="text-slate-800 font-bold text-xs sm:text-sm hidden sm:inline">蜘蛛纸牌</span>
           <div className="flex items-center gap-0.5 ml-1 sm:ml-3">
-            <button onClick={() => setShowDialog(true)} className="px-2 sm:px-2.5 py-1 text-[10px] sm:text-[11px] text-white/80 hover:bg-white/10 rounded transition-colors">游戏</button>
-            <a href="/" className="px-2 sm:px-2.5 py-1 text-[10px] sm:text-[11px] text-white/80 hover:bg-white/10 rounded transition-colors">主页</a>
-            <button onClick={undo} className="px-2 sm:px-2.5 py-1 text-[10px] sm:text-[11px] text-white/80 hover:bg-white/10 rounded transition-colors" title="撤销 (Ctrl+Z)">撤销</button>
-            <button onClick={showHint} className="px-2 sm:px-2.5 py-1 text-[10px] sm:text-[11px] text-white/80 hover:bg-white/10 rounded transition-colors" title="提示 (H)">提示</button>
+            <button onClick={() => setShowDialog(true)} className="px-2 sm:px-2.5 py-1 text-[10px] sm:text-[11px] text-slate-600 hover:bg-slate-900/8 rounded transition-colors">游戏</button>
+            <a href="/" className="px-2 sm:px-2.5 py-1 text-[10px] sm:text-[11px] text-slate-600 hover:bg-slate-900/8 rounded transition-colors">主页</a>
+            <button onClick={undo} className="px-2 sm:px-2.5 py-1 text-[10px] sm:text-[11px] text-slate-600 hover:bg-slate-900/8 rounded transition-colors" title="撤销 (Ctrl+Z)">撤销</button>
+            <button onClick={showHint} className="px-2 sm:px-2.5 py-1 text-[10px] sm:text-[11px] text-slate-600 hover:bg-slate-900/8 rounded transition-colors" title="提示 (H)">提示</button>
             <button onClick={dealFromStock} disabled={game.stock.length === 0 || game.columns.some(c => c.length === 0)}
-              className="px-2 sm:px-2.5 py-1 text-[10px] sm:text-[11px] text-white/80 hover:bg-white/10 rounded transition-colors disabled:opacity-30" title="发牌 (D)">发牌</button>
+              className="px-2 sm:px-2.5 py-1 text-[10px] sm:text-[11px] text-slate-600 hover:bg-slate-900/8 rounded transition-colors disabled:opacity-30" title="发牌 (D)">发牌</button>
             <button onClick={toggleAutoPlay}
-              className={`px-2 sm:px-2.5 py-1 text-[10px] sm:text-[11px] rounded transition-colors ${autoPlay ? "bg-yellow-500/80 text-white" : "text-white/80 hover:bg-white/10"}`}
+              className={`px-2 sm:px-2.5 py-1 text-[10px] sm:text-[11px] rounded transition-colors ${autoPlay ? "bg-amber-400 text-slate-900" : "text-slate-600 hover:bg-slate-900/8"}`}
               title="自动游玩">
               {autoPlay ? "停止" : "自动"}
             </button>
-            <button onClick={() => setLandscape(!landscape)} className="px-2 sm:px-2.5 py-1 text-[10px] sm:text-[11px] text-white/80 hover:bg-white/10 rounded transition-colors" title="切换横屏/竖屏">
+            <button onClick={() => setLandscape(!landscape)} className="px-2 sm:px-2.5 py-1 text-[10px] sm:text-[11px] text-slate-600 hover:bg-slate-900/8 rounded transition-colors" title="切换横屏/竖屏">
               {landscape ? "竖屏" : "横屏"}
             </button>
-            <button onClick={() => setShowScores(true)} className="px-2 sm:px-2.5 py-1 text-[10px] sm:text-[11px] text-white/80 hover:bg-white/10 rounded transition-colors">排行</button>
+            <button onClick={() => setShowScores(true)} className="px-2 sm:px-2.5 py-1 text-[10px] sm:text-[11px] text-slate-600 hover:bg-slate-900/8 rounded transition-colors">排行</button>
           </div>
         </div>
-        <div className="flex items-center gap-2 sm:gap-3 text-[10px] sm:text-[11px] text-white/60">
+        <div className="flex items-center gap-2 sm:gap-3 text-[10px] sm:text-[11px] text-slate-500">
           <span className="hidden sm:inline">得分: {game.score}</span>
           <span>{game.score}分</span>
           <span className="hidden xs:inline">步数: {game.moves}</span>
@@ -952,7 +952,7 @@ export default function SpiderSolitaire({ onNewGameNickname }: Props) {
       )}
 
       {/* ─── Bottom Bar ─── */}
-      <div className="shrink-0 bg-[#1b5e2e]/80 border-t border-green-900/50 px-2 sm:px-4 py-1 sm:py-2 flex items-center justify-between">
+      <div className="shrink-0 bg-white/75 border-t border-slate-900/10 backdrop-blur-md px-2 sm:px-4 py-1 sm:py-2 flex items-center justify-between">
         <div className="flex items-center gap-1.5 sm:gap-2">
           <button
             onClick={dealFromStock}
@@ -969,17 +969,17 @@ export default function SpiderSolitaire({ onNewGameNickname }: Props) {
                 <div className="relative w-[36px] sm:w-[52px] h-[48px] sm:h-[70px] rounded-[4px] sm:rounded-[5px] group-hover:brightness-110 transition-all group-disabled:opacity-40 group-disabled:cursor-not-allowed"
                   style={{ background: "linear-gradient(145deg, #2563eb 0%, #1d4ed8 40%, #1e3a8a 100%)", border: "1px solid #1e40af" }}>
                   <div className="w-full h-full flex items-center justify-center">
-                    <div className="w-[70%] h-[80%] border border-white/25 rounded-[2px] flex items-center justify-center text-white/40 text-[10px] sm:text-sm font-bold">
+                    <div className="w-[70%] h-[80%] border border-slate-900/15 rounded-[2px] flex items-center justify-center text-slate-400 text-[10px] sm:text-sm font-bold">
                       {stockDeals}
                     </div>
                   </div>
                 </div>
               </>
             ) : (
-              <div className="w-[36px] sm:w-[52px] h-[48px] sm:h-[70px] rounded-[4px] sm:rounded-[5px] border-2 border-dashed border-white/10" />
+              <div className="w-[36px] sm:w-[52px] h-[48px] sm:h-[70px] rounded-[4px] sm:rounded-[5px] border-2 border-dashed border-slate-300" />
             )}
           </button>
-          <span className="text-white/50 text-[10px] sm:text-xs">{game.stock.length}张</span>
+          <span className="text-slate-400 text-[10px] sm:text-xs">{game.stock.length}张</span>
         </div>
 
         <div className="flex gap-1 sm:gap-1.5">

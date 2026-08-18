@@ -4,8 +4,8 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import type { ClientPlugin } from '@/lib/categories';
 import TopBar from './TopBar';
 import AppCard from './AppCard';
+import MeiIcon from './MeiIcon';
 import { isSwitchable, isAppEnabled } from '@/lib/app-toggles';
-import 'iconify-icon';
 
 interface Item {
   plugin: ClientPlugin;
@@ -79,11 +79,14 @@ export default function PortalClient({ items }: { items: Item[] }) {
     );
   }, [resolvedItems, query]);
 
-  // 应用数量不多：不做分类，统一按名称排序平铺
+  // 应用数量不多：不做分类，统一按名称排序平铺；主页面板固定排在第一位
   const sorted = useMemo(() => {
-    return [...filtered].sort((a, b) =>
-      a.plugin.name.localeCompare(b.plugin.name, 'zh-Hans-CN')
-    );
+    return [...filtered].sort((a, b) => {
+      const aPanel = a.plugin.id === 'sun-panel' ? 0 : 1;
+      const bPanel = b.plugin.id === 'sun-panel' ? 0 : 1;
+      if (aPanel !== bPanel) return aPanel - bPanel;
+      return a.plugin.name.localeCompare(b.plugin.name, 'zh-Hans-CN');
+    });
   }, [filtered]);
 
   // Cmd/Ctrl+K 聚焦搜索
@@ -202,16 +205,17 @@ export default function PortalClient({ items }: { items: Item[] }) {
               alignItems: 'center',
             }}
           >
-            <iconify-icon
-              icon="lucide:search"
-              width="18"
+            <span
               style={{
                 position: 'absolute',
                 left: 18,
                 color: 'var(--mei-text-faint)',
                 pointerEvents: 'none',
+                display: 'inline-flex',
               }}
-            />
+            >
+              <MeiIcon icon="lucide:search" size={18} />
+            </span>
             <input
               ref={searchRef}
               value={query}

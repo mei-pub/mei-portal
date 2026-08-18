@@ -131,7 +131,7 @@ export function generateHtmlCardThumbnail(content: string, opts: CardOpts): stri
   <rect x="${400 - 20 - badgeWidth}" y="18" width="${badgeWidth}" height="22" rx="11" fill="${palette.badge}"/>
   <text x="${400 - 20 - badgeWidth / 2}" y="33" font-family="-apple-system,Segoe UI,sans-serif" font-size="11" font-weight="600" text-anchor="middle" fill="${palette.badgeText}">${badgeLabel}</text>
   ${lines.map((line, i) => `<text x="200" y="${startY + i * lineHeight}" font-family="-apple-system,Segoe UI,sans-serif" font-size="24" font-weight="700" text-anchor="middle" fill="${palette.text}">${escapeXml(line)}</text>`).join('\n  ')}
-  <text x="380" y="234" font-family="-apple-system,Segoe UI,sans-serif" font-size="10" text-anchor="end" fill="${palette.sub}">AI Draw</text>
+  <text x="380" y="234" font-family="-apple-system,Segoe UI,sans-serif" font-size="10" text-anchor="end" fill="${palette.sub}">Mei Draw</text>
 </svg>`
 
   const encoded = btoa(unescape(encodeURIComponent(svg)))

@@ -4,9 +4,9 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import TopBar from '@/components/TopBar';
 import IframeHost from '@/components/IframeHost';
+import MeiIcon from '@/components/MeiIcon';
 import { SETTING_GROUPS } from '@/lib/settings-entries';
 import { syncAppTokens } from '@/lib/token-sync';
-import 'iconify-icon';
 
 const ALL_ENTRIES = SETTING_GROUPS.flatMap((g) => g.entries.map((e) => e.id));
 const DEFAULT_ENTRY = ALL_ENTRIES[0];
@@ -76,7 +76,7 @@ export default function SettingsClient() {
               <div
                 className={`mei-settings-group-title${g.id === activeGroupId ? ' active' : ''}`}
               >
-                <iconify-icon icon={g.icon} width='16' />
+                <MeiIcon icon={g.icon} size={14} />
                 {g.label}
               </div>
               {g.entries.map((e) => (
@@ -85,7 +85,7 @@ export default function SettingsClient() {
                   onClick={() => pick(e.id)}
                   className={`mei-settings-item${e.id === activeId ? ' active' : ''}`}
                 >
-                  <iconify-icon icon={e.icon} width='16' />
+                  <MeiIcon icon={e.icon} size={15} />
                   {e.name}
                 </button>
               ))}
@@ -115,11 +115,16 @@ export default function SettingsClient() {
         .mei-settings-body{flex:1;display:flex;min-height:0;}
         .mei-settings-nav{width:220px;flex-shrink:0;padding:var(--mei-space-4);background:var(--mei-surface);backdrop-filter:blur(22px) saturate(1.5);-webkit-backdrop-filter:blur(22px) saturate(1.5);border-right:1px solid var(--mei-border);overflow-y:auto;}
         .mei-settings-group{margin-bottom:var(--mei-space-4);}
-        .mei-settings-group-title{display:flex;align-items:center;gap:8px;padding:6px 8px;font-size:11px;font-weight:700;letter-spacing:1.2px;color:var(--mei-text-faint);}
+        /* 分组标题：小号大写间距 + 底部细线，与入口按钮明显区分 */
+        .mei-settings-group-title{display:flex;align-items:center;gap:7px;padding:4px 8px 6px;font-size:10.5px;font-weight:800;letter-spacing:1.8px;text-transform:uppercase;color:var(--mei-text-faint);border-bottom:1px solid var(--mei-border);margin-bottom:6px;}
         .mei-settings-group-title.active{color:var(--mei-primary);}
-        .mei-settings-item{width:100%;display:flex;align-items:center;gap:8px;padding:8px 10px;background:transparent;border:1px solid transparent;border-radius:var(--mei-radius-sm);color:var(--mei-text);cursor:pointer;font-size:13px;text-align:left;transition:var(--mei-transition);}
+        /* 入口按钮：左侧强调条 + 主体字号，激活时渐变底 */
+        .mei-settings-item{position:relative;width:100%;display:flex;align-items:center;gap:9px;padding:8px 10px 8px 13px;background:transparent;border:none;border-radius:10px;color:var(--mei-text);cursor:pointer;font-size:13px;font-weight:550;text-align:left;transition:var(--mei-transition);}
+        .mei-settings-item::before{content:'';position:absolute;left:0;top:22%;bottom:22%;width:3px;border-radius:2px;background:transparent;transition:var(--mei-transition);}
         .mei-settings-item:hover{background:rgba(23,32,56,0.05);}
-        .mei-settings-item.active{background:var(--mei-gradient-soft);border-color:rgba(129,140,248,0.4);}
+        .mei-settings-item.active{background:var(--mei-gradient-soft);}
+        .mei-settings-item.active::before{background:var(--mei-gradient);}
+        .mei-settings-item.active{color:var(--mei-primary);}
         .mei-settings-main{flex:1;min-width:0;display:flex;flex-direction:column;padding:var(--mei-space-4);gap:var(--mei-space-3);}
         .mei-settings-content-head{display:flex;align-items:center;justify-content:space-between;flex-shrink:0;padding:0 4px;}
         .mei-settings-content-title{font-size:14px;font-weight:650;color:var(--mei-text);letter-spacing:0.3px;}

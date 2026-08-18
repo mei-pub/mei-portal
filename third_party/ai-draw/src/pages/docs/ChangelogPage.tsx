@@ -208,7 +208,7 @@ const CHANGELOG_DATA: ChangelogItem[] = [
     isLatest: false,
     content: {
       zh: `
-AI Draw 正式发布！带来全新的智能绘图体验。
+Mei Draw 正式发布！带来全新的智能绘图体验。
 
 #### ✨ 核心功能
 - 集成 **Mermaid**, **Excalidraw**, **Draw.io** 三大主流绘图引擎。
@@ -220,7 +220,7 @@ AI Draw 正式发布！带来全新的智能绘图体验。
 - 历史版本管理，支持随时回滚。
       `,
       en: `
-AI Draw is officially released! Bringing a brand new intelligent drawing experience.
+Mei Draw is officially released! Bringing a brand new intelligent drawing experience.
 
 #### ✨ Core Features
 - Integrated **Mermaid**, **Excalidraw**, **Draw.io** three mainstream drawing engines.

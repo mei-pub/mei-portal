@@ -1,0 +1,128 @@
+'use client';
+
+// mei-allin：左侧中段可折叠浮动小面板 —— 替代原固定侧栏
+// 收起时仅一个圆钮；展开显示 首页/搜索/电影/剧集/动漫 五个行动
+import Link from 'next/link';
+import { usePathname } from 'next/navigation';
+import { useState, type ReactNode } from 'react';
+
+interface NavItem {
+  label: string;
+  href: string;
+  icon: ReactNode;
+}
+
+const stroke = {
+  fill: 'none',
+  stroke: 'currentColor',
+  strokeWidth: 2,
+  strokeLinecap: 'round',
+  strokeLinejoin: 'round',
+} as const;
+
+const ITEMS: NavItem[] = [
+  {
+    label: '首页',
+    href: '/',
+    icon: (
+      <svg className='h-[18px] w-[18px]' viewBox='0 0 24 24' {...stroke}>
+        <path d='m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z' />
+        <path d='M9 22V12h6v10' />
+      </svg>
+    ),
+  },
+  {
+    label: '搜索',
+    href: '/search',
+    icon: (
+      <svg className='h-[18px] w-[18px]' viewBox='0 0 24 24' {...stroke}>
+        <circle cx='11' cy='11' r='8' />
+        <path d='m21 21-4.35-4.35' />
+      </svg>
+    ),
+  },
+  {
+    label: '电影',
+    href: '/douban?type=movie',
+    icon: (
+      <svg className='h-[18px] w-[18px]' viewBox='0 0 24 24' {...stroke}>
+        <rect width='18' height='18' x='3' y='3' rx='2' />
+        <path d='M7 3v18M3 7.5h4M3 12h18M3 16.5h4M17 3v18M17 7.5h4M17 16.5h4' />
+      </svg>
+    ),
+  },
+  {
+    label: '剧集',
+    href: '/douban?type=tv',
+    icon: (
+      <svg className='h-[18px] w-[18px]' viewBox='0 0 24 24' {...stroke}>
+        <rect width='20' height='15' x='2' y='7' rx='2' />
+        <path d='m17 2-5 5-5-5' />
+      </svg>
+    ),
+  },
+  {
+    label: '动漫',
+    href: '/douban?type=anime',
+    icon: (
+      <svg className='h-[18px] w-[18px]' viewBox='0 0 24 24' {...stroke}>
+        <path d='M12 2c5.5 0 10 3.6 10 8s-4.5 8-10 8c-1 0-2-.1-2.9-.35L5 20l.5-3.2C3.3 15.3 2 12.8 2 10c0-4.4 4.5-8 10-8z' />
+        <path d='M8.5 10.5h.01M15.5 10.5h.01M12 13.5h.01' />
+      </svg>
+    ),
+  },
+];
+
+export default function FloatingNav({ activePath }: { activePath?: string }) {
+  const [open, setOpen] = useState(false);
+  const pathname = usePathname();
+  const current = activePath ?? pathname;
+
+  return (
+    <div className='fixed left-3 top-1/2 z-40 hidden -translate-y-1/2 md:flex md:flex-col md:items-center md:gap-1 md:rounded-2xl md:border md:border-black/10 md:bg-white/75 md:p-1.5 md:shadow-lg md:backdrop-blur-xl dark:border-white/10 dark:bg-gray-900/70'>
+      {!open ? (
+        <button
+          onClick={() => setOpen(true)}
+          title='展开导航'
+          className='flex h-10 w-10 items-center justify-center rounded-xl text-gray-500 transition-colors hover:bg-gray-900/5 hover:text-green-600 dark:text-gray-400 dark:hover:bg-white/10'
+        >
+          <svg className='h-5 w-5' viewBox='0 0 24 24' {...stroke}>
+            <path d='M3 7h18M3 12h18M3 17h18' />
+          </svg>
+        </button>
+      ) : (
+        <>
+          {ITEMS.map((item) => {
+            const isActive =
+              item.href === '/' ? current === '/' : current.startsWith(item.href.split('?')[0]);
+            return (
+              <Link
+                key={item.label}
+                href={item.href}
+                title={item.label}
+                onClick={() => setOpen(false)}
+                className={`flex h-11 w-11 flex-col items-center justify-center rounded-xl transition-colors ${
+                  isActive
+                    ? 'bg-green-600/10 text-green-600'
+                    : 'text-gray-500 hover:bg-gray-900/5 hover:text-green-600 dark:text-gray-400 dark:hover:bg-white/10'
+                }`}
+              >
+                {item.icon}
+                <span className='mt-0.5 text-[9px] leading-none'>{item.label}</span>
+              </Link>
+            );
+          })}
+          <button
+            onClick={() => setOpen(false)}
+            title='收起'
+            className='flex h-8 w-11 items-center justify-center rounded-xl text-gray-400 transition-colors hover:bg-gray-900/5 dark:hover:bg-white/10'
+          >
+            <svg className='h-4 w-4' viewBox='0 0 24 24' {...stroke}>
+              <path d='m15 18-6-6 6-6' />
+            </svg>
+          </button>
+        </>
+      )}
+    </div>
+  );
+}

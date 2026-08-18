@@ -82,7 +82,7 @@
       '[class*="Navbar"][class*="fixed"],[class*="navbar"][class*="fixed"],',
       '[class*="Sidebar"][class*="fixed"],[class*="sidebar"][class*="fixed"],',
       '[class*="header"][class*="fixed"],[class*="Header"][class*="fixed"]{top:74px!important;}',
-      'body{padding-top:74px!important;}',
+      'body{padding-top:74px!important;--mei-topbar-space:74px;}',
       '#mei-topbar *{box-sizing:border-box;}',
       '#mei-topbar a{color:inherit;text-decoration:none;}',
       /* Toast/notification 容器下移 */
@@ -173,12 +173,16 @@
       spacer.className = 'mei-spacer';
       bar.appendChild(spacer);
 
-      // 设置齿轮下拉
+      // 设置齿轮下拉（内联 SVG，不依赖 emoji/CDN）
+      var GEAR_SVG = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>';
       var gearWrap = document.createElement('div');
       gearWrap.className = 'mei-gear-wrap';
       var gear = document.createElement('button');
       gear.className = 'mei-gear';
-      gear.textContent = '⚙️';
+      gear.innerHTML = GEAR_SVG;
+      gear.style.display = 'inline-flex';
+      gear.style.alignItems = 'center';
+      gear.style.justifyContent = 'center';
       gear.title = '设置';
       var menu = document.createElement('div');
       menu.className = 'mei-menu';
@@ -264,7 +268,7 @@
       var settings = document.createElement('a');
       settings.className = 'mei-menu-link';
       settings.href = '/settings';
-      settings.textContent = '⚙️ 设置集成页';
+      settings.innerHTML = GEAR_SVG.replace('width="16" height="16"', 'width="15" height="15"') + '<span style="margin-left:8px;">设置集成页</span>';
       menu.appendChild(settings);
 
       gearWrap.appendChild(gear);

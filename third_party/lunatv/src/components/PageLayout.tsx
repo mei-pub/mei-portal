@@ -1,7 +1,7 @@
 import { BackButton } from './BackButton';
+import FloatingNav from './FloatingNav';
 import MobileBottomNav from './MobileBottomNav';
 import MobileHeader from './MobileHeader';
-import Sidebar from './Sidebar';
 
 interface PageLayoutProps {
   children: React.ReactNode;
@@ -14,12 +14,10 @@ const PageLayout = ({ children, activePath = '/' }: PageLayoutProps) => {
       {/* 移动端头部 */}
       <MobileHeader showBackButton={['/play', '/live'].includes(activePath)} />
 
-      {/* 主要布局容器 */}
-      <div className='flex md:grid md:grid-cols-[auto_1fr] w-full min-h-screen md:min-h-auto'>
-        {/* 侧边栏 - 桌面端显示，移动端隐藏 */}
-        <div className='hidden md:block'>
-          <Sidebar activePath={activePath} />
-        </div>
+      {/* 主要布局容器（原固定侧栏已改为左侧浮动小面板 FloatingNav） */}
+      <div className='flex w-full min-h-screen md:min-h-auto'>
+        {/* 浮动导航面板 - 桌面端 */}
+        <FloatingNav activePath={activePath} />
 
         {/* 主内容区域 */}
         <div className='relative min-w-0 flex-1 transition-all duration-300'>

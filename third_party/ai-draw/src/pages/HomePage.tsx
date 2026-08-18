@@ -418,7 +418,7 @@ export function HomePage() {
       <AppSidebar onCreateProject={() => setIsCreateDialogOpen(true)} />
 
       {/* Main Content */}
-      <main className="flex flex-1 flex-col pl-[72px] overflow-x-hidden">
+      <main className="flex flex-1 flex-col overflow-x-hidden">
         {/* Header */}
         <AppHeader />
 
@@ -456,7 +456,7 @@ export function HomePage() {
           {/* Logo & Slogan */}
           <div className="mb-12 flex flex-col items-center">
             <div className="mb-6 flex items-center gap-3 text-4xl font-bold text-primary sm:text-5xl">
-              <span>AI Draw</span>
+              <span>Mei Draw</span>
               <div className="flex h-12 w-12 items-center justify-center rounded-full shadow-sm" style={{ backgroundColor: logoColor }}>
                 <Logo className="h-7 w-7" style={{ color: 'white' }} />
               </div>

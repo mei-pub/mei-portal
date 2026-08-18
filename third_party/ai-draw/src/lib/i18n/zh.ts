@@ -41,7 +41,7 @@ export const zh = {
     import: '导入文件',
   },
   home: {
-    title: 'AI Draw',
+    title: 'Mei Draw',
     subtitle: 'AI 驱动的图表生成工具',
     startDrawing: '开始绘图',
     recentProjects: '最近的项目',

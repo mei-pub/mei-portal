@@ -1315,9 +1315,8 @@ onUnmounted(() => {
   position: fixed;
   inset: 0;
   z-index: -10;
-  background-image: radial-gradient(circle at 1px 1px, hsl(var(--muted-foreground)) 1px, transparent 0);
-  background-size: 20px 20px;
-  opacity: 0.1;
+  background: hsl(var(--background));
+  opacity: 1;
 }
 
 /* 页面切换动画 */

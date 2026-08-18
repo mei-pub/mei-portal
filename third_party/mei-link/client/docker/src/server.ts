@@ -73,11 +73,11 @@ export async function createMeilinkServer(options: MeilinkServerOptions = {}): P
       if (url.pathname === "/") return sendFile(response, webDir, "index.html", "text/html; charset=utf-8");
       if (url.pathname === "/app.js") return sendFile(response, webDir, "app.js", "text/javascript; charset=utf-8");
       if (url.pathname === "/api/logout" && request.method === "POST") {
-        auth.logout(request.headers.cookie);
+        await auth.logout(request.headers.cookie);
         response.setHeader("set-cookie", "meilink_session=; Max-Age=0; Path=/");
         return json(response, 200, { ok: true });
       }
-      if (!auth.valid(request.headers.cookie)) return json(response, 401, { error: "请先登录" });
+      if (!(await auth.valid(request.headers.cookie))) return json(response, 401, { error: "请先登录" });
       if (url.pathname === "/api/status" && request.method === "GET") {
         await manager.refreshRuntime();
         return json(response, 200, manager.status());
