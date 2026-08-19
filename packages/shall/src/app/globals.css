@@ -189,6 +189,18 @@ body {
   color: var(--mei-text-muted);
 }
 
+/* ===== 图标模式（紧凑图标网格，Sun-Panel iconStyle=icon）===== */
+.mei-card-grid[data-mode='icon'] { grid-template-columns: repeat(8, 1fr); gap: var(--mei-space-2); }
+.mei-app-card[data-mode='icon'] {
+  align-items: center;
+  min-height: 104px !important;
+  padding: 12px 8px 10px !important;
+}
+.mei-app-card[data-mode='icon'] .mei-icon-tile {
+  width: 48px; height: 48px; border-radius: 15px;
+}
+.mei-app-card[data-mode='icon'] .mei-icon-tile svg { width: 24px; height: 24px; }
+
 /* ===== 响应式 ===== */
 @media (min-width: 1281px) {
   .mei-card-grid { grid-template-columns: repeat(5, 1fr); }
@@ -198,10 +210,14 @@ body {
 }
 @media (min-width: 769px) and (max-width: 1024px) {
   .mei-card-grid { grid-template-columns: repeat(3, 1fr); }
+  .mei-card-grid[data-mode='icon'] { grid-template-columns: repeat(6, 1fr); }
 }
 @media (max-width: 768px) {
   .mei-card-grid { grid-template-columns: repeat(2, 1fr); gap: var(--mei-space-2); }
+  .mei-card-grid[data-mode='icon'] { grid-template-columns: repeat(4, 1fr); }
   .mei-app-card { min-height: 112px !important; padding: var(--mei-space-3) !important; }
+  .mei-app-card[data-mode='icon'] { min-height: 92px !important; padding: 8px 4px !important; }
+  .mei-app-card[data-mode='icon'] .mei-icon-tile { width: 40px; height: 40px; }
 }
 
 /* ===== 滚动条 ===== */

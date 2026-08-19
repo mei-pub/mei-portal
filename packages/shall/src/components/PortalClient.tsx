@@ -9,6 +9,7 @@ import MeiIcon from './MeiIcon';
 import { isSwitchable, isAppEnabled } from '@/lib/app-toggles';
 import { useHealth } from '@/lib/use-health';
 import type { PanelConfig, PanelItem } from '@/lib/panel-store';
+import ItemIconPicker, { isImgIcon, isTextIcon, textIconContent } from './ItemIconPicker';
 
 interface Item {
   plugin: ClientPlugin;
@@ -36,15 +37,12 @@ function hashGradient(id: string): string {
   for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) >>> 0;
   return GRADIENTS[h % GRADIENTS.length];
 }
-function isImg(src: string): boolean {
-  return /^https?:\/\//.test(src) || src.startsWith('data:image/');
-}
 
 type HealthMap = Record<string, { ok: boolean; ms: number; loading: boolean }>;
 
 /* ============ 统一图标卡片 ============ */
 function UnifiedCard({
-  item, lanMode, health, disabled, editMode,
+  item, lanMode, health, disabled, editMode, iconMode,
   onEdit, onDelete, onContext, onDragStart, onDragOver, onDrop, isDragging,
 }: {
   item: PanelItem;
@@ -52,6 +50,7 @@ function UnifiedCard({
   health?: { ok: boolean; ms: number; loading: boolean };
   disabled?: boolean;
   editMode: boolean;
+  iconMode?: boolean;
   onEdit: () => void;
   onDelete: () => void;
   onContext: (e: React.MouseEvent) => void;
@@ -69,10 +68,12 @@ function UnifiedCard({
     : health.ok
     ? { color: 'var(--mei-success)' }
     : { color: 'var(--mei-danger)' };
-  const tileBg = item.builtin ? hashGradient(item.builtin) : 'linear-gradient(135deg,#64748b,#334155)';
-  const iconNode = isImg(item.icon) ? (
+  const tileBg = item.iconColor || (item.builtin ? hashGradient(item.builtin) : 'linear-gradient(135deg,#64748b,#334155)');
+  const iconNode = isImgIcon(item.icon) ? (
     // eslint-disable-next-line @next/next/no-img-element
     <img src={item.icon} alt={item.title} style={{ width: 22, height: 22, objectFit: 'contain' }} />
+  ) : isTextIcon(item.icon) ? (
+    <span style={{ fontSize: 20, fontWeight: 750 }}>{textIconContent(item.icon, item.title)}</span>
   ) : (
     <MeiIcon icon={item.icon || 'lucide:link'} size={22} />
   );
@@ -87,6 +88,7 @@ function UnifiedCard({
       <button
         className="mei-app-card"
         data-disabled={disabled ? 'true' : undefined}
+        data-mode={iconMode ? 'icon' : undefined}
         type="button"
         onClick={() => { if (!editMode && !disabled) window.open(href, external ? '_blank' : '_self'); }}
         onContextMenu={onContext}
@@ -113,15 +115,17 @@ function UnifiedCard({
           </span>
         )}
         <div className="mei-icon-tile" style={{ background: tileBg }}>{iconNode}</div>
-        <div style={{ fontWeight: 650, fontSize: 14, lineHeight: 1.3, letterSpacing: 0.2 }}>{item.title}</div>
-        {item.description && (
+        <div style={{ fontWeight: 650, fontSize: iconMode ? 11.5 : 14, lineHeight: 1.3, letterSpacing: 0.2, width: '100%', textAlign: iconMode ? 'center' : 'left', overflow: iconMode ? 'hidden' : undefined, textOverflow: iconMode ? 'ellipsis' : undefined, whiteSpace: iconMode ? 'nowrap' : undefined }}>{item.title}</div>
+        {!iconMode && item.description && (
           <div style={{ color: 'var(--mei-text-muted)', fontSize: 12, lineHeight: 1.45, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
             {item.description}
           </div>
         )}
-        <span style={{ marginTop: 'auto', paddingTop: 6, fontSize: 10.5, letterSpacing: 0.6, color: 'var(--mei-text-faint)', opacity: 0.85, maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-          {item.builtin ? (item.builtin.startsWith('tutorial-') ? '/novels' : `/${item.builtin.split('-')[0]}`) : href.replace(/^https?:\/\//, '').split('/')[0]}
-        </span>
+        {!iconMode && (
+          <span style={{ marginTop: 'auto', paddingTop: 6, fontSize: 10.5, letterSpacing: 0.6, color: 'var(--mei-text-faint)', opacity: 0.85, maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {item.builtin ? (item.builtin.startsWith('tutorial-') ? '/novels' : `/${item.builtin.split('-')[0]}`) : href.replace(/^https?:\/\//, '').split('/')[0]}
+          </span>
+        )}
       </button>
     </div>
   );
@@ -143,12 +147,6 @@ function ItemFormModal({
     color: 'var(--mei-text)', background: '#fff',
   };
   const label: React.CSSProperties = { display: 'block', fontSize: 12, fontWeight: 600, color: 'var(--mei-text-muted)', margin: '10px 0 4px' };
-  const readImg = (file: File, cb: (d: string) => void) => {
-    if (file.size > 30 * 1024 * 1024) { alert('图片过大（>30MB）'); return; }
-    const r = new FileReader();
-    r.onload = () => cb(String(r.result));
-    r.readAsDataURL(file);
-  };
   return (
     <div
       style={{ position: 'fixed', inset: 0, zIndex: 1000, background: 'rgba(10,14,26,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
@@ -172,20 +170,14 @@ function ItemFormModal({
           <option value="">常用（未分组）</option>
           {groups.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}
         </select>
-        <label style={label}>图标（lucide 名称或图片）</label>
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-          <input style={{ ...input, flex: 1 }} value={isImg(form.icon) ? '' : form.icon} onChange={(e) => setForm({ ...form, icon: e.target.value })} placeholder="lucide:github" />
-          <label style={{ padding: '8px 12px', borderRadius: 10, border: '1px solid var(--mei-border-strong)', fontSize: 12, cursor: 'pointer', whiteSpace: 'nowrap' }}>
-            上传
-            <input type="file" accept="image/*" hidden onChange={(e) => { const f = e.target.files?.[0]; if (f) readImg(f, (d) => setForm({ ...form, icon: d })); }} />
-          </label>
-          <span style={{ display: 'inline-flex', color: 'var(--mei-text-muted)' }}>
-            {isImg(form.icon)
-              // eslint-disable-next-line @next/next/no-img-element
-              ? <img src={form.icon} alt="" style={{ width: 22, height: 22, objectFit: 'contain' }} />
-              : <MeiIcon icon={form.icon || 'lucide:link'} size={20} />}
-          </span>
-        </div>
+        <label style={label}>图标（图标库 / 文字 / 图片，含底色）</label>
+        <ItemIconPicker
+          icon={form.icon}
+          iconColor={form.iconColor || ''}
+          title={form.title}
+          onIcon={(icon) => setForm({ ...form, icon })}
+          onColor={(c) => setForm({ ...form, iconColor: c })}
+        />
         <div style={{ display: 'flex', gap: 8, marginTop: 16 }}>
           <button onClick={onClose} style={{ flex: 1, padding: 10, borderRadius: 12, border: '1px solid var(--mei-border-strong)', background: 'transparent', color: 'var(--mei-text-muted)', fontSize: 13, cursor: 'pointer' }}>取消</button>
           <button
@@ -354,6 +346,7 @@ export default function PortalClient({ items, panel: initialPanel }: { items: It
   const maxW = style?.maxWidth || 1180;
   const textColor = style?.iconTextColor || undefined;
 
+  const iconMode = style?.iconStyle === 'icon';
   const renderCard = (item: PanelItem) => (
     <UnifiedCard
       key={item.id}
@@ -362,6 +355,7 @@ export default function PortalClient({ items, panel: initialPanel }: { items: It
       health={healthOf(item)}
       disabled={isSwitchedOff(item)}
       editMode={editMode}
+      iconMode={iconMode}
       isDragging={dragId === item.id}
       onEdit={() => setEditing(item)}
       onDelete={() => deleteItem(item)}
@@ -470,11 +464,11 @@ export default function PortalClient({ items, panel: initialPanel }: { items: It
             <span style={{ fontSize: 12, letterSpacing: 2, color: 'var(--mei-text-faint)' }}>常用 · {ungrouped.length}</span>
             {lanMode && <span style={{ fontSize: 11, color: 'var(--mei-primary)' }}>内网模式</span>}
           </div>
-          <div className="mei-card-grid">
+          <div className="mei-card-grid" data-mode={iconMode ? 'icon' : 'card'}>
             {ungrouped.map(renderCard)}
             {editMode && (
               <button
-                onClick={() => setEditing({ id: '', groupId: '', title: '', description: '', url: '', lanUrl: '', icon: 'lucide:link' })}
+                onClick={() => setEditing({ id: '', groupId: '', title: '', description: '', url: '', lanUrl: '', icon: 'lucide:link', iconColor: '' })}
                 style={{
                   minHeight: 132, borderRadius: 'var(--mei-radius)', border: '2px dashed var(--mei-border-strong)',
                   background: 'transparent', cursor: 'pointer', display: 'flex', flexDirection: 'column',
@@ -500,14 +494,14 @@ export default function PortalClient({ items, panel: initialPanel }: { items: It
               <span style={{ fontSize: 12, letterSpacing: 2, color: 'var(--mei-text-faint)' }}>{group.name} · {list.length}</span>
               {editMode && (
                 <button
-                  onClick={() => setEditing({ id: '', groupId: group.id, title: '', description: '', url: '', lanUrl: '', icon: 'lucide:link' })}
+                  onClick={() => setEditing({ id: '', groupId: group.id, title: '', description: '', url: '', lanUrl: '', icon: 'lucide:link', iconColor: '' })}
                   style={{ border: 'none', background: 'transparent', color: 'var(--mei-primary)', fontSize: 11, cursor: 'pointer' }}
                 >
                   + 添加
                 </button>
               )}
             </div>
-            <div className="mei-card-grid">
+            <div className="mei-card-grid" data-mode={iconMode ? 'icon' : 'card'}>
               {list.map(renderCard)}
             </div>
           </section>

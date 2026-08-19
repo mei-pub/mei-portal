@@ -40,7 +40,8 @@ export interface PanelItem {
   description: string;
   url: string;
   lanUrl: string; // 内网地址（内网模式优先）
-  icon: string; // lucide:xxx 或 http(s)/data:image（图片）
+  icon: string; // lucide:xxx | text:xxx（文字图标）| http(s)/data:image（图片）
+  iconColor: string; // 图标块底色（空 = 默认渐变/灰蓝）
   builtin?: string; // 关联的插件 id（内置应用物化；保留健康检查/开关关联）
 }
 
@@ -128,6 +129,7 @@ export function normalizeConfig(raw: unknown): PanelConfig {
         url: str(i.url, 40 * 1024 * 1024),
         lanUrl: str(i.lanUrl, 40 * 1024 * 1024),
         icon: str(i.icon, 40 * 1024 * 1024, 'lucide:link'),
+        iconColor: /^#[0-9a-fA-F]{3,8}$/.test(String(i.iconColor)) ? String(i.iconColor) : '',
         ...(i.builtin ? { builtin: str(i.builtin, 60) } : {}),
       })),
     removedBuiltin: (Array.isArray(r.removedBuiltin) ? r.removedBuiltin : [])
@@ -166,6 +168,7 @@ export function syncBuiltinItems(
       url: p.url,
       lanUrl: '',
       icon: p.icon,
+      iconColor: '',
       builtin: p.id,
     });
     changed = true;

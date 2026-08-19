@@ -3,6 +3,7 @@
 // 分区：风格设置（背景/Logo/时钟/搜索/图标样式/边距/页脚/监控）/ 分组管理 / 图标项管理（图标上传/拖拽排序/双地址）/ 导入导出
 import { useCallback, useEffect, useRef, useState } from 'react';
 import MeiIcon from '@/components/MeiIcon';
+import ItemIconPicker, { isImgIcon } from '@/components/ItemIconPicker';
 import type { PanelConfig, PanelItem, PanelGroup } from '@/lib/panel-store';
 
 type Tab = 'style' | 'groups' | 'items' | 'backup';
@@ -203,7 +204,8 @@ function StyleTab({ config, setConfig }: { config: PanelConfig; setConfig: (c: P
           <div>
             <label style={label}>卡片样式</label>
             <select style={input} value={config.style.iconStyle} onChange={(e) => setStyle({ iconStyle: e.target.value as 'icon' | 'info' })}>
-              <option value="info">详情（图标+标题+描述）</option>
+              <option value="info">卡片模式（图标+标题+描述）</option>
+              <option value="icon">图标模式（紧凑图标网格）</option>
             </select>
           </div>
           <div>
@@ -346,7 +348,7 @@ function ItemsTab({ config, setConfig }: { config: PanelConfig; setConfig: (c: P
     <section style={{ background: 'var(--mei-surface)', border: '1px solid var(--mei-border)', borderRadius: 'var(--mei-radius)', padding: 16 }}>
       <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}>
         <button
-          onClick={() => setEditing({ id: '', groupId: '', title: '', description: '', url: '', lanUrl: '', icon: 'lucide:link' })}
+          onClick={() => setEditing({ id: '', groupId: '', title: '', description: '', url: '', lanUrl: '', icon: 'lucide:link', iconColor: '' })}
           style={{ padding: '6px 16px', borderRadius: 'var(--mei-radius-full)', border: '1px solid var(--mei-primary)', background: 'transparent', color: 'var(--mei-primary)', fontSize: 13, cursor: 'pointer' }}
         >
           + 添加图标项
@@ -367,18 +369,15 @@ function ItemsTab({ config, setConfig }: { config: PanelConfig; setConfig: (c: P
             <input style={input} placeholder="地址（https://… 或 /path，必填）" value={editing.url} onChange={(e) => setEditing({ ...editing, url: e.target.value })} />
             <input style={input} placeholder="内网地址（可选，内网模式优先）" value={editing.lanUrl} onChange={(e) => setEditing({ ...editing, lanUrl: e.target.value })} />
           </div>
-          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-            <input style={{ ...input, flex: 1 }} placeholder="图标（lucide:github 等）或图片地址" value={isImg(editing.icon) ? '' : editing.icon} onChange={(e) => setEditing({ ...editing, icon: e.target.value })} />
-            <label style={{ padding: '8px 12px', borderRadius: 10, border: '1px solid var(--mei-border-strong)', fontSize: 12, cursor: 'pointer', whiteSpace: 'nowrap' }}>
-              上传图标
-              <input type="file" accept="image/*" hidden onChange={(e) => { const f = e.target.files?.[0]; if (f) readImageFile(f, (d) => setEditing({ ...editing, icon: d })); }} />
-            </label>
-            <span style={{ display: 'inline-flex', alignItems: 'center', color: 'var(--mei-text-muted)' }}>
-              {isImg(editing.icon)
-                // eslint-disable-next-line @next/next/no-img-element
-                ? <img src={editing.icon} alt="icon" style={{ width: 22, height: 22, objectFit: 'contain' }} />
-                : <MeiIcon icon={editing.icon || 'lucide:link'} size={20} />}
-            </span>
+          <div>
+            <label style={{ display: 'block', fontSize: 12, color: 'var(--mei-text-muted)', marginBottom: 4 }}>图标（图标库 / 文字 / 图片，含底色）</label>
+            <ItemIconPicker
+              icon={editing.icon}
+              iconColor={editing.iconColor || ''}
+              title={editing.title}
+              onIcon={(icon) => setEditing({ ...editing, icon })}
+              onColor={(c) => setEditing({ ...editing, iconColor: c })}
+            />
           </div>
           <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
             <button onClick={() => setEditing(null)} style={{ padding: '7px 16px', borderRadius: 10, border: '1px solid var(--mei-border)', background: 'transparent', fontSize: 13, cursor: 'pointer' }}>取消</button>
