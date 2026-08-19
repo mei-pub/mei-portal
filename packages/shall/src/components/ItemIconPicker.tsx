@@ -62,6 +62,7 @@ export default function ItemIconPicker({
   // 在线 iconify 搜索
   const [onlineQuery, setOnlineQuery] = useState('');
   const [onlineIcons, setOnlineIcons] = useState<string[]>([]);
+  const [onlineCollections, setOnlineCollections] = useState<Record<string, { name?: string }>>({});
   const [onlineLoading, setOnlineLoading] = useState(false);
   const [onlineError, setOnlineError] = useState('');
 
@@ -71,13 +72,15 @@ export default function ItemIconPicker({
     setOnlineLoading(true);
     setOnlineError('');
     try {
-      const res = await fetch(`https://api.iconify.design/search?query=${encodeURIComponent(query)}&limit=48`);
+      const res = await fetch(`https://api.iconify.design/search?query=${encodeURIComponent(query)}&limit=60`);
       const data = await res.json();
       setOnlineIcons(Array.isArray(data.icons) ? data.icons : []);
+      setOnlineCollections(data.collections || {});
       if (!data.icons || data.icons.length === 0) setOnlineError('无匹配图标');
     } catch {
       setOnlineError('搜索失败（需外网访问 api.iconify.design）');
       setOnlineIcons([]);
+      setOnlineCollections({});
     } finally {
       setOnlineLoading(false);
     }
@@ -192,28 +195,49 @@ export default function ItemIconPicker({
           </div>
           {(onlineLoading || onlineIcons.length > 0 || onlineError) && (
             <div style={{
-              maxHeight: 180, overflowY: 'auto', display: 'grid', gridTemplateColumns: 'repeat(10, 1fr)',
-              gap: 4, padding: 4, border: '1px solid var(--mei-border)', borderRadius: 10, marginBottom: 8,
+              maxHeight: 260, overflowY: 'auto', display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)',
+              gap: 6, padding: 6, border: '1px solid var(--mei-border)', borderRadius: 10, marginBottom: 8,
             }}>
-              {onlineLoading && <span style={{ gridColumn: '1/-1', textAlign: 'center', fontSize: 12, color: 'var(--mei-text-faint)', padding: 12 }}>搜索中…</span>}
-              {onlineError && !onlineLoading && <span style={{ gridColumn: '1/-1', textAlign: 'center', fontSize: 12, color: 'var(--mei-text-faint)', padding: 12 }}>{onlineError}</span>}
-              {!onlineLoading && onlineIcons.map((name) => (
-                <button
-                  key={name}
-                  title={name}
-                  onClick={() => onIcon(name)}
-                  style={{
-                    aspectRatio: '1', borderRadius: 8, cursor: 'pointer', display: 'flex',
-                    alignItems: 'center', justifyContent: 'center',
-                    border: icon === name ? '2px solid var(--mei-primary)' : '1px solid transparent',
-                    background: icon === name ? 'var(--mei-gradient-soft)' : 'transparent',
-                    color: icon === name ? 'var(--mei-primary)' : 'var(--mei-text-muted)',
-                    padding: 0,
-                  }}
-                >
-                  <iconify-icon icon={name} width="17" height="17" />
-                </button>
-              ))}
+              {onlineLoading && <span style={{ gridColumn: '1/-1', textAlign: 'center', fontSize: 12, color: 'var(--mei-text-faint)', padding: 16 }}>搜索中…</span>}
+              {onlineError && !onlineLoading && <span style={{ gridColumn: '1/-1', textAlign: 'center', fontSize: 12, color: 'var(--mei-text-faint)', padding: 16 }}>{onlineError}</span>}
+              {!onlineLoading && onlineIcons.map((name) => {
+                const colonIdx = name.indexOf(':');
+                const prefix = colonIdx > 0 ? name.slice(0, colonIdx) : '';
+                const iconName = colonIdx > 0 ? name.slice(colonIdx + 1) : name;
+                const collectionName = onlineCollections[prefix]?.name || prefix;
+                const selected = icon === name;
+                return (
+                  <button
+                    key={name}
+                    title={`${collectionName} · ${iconName}（${name}）`}
+                    onClick={() => onIcon(name)}
+                    style={{
+                      borderRadius: 10, cursor: 'pointer', display: 'flex', flexDirection: 'column',
+                      alignItems: 'center', justifyContent: 'center', gap: 3, padding: '10px 6px 8px',
+                      border: selected ? '2px solid var(--mei-primary)' : '1px solid var(--mei-border)',
+                      background: selected ? 'var(--mei-gradient-soft)' : 'rgba(255,255,255,0.5)',
+                      color: selected ? 'var(--mei-primary)' : 'var(--mei-text-muted)',
+                      transition: 'var(--mei-transition)',
+                    }}
+                  >
+                    <iconify-icon icon={name} width="24" height="24" style={{ flexShrink: 0 }} />
+                    <span style={{
+                      fontSize: 11, fontWeight: 600, maxWidth: '100%',
+                      overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                      color: 'var(--mei-text)',
+                    }}>
+                      {iconName}
+                    </span>
+                    <span style={{
+                      fontSize: 9.5, maxWidth: '100%',
+                      overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                      color: 'var(--mei-text-faint)',
+                    }}>
+                      {collectionName}
+                    </span>
+                  </button>
+                );
+              })}
             </div>
           )}
           <input
