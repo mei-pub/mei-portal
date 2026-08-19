@@ -223,6 +223,13 @@ function ItemFormModal({
 /* ============ 主页 ============ */
 export default function PortalClient({ items, panel: initialPanel }: { items: Item[]; panel: PanelConfig }) {
   const [panel, setPanel] = useState(initialPanel);
+  // 客户端同步配置（确保 hydration 后背景图等 SSR 无法传递的字段生效）
+  useEffect(() => {
+    fetch('/api/panel', { credentials: 'include' })
+      .then(r => r.json())
+      .then(cfg => { if (cfg?.background?.url) setPanel(cfg); })
+      .catch(() => {});
+  }, []);
   const [query, setQuery] = useState('');
   const searchRef = useRef<HTMLInputElement>(null);
   const [now, setNow] = useState<Date | null>(null);

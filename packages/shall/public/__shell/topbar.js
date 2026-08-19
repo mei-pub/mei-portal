@@ -163,10 +163,10 @@
         if (/^tutorial-/.test(p.id)) return; // 书架实例统一由下方聚合入口渲染
         var isActive = p.id === APP_ID;
         var b = document.createElement('a');
-        b.className = 'mei-btn' + (isActive ? ' active' : '') + (isAppOn(p.id) ? '' : ' off');
+        b.className = 'mei-btn' + (isActive ? ' active' : '');
         b.href = p.url;
         b.textContent = p.name;
-        b.title = p.name + (isAppOn(p.id) ? '' : '（已关闭）');
+        b.title = p.name;
         apps.appendChild(b);
       });
       if (libEntries.length === 1) {
@@ -252,55 +252,6 @@
           gear.classList.remove('open');
         }
       });
-
-      // 应用开关
-      var title = document.createElement('div');
-      title.className = 'mei-menu-title';
-      title.textContent = '应用开关';
-      menu.appendChild(title);
-      SWITCHABLE.forEach(function (pair) {
-        var id = pair[0], name = pair[1], desc = pair[2] || '';
-        var row = document.createElement('button');
-        row.className = 'mei-switch' + (isAppOn(id) ? '' : ' off');
-        row.dataset.app = id;
-        row.style.flexDirection = 'column';
-        row.style.alignItems = 'flex-start';
-        row.style.gap = '2px';
-        var label = document.createElement('span');
-        label.className = 'mei-switch-label';
-        label.style.width = '100%';
-        label.style.display = 'flex';
-        label.style.alignItems = 'center';
-        label.textContent = name;
-        var track = document.createElement('span');
-        track.className = 'mei-track' + (isAppOn(id) ? ' on' : '');
-        track.style.marginLeft = 'auto';
-        track.innerHTML = '<span class="mei-knob"></span>';
-        label.appendChild(track);
-        row.appendChild(label);
-        if (desc) {
-          var descEl = document.createElement('span');
-          descEl.style.cssText = 'font-size:10.5px;color:#9aa3b8;line-height:1.3;text-align:left;';
-          descEl.textContent = desc;
-          row.appendChild(descEl);
-        }
-        row.onclick = function (e) {
-          e.stopPropagation();
-          var next = !isAppOn(id);
-          setAppOn(id, next);
-          row.classList.toggle('off', !next);
-          track.classList.toggle('on', next);
-        };
-        menu.appendChild(row);
-      });
-
-      var sep = document.createElement('div');
-      sep.className = 'mei-menu-sep';
-      menu.appendChild(sep);
-
-      var sep2 = document.createElement('div');
-      sep2.className = 'mei-menu-sep';
-      menu.appendChild(sep2);
 
       // 集成开关：主页内网模式
       var lanRow = document.createElement('button');

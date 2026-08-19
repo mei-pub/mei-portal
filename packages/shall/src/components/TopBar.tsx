@@ -2,7 +2,6 @@
 // Shell 顶栏：品牌 + 搜索 + 开关集成设置齿轮下拉
 // transparent 模式用于首页（浮于极光背景之上，无底色边框）
 import { useEffect, useRef, useState } from 'react';
-import AppToggles from './AppToggles';
 import MeiIcon from './MeiIcon';
 import PanelNetModeToggle from './PanelNetModeToggle';
 
@@ -27,6 +26,8 @@ export default function TopBar({
   const [pwHint, setPwHint] = useState('');
   const [pwBusy, setPwBusy] = useState(false);
   const [logoutConfirm, setLogoutConfirm] = useState(false);
+  const [bgMask, setBgMask] = useState(0.35);
+  const [bgBlur, setBgBlur] = useState(0);
   const menuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -53,6 +54,62 @@ export default function TopBar({
       document.removeEventListener('keydown', onKey);
     };
   }, []);
+
+  // 加载面板背景配置
+  useEffect(() => {
+    fetch('/api/panel', { credentials: 'include' })
+      .then(r => r.json())
+      .then(cfg => {
+        if (cfg?.background) {
+          setBgMask(cfg.background.mask ?? 0.35);
+          setBgBlur(cfg.background.blur ?? 0);
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  // 保存遮罩/模糊到面板配置
+  function saveBgMask(mask: number) {
+    setBgMask(mask);
+    fetch('/api/panel', {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
+      body: JSON.stringify({ background: { mask, blur: bgBlur, url: '' } }),
+    }).catch(() => {});
+  }
+  function saveBgBlur(blur: number) {
+    setBgBlur(blur);
+    fetch('/api/panel', {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
+      body: JSON.stringify({ background: { mask: bgMask, blur, url: '' } }),
+    }).catch(() => {});
+  }
+
+  const sliderThumb = { width: 14, height: 14, borderRadius: '50%', background: '#fff', boxShadow: '0 1px 3px rgba(0,0,0,0.3)' } as const;
+  const sliderTrack = { width: '100%', height: 4, borderRadius: 2, background: 'var(--mei-border-strong)', WebkitAppearance: 'none', appearance: 'none', outline: 'none', cursor: 'pointer' } as const;
+  const bgMaskSlider = (
+    <div style={{ padding: '4px 10px 8px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+        <input
+          type="range" min={0} max={0.9} step={0.05} value={bgMask}
+          style={{ ...sliderTrack, accentColor: 'var(--mei-primary)' }}
+          onChange={(e) => saveBgMask(Number(e.target.value))}
+        />
+        <span style={{ fontSize: 11, color: 'var(--mei-text-faint)', minWidth: 32, textAlign: 'right' }}>{Math.round(bgMask * 100)}%</span>
+      </div>
+    </div>
+  );
+  const bgBlurSlider = (
+    <div style={{ padding: '4px 10px 8px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+        <input
+          type="range" min={0} max={24} step={1} value={bgBlur}
+          style={{ ...sliderTrack, accentColor: 'var(--mei-primary)' }}
+          onChange={(e) => saveBgBlur(Number(e.target.value))}
+        />
+        <span style={{ fontSize: 11, color: 'var(--mei-text-faint)', minWidth: 32, textAlign: 'right' }}>{bgBlur}px</span>
+      </div>
+    </div>
+  );
 
   function logout() {
     fetch('/api/auth/logout', { method: 'POST', credentials: 'include' })
@@ -183,18 +240,6 @@ export default function TopBar({
               zIndex: 999,
             }}
           >
-            <div
-              style={{
-                padding: '8px 10px',
-                fontSize: 11,
-                color: 'var(--mei-text-faint)',
-                fontWeight: 700,
-                letterSpacing: 1.5,
-              }}
-            >
-              应用开关
-            </div>
-            <AppToggles reloadOnChange />
             <div style={{ height: 1, background: 'var(--mei-border)', margin: '6px 0' }} />
             <div
               style={{
@@ -209,6 +254,30 @@ export default function TopBar({
             </div>
             <PanelNetModeToggle />
             <div style={{ height: 1, background: 'var(--mei-border)', margin: '6px 0' }} />
+            <div
+              style={{
+                padding: '8px 10px',
+                fontSize: 11,
+                color: 'var(--mei-text-faint)',
+                fontWeight: 700,
+                letterSpacing: 1.5,
+              }}
+            >
+              背景遮罩
+            </div>
+            {bgMaskSlider}
+            <div
+              style={{
+                padding: '8px 10px',
+                fontSize: 11,
+                color: 'var(--mei-text-faint)',
+                fontWeight: 700,
+                letterSpacing: 1.5,
+              }}
+            >
+              背景模糊
+            </div>
+            {bgBlurSlider}
 
             <a
               href="/settings"
