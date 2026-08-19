@@ -10,6 +10,7 @@ import { isSwitchable, isAppEnabled } from '@/lib/app-toggles';
 import { useHealth } from '@/lib/use-health';
 import type { PanelConfig, PanelItem } from '@/lib/panel-store';
 import ItemIconPicker, { isImgIcon, isTextIcon, textIconContent } from './ItemIconPicker';
+import 'iconify-icon';
 
 interface Item {
   plugin: ClientPlugin;
@@ -153,23 +154,36 @@ function ItemFormModal({
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
       <div
-        style={{ width: 380, maxWidth: 'calc(100vw - 32px)', borderRadius: 18, padding: 20, background: 'rgba(255,255,255,0.97)', border: '1px solid var(--mei-border-strong)', boxShadow: 'var(--mei-shadow-lg)' }}
+        style={{ width: 540, maxWidth: 'calc(100vw - 32px)', borderRadius: 18, padding: 20, background: 'rgba(255,255,255,0.97)', border: '1px solid var(--mei-border-strong)', boxShadow: 'var(--mei-shadow-lg)' }}
         onClick={(e) => e.stopPropagation()}
       >
         <div style={{ fontSize: 15, fontWeight: 700 }}>{form.id ? '编辑图标项' : '添加图标项'}</div>
-        <label style={label}>标题</label>
-        <input style={input} value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} placeholder="必填" />
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+          <div>
+            <label style={label}>标题</label>
+            <input style={input} value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} placeholder="必填" />
+          </div>
+          <div>
+            <label style={label}>分组</label>
+            <select style={input} value={form.groupId} onChange={(e) => setForm({ ...form, groupId: e.target.value })}>
+              <option value="">常用（未分组）</option>
+              {groups.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}
+            </select>
+          </div>
+        </div>
         <label style={label}>描述</label>
         <input style={input} value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} placeholder="可选" />
-        <label style={label}>地址</label>
-        <input style={input} value={form.url} onChange={(e) => setForm({ ...form, url: e.target.value })} placeholder="https://… 或 /path" />
-        <label style={label}>内网地址（可选，内网模式优先）</label>
-        <input style={input} value={form.lanUrl} onChange={(e) => setForm({ ...form, lanUrl: e.target.value })} placeholder="http://192.168.x.x…" />
-        <label style={label}>分组</label>
-        <select style={input} value={form.groupId} onChange={(e) => setForm({ ...form, groupId: e.target.value })}>
-          <option value="">常用（未分组）</option>
-          {groups.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}
-        </select>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+          <div>
+            <label style={label}>地址</label>
+            <input style={input} value={form.url} onChange={(e) => setForm({ ...form, url: e.target.value })} placeholder="https://… 或 /path" />
+          </div>
+          <div>
+            <label style={label}>内网地址（可选）</label>
+            <input style={input} value={form.lanUrl} onChange={(e) => setForm({ ...form, lanUrl: e.target.value })} placeholder="http://192.168.x.x…" />
+          </div>
+        </div>
+
         <label style={label}>图标（图标库 / 文字 / 图片，含底色）</label>
         <ItemIconPicker
           icon={form.icon}

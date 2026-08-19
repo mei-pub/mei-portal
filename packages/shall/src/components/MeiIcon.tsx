@@ -1,6 +1,7 @@
 // 内联 SVG 图标库 —— 摆脱 iconify CDN 依赖（离线可用，避免 Logo 加载失败）
 // 图标名与 plugins.json / settings-entries.ts 中的 iconify 命名保持一致
 import type { CSSProperties } from 'react';
+import 'iconify-icon';
 
 type P = { size?: number; style?: CSSProperties; className?: string };
 
@@ -284,6 +285,19 @@ const ICONS: Record<string, (p: P) => JSX.Element> = {
 export default function MeiIcon({ icon, size = 16, style, className }: { icon: string } & P) {
   const Render = ICONS[icon];
   if (Render) return <Render size={size} style={style} className={className} />;
+  // 含冒号的非内置名 → iconify 在线图标（Web Component，CDN 加载渲染）
+  if (icon.includes(':')) {
+    return (
+      <iconify-icon
+        icon={icon}
+        width={size}
+        height={size}
+        style={{ flexShrink: 0, ...style }}
+        className={className}
+        aria-hidden
+      />
+    );
+  }
   // 兜底：首字母圆片
   const letter = (icon.split(':').pop() || '?').charAt(0).toUpperCase();
   return (

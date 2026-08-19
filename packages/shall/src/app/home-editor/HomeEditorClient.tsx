@@ -4,6 +4,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import MeiIcon from '@/components/MeiIcon';
 import ItemIconPicker, { isImgIcon } from '@/components/ItemIconPicker';
+import 'iconify-icon';
 import type { PanelConfig, PanelItem, PanelGroup } from '@/lib/panel-store';
 
 type Tab = 'style' | 'groups' | 'items' | 'backup';
