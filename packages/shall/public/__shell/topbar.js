@@ -19,6 +19,15 @@
   }
   var EMBED = isEmbedMode();
 
+  // ---- 主页内网模式开关（自研主页版：localStorage mei-lan-mode，自定义链接优先 lanUrl）----
+  function isLanMode() {
+    try { return localStorage.getItem('mei-lan-mode') === '1'; } catch (e) { return false; }
+  }
+  function setLanMode(on) {
+    try { localStorage.setItem('mei-lan-mode', on ? '1' : '0'); } catch (e) {}
+    window.dispatchEvent(new Event('mei-lan-change'));
+  }
+
   // ---- 应用开关（localStorage mei-enabled，仅当前浏览器）----
   var SWITCHABLE = [
     ['ai-draw', 'AI 绘图', '关闭后门户卡片与顶栏入口置灰'],
@@ -292,6 +301,39 @@
       var sep2 = document.createElement('div');
       sep2.className = 'mei-menu-sep';
       menu.appendChild(sep2);
+
+      // 集成开关：主页内网模式
+      var lanRow = document.createElement('button');
+      lanRow.className = 'mei-switch' + (isLanMode() ? '' : ' off');
+      lanRow.style.flexDirection = 'column';
+      lanRow.style.alignItems = 'flex-start';
+      lanRow.style.gap = '2px';
+      var lanLabel = document.createElement('span');
+      lanLabel.className = 'mei-switch-label';
+      lanLabel.style.cssText = 'width:100%;display:flex;align-items:center;';
+      lanLabel.textContent = '主页内网模式';
+      var lanTrack = document.createElement('span');
+      lanTrack.className = 'mei-track' + (isLanMode() ? ' on' : '');
+      lanTrack.style.marginLeft = 'auto';
+      lanTrack.innerHTML = '<span class="mei-knob"></span>';
+      lanLabel.appendChild(lanTrack);
+      lanRow.appendChild(lanLabel);
+      var lanDesc = document.createElement('span');
+      lanDesc.style.cssText = 'font-size:10.5px;color:#9aa3b8;line-height:1.3;text-align:left;';
+      lanDesc.textContent = '开启后主页自定义链接优先使用内网地址打开';
+      lanRow.appendChild(lanDesc);
+      lanRow.onclick = function (e) {
+        e.stopPropagation();
+        var next = !isLanMode();
+        setLanMode(next);
+        lanRow.classList.toggle('off', !next);
+        lanTrack.classList.toggle('on', next);
+      };
+      menu.appendChild(lanRow);
+
+      var sep3 = document.createElement('div');
+      sep3.className = 'mei-menu-sep';
+      menu.appendChild(sep3);
 
       var settings = document.createElement('a');
       settings.className = 'mei-menu-link';

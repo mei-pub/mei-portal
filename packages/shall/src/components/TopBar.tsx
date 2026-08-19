@@ -4,6 +4,7 @@
 import { useEffect, useRef, useState } from 'react';
 import AppToggles from './AppToggles';
 import MeiIcon from './MeiIcon';
+import PanelNetModeToggle from './PanelNetModeToggle';
 
 export default function TopBar({
   query,
@@ -194,6 +195,19 @@ export default function TopBar({
               应用开关
             </div>
             <AppToggles reloadOnChange />
+            <div style={{ height: 1, background: 'var(--mei-border)', margin: '6px 0' }} />
+            <div
+              style={{
+                padding: '8px 10px',
+                fontSize: 11,
+                color: 'var(--mei-text-faint)',
+                fontWeight: 700,
+                letterSpacing: 1.5,
+              }}
+            >
+              集成开关
+            </div>
+            <PanelNetModeToggle />
             <div style={{ height: 1, background: 'var(--mei-border)', margin: '6px 0' }} />
 
             <a
