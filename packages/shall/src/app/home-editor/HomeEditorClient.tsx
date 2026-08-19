@@ -131,7 +131,7 @@ function StyleTab({ config, setConfig }: { config: PanelConfig; setConfig: (c: P
   const label: React.CSSProperties = { display: 'block', fontSize: 12, color: 'var(--mei-text-muted)', marginBottom: 4 };
 
   const readImageFile = (file: File, cb: (dataUrl: string) => void) => {
-    if (file.size > 300 * 1024) { alert('图片过大（>300KB），请压缩后上传'); return; }
+    if (file.size > 30 * 1024 * 1024) { alert('图片过大（>30MB）'); return; }
     const reader = new FileReader();
     reader.onload = () => cb(String(reader.result));
     reader.readAsDataURL(file);
@@ -326,7 +326,7 @@ function ItemsTab({ config, setConfig }: { config: PanelConfig; setConfig: (c: P
   };
 
   const readImageFile = (file: File, cb: (dataUrl: string) => void) => {
-    if (file.size > 300 * 1024) { alert('图标过大（>300KB），请压缩后上传'); return; }
+    if (file.size > 30 * 1024 * 1024) { alert('图标过大（>30MB）'); return; }
     const reader = new FileReader();
     reader.onload = () => cb(String(reader.result));
     reader.readAsDataURL(file);

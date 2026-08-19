@@ -91,13 +91,13 @@ export function normalizeConfig(raw: unknown): PanelConfig {
     : 'bing';
   return {
     background: {
-      url: str(bg.url, 300000),
+      url: str(bg.url, 40 * 1024 * 1024),
       mask: clampNum(bg.mask, 0, 0.9, 0.35),
       blur: clampNum(bg.blur, 0, 24, 0),
     },
     style: {
       logoText: str(st.logoText, 40, 'Mei-Allin'),
-      logoImage: str(st.logoImage, 300000),
+      logoImage: str(st.logoImage, 40 * 1024 * 1024),
       clockShowSecond: st.clockShowSecond !== false,
       searchBoxShow: st.searchBoxShow !== false,
       searchEngine: engine,
@@ -122,9 +122,9 @@ export function normalizeConfig(raw: unknown): PanelConfig {
         groupId: str(i.groupId, 40),
         title: str(i.title, 30),
         description: str(i.description, 80),
-        url: str(i.url, 300000),
-        lanUrl: str(i.lanUrl, 300000),
-        icon: str(i.icon, 300000, 'lucide:link'),
+        url: str(i.url, 40 * 1024 * 1024),
+        lanUrl: str(i.lanUrl, 40 * 1024 * 1024),
+        icon: str(i.icon, 40 * 1024 * 1024, 'lucide:link'),
       })),
   };
 }
