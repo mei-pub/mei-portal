@@ -189,6 +189,19 @@ body {
   color: var(--mei-text-muted);
 }
 
+/* ===== 紧凑卡片模式（水平布局，描述+路径在图标右侧，压缩纵向高度）===== */
+.mei-card-grid[data-mode='compact'] { grid-template-columns: repeat(4, 1fr); }
+.mei-app-card[data-mode='compact'] {
+  min-height: 72px !important;
+  padding: 12px !important;
+  flex-direction: row;
+  align-items: center;
+}
+.mei-app-card[data-mode='compact'] .mei-icon-tile {
+  width: 44px; height: 44px; border-radius: 12px;
+}
+.mei-app-card[data-mode='compact'] .mei-icon-tile svg { width: 22px; height: 22px; }
+
 /* ===== 图标模式（紧凑图标网格，Sun-Panel iconStyle=icon）===== */
 .mei-card-grid[data-mode='icon'] { grid-template-columns: repeat(8, 1fr); gap: var(--mei-space-2); }
 .mei-app-card[data-mode='icon'] {
@@ -215,7 +228,9 @@ body {
 @media (max-width: 768px) {
   .mei-card-grid { grid-template-columns: repeat(2, 1fr); gap: var(--mei-space-2); }
   .mei-card-grid[data-mode='icon'] { grid-template-columns: repeat(4, 1fr); }
+  .mei-card-grid[data-mode='compact'] { grid-template-columns: repeat(2, 1fr); }
   .mei-app-card { min-height: 112px !important; padding: var(--mei-space-3) !important; }
+  .mei-app-card[data-mode='compact'] { min-height: 64px !important; padding: 10px !important; }
   .mei-app-card[data-mode='icon'] { min-height: 92px !important; padding: 8px 4px !important; }
   .mei-app-card[data-mode='icon'] .mei-icon-tile { width: 40px; height: 40px; }
 }

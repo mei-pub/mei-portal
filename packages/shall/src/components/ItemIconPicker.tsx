@@ -189,7 +189,7 @@ export default function ItemIconPicker({
           </div>
         </div>
         {/* 类型切换 */}
-        <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', justifyContent: 'flex-end', maxWidth: 220 }}>
+        <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
           {([['library', '图标库'], ['online', '在线图标'], ['text', '文字'], ['image', '图片']] as [IconType, string][]).map(([t, label]) => (
             <button
               key={t}

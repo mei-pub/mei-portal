@@ -360,10 +360,16 @@ function ItemsTab({ config, setConfig }: { config: PanelConfig; setConfig: (c: P
         <div style={{ border: '1px dashed var(--mei-border-strong)', borderRadius: 12, padding: 14, marginBottom: 14, display: 'grid', gap: 8 }}>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
             <input style={input} placeholder="标题（必填）" value={editing.title} onChange={(e) => setEditing({ ...editing, title: e.target.value })} />
-            <select style={input} value={editing.groupId} onChange={(e) => setEditing({ ...editing, groupId: e.target.value })}>
-              <option value="">未分组</option>
-              {config.groups.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}
-            </select>
+            <input
+              style={input}
+              placeholder="分组名（输入新名称自动创建）"
+              value={editing.groupId}
+              onChange={(e) => setEditing({ ...editing, groupId: e.target.value })}
+              list="edit-group-list"
+            />
+            <datalist id="edit-group-list">
+              {config.groups.map((g) => <option key={g.id} value={g.name} />)}
+            </datalist>
           </div>
           <input style={input} placeholder="描述（可选）" value={editing.description} onChange={(e) => setEditing({ ...editing, description: e.target.value })} />
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
@@ -386,7 +392,13 @@ function ItemsTab({ config, setConfig }: { config: PanelConfig; setConfig: (c: P
             <button
               onClick={() => {
                 if (!editing.title.trim() || !editing.url.trim()) return;
-                const item = { ...editing, id: editing.id || `c${Date.now()}` };
+                let groupId = editing.groupId;
+                if (groupId && !config.groups.some(g => g.name === groupId.trim() || g.id === groupId)) {
+                  const newGroup = { id: `g${Date.now()}`, name: groupId.trim() };
+                  config.groups.push(newGroup);
+                  groupId = newGroup.id;
+                }
+                const item = { ...editing, groupId, id: editing.id || `c${Date.now()}` };
                 const exists = config.items.some((i) => i.id === item.id);
                 setConfig({ ...config, items: exists ? config.items.map((i) => (i.id === item.id ? item : i)) : [...config.items, item] });
                 setEditing(null);

@@ -93,7 +93,7 @@ function UnifiedCard({
       <button
         className="mei-app-card"
         data-disabled={disabled ? 'true' : undefined}
-        data-mode={iconMode ? 'icon' : undefined}
+        data-mode={iconMode ? 'icon' : 'compact'}
         type="button"
         onClick={() => { if (!editMode && !disabled) window.open(href, external ? '_blank' : '_self'); }}
         onContextMenu={onContext}
@@ -119,18 +119,21 @@ function UnifiedCard({
             ×
           </span>
         )}
-        <div className="mei-icon-tile" style={{ background: tileBg, color: tileFg, border: tileBg === '#ffffff' ? '1px solid rgba(23,32,56,0.1)' : undefined }}>{iconNode}</div>
-        <div style={{ fontWeight: 650, fontSize: iconMode ? 11.5 : 14, lineHeight: 1.3, letterSpacing: 0.2, width: '100%', textAlign: iconMode ? 'center' : 'left', overflow: iconMode ? 'hidden' : undefined, textOverflow: iconMode ? 'ellipsis' : undefined, whiteSpace: iconMode ? 'nowrap' : undefined }}>{item.title}</div>
-        {!iconMode && item.description && (
-          <div style={{ color: 'var(--mei-text-muted)', fontSize: 12, lineHeight: 1.45, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
-            {item.description}
+        {/* 图标+描述+路径水平布局（自定义项和白底项压缩纵向空间） */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, width: '100%' }}>
+          <div className="mei-icon-tile" style={{ flexShrink: 0, background: tileBg, color: tileFg, border: tileBg === '#ffffff' ? '1px solid rgba(23,32,56,0.1)' : undefined }}>{iconNode}</div>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontWeight: 650, fontSize: 14, lineHeight: 1.3, letterSpacing: 0.2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.title}</div>
+            {item.description && (
+              <div style={{ color: 'var(--mei-text-muted)', fontSize: 12, lineHeight: 1.4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginTop: 2 }}>
+                {item.description}
+              </div>
+            )}
+            <span style={{ color: 'var(--mei-text-faint)', fontSize: 10.5, letterSpacing: 0.5, opacity: 0.85, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'block', marginTop: 1 }}>
+              {item.builtin ? (item.builtin.startsWith('tutorial-') ? '/novels' : `/${item.builtin.split('-')[0]}`) : href.replace(/^https?:\/\//, '').split('/')[0]}
+            </span>
           </div>
-        )}
-        {!iconMode && (
-          <span style={{ marginTop: 'auto', paddingTop: 6, fontSize: 10.5, letterSpacing: 0.6, color: 'var(--mei-text-faint)', opacity: 0.85, maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-            {item.builtin ? (item.builtin.startsWith('tutorial-') ? '/novels' : `/${item.builtin.split('-')[0]}`) : href.replace(/^https?:\/\//, '').split('/')[0]}
-          </span>
-        )}
+        </div>
       </button>
     </div>
   );
@@ -168,11 +171,17 @@ function ItemFormModal({
             <input style={input} value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} placeholder="必填" />
           </div>
           <div>
-            <label style={label}>分组</label>
-            <select style={input} value={form.groupId} onChange={(e) => setForm({ ...form, groupId: e.target.value })}>
-              <option value="">常用（未分组）</option>
-              {groups.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}
-            </select>
+            <label style={label}>分组（输入名称快速创建新分组）</label>
+            <input
+              style={input}
+              placeholder="留空=未分组，输入新名称=新建"
+              value={form.groupId}
+              onChange={(e) => setForm({ ...form, groupId: e.target.value })}
+              list="group-list"
+            />
+            <datalist id="group-list">
+              {groups.map((g) => <option key={g.id} value={g.name} />)}
+            </datalist>
           </div>
         </div>
         <label style={label}>描述</label>
@@ -224,6 +233,10 @@ export default function PortalClient({ items, panel: initialPanel }: { items: It
   const [editing, setEditing] = useState<PanelItem | null>(null);
   const [dragId, setDragId] = useState<string | null>(null);
   const [toast, setToast] = useState('');
+  // 分组分页
+  const [pageIdx, setPageIdx] = useState(0);
+  const [dragPage, setDragPage] = useState<{ startX: number; startIdx: number; offset: number; active: boolean } | null>(null);
+  const [touchStartX, setTouchStartX] = useState<number | null>(null);
   const health = useHealth() as HealthMap;
   const style = panel.style;
 
@@ -265,6 +278,16 @@ export default function PortalClient({ items, panel: initialPanel }: { items: It
     return () => window.removeEventListener('keydown', onKey);
   }, []);
 
+  // 方向键翻页
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key === 'ArrowLeft' && !e.ctrlKey && !e.metaKey) { setPageIdx(i => Math.max(0, i - 1)); }
+      if (e.key === 'ArrowRight' && !e.ctrlKey && !e.metaKey) { setPageIdx(i => i + 1); }
+    }
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
+
   // 点击关闭右键菜单
   useEffect(() => {
     if (!contextMenu) return;
@@ -287,11 +310,20 @@ export default function PortalClient({ items, panel: initialPanel }: { items: It
   }, []);
 
   /* ---- 管理操作 ---- */
-  const upsertItem = (item: PanelItem) => {
-    const exists = panel.items.some((i) => i.id === item.id);
+  const upsertItem = async (item: PanelItem) => {
+    // 自动创建新分组：如果 groupId 是一个新名称（不在现有分组列表中），则自动创建分组
+    let groupId = item.groupId;
+    const groupExists = !groupId || !groupId.trim() || panel.groups.some(g => g.name === groupId.trim() || g.id === groupId);
+    if (!groupExists && groupId.trim()) {
+      const newGroup = { id: `g${Date.now()}`, name: groupId.trim() };
+      setPanel({ ...panel, groups: [...panel.groups, newGroup] });
+      groupId = newGroup.id;
+    }
+    const finalItem = { ...item, groupId: groupExists ? groupId : groupId };
+    const exists = panel.items.some((i) => i.id === finalItem.id);
     const next = exists
-      ? { ...panel, items: panel.items.map((i) => (i.id === item.id ? item : i)) }
-      : { ...panel, items: [...panel.items, item] };
+      ? { ...panel, items: panel.items.map((i) => (i.id === finalItem.id ? finalItem : i)) }
+      : { ...panel, items: [...panel.items, finalItem] };
     setEditing(null);
     savePanel(next, exists ? '已更新' : '已添加');
   };
@@ -352,6 +384,15 @@ export default function PortalClient({ items, panel: initialPanel }: { items: It
   const grouped = panel.groups
     .map((g) => ({ group: g, list: visibleItems.filter((i) => i.groupId === g.id) }))
     .filter((s) => s.list.length > 0 || editMode);
+
+  // 分页：第0页=常用(未分组)，1+页=分组
+  const pages = [{ id: 'default', name: '常用', items: ungrouped }, ...grouped.map(g => ({ id: g.group.id, name: g.group.name, items: g.list }))].filter(p => p.items.length > 0 || editMode || query);
+  const activePage = pages[pageIdx] || pages[0];
+
+  // 分页切换（含方向键和拖拽）
+  const goPage = (dir: number) => {
+    setPageIdx(i => Math.max(0, Math.min(pages.length - 1, i + dir)));
+  };
 
   function submitSearch() {
     const q = query.trim();
@@ -473,58 +514,79 @@ export default function PortalClient({ items, panel: initialPanel }: { items: It
           </div>
         )}
 
-        {/* 未分组（常用） */}
-        <section
-          style={{ marginBottom: 26, margin: `0 ${style?.marginX || 0}px ${26}px` }}
-          onDragOver={(e) => e.preventDefault()}
-          onDrop={() => moveToGroupEnd('')}
+        {/* ===== 分页容器：macOS 应用页切屏风格 ===== */}
+        <div
+          style={{ position: 'relative', overflow: 'hidden', userSelect: 'none' }}
+          onMouseDown={(e) => { setDragPage({ startX: e.clientX, startIdx: pageIdx, offset: 0, active: true }); }}
+          onMouseMove={(e) => { if (dragPage?.active) { const d = e.clientX - dragPage.startX; setDragPage({ ...dragPage, offset: d }); } }}
+          onMouseUp={() => { if (dragPage?.active) { const threshold = 80; if (dragPage.offset < -threshold && pageIdx < pages.length - 1) setPageIdx(pageIdx + 1); else if (dragPage.offset > threshold && pageIdx > 0) setPageIdx(pageIdx - 1); setDragPage(null); } }}
+          onMouseLeave={() => { if (dragPage?.active) { setDragPage(null); } }}
+          onTouchStart={(e) => { setTouchStartX(e.touches[0].clientX); }}
+          onTouchEnd={(e) => { if (touchStartX !== null) { const d = e.changedTouches[0].clientX - touchStartX; if (d < -80 && pageIdx < pages.length - 1) setPageIdx(pageIdx + 1); else if (d > 80 && pageIdx > 0) setPageIdx(pageIdx - 1); setTouchStartX(null); } }}
         >
-          <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 'var(--mei-space-3)' }}>
-            <span style={{ fontSize: 12, letterSpacing: 2, color: 'var(--mei-text-faint)' }}>常用 · {ungrouped.length}</span>
-            {lanMode && <span style={{ fontSize: 11, color: 'var(--mei-primary)' }}>内网模式</span>}
-          </div>
-          <div className="mei-card-grid" data-mode={iconMode ? 'icon' : 'card'}>
-            {ungrouped.map(renderCard)}
-            {editMode && (
-              <button
-                onClick={() => setEditing({ id: '', groupId: '', title: '', description: '', url: '', lanUrl: '', icon: 'lucide:link', iconColor: '' })}
-                style={{
-                  minHeight: 132, borderRadius: 'var(--mei-radius)', border: '2px dashed var(--mei-border-strong)',
-                  background: 'transparent', cursor: 'pointer', display: 'flex', flexDirection: 'column',
-                  alignItems: 'center', justifyContent: 'center', gap: 6, color: 'var(--mei-text-faint)', fontSize: 12,
-                }}
-              >
-                <span style={{ fontSize: 26, lineHeight: 1 }}>+</span>
-                添加图标项
-              </button>
-            )}
-          </div>
-        </section>
-
-        {/* 分组 */}
-        {grouped.map(({ group, list }) => (
-          <section
-            key={group.id}
-            style={{ margin: `0 ${style?.marginX || 0}px ${26}px` }}
-            onDragOver={(e) => e.preventDefault()}
-            onDrop={() => moveToGroupEnd(group.id)}
-          >
-            <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 'var(--mei-space-3)' }}>
-              <span style={{ fontSize: 12, letterSpacing: 2, color: 'var(--mei-text-faint)' }}>{group.name} · {list.length}</span>
-              {editMode && (
+          {/* 页面指示器 */}
+          {pages.length > 1 && !editMode && !query && (
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, marginBottom: 14 }}>
+              <button onClick={() => goPage(-1)} disabled={pageIdx <= 0} style={{ border: 'none', background: 'transparent', color: 'var(--mei-text-faint)', cursor: 'pointer', fontSize: 16, opacity: pageIdx <= 0 ? 0.3 : 1 }}>◀</button>
+              {pages.map((p, i) => (
                 <button
-                  onClick={() => setEditing({ id: '', groupId: group.id, title: '', description: '', url: '', lanUrl: '', icon: 'lucide:link', iconColor: '' })}
-                  style={{ border: 'none', background: 'transparent', color: 'var(--mei-primary)', fontSize: 11, cursor: 'pointer' }}
+                  key={p.id}
+                  onClick={() => setPageIdx(i)}
+                  style={{
+                    border: 'none', background: 'transparent', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4,
+                    padding: '4px 10px', borderRadius: 'var(--mei-radius-full)', fontSize: 12,
+                    color: i === pageIdx ? 'var(--mei-primary)' : 'var(--mei-text-faint)',
+                    fontWeight: i === pageIdx ? 650 : 400,
+                  }}
                 >
-                  + 添加
+                  <span style={{ width: i === pageIdx ? 6 : 5, height: i === pageIdx ? 6 : 5, borderRadius: '50%', background: i === pageIdx ? 'var(--mei-primary)' : 'var(--mei-border-strong)', transition: 'all .2s' }} />
+                  {p.name} · {p.items.length}
                 </button>
-              )}
+              ))}
+              <button onClick={() => goPage(1)} disabled={pageIdx >= pages.length - 1} style={{ border: 'none', background: 'transparent', color: 'var(--mei-text-faint)', cursor: 'pointer', fontSize: 16, opacity: pageIdx >= pages.length - 1 ? 0.3 : 1 }}>▶</button>
             </div>
-            <div className="mei-card-grid" data-mode={iconMode ? 'icon' : 'card'}>
-              {list.map(renderCard)}
-            </div>
-          </section>
-        ))}
+          )}
+          <div
+            style={{
+              display: 'flex', transition: 'transform .3s cubic-bezier(0.25, 0.46, 0.45, 0.94)',
+              transform: dragPage?.active ? `translateX(calc(-${pageIdx * 100}% + ${dragPage.offset}px))` : `translateX(-${pageIdx * 100}%)`,
+            }}
+          >
+            {pages.map((page, pi) => (
+              <section
+                key={page.id}
+                style={{ minWidth: '100%', boxSizing: 'border-box', paddingRight: style?.marginX || 0 }}
+                onDragOver={(e) => e.preventDefault()}
+                onDrop={() => moveToGroupEnd(page.id === 'default' ? '' : page.id)}
+              >
+                <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 'var(--mei-space-3)' }}>
+                  <span style={{ fontSize: 12, letterSpacing: 2, color: 'var(--mei-text-faint)' }}>{page.name} · {page.items.length}</span>
+                  {lanMode && <span style={{ fontSize: 11, color: 'var(--mei-primary)' }}>内网模式</span>}
+                  {editMode && (
+                    <button
+                      onClick={() => setEditing({ id: '', groupId: page.id === 'default' ? '' : page.id, title: '', description: '', url: '', lanUrl: '', icon: 'lucide:link', iconColor: '' })}
+                      style={{ border: 'none', background: 'transparent', color: 'var(--mei-primary)', fontSize: 11, cursor: 'pointer' }}
+                    >
+                      + 添加
+                    </button>
+                  )}
+                </div>
+                <div className="mei-card-grid" data-mode={iconMode ? 'icon' : 'compact'}>
+                  {page.items.map(renderCard)}
+                  {editMode && pageIdx === pi && (
+                    <button
+                      onClick={() => setEditing({ id: '', groupId: page.id === 'default' ? '' : page.id, title: '', description: '', url: '', lanUrl: '', icon: 'lucide:link', iconColor: '' })}
+                      style={{ minHeight: 72, borderRadius: 'var(--mei-radius)', border: '2px dashed var(--mei-border-strong)', background: 'transparent', cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 6, color: 'var(--mei-text-faint)', fontSize: 12 }}
+                    >
+                      <span style={{ fontSize: 26, lineHeight: 1 }}>+</span>
+                      添加图标项
+                    </button>
+                  )}
+                </div>
+              </section>
+            ))}
+          </div>
+        </div>
 
         {/* 空态 */}
         {q && visibleItems.length === 0 && (
