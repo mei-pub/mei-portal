@@ -1,5 +1,5 @@
 'use client';
-// 图标选择器 —— 对齐 Sun-Panel 图标能力：图标库 / 文字图标 / 在线图片 / 上传图片 / 底色
+// 图标选择器 —— 对齐 Sun-Panel 图标能力：图标库 / 在线 iconify / 文字 / 图片(上传+网址favicon) / 底色 / 实时预览
 import { useMemo, useState } from 'react';
 import MeiIcon from './MeiIcon';
 import 'iconify-icon';
@@ -17,15 +17,45 @@ export const ICON_LIBRARY = [
   'lucide:bell', 'lucide:bookmark', 'lucide:tag', 'lucide:palette', 'lucide:terminal',
   'lucide:code', 'lucide:shopping-cart', 'lucide:credit-card', 'lucide:briefcase', 'lucide:building',
   'lucide:github', 'lucide:wrench', 'lucide:pen-tool', 'lucide:layout-dashboard', 'lucide:network',
-  'lucide:scroll-text', 'lucide:library', 'lucide:plug', 'lucide:settings-2', 'lucide:server',
+  'lucide:scroll-text', 'lucide:library', 'lucide:plug', 'lucide:settings-2',
 ];
 
-// 预设底色板
+// 预设底色板（白色为默认，含渐变选项）
 export const COLOR_SWATCHES = [
-  '', // 默认（渐变）
-  '#6366f1', '#8b5cf6', '#ec4899', '#ef4444', '#f59e0b',
-  '#10b981', '#06b6d4', '#3b82f6', '#1f2937', '#64748b',
+  '#ffffff', // 白色（默认）
+  '#f1f5f9', '#6366f1', '#8b5cf6', '#ec4899', '#ef4444',
+  '#f59e0b', '#10b981', '#06b6d4', '#3b82f6', '#1f2937',
+  'gradient', // 渐变
 ];
+
+/**
+ * 根据底色亮度自动选择图标/文字前景色（深底白字、浅底深字）
+ * 传入 CSS background 值（hex/rgb/渐变），返回 '#fff' 或 '#1c2333'
+ */
+export function contrastColor(bg: string | undefined | null): string {
+  if (!bg) return '#1c2333'; // 无底色（白底默认）→ 深色图标
+  // 渐变 → 白色图标（渐变均为深色调）
+  if (bg === 'gradient' || bg.includes('gradient') || bg.includes('linear')) return '#fff';
+  // 解析 hex
+  const hex = bg.replace('#', '');
+  if (hex.length === 3 || hex.length === 6) {
+    const r = parseInt(hex.slice(0, 2).padEnd(2, hex[0]), 16);
+    const g = parseInt(hex.slice(hex.length > 3 ? 2 : 1, hex.length > 3 ? 4 : 2).padEnd(2, hex[1]), 16);
+    const b = parseInt(hex.slice(hex.length > 3 ? 4 : 2).padEnd(2, hex[2]), 16);
+    if (isNaN(r) || isNaN(g) || isNaN(b)) return '#fff';
+    const lum = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+    return lum > 0.55 ? '#1c2333' : '#fff';
+  }
+  return '#fff';
+}
+
+/** 图标块底色解析：''→白色（默认）、'gradient'→渐变、其他→原值 */
+export function tileBackground(iconColor: string | undefined, builtinId?: string): string {
+  if (iconColor === 'gradient') return builtinId ? '' : 'linear-gradient(135deg,#6366f1,#a855f7)';
+  if (iconColor && iconColor !== 'gradient') return iconColor;
+  // 未设置：内置项用专属渐变，自定义项用白色
+  return builtinId ? '' : '#ffffff';
+}
 
 export function isImgIcon(src: string): boolean {
   return /^https?:\/\//.test(src) || src.startsWith('data:image/');
@@ -37,28 +67,38 @@ export function textIconContent(src: string, fallbackTitle: string): string {
   const t = src.slice(5).trim();
   return t || fallbackTitle.trim().charAt(0) || '链';
 }
+/** 从网址提取 favicon URL（Google favicon 服务） */
+export function faviconUrlFrom(siteUrl: string): string {
+  try {
+    const u = new URL(siteUrl.startsWith('http') ? siteUrl : `https://${siteUrl}`);
+    return `https://www.google.com/s2/favicons?domain=${encodeURIComponent(u.hostname)}&sz=64`;
+  } catch {
+    return '';
+  }
+}
 
 type IconType = 'library' | 'online' | 'text' | 'image';
 
 export function detectType(icon: string): IconType {
   if (isImgIcon(icon)) return 'image';
   if (isTextIcon(icon)) return 'text';
-  // 非内置 lucide 集合且含冒号 → 在线 iconify 图标（如 mdi:home）
   if (icon.includes(':') && !ICON_LIBRARY.includes(icon)) return 'online';
   return 'library';
 }
 
 export default function ItemIconPicker({
-  icon, iconColor, title = '', onIcon, onColor,
+  icon, iconColor, title = '', itemUrl = '', onIcon, onColor,
 }: {
   icon: string;
   iconColor: string;
   title?: string;
+  itemUrl?: string; // 图标项的地址（用于从网址获取 favicon）
   onIcon: (icon: string) => void;
   onColor: (color: string) => void;
 }) {
   const [type, setType] = useState<IconType>(detectType(icon));
   const [search, setSearch] = useState('');
+  const [faviconQuery, setFaviconQuery] = useState(itemUrl);
   // 在线 iconify 搜索
   const [onlineQuery, setOnlineQuery] = useState('');
   const [onlineIcons, setOnlineIcons] = useState<string[]>([]);
@@ -98,44 +138,68 @@ export default function ItemIconPicker({
     color: 'var(--mei-text)', background: '#fff',
   };
 
-  const preview = (
-    <span
-      style={{
-        width: 42, height: 42, borderRadius: 13, display: 'inline-flex',
-        alignItems: 'center', justifyContent: 'center', color: '#fff', flexShrink: 0,
-        background: iconColor || 'linear-gradient(135deg,#6366f1,#a855f7)',
-        boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.25), 0 4px 12px rgba(0,0,0,0.18)',
-        fontSize: isTextIcon(icon) ? 20 : undefined, fontWeight: isTextIcon(icon) ? 700 : undefined,
-      }}
-    >
-      {isImgIcon(icon) ? (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img src={icon} alt="" style={{ width: 22, height: 22, objectFit: 'contain' }} />
-      ) : isTextIcon(icon) ? (
-        textIconContent(icon, title)
-      ) : type === 'online' || (icon.includes(':') && !ICON_LIBRARY.includes(icon) && !icon.startsWith('lucide:')) ? (
-        <iconify-icon icon={icon} width="22" height="22" style={{ color: '#fff' }} />
-      ) : (
-        <MeiIcon icon={icon || 'lucide:link'} size={22} />
-      )}
-    </span>
-  );
+  // 判断当前图标是否需要 iconify WC 渲染
+  const useIconifyWC = (icon.includes(':') && !ICON_LIBRARY.includes(icon) && !icon.startsWith('lucide:'));
+
+  // 实时预览：底色 + 自动对比前景色
+  const previewBg = iconColor === 'gradient' ? 'linear-gradient(135deg,#6366f1,#a855f7)' : (iconColor || '#ffffff');
+  const previewFg = contrastColor(iconColor || '#ffffff');
 
   return (
     <div>
-      {/* 类型切换 + 预览 */}
-      <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
-        {preview}
-        <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+      {/* ===== 实时预览区（大图标 + 标题，随选择即时更新）===== */}
+      <div
+        style={{
+          display: 'flex', alignItems: 'center', gap: 14, padding: '12px 16px',
+          borderRadius: 'var(--mei-radius)', marginBottom: 10,
+          background: 'var(--mei-gradient-soft)', border: '1px solid var(--mei-border)',
+        }}
+      >
+        <span
+          style={{
+            width: 52, height: 52, borderRadius: 15, display: 'inline-flex',
+            alignItems: 'center', justifyContent: 'center', color: previewFg, flexShrink: 0,
+            background: previewBg,
+            boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.15), 0 4px 14px rgba(0,0,0,0.12)',
+            fontSize: isTextIcon(icon) ? 24 : undefined, fontWeight: isTextIcon(icon) ? 750 : undefined,
+            transition: 'background .2s ease, color .2s ease',
+            border: '1px solid rgba(23,32,56,0.08)',
+          }}
+        >
+          {isImgIcon(icon) ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={icon} alt="" style={{ width: 26, height: 26, objectFit: 'contain' }} />
+          ) : isTextIcon(icon) ? (
+            textIconContent(icon, title)
+          ) : useIconifyWC ? (
+            <iconify-icon icon={icon} width="26" height="26" style={{ color: previewFg }} />
+          ) : (
+            <MeiIcon icon={icon || 'lucide:link'} size={26} style={{ color: previewFg }} />
+          )}
+        </span>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontSize: 14, fontWeight: 650, color: 'var(--mei-text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {title || '图标预览'}
+          </div>
+          <div style={{ fontSize: 11, color: 'var(--mei-text-faint)', marginTop: 2 }}>
+            {isImgIcon(icon) ? '图片图标' : isTextIcon(icon) ? `文字：${textIconContent(icon, title)}` : useIconifyWC ? `iconify：${icon}` : icon || '未选择图标'}
+          </div>
+          <div style={{ fontSize: 10.5, color: 'var(--mei-text-faint)', marginTop: 1 }}>
+            底色：{iconColor === 'gradient' ? '渐变' : iconColor || '白色（默认）'} · 图标色：{previewFg === '#fff' ? '白' : '深'}
+          </div>
+        </div>
+        {/* 类型切换 */}
+        <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', justifyContent: 'flex-end', maxWidth: 220 }}>
           {([['library', '图标库'], ['online', '在线图标'], ['text', '文字'], ['image', '图片']] as [IconType, string][]).map(([t, label]) => (
             <button
               key={t}
               onClick={() => setType(t)}
               style={{
-                padding: '5px 12px', borderRadius: 'var(--mei-radius-full)', fontSize: 12, cursor: 'pointer',
+                padding: '5px 11px', borderRadius: 'var(--mei-radius-full)', fontSize: 11.5, cursor: 'pointer',
                 border: '1px solid ' + (type === t ? 'transparent' : 'var(--mei-border-strong)'),
                 background: type === t ? 'var(--mei-gradient)' : 'transparent',
                 color: type === t ? '#fff' : 'var(--mei-text-muted)',
+                whiteSpace: 'nowrap',
               }}
             >
               {label}
@@ -144,7 +208,7 @@ export default function ItemIconPicker({
         </div>
       </div>
 
-      {/* 图标库 */}
+      {/* ===== 图标库 ===== */}
       {type === 'library' && (
         <div>
           <input style={{ ...input, marginBottom: 8 }} placeholder="搜索图标（如 link / home / cloud）" value={search} onChange={(e) => setSearch(e.target.value)} />
@@ -170,7 +234,7 @@ export default function ItemIconPicker({
         </div>
       )}
 
-      {/* 在线 iconify 图标：搜索 + 直贴名称 */}
+      {/* ===== 在线 iconify 图标 ===== */}
       {type === 'online' && (
         <div>
           <div style={{ display: 'flex', gap: 6, marginBottom: 8 }}>
@@ -243,7 +307,7 @@ export default function ItemIconPicker({
           <input
             style={input}
             placeholder="或直接输入 iconify 图标名（如 mdi:home、ph:rocket）"
-            value={type === 'online' && !isImgIcon(icon) && !isTextIcon(icon) && !ICON_LIBRARY.includes(icon) ? icon : ''}
+            value={!isImgIcon(icon) && !isTextIcon(icon) && !ICON_LIBRARY.includes(icon) ? icon : ''}
             onChange={(e) => onIcon(e.target.value.trim())}
           />
           <div style={{ fontSize: 11, color: 'var(--mei-text-faint)', marginTop: 4 }}>
@@ -252,7 +316,7 @@ export default function ItemIconPicker({
         </div>
       )}
 
-      {/* 文字图标 */}
+      {/* ===== 文字图标 ===== */}
       {type === 'text' && (
         <input
           style={input}
@@ -262,48 +326,85 @@ export default function ItemIconPicker({
         />
       )}
 
-      {/* 图片（在线 URL / 上传） */}
+      {/* ===== 图片（在线 URL / 上传 / 从网址获取 favicon）===== */}
       {type === 'image' && (
-        <div style={{ display: 'flex', gap: 8 }}>
-          <input
-            style={input}
-            placeholder="图片地址（https://…）"
-            value={isImgIcon(icon) ? icon : ''}
-            onChange={(e) => onIcon(e.target.value)}
-          />
-          <label style={{ padding: '8px 12px', borderRadius: 10, border: '1px solid var(--mei-border-strong)', fontSize: 12, cursor: 'pointer', whiteSpace: 'nowrap' }}>
-            上传
+        <div>
+          <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
             <input
-              type="file" accept="image/*" hidden
-              onChange={(e) => {
-                const f = e.target.files?.[0];
-                if (!f) return;
-                if (f.size > 30 * 1024 * 1024) { alert('图片过大（>30MB）'); return; }
-                const r = new FileReader();
-                r.onload = () => onIcon(String(r.result));
-                r.readAsDataURL(f);
-              }}
+              style={{ ...input, flex: 1 }}
+              placeholder="图片地址（https://…）"
+              value={isImgIcon(icon) ? icon : ''}
+              onChange={(e) => onIcon(e.target.value)}
             />
-          </label>
+            <label style={{ padding: '8px 12px', borderRadius: 10, border: '1px solid var(--mei-border-strong)', fontSize: 12, cursor: 'pointer', whiteSpace: 'nowrap' }}>
+              上传
+              <input
+                type="file" accept="image/*" hidden
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  if (!f) return;
+                  if (f.size > 30 * 1024 * 1024) { alert('图片过大（>30MB）'); return; }
+                  const r = new FileReader();
+                  r.onload = () => onIcon(String(r.result));
+                  r.readAsDataURL(f);
+                }}
+              />
+            </label>
+          </div>
+          {/* 从网址获取 favicon */}
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            <input
+              style={{ ...input, flex: 1 }}
+              placeholder="输入网站地址获取图标（如 github.com）"
+              value={faviconQuery}
+              onChange={(e) => setFaviconQuery(e.target.value)}
+            />
+            <button
+              onClick={() => {
+                const url = faviconUrlFrom(faviconQuery);
+                if (url) onIcon(url);
+                else alert('请输入有效的网址');
+              }}
+              style={{
+                padding: '8px 14px', borderRadius: 10, border: '1px solid var(--mei-primary)',
+                background: 'transparent', color: 'var(--mei-primary)', fontSize: 12,
+                cursor: 'pointer', whiteSpace: 'nowrap',
+              }}
+            >
+              获取图标
+            </button>
+          </div>
+          <div style={{ fontSize: 11, color: 'var(--mei-text-faint)', marginTop: 4 }}>
+            通过 Google Favicon 服务从网址自动获取网站图标（需外网）。
+          </div>
         </div>
       )}
 
-      {/* 底色 */}
+      {/* ===== 底色 ===== */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 10, flexWrap: 'wrap' }}>
         <span style={{ fontSize: 12, color: 'var(--mei-text-muted)' }}>底色：</span>
-        {COLOR_SWATCHES.map((c) => (
-          <button
-            key={c || 'default'}
-            title={c || '默认渐变'}
-            onClick={() => onColor(c)}
-            style={{
-              width: 24, height: 24, borderRadius: 8, cursor: 'pointer', flexShrink: 0,
-              border: iconColor === c ? '2px solid var(--mei-primary)' : '1px solid var(--mei-border-strong)',
-              background: c || 'linear-gradient(135deg,#6366f1,#a855f7)',
-              padding: 0,
-            }}
-          />
-        ))}
+        {COLOR_SWATCHES.map((c) => {
+          const isDefault = (c === '#ffffff' && (!iconColor || iconColor === '#ffffff'));
+          const isGradient = c === 'gradient';
+          const swatchBg = isGradient ? 'linear-gradient(135deg,#6366f1,#a855f7)' : c;
+          const selected = isGradient ? iconColor === 'gradient' : iconColor === c;
+          return (
+            <button
+              key={c}
+              title={isGradient ? '渐变' : c === '#ffffff' ? '白色（默认）' : c}
+              onClick={() => onColor(isGradient ? 'gradient' : c)}
+              style={{
+                width: 24, height: 24, borderRadius: 8, cursor: 'pointer', flexShrink: 0,
+                border: (selected || isDefault) && !isGradient ? '2px solid var(--mei-primary)' : '1px solid var(--mei-border-strong)',
+                background: swatchBg,
+                padding: 0,
+                display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+              }}
+            >
+              {isDefault && <span style={{ fontSize: 9, color: '#6366f1', fontWeight: 800 }}>✓</span>}
+            </button>
+          );
+        })}
         <input
           type="color"
           title="自定义底色"

@@ -9,7 +9,7 @@ import MeiIcon from './MeiIcon';
 import { isSwitchable, isAppEnabled } from '@/lib/app-toggles';
 import { useHealth } from '@/lib/use-health';
 import type { PanelConfig, PanelItem } from '@/lib/panel-store';
-import ItemIconPicker, { isImgIcon, isTextIcon, textIconContent } from './ItemIconPicker';
+import ItemIconPicker, { isImgIcon, isTextIcon, textIconContent, contrastColor } from './ItemIconPicker';
 import 'iconify-icon';
 
 interface Item {
@@ -69,14 +69,18 @@ function UnifiedCard({
     : health.ok
     ? { color: 'var(--mei-success)' }
     : { color: 'var(--mei-danger)' };
-  const tileBg = item.iconColor || (item.builtin ? hashGradient(item.builtin) : 'linear-gradient(135deg,#64748b,#334155)');
+  // 底色：自定义色 > 内置渐变 > 白色（默认）；前景色随底色亮度自动对比
+  const tileBg = item.iconColor === 'gradient'
+    ? 'linear-gradient(135deg,#6366f1,#a855f7)'
+    : item.iconColor || (item.builtin ? hashGradient(item.builtin) : '#ffffff');
+  const tileFg = contrastColor(item.iconColor || (item.builtin ? 'gradient' : '#ffffff'));
   const iconNode = isImgIcon(item.icon) ? (
     // eslint-disable-next-line @next/next/no-img-element
     <img src={item.icon} alt={item.title} style={{ width: 22, height: 22, objectFit: 'contain' }} />
   ) : isTextIcon(item.icon) ? (
     <span style={{ fontSize: 20, fontWeight: 750 }}>{textIconContent(item.icon, item.title)}</span>
   ) : (
-    <MeiIcon icon={item.icon || 'lucide:link'} size={22} />
+    <MeiIcon icon={item.icon || 'lucide:link'} size={22} style={{ color: tileFg }} />
   );
   return (
     <div
@@ -115,7 +119,7 @@ function UnifiedCard({
             ×
           </span>
         )}
-        <div className="mei-icon-tile" style={{ background: tileBg }}>{iconNode}</div>
+        <div className="mei-icon-tile" style={{ background: tileBg, color: tileFg, border: tileBg === '#ffffff' ? '1px solid rgba(23,32,56,0.1)' : undefined }}>{iconNode}</div>
         <div style={{ fontWeight: 650, fontSize: iconMode ? 11.5 : 14, lineHeight: 1.3, letterSpacing: 0.2, width: '100%', textAlign: iconMode ? 'center' : 'left', overflow: iconMode ? 'hidden' : undefined, textOverflow: iconMode ? 'ellipsis' : undefined, whiteSpace: iconMode ? 'nowrap' : undefined }}>{item.title}</div>
         {!iconMode && item.description && (
           <div style={{ color: 'var(--mei-text-muted)', fontSize: 12, lineHeight: 1.45, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
@@ -189,6 +193,7 @@ function ItemFormModal({
           icon={form.icon}
           iconColor={form.iconColor || ''}
           title={form.title}
+          itemUrl={form.url}
           onIcon={(icon) => setForm({ ...form, icon })}
           onColor={(c) => setForm({ ...form, iconColor: c })}
         />

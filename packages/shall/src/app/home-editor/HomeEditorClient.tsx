@@ -3,7 +3,7 @@
 // 分区：风格设置（背景/Logo/时钟/搜索/图标样式/边距/页脚/监控）/ 分组管理 / 图标项管理（图标上传/拖拽排序/双地址）/ 导入导出
 import { useCallback, useEffect, useRef, useState } from 'react';
 import MeiIcon from '@/components/MeiIcon';
-import ItemIconPicker, { isImgIcon } from '@/components/ItemIconPicker';
+import ItemIconPicker, { isImgIcon, contrastColor } from '@/components/ItemIconPicker';
 import 'iconify-icon';
 import type { PanelConfig, PanelItem, PanelGroup } from '@/lib/panel-store';
 
@@ -376,6 +376,7 @@ function ItemsTab({ config, setConfig }: { config: PanelConfig; setConfig: (c: P
               icon={editing.icon}
               iconColor={editing.iconColor || ''}
               title={editing.title}
+              itemUrl={editing.url}
               onIcon={(icon) => setEditing({ ...editing, icon })}
               onColor={(c) => setEditing({ ...editing, iconColor: c })}
             />
@@ -418,10 +419,20 @@ function ItemsTab({ config, setConfig }: { config: PanelConfig; setConfig: (c: P
               }}
             >
               <span style={{ color: 'var(--mei-text-faint)', fontSize: 11, cursor: 'grab' }} title="拖拽排序">⠿</span>
-              {isImg(item.icon)
-                // eslint-disable-next-line @next/next/no-img-element
-                ? <img src={item.icon} alt="" style={{ width: 18, height: 18, objectFit: 'contain' }} />
-                : <MeiIcon icon={item.icon || 'lucide:link'} size={17} />}
+              <span
+                style={{
+                  width: 26, height: 26, borderRadius: 8, display: 'inline-flex',
+                  alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+                  background: item.iconColor === 'gradient' ? 'linear-gradient(135deg,#6366f1,#a855f7)' : (item.iconColor || (item.builtin ? 'linear-gradient(135deg,#6366f1,#a855f7)' : '#ffffff')),
+                  color: contrastColor(item.iconColor || (item.builtin ? 'gradient' : '#ffffff')),
+                  border: (!item.iconColor || item.iconColor === '#ffffff') && !item.builtin ? '1px solid rgba(23,32,56,0.1)' : undefined,
+                }}
+              >
+                {isImg(item.icon)
+                  // eslint-disable-next-line @next/next/no-img-element
+                  ? <img src={item.icon} alt="" style={{ width: 16, height: 16, objectFit: 'contain' }} />
+                  : <MeiIcon icon={item.icon || 'lucide:link'} size={15} />}
+              </span>
               <span style={{ fontSize: 13, fontWeight: 600 }}>{item.title}</span>
               {item.builtin && <span style={{ fontSize: 10, padding: '1px 6px', borderRadius: 99, background: 'rgba(16,185,129,0.1)', color: '#059669' }}>内置</span>}
               {item.lanUrl && <span style={{ fontSize: 10, padding: '1px 6px', borderRadius: 99, background: 'rgba(99,102,241,0.1)', color: 'var(--mei-primary)' }}>双地址</span>}
