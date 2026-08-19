@@ -288,6 +288,36 @@ export default function PortalClient({ items, panel: initialPanel }: { items: It
     return () => window.removeEventListener('keydown', onKey);
   }, []);
 
+  // 全局鼠标拖拽翻页（mousedown/mousemove/mouseup 全部全局监听，无区域限制）
+  const swiperRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const mouseDown = (e: MouseEvent) => {
+      setDragPage({ startX: e.clientX, startIdx: pageIdx, offset: 0, active: true });
+    };
+    const mouseMove = (e: MouseEvent) => {
+      if (dragPage?.active) {
+        const d = e.clientX - dragPage.startX;
+        setDragPage({ ...dragPage, offset: d });
+      }
+    };
+    const mouseUp = () => {
+      if (dragPage?.active) {
+        const threshold = 80;
+        if (dragPage.offset < -threshold) setPageIdx(i => i + 1);
+        else if (dragPage.offset > threshold) setPageIdx(i => Math.max(0, i - 1));
+        setDragPage(null);
+      }
+    };
+    document.addEventListener('mousedown', mouseDown);
+    document.addEventListener('mousemove', mouseMove);
+    document.addEventListener('mouseup', mouseUp);
+    return () => {
+      document.removeEventListener('mousedown', mouseDown);
+      document.removeEventListener('mousemove', mouseMove);
+      document.removeEventListener('mouseup', mouseUp);
+    };
+  }, [dragPage, pageIdx]);
+
   // 点击关闭右键菜单
   useEffect(() => {
     if (!contextMenu) return;
@@ -517,12 +547,8 @@ export default function PortalClient({ items, panel: initialPanel }: { items: It
         {/* ===== 分页容器：macOS 应用页切屏风格 ===== */}
         <div
           style={{ position: 'relative', overflow: 'hidden', userSelect: 'none' }}
-          onMouseDown={(e) => { setDragPage({ startX: e.clientX, startIdx: pageIdx, offset: 0, active: true }); }}
-          onMouseMove={(e) => { if (dragPage?.active) { const d = e.clientX - dragPage.startX; setDragPage({ ...dragPage, offset: d }); } }}
-          onMouseUp={() => { if (dragPage?.active) { const threshold = 80; if (dragPage.offset < -threshold && pageIdx < pages.length - 1) setPageIdx(pageIdx + 1); else if (dragPage.offset > threshold && pageIdx > 0) setPageIdx(pageIdx - 1); setDragPage(null); } }}
-          onMouseLeave={() => { if (dragPage?.active) { setDragPage(null); } }}
           onTouchStart={(e) => { setTouchStartX(e.touches[0].clientX); }}
-          onTouchEnd={(e) => { if (touchStartX !== null) { const d = e.changedTouches[0].clientX - touchStartX; if (d < -80 && pageIdx < pages.length - 1) setPageIdx(pageIdx + 1); else if (d > 80 && pageIdx > 0) setPageIdx(pageIdx - 1); setTouchStartX(null); } }}
+          onTouchEnd={(e) => { if (touchStartX !== null) { const d = e.changedTouches[0].clientX - touchStartX; if (d < -80) setPageIdx(i => i + 1); else if (d > 80) setPageIdx(i => Math.max(0, i - 1)); setTouchStartX(null); } }}
         >
           {/* 页面指示器 */}
           {pages.length > 1 && !editMode && !query && (
