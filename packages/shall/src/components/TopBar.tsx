@@ -3,6 +3,7 @@
 // transparent 模式用于首页（浮于极光背景之上，无底色边框）
 import { useEffect, useRef, useState } from 'react';
 import MeiIcon from './MeiIcon';
+
 import PanelNetModeToggle from './PanelNetModeToggle';
 
 export default function TopBar({
@@ -21,6 +22,8 @@ export default function TopBar({
   const [menuOpen, setMenuOpen] = useState(false);
   const [loggedIn, setLoggedIn] = useState(false);
   // 账户操作：修改密码 / 退出确认
+  const [brandLogo, setBrandLogo] = useState('');
+  const [brandName, setBrandName] = useState('mei-allin');
   const [pwOpen, setPwOpen] = useState(false);
   const [pwForm, setPwForm] = useState({ old: '', next: '', confirm: '' });
   const [pwHint, setPwHint] = useState('');
@@ -53,6 +56,19 @@ export default function TopBar({
       document.removeEventListener('mousedown', onDocClick);
       document.removeEventListener('keydown', onKey);
     };
+  }, []);
+
+  // 加载面板品牌配置
+  useEffect(() => {
+    fetch('/api/panel', { credentials: 'include' })
+      .then(r => r.json())
+      .then(cfg => {
+        if (cfg?.style) {
+          if (cfg.style.logoImage) setBrandLogo(cfg.style.logoImage);
+          if (cfg.style.logoText) setBrandName(cfg.style.logoText);
+        }
+      })
+      .catch(() => {});
   }, []);
 
   // 加载面板背景配置
@@ -171,7 +187,7 @@ export default function TopBar({
             flexShrink: 0,
           }}
         />
-        <span style={{ fontSize: 17, letterSpacing: 0.5, color: 'var(--mei-text)' }}>mei-allin</span>
+        {brandLogo ? <img src={brandLogo} alt="logo" style={{ height: 24, maxWidth: 120, objectFit: 'contain' }} /> : <span style={{ fontSize: 17, letterSpacing: 0.5, color: 'var(--mei-text)' }}>{brandName}</span>}
       </a>
 
       {/* 搜索（无搜索功能的页面隐藏） */}

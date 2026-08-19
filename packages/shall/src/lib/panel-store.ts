@@ -31,6 +31,8 @@ export interface PanelStyle {
 export interface PanelGroup {
   id: string;
   name: string;
+  iconStyle?: 'icon' | 'info';
+  iconColor?: string;
 }
 
 export interface PanelItem {
@@ -117,7 +119,7 @@ export function normalizeConfig(raw: unknown): PanelConfig {
     groups: (Array.isArray(r.groups) ? r.groups : [])
       .filter((g) => g && g.name)
       .slice(0, 24)
-      .map((g, i) => ({ id: str(g.id, 40, `g${Date.now()}-${i}`), name: str(g.name, 24) })),
+      .map((g, i) => ({ id: str(g.id, 40, `g${Date.now()}-${i}`), name: str(g.name, 24), iconStyle: ['icon', 'info'].includes(String(g.iconStyle)) ? g.iconStyle as 'icon' | 'info' : undefined, iconColor: /^#[0-9a-fA-F]{3,8}$/.test(String(g.iconColor)) ? String(g.iconColor) : '' })),
     items: (Array.isArray(r.items) ? r.items : [])
       .filter((i) => i && i.title && i.url)
       .slice(0, 300)

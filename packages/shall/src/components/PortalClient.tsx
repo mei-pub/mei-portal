@@ -8,7 +8,7 @@ import TopBar from './TopBar';
 import MeiIcon from './MeiIcon';
 import { isSwitchable, isAppEnabled } from '@/lib/app-toggles';
 import { useHealth } from '@/lib/use-health';
-import type { PanelConfig, PanelItem } from '@/lib/panel-store';
+import type { PanelConfig, PanelItem, PanelGroup } from '@/lib/panel-store';
 import ItemIconPicker, { isImgIcon, isTextIcon, textIconContent, contrastColor } from './ItemIconPicker';
 import 'iconify-icon';
 
@@ -423,7 +423,7 @@ export default function PortalClient({ items, panel: initialPanel }: { items: It
     .filter((s) => s.list.length > 0 || editMode);
 
   // 分页：第0页=常用(未分组)，1+页=分组
-  const pages = [{ id: 'default', name: '常用', items: ungrouped }, ...grouped.map(g => ({ id: g.group.id, name: g.group.name, items: g.list }))].filter(p => p.items.length > 0 || editMode || query);
+  const pages: Array<{ id: string; name: string; items: PanelItem[]; group?: PanelGroup }> = [{ id: 'default', name: '常用', items: ungrouped }, ...grouped.map(g => ({ id: g.group.id, name: g.group.name, items: g.list, group: g.group }))].filter(p => p.items.length > 0 || editMode || query);
   const activePage = pages[pageIdx] || pages[0];
 
   // 分页切换（含方向键和拖拽）
@@ -595,6 +595,19 @@ export default function PortalClient({ items, panel: initialPanel }: { items: It
                 <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 'var(--mei-space-3)' }}>
                   <span style={{ fontSize: 12, letterSpacing: 2, color: 'var(--mei-text-faint)' }}>{page.name} · {page.items.length}</span>
                   {lanMode && <span style={{ fontSize: 11, color: 'var(--mei-primary)' }}>内网模式</span>}
+                  {page.id !== 'default' && page.group && (
+                    <button
+                      onClick={() => {
+                        const next = page.group!.iconStyle === 'icon' ? 'info' : 'icon';
+                        const groups: PanelGroup[] = panel.groups.map(g => g.id === page.group!.id ? {...g, iconStyle: next as 'icon' | 'info'} : g);
+                        savePanel({...panel, groups}, '已更新分组样式');
+                      }}
+                      title="切换分组图标样式"
+                      style={{ border: 'none', background: 'transparent', color: 'var(--mei-primary)', fontSize: 11, cursor: 'pointer', marginRight: 6 }}
+                    >
+                      {page.group.iconStyle === 'icon' ? '👁' : '📋'}
+                    </button>
+                  )}
                   {editMode && (
                     <button
                       onClick={() => setEditing({ id: '', groupId: page.id === 'default' ? '' : page.id, title: '', description: '', url: '', lanUrl: '', icon: 'lucide:link', iconColor: '' })}
@@ -604,7 +617,7 @@ export default function PortalClient({ items, panel: initialPanel }: { items: It
                     </button>
                   )}
                 </div>
-                <div className="mei-card-grid" data-mode={iconMode ? 'icon' : 'compact'}>
+                <div className="mei-card-grid" data-mode={page.group?.iconStyle === 'icon' ? 'icon' : (iconMode ? 'icon' : 'compact')}>
                   {page.items.map(renderCard)}
                   {editMode && pageIdx === pi && (
                     <button

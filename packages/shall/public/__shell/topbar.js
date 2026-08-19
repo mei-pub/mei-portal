@@ -149,7 +149,21 @@
       var brand = document.createElement('a');
       brand.className = 'mei-brand';
       brand.href = '/';
-      brand.innerHTML = '<span class="mei-logo"></span><span class="mei-brand-text">mei-allin</span>';
+      brand.innerHTML = '<span class="mei-logo"></span><span class="mei-brand-text" id="mei-brand-text">mei-allin</span>';
+      // 从面板配置加载品牌名
+      fetch('/api/panel', { credentials: 'include' })
+        .then(function(r) { return r.json(); })
+        .then(function(cfg) {
+          if (cfg && cfg.style) {
+            var txt = document.getElementById('mei-brand-text');
+            if (cfg.style.logoImage) {
+              brand.innerHTML = '<img src="' + cfg.style.logoImage + '" alt="logo" style="height:22px;max-width:120px;object-fit:contain;border-radius:6px;flex-shrink:0;" /><span class="mei-brand-text" id="mei-brand-text"></span>';
+            } else if (cfg.style.logoText) {
+              if (txt) txt.textContent = cfg.style.logoText;
+            }
+          }
+        })
+        .catch(function() {});
       bar.appendChild(brand);
 
       // 应用切换（书架多实例：单个=书架名入口；多个=悬浮下拉，按钮显示当前书架名）

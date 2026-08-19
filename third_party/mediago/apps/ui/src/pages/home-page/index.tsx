@@ -71,45 +71,6 @@ const HomePage: FC<Props> = ({ filter = DownloadFilter.list }) => {
 
   return (
     <PageContainer
-      title={
-        filter === DownloadFilter.list
-          ? t("downloadList")
-          : t("downloadComplete")
-      }
-      rightExtra={
-        <div className="flex flex-row gap-2">
-          {!isWeb && (
-            <Button onClick={() => shell.open(appStore.local)}>
-              <FolderIcon />
-              {t("openFolder")}
-            </Button>
-          )}
-          {filter === DownloadFilter.done &&
-            !isWeb &&
-            appStore.enableMobilePlayer && (
-              <Popover
-                content={
-                  <div>
-                    <QRCode value={envPath?.playerUrl || ""} />
-                    <div className="text-xs">{t("scanToWatch")}</div>
-                  </div>
-                }
-                placement="bottomRight"
-              >
-                <Button>
-                  <QrcodeOutlined />
-                  {t("playOnMobile")}
-                </Button>
-              </Popover>
-            )}
-          {filter === DownloadFilter.list && (
-            <>
-              <Button onClick={() => setDoneOpen(true)}>{t("downloadComplete")}</Button>
-              <HomeDownloadButton onClick={handleOpenForm} />
-            </>
-          )}
-        </div>
-      }
       className="bg-white/85 dark:bg-[#1F2024] flex flex-col flex-1 min-h-0 h-full rounded-xl border border-black/5 shadow-sm p-3 gap-3 overflow-hidden"
     >
       <DownloadList filter={filter} />
