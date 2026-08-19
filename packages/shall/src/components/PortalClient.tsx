@@ -6,10 +6,41 @@ import TopBar from './TopBar';
 import AppCard from './AppCard';
 import MeiIcon from './MeiIcon';
 import { isSwitchable, isAppEnabled } from '@/lib/app-toggles';
+import type { PanelConfig, CustomItem } from '@/lib/panel-store';
 
 interface Item {
   plugin: ClientPlugin;
   url: string;
+}
+
+// 自定义链接卡片复用 mei-app-card 样式
+function CustomCard({ item }: { item: CustomItem }) {
+  return (
+    <a href={item.url} target="_blank" rel="noreferrer" style={{ textDecoration: 'none' }}>
+      <button className="mei-app-card" type="button">
+        <div className="mei-icon-tile" style={{ background: 'linear-gradient(135deg,#64748b,#334155)' }}>
+          <MeiIcon icon={item.icon} size={22} />
+        </div>
+        <div style={{ fontWeight: 650, fontSize: 14, lineHeight: 1.3, letterSpacing: 0.2 }}>{item.name}</div>
+        <span
+          style={{
+            marginTop: 'auto',
+            paddingTop: 6,
+            fontSize: 10.5,
+            letterSpacing: 0.6,
+            color: 'var(--mei-text-faint)',
+            opacity: 0.85,
+            maxWidth: '100%',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
+          }}
+        >
+          {item.url.replace(/^https?:\/\//, '').split('/')[0]}
+        </span>
+      </button>
+    </a>
+  );
 }
 
 interface ResolvedItem extends Item {
@@ -30,7 +61,7 @@ function greeting(hour: number): string {
 const WEEKDAYS = ['星期日', '星期一', '星期二', '星期三', '星期四', '星期五', '星期六'];
 const pad = (n: number) => String(n).padStart(2, '0');
 
-export default function PortalClient({ items }: { items: Item[] }) {
+export default function PortalClient({ items, panel }: { items: Item[]; panel: PanelConfig }) {
   const [query, setQuery] = useState('');
   const searchRef = useRef<HTMLInputElement>(null);
   const [enabledTick, setEnabledTick] = useState(0);
@@ -79,14 +110,11 @@ export default function PortalClient({ items }: { items: Item[] }) {
     );
   }, [resolvedItems, query]);
 
-  // 应用数量不多：不做分类，统一按名称排序平铺；主页面板固定排在第一位
+  // 应用数量不多：不做分类，统一按名称排序平铺
   const sorted = useMemo(() => {
-    return [...filtered].sort((a, b) => {
-      const aPanel = a.plugin.id === 'sun-panel' ? 0 : 1;
-      const bPanel = b.plugin.id === 'sun-panel' ? 0 : 1;
-      if (aPanel !== bPanel) return aPanel - bPanel;
-      return a.plugin.name.localeCompare(b.plugin.name, 'zh-Hans-CN');
-    });
+    return [...filtered].sort((a, b) =>
+      a.plugin.name.localeCompare(b.plugin.name, 'zh-Hans-CN')
+    );
   }, [filtered]);
 
   // Cmd/Ctrl+K 聚焦搜索
@@ -111,12 +139,39 @@ export default function PortalClient({ items }: { items: Item[] }) {
 
   return (
     <div style={{ minHeight: '100vh', position: 'relative' }}>
-      {/* 极光动态背景 */}
-      <div className="mei-aurora" aria-hidden>
-        <div className="blob blob-1" />
-        <div className="blob blob-2" />
-        <div className="blob blob-3" />
-      </div>
+      {/* 背景：自定义壁纸（可配遮罩/模糊）或默认极光 */}
+      {panel?.background?.url ? (
+        <>
+          <div
+            aria-hidden
+            style={{
+              position: 'fixed',
+              inset: 0,
+              zIndex: -3,
+              backgroundImage: `url(${panel.background.url})`,
+              backgroundSize: 'cover',
+              backgroundPosition: 'center',
+              filter: panel.background.blur ? `blur(${panel.background.blur}px)` : undefined,
+              transform: panel.background.blur ? 'scale(1.06)' : undefined,
+            }}
+          />
+          <div
+            aria-hidden
+            style={{
+              position: 'fixed',
+              inset: 0,
+              zIndex: -2,
+              background: `rgba(7,10,19,${panel.background.mask})`,
+            }}
+          />
+        </>
+      ) : (
+        <div className="mei-aurora" aria-hidden>
+          <div className="blob blob-1" />
+          <div className="blob blob-2" />
+          <div className="blob blob-3" />
+        </div>
+      )}
 
       {/* 顶栏（透明玻璃，仅右侧操作区） */}
       <TopBar query="" onSearch={() => {}} showSearch={false} transparent />
@@ -287,6 +342,9 @@ export default function PortalClient({ items }: { items: Item[] }) {
               <a key={plugin.id} href={disabled ? undefined : url} style={{ textDecoration: 'none' }}>
                 <AppCard plugin={plugin} url={url} disabled={disabled} onClick={() => {}} />
               </a>
+            ))}
+            {(panel?.customItems || []).map((item) => (
+              <CustomCard key={item.id} item={item} />
             ))}
           </div>
           {filtered.length === 0 && (

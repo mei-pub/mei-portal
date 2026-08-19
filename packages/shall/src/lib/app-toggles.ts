@@ -5,15 +5,15 @@ export interface SwitchableApp {
   id: string;
   name: string;
   icon: string;
+  desc?: string;
 }
 
 // 可开关的应用（与 image/plugins.json 中的 id 对应）
 export const SWITCHABLE_APPS: SwitchableApp[] = [
-  { id: 'ai-draw', name: 'AI 绘图', icon: 'lucide:pen-tool' },
-  { id: 'sun-panel', name: '主页面板', icon: 'lucide:layout-dashboard' },
-  { id: 'solara', name: '音乐播放', icon: 'lucide:music' },
-  { id: 'lunatv', name: '影视门户', icon: 'lucide:tv' },
-  { id: 'mediago', name: '流媒体下载', icon: 'lucide:download' },
+  { id: 'ai-draw', name: 'AI 绘图', icon: 'lucide:pen-tool', desc: '关闭后门户卡片与顶栏入口置灰' },
+  { id: 'solara', name: '音乐播放', icon: 'lucide:music', desc: '关闭后门户卡片与顶栏入口置灰' },
+  { id: 'lunatv', name: '影视门户', icon: 'lucide:tv', desc: '关闭后门户卡片与顶栏入口置灰' },
+  { id: 'mediago', name: '流媒体下载', icon: 'lucide:download', desc: '关闭后门户卡片与顶栏入口置灰' },
 ];
 
 const STORAGE_KEY = 'mei-enabled';

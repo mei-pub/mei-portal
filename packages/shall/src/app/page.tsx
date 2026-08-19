@@ -1,6 +1,7 @@
 import { getPlugins, getPluginUrl, expandTutorialLibraries } from '@/lib/plugins';
 import type { ClientPlugin } from '@/lib/categories';
 import { isLoggedIn, initUserIfNeeded } from '@/lib/auth';
+import { getPanelConfig } from '@/lib/panel-store';
 import { redirect } from 'next/navigation';
 import PortalClient from '@/components/PortalClient';
 
@@ -40,5 +41,8 @@ export default async function HomePage() {
     },
   }));
 
-  return <PortalClient items={items} />;
+  // 主页面板配置（背景 + 自定义应用），mei-allin 自研主页
+  const panel = getPanelConfig();
+
+  return <PortalClient items={items} panel={panel} />;
 }

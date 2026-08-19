@@ -78,31 +78,6 @@ const solaraAdapter: AppLoginAdapter = {
   },
 };
 
-// ----- sun-panel 适配器（token header + localStorage，默认 admin@sun.cc/12345678）-----
-// sun-panel 不支持 env 初始化，用默认凭据登录拿 token
-// token 通过 /api/auth/me 返回给前端，顶栏 JS 注入 localStorage
-const sunpanelAdapter: AppLoginAdapter = {
-  appId: 'sun-panel',
-  async login() {
-    try {
-      const res = await fetch('http://127.0.0.1:3006/panel/api/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username: 'admin@sun.cc', password: '12345678' }),
-      });
-      const data = await res.json();
-      const token = data?.data?.token;
-      if (token) {
-        return { success: true, cookies: [], token };
-      }
-      return { success: false, cookies: [] };
-    } catch {
-      return { success: false, cookies: [] };
-    }
-  },
-};
-
-// ----- mediago 适配器（API key + localStorage）-----
 const mediagoAdapter: AppLoginAdapter = {
   appId: 'mediago',
   async login(_u, password) {
@@ -174,7 +149,7 @@ const tutorialUnlockAdapter: AppLoginAdapter = {
   },
 };
 
-const ADAPTERS: AppLoginAdapter[] = [meilinkAdapter, lunatvAdapter, solaraAdapter, sunpanelAdapter, mediagoAdapter, aidrawAdapter, tutorialUnlockAdapter];
+const ADAPTERS: AppLoginAdapter[] = [meilinkAdapter, lunatvAdapter, solaraAdapter, mediagoAdapter, aidrawAdapter, tutorialUnlockAdapter];
 
 /** 并发代理登录所有已注册应用 */
 export async function proxyLoginAll(

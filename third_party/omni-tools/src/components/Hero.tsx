@@ -126,25 +126,46 @@ export default function Hero() {
 
   return (
     <Box width={{ xs: '90%', md: '80%', lg: '60%' }}>
-      <Stack mb={1} direction={'row'} spacing={1} justifyContent={'center'}>
-        <Typography sx={{ textAlign: 'center' }} fontSize={{ xs: 25, md: 30 }}>
-          {t('translation:hero.title')}{' '}
-          <Typography
-            fontSize={{ xs: 25, md: 30 }}
-            display={'inline'}
-            color={'primary'}
-          >
-            {t('translation:hero.brand')}
-          </Typography>
+      {/* mei-allin：Mei Tools 品牌主题渲染（替换原 title/description 文案） */}
+      <Stack
+        mb={2}
+        direction={'row'}
+        spacing={1.5}
+        justifyContent={'center'}
+        alignItems={'center'}
+      >
+        <Box
+          sx={{
+            width: { xs: 38, md: 46 },
+            height: { xs: 38, md: 46 },
+            borderRadius: '14px',
+            background: 'linear-gradient(135deg,#6366f1 0%,#a855f7 55%,#ec4899 100%)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            boxShadow: '0 6px 20px rgba(99,102,241,0.4), inset 0 1px 0 rgba(255,255,255,0.35)',
+            color: '#fff',
+            fontSize: { xs: 20, md: 24 },
+            fontWeight: 800,
+          }}
+        >
+          M
+        </Box>
+        <Typography
+          sx={{
+            textAlign: 'center',
+            fontWeight: 800,
+            letterSpacing: '-0.5px',
+            background: 'linear-gradient(135deg,#6366f1 0%,#a855f7 55%,#ec4899 100%)',
+            WebkitBackgroundClip: 'text',
+            WebkitTextFillColor: 'transparent',
+            backgroundClip: 'text',
+          }}
+          fontSize={{ xs: 30, md: 40 }}
+        >
+          Mei Tools
         </Typography>
       </Stack>
-      <Typography
-        sx={{ textAlign: 'center' }}
-        fontSize={{ xs: 15, md: 20 }}
-        mb={2}
-      >
-        {t('translation:hero.description')}
-      </Typography>
 
       <Autocomplete
         sx={{ mb: 2 }}

@@ -7,19 +7,49 @@ interface AppSidebarProps {
   onCreateProject?: () => void
 }
 
-// mei-allin 集成：原 72px 固定侧栏改为左侧中段可折叠浮动小面板
-// 三个行动：系统首页 / 新建 / 文件管理（弹层打开 ProjectsPage）
+const STORE_KEY = 'mei-float-aidraw'
+
+// mei-allin 集成：左侧中段浮动操作面板（首页 / 新建 / 文件管理弹层）
+// 默认展开 + localStorage 记忆；编辑页（/editor/*）默认收起（对话区顶到左边）
 export function AppSidebar({ onCreateProject }: AppSidebarProps) {
   const navigate = useNavigate()
   const location = useLocation()
-  const [open, setOpen] = useState(false)
+  const [open, setOpen] = useState<boolean | null>(null)
   const [projectsOpen, setProjectsOpen] = useState(false)
+  const isEditor = location.pathname.startsWith('/editor')
 
-  // 路由变化（如从文件管理里进入编辑器）时收起面板并关闭弹层
+  // 初始：记忆优先；无记忆时编辑页收起、其余展开
   useEffect(() => {
-    setOpen(false)
+    try {
+      const saved = localStorage.getItem(STORE_KEY)
+      if (saved === '1') setOpen(false)
+      else if (saved === '0') setOpen(true)
+      else setOpen(!isEditor)
+    } catch {
+      setOpen(!isEditor)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // 无记忆时切换到编辑页自动收起；离开编辑页自动展开（有手动记忆后尊重记忆）
+  useEffect(() => {
+    try {
+      if (localStorage.getItem(STORE_KEY) !== null) return
+    } catch {}
+    setOpen(!isEditor)
+  }, [isEditor])
+
+  // 路由变化（如从文件管理里进入编辑器）时关闭弹层
+  useEffect(() => {
     setProjectsOpen(false)
   }, [location.pathname])
+
+  const toggle = (next: boolean) => {
+    setOpen(next)
+    try {
+      localStorage.setItem(STORE_KEY, next ? '0' : '1')
+    } catch {}
+  }
 
   const stroke = {
     fill: 'none',
@@ -63,44 +93,46 @@ export function AppSidebar({ onCreateProject }: AppSidebarProps) {
     },
   ]
 
+  // 初始 null（SSR/首帧）按收起把手渲染，避免闪烁
+  const expanded = open === true
+
   return (
     <>
-      <div className="fixed left-3 top-1/2 -translate-y-1/2 z-40 flex flex-col items-center gap-1 p-1.5 rounded-2xl bg-white/75 dark:bg-gray-900/70 backdrop-blur-xl border border-black/10 dark:border-white/10 shadow-lg">
-        {!open ? (
+      {!expanded ? (
+        // 收起态：紧贴左缘的渐变小把手
+        <button
+          onClick={() => toggle(true)}
+          title="展开菜单"
+          className="fixed left-0 top-1/2 z-40 h-16 w-6 -translate-y-1/2 flex items-center justify-center rounded-r-xl bg-gradient-to-b from-indigo-500 to-purple-500 text-white shadow-lg transition-all hover:w-8"
+        >
+          <svg className="h-4 w-4" viewBox="0 0 24 24" {...stroke}>
+            <path d="m9 18 6-6-6-6"/>
+          </svg>
+        </button>
+      ) : (
+        <div className="fixed left-3 top-1/2 -translate-y-1/2 z-40 flex flex-col items-center gap-1 p-1.5 rounded-2xl bg-white/75 dark:bg-gray-900/70 backdrop-blur-xl border border-black/10 dark:border-white/10 shadow-lg">
+          {actions.map(a => (
+            <button
+              key={a.label}
+              onClick={a.onClick}
+              title={a.title}
+              className="w-10 h-11 rounded-xl flex flex-col items-center justify-center text-gray-500 hover:bg-gray-900/5 hover:text-indigo-600 dark:text-gray-400 dark:hover:bg-white/10 transition-colors"
+            >
+              {a.icon}
+              <span className="text-[9px] leading-none mt-0.5">{a.label}</span>
+            </button>
+          ))}
           <button
-            onClick={() => setOpen(true)}
-            title="展开菜单"
-            className="w-10 h-10 rounded-xl flex items-center justify-center text-gray-500 hover:bg-gray-900/5 hover:text-indigo-600 dark:text-gray-400 dark:hover:bg-white/10 transition-colors"
+            onClick={() => toggle(false)}
+            title="收起菜单"
+            className="w-10 h-8 rounded-xl flex items-center justify-center text-gray-400 hover:bg-gray-900/5 dark:hover:bg-white/10 transition-colors"
           >
-            <svg className="h-5 w-5" viewBox="0 0 24 24" {...stroke}>
-              <path d="M3 7h18M3 12h18M3 17h18"/>
+            <svg className="h-4 w-4" viewBox="0 0 24 24" {...stroke}>
+              <path d="m15 18-6-6 6-6"/>
             </svg>
           </button>
-        ) : (
-          <>
-            {actions.map(a => (
-              <button
-                key={a.label}
-                onClick={a.onClick}
-                title={a.title}
-                className="w-10 h-11 rounded-xl flex flex-col items-center justify-center text-gray-500 hover:bg-gray-900/5 hover:text-indigo-600 dark:text-gray-400 dark:hover:bg-white/10 transition-colors"
-              >
-                {a.icon}
-                <span className="text-[9px] leading-none mt-0.5">{a.label}</span>
-              </button>
-            ))}
-            <button
-              onClick={() => setOpen(false)}
-              title="收起"
-              className="w-10 h-8 rounded-xl flex items-center justify-center text-gray-400 hover:bg-gray-900/5 dark:hover:bg-white/10 transition-colors"
-            >
-              <svg className="h-4 w-4" viewBox="0 0 24 24" {...stroke}>
-                <path d="m15 18-6-6 6-6"/>
-              </svg>
-            </button>
-          </>
-        )}
-      </div>
+        </div>
+      )}
 
       {/* 文件管理：弹层打开 */}
       <Dialog open={projectsOpen} onOpenChange={setProjectsOpen}>

@@ -1,10 +1,12 @@
 'use client';
 
-// mei-allin：左侧中段可折叠浮动小面板 —— 替代原固定侧栏
-// 收起时仅一个圆钮；展开显示 首页/搜索/电影/剧集/动漫 五个行动
+// mei-allin：左侧中段浮动导航面板 —— 替代原固定侧栏
+// 默认展开；收起态为紧贴左缘的渐变小把手（›）；状态经 localStorage 记忆
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { useState, type ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
+
+const STORE_KEY = 'mei-float-lunatv';
 
 interface NavItem {
   label: string;
@@ -74,55 +76,65 @@ const ITEMS: NavItem[] = [
 ];
 
 export default function FloatingNav({ activePath }: { activePath?: string }) {
-  const [open, setOpen] = useState(false);
   const pathname = usePathname();
   const current = activePath ?? pathname;
+  const [open, setOpen] = useState(true);
 
-  return (
+  // 初始状态：localStorage 记忆优先，默认展开
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(STORE_KEY);
+      if (saved === '1') setOpen(false);
+    } catch {}
+  }, []);
+
+  const toggle = (next: boolean) => {
+    setOpen(next);
+    try {
+      localStorage.setItem(STORE_KEY, next ? '0' : '1');
+    } catch {}
+  };
+
+  return !open ? (
+    // 收起态：紧贴左缘的渐变小把手
+    <button
+      onClick={() => toggle(true)}
+      title='展开导航'
+      className='fixed left-0 top-1/2 z-40 hidden h-16 w-6 -translate-y-1/2 items-center justify-center rounded-r-xl bg-gradient-to-b from-indigo-500 to-purple-500 text-white shadow-lg transition-all hover:w-8 md:flex'
+    >
+      <svg className='h-4 w-4' viewBox='0 0 24 24' {...stroke}>
+        <path d='m9 18 6-6-6-6' />
+      </svg>
+    </button>
+  ) : (
     <div className='fixed left-3 top-1/2 z-40 hidden -translate-y-1/2 md:flex md:flex-col md:items-center md:gap-1 md:rounded-2xl md:border md:border-black/10 md:bg-white/75 md:p-1.5 md:shadow-lg md:backdrop-blur-xl dark:border-white/10 dark:bg-gray-900/70'>
-      {!open ? (
-        <button
-          onClick={() => setOpen(true)}
-          title='展开导航'
-          className='flex h-10 w-10 items-center justify-center rounded-xl text-gray-500 transition-colors hover:bg-gray-900/5 hover:text-green-600 dark:text-gray-400 dark:hover:bg-white/10'
-        >
-          <svg className='h-5 w-5' viewBox='0 0 24 24' {...stroke}>
-            <path d='M3 7h18M3 12h18M3 17h18' />
-          </svg>
-        </button>
-      ) : (
-        <>
-          {ITEMS.map((item) => {
-            const isActive =
-              item.href === '/' ? current === '/' : current.startsWith(item.href.split('?')[0]);
-            return (
-              <Link
-                key={item.label}
-                href={item.href}
-                title={item.label}
-                onClick={() => setOpen(false)}
-                className={`flex h-11 w-11 flex-col items-center justify-center rounded-xl transition-colors ${
-                  isActive
-                    ? 'bg-green-600/10 text-green-600'
-                    : 'text-gray-500 hover:bg-gray-900/5 hover:text-green-600 dark:text-gray-400 dark:hover:bg-white/10'
-                }`}
-              >
-                {item.icon}
-                <span className='mt-0.5 text-[9px] leading-none'>{item.label}</span>
-              </Link>
-            );
-          })}
-          <button
-            onClick={() => setOpen(false)}
-            title='收起'
-            className='flex h-8 w-11 items-center justify-center rounded-xl text-gray-400 transition-colors hover:bg-gray-900/5 dark:hover:bg-white/10'
+      {ITEMS.map((item) => {
+        const isActive =
+          item.href === '/' ? current === '/' : current.startsWith(item.href.split('?')[0]);
+        return (
+          <Link
+            key={item.label}
+            href={item.href}
+            title={item.label}
+            className={`flex h-11 w-11 items-center justify-center rounded-xl transition-colors ${
+              isActive
+                ? 'bg-green-600/10 text-green-600'
+                : 'text-gray-500 hover:bg-gray-900/5 hover:text-green-600 dark:text-gray-400 dark:hover:bg-white/10'
+            }`}
           >
-            <svg className='h-4 w-4' viewBox='0 0 24 24' {...stroke}>
-              <path d='m15 18-6-6 6-6' />
-            </svg>
-          </button>
-        </>
-      )}
+            {item.icon}
+          </Link>
+        );
+      })}
+      <button
+        onClick={() => toggle(false)}
+        title='收起导航'
+        className='flex h-8 w-11 items-center justify-center rounded-xl text-gray-400 transition-colors hover:bg-gray-900/5 dark:hover:bg-white/10'
+      >
+        <svg className='h-4 w-4' viewBox='0 0 24 24' {...stroke}>
+          <path d='m15 18-6-6 6-6' />
+        </svg>
+      </button>
     </div>
   );
 }

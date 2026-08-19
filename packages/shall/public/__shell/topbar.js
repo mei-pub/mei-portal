@@ -21,11 +21,10 @@
 
   // ---- 应用开关（localStorage mei-enabled，仅当前浏览器）----
   var SWITCHABLE = [
-    ['ai-draw', 'AI 绘图'],
-    ['sun-panel', '主页面板'],
-    ['solara', '音乐播放'],
-    ['lunatv', '影视门户'],
-    ['mediago', '流媒体下载'],
+    ['ai-draw', 'AI 绘图', '关闭后门户卡片与顶栏入口置灰'],
+    ['solara', '音乐播放', '关闭后门户卡片与顶栏入口置灰'],
+    ['lunatv', '影视门户', '关闭后门户卡片与顶栏入口置灰'],
+    ['mediago', '流媒体下载', '关闭后门户卡片与顶栏入口置灰'],
   ];
   function readEnabled() {
     try { return JSON.parse(localStorage.getItem('mei-enabled') || '{}') || {}; } catch (e) { return {}; }
@@ -35,25 +34,6 @@
     var m = readEnabled();
     m[id] = !!on;
     try { localStorage.setItem('mei-enabled', JSON.stringify(m)); } catch (e) {}
-  }
-
-  // ---- 主页内网模式开关（sun-panel localStorage panelStorage，0=内网 lan、1=外网 wan）----
-  function isLanMode() {
-    try {
-      var p = JSON.parse(localStorage.getItem('panelStorage') || 'null');
-      return !!(p && p.data && p.data.networkMode === 0);
-    } catch (e) { return false; }
-  }
-  function setLanMode(on) {
-    try {
-      var p = JSON.parse(localStorage.getItem('panelStorage') || '{}');
-      if (!p.data || typeof p.data !== 'object') p.data = {};
-      p.data.networkMode = on ? 0 : 1;
-      p.expire = null;
-      localStorage.setItem('panelStorage', JSON.stringify(p));
-    } catch (e) {}
-    // 面板页面内切换时需重载才生效
-    if (window.location.pathname.indexOf('/panel') === 0) window.location.reload();
   }
 
   // 非嵌入模式才注入顶栏
@@ -82,7 +62,18 @@
       '[class*="Navbar"][class*="fixed"],[class*="navbar"][class*="fixed"],',
       '[class*="Sidebar"][class*="fixed"],[class*="sidebar"][class*="fixed"],',
       '[class*="header"][class*="fixed"],[class*="Header"][class*="fixed"]{top:74px!important;}',
-      'body{padding-top:74px!important;--mei-topbar-space:74px;}',
+      'body{padding-top:74px!important;--mei-topbar-space:74px;transition:padding-top .25s ease;}',
+      'body.mei-topbar-collapsed{padding-top:30px!important;--mei-topbar-space:30px;}',
+      /* 收起把手：贴顶居中的小渐变条 */
+      '#mei-topbar-toggle{position:fixed;top:0;left:50%;transform:translateX(-50%);z-index:9999;height:22px;width:64px;',
+      'border-radius:0 0 14px 14px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:#fff;',
+      'background:linear-gradient(180deg,#6366f1,#a855f7);box-shadow:0 4px 14px rgba(99,102,241,0.45);',
+      'transition:width .18s ease,box-shadow .18s ease;}',
+      '#mei-topbar-toggle:hover{width:84px;box-shadow:0 6px 20px rgba(99,102,241,0.6);}',
+      /* 胶囊收起按钮 */
+      '#mei-topbar .mei-collapse{display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;',
+      'border-radius:999px;border:none;background:transparent;color:#9aa3b8;cursor:pointer;flex-shrink:0;transition:all .18s;}',
+      '#mei-topbar .mei-collapse:hover{background:rgba(23,32,56,0.08);color:#1c2333;}',
       '#mei-topbar *{box-sizing:border-box;}',
       '#mei-topbar a{color:inherit;text-decoration:none;}',
       /* Toast/notification 容器下移 */
@@ -152,14 +143,16 @@
       brand.innerHTML = '<span class="mei-logo"></span><span class="mei-brand-text">mei-allin</span>';
       bar.appendChild(brand);
 
-      // 应用切换
+      // 应用切换（书架多实例：单个=书架名入口；多个=悬浮下拉，按钮显示当前书架名）
       var apps = document.createElement('div');
       apps.className = 'mei-apps';
       var currentLib = null;
       try { currentLib = new URLSearchParams(window.location.search).get('lib'); } catch (e) {}
+      var libEntries = plugins.filter(function (p) { return /^tutorial-/.test(p.id); });
+      var libGroupActive = APP_ID === 'tutorial' || /^tutorial-/.test(APP_ID);
       plugins.forEach(function (p) {
+        if (/^tutorial-/.test(p.id)) return; // 书架实例统一由下方聚合入口渲染
         var isActive = p.id === APP_ID;
-        if (currentLib && p.id === APP_ID + '-' + currentLib) isActive = true;
         var b = document.createElement('a');
         b.className = 'mei-btn' + (isActive ? ' active' : '') + (isAppOn(p.id) ? '' : ' off');
         b.href = p.url;
@@ -167,6 +160,52 @@
         b.title = p.name + (isAppOn(p.id) ? '' : '（已关闭）');
         apps.appendChild(b);
       });
+      if (libEntries.length === 1) {
+        var lib = libEntries[0];
+        var b1 = document.createElement('a');
+        b1.className = 'mei-btn' + (libGroupActive ? ' active' : '');
+        b1.href = lib.url;
+        b1.textContent = lib.name;
+        b1.title = lib.name;
+        apps.appendChild(b1);
+      } else if (libEntries.length > 1) {
+        // 当前书架：URL ?lib=N 匹配；未进入则用第一个书架名
+        var current = libEntries[0];
+        if (currentLib) {
+          for (var i = 0; i < libEntries.length; i++) {
+            if (libEntries[i].id === 'tutorial-' + currentLib) { current = libEntries[i]; break; }
+          }
+        }
+        var wrap = document.createElement('div');
+        wrap.style.position = 'relative';
+        wrap.style.flexShrink = '0';
+        var libBtn = document.createElement('button');
+        libBtn.className = 'mei-btn' + (libGroupActive ? ' active' : '');
+        libBtn.style.display = 'inline-flex';
+        libBtn.innerHTML = '<span style="max-width:96px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + current.name + '</span>' +
+          '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="margin-left:3px;opacity:.6"><path d="m6 9 6 6 6-6"/></svg>';
+        libBtn.title = '书架：' + current.name;
+        var libMenu = document.createElement('div');
+        libMenu.className = 'mei-menu';
+        libMenu.style.cssText += 'left:0;right:auto;top:40px;width:180px;';
+        libMenu.style.display = 'none';
+        libEntries.forEach(function (l) {
+          var item = document.createElement('a');
+          item.className = 'mei-menu-link';
+          item.href = l.url;
+          item.textContent = l.name;
+          if (l.id === current.id) {
+            item.style.color = 'var(--mei-primary, #6366f1)';
+            item.style.fontWeight = '600';
+          }
+          libMenu.appendChild(item);
+        });
+        libBtn.onclick = function (e) { e.stopPropagation(); var open = libMenu.style.display === 'block'; libMenu.style.display = open ? 'none' : 'block'; };
+        document.addEventListener('click', function () { libMenu.style.display = 'none'; });
+        wrap.appendChild(libBtn);
+        wrap.appendChild(libMenu);
+        apps.appendChild(wrap);
+      }
       bar.appendChild(apps);
 
       var spacer = document.createElement('div');
@@ -211,18 +250,31 @@
       title.textContent = '应用开关';
       menu.appendChild(title);
       SWITCHABLE.forEach(function (pair) {
-        var id = pair[0], name = pair[1];
+        var id = pair[0], name = pair[1], desc = pair[2] || '';
         var row = document.createElement('button');
         row.className = 'mei-switch' + (isAppOn(id) ? '' : ' off');
         row.dataset.app = id;
+        row.style.flexDirection = 'column';
+        row.style.alignItems = 'flex-start';
+        row.style.gap = '2px';
         var label = document.createElement('span');
         label.className = 'mei-switch-label';
+        label.style.width = '100%';
+        label.style.display = 'flex';
+        label.style.alignItems = 'center';
         label.textContent = name;
         var track = document.createElement('span');
         track.className = 'mei-track' + (isAppOn(id) ? ' on' : '');
+        track.style.marginLeft = 'auto';
         track.innerHTML = '<span class="mei-knob"></span>';
+        label.appendChild(track);
         row.appendChild(label);
-        row.appendChild(track);
+        if (desc) {
+          var descEl = document.createElement('span');
+          descEl.style.cssText = 'font-size:10.5px;color:#9aa3b8;line-height:1.3;text-align:left;';
+          descEl.textContent = desc;
+          row.appendChild(descEl);
+        }
         row.onclick = function (e) {
           e.stopPropagation();
           var next = !isAppOn(id);
@@ -236,30 +288,6 @@
       var sep = document.createElement('div');
       sep.className = 'mei-menu-sep';
       menu.appendChild(sep);
-
-      // 集成开关：主页内网模式
-      var title2 = document.createElement('div');
-      title2.className = 'mei-menu-title';
-      title2.textContent = '集成开关';
-      menu.appendChild(title2);
-      var lanRow = document.createElement('button');
-      lanRow.className = 'mei-switch' + (isLanMode() ? '' : ' off');
-      var lanLabel = document.createElement('span');
-      lanLabel.className = 'mei-switch-label';
-      lanLabel.textContent = '主页内网模式';
-      var lanTrack = document.createElement('span');
-      lanTrack.className = 'mei-track' + (isLanMode() ? ' on' : '');
-      lanTrack.innerHTML = '<span class="mei-knob"></span>';
-      lanRow.appendChild(lanLabel);
-      lanRow.appendChild(lanTrack);
-      lanRow.onclick = function (e) {
-        e.stopPropagation();
-        var next = !isLanMode();
-        setLanMode(next);
-        lanRow.classList.toggle('off', !next);
-        lanTrack.classList.toggle('on', next);
-      };
-      menu.appendChild(lanRow);
 
       var sep2 = document.createElement('div');
       sep2.className = 'mei-menu-sep';
@@ -280,26 +308,29 @@
       userSlot.style.flexShrink = '0';
       bar.appendChild(userSlot);
 
+      // 收起顶栏按钮
+      var collapseBtn = document.createElement('button');
+      collapseBtn.className = 'mei-collapse';
+      collapseBtn.title = '收起导航面板';
+      collapseBtn.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m18 15-6-6-6 6"/></svg>';
+      collapseBtn.onclick = function (e) { e.stopPropagation(); setCollapsed(true); };
+      bar.appendChild(collapseBtn);
+
       return { bar: bar, userSlot: userSlot };
     }
 
-    // 异步加载用户态
+    // 异步加载用户态（用户名点击打开账户弹层：修改密码 / 退出登录）
     function renderUser(slot) {
       fetch('/api/auth/me', { credentials: 'include' })
         .then(function (r) { return r.json(); })
         .then(function (d) {
           slot.innerHTML = '';
           if (d.loggedIn) {
-            var a = document.createElement('a');
+            var a = document.createElement('button');
             a.className = 'mei-user';
-            a.href = '/';
-            a.title = '退出登录';
+            a.title = '账户';
             a.textContent = d.username || 'admin';
-            a.onclick = function (e) {
-              e.preventDefault();
-              fetch('/api/auth/logout', { method: 'POST', credentials: 'include' })
-                .then(function () { window.location.href = '/'; });
-            };
+            a.onclick = function (e) { e.stopPropagation(); openAccountModal(d.username || 'admin'); };
             slot.appendChild(a);
           } else {
             var a2 = document.createElement('a');
@@ -312,7 +343,181 @@
         .catch(function () {});
     }
 
+    // ---- 账户弹层（vanilla 模态：主菜单 / 退出确认 / 修改密码表单）----
+    function closeAccountModal() {
+      var m = document.getElementById('mei-account-modal');
+      if (m) m.remove();
+    }
+    function accountModalShell() {
+      closeAccountModal();
+      var overlay = document.createElement('div');
+      overlay.id = 'mei-account-modal';
+      overlay.style.cssText = 'position:fixed;inset:0;z-index:10002;background:rgba(10,14,26,0.45);display:flex;align-items:center;justify-content:center;';
+      overlay.onclick = function (e) { if (e.target === overlay) closeAccountModal(); };
+      var card = document.createElement('div');
+      card.style.cssText = 'width:320px;max-width:calc(100vw - 32px);border-radius:18px;padding:20px;' +
+        'background:rgba(255,255,255,0.96);-webkit-backdrop-filter:blur(28px) saturate(1.6);backdrop-filter:blur(28px) saturate(1.6);' +
+        'border:1px solid rgba(23,32,56,0.1);box-shadow:0 24px 64px rgba(23,32,56,0.24);color:#1c2333;font-size:13px;';
+      overlay.appendChild(card);
+      document.body.appendChild(overlay);
+      return card;
+    }
+    function accBtn(text, opts) {
+      var b = document.createElement(opts && opts.primary ? 'button' : 'button');
+      b.textContent = text;
+      b.style.cssText = 'width:100%;padding:10px 12px;border-radius:12px;cursor:pointer;font-size:13px;transition:all .15s;' +
+        (opts && opts.primary
+          ? 'border:none;background:linear-gradient(135deg,#6366f1,#a855f7);color:#fff;box-shadow:0 4px 14px rgba(99,102,241,0.35);'
+          : opts && opts.danger
+          ? 'border:1px solid rgba(239,68,68,0.35);background:rgba(239,68,68,0.06);color:#ef4444;'
+          : 'border:1px solid rgba(23,32,56,0.12);background:transparent;color:#3d465a;');
+      return b;
+    }
+    function accLabel(text) {
+      var l = document.createElement('div');
+      l.textContent = text;
+      l.style.cssText = 'display:block;font-size:12px;font-weight:600;color:#5d6778;margin:10px 0 4px;';
+      return l;
+    }
+    function accInput(type, placeholder) {
+      var i = document.createElement('input');
+      i.type = type;
+      i.placeholder = placeholder;
+      i.style.cssText = 'width:100%;box-sizing:border-box;padding:9px 12px;border-radius:10px;font-size:13px;' +
+        'border:1px solid rgba(23,32,56,0.15);outline:none;color:#1c2333;background:#fff;';
+      return i;
+    }
+    function openAccountModal(username) {
+      var card = accountModalShell();
+      var title = document.createElement('div');
+      title.style.cssText = 'font-size:15px;font-weight:700;margin-bottom:2px;';
+      title.textContent = username;
+      card.appendChild(title);
+      var sub = document.createElement('div');
+      sub.style.cssText = 'font-size:11px;color:#9aa3b8;margin-bottom:14px;';
+      sub.textContent = 'MEI ALLIN 账户';
+      card.appendChild(sub);
+
+      var pwBtn = accBtn('修改账户密码');
+      pwBtn.style.marginBottom = '8px';
+      pwBtn.onclick = function () { openPasswordForm(card); };
+      var logoutBtn = accBtn('退出登录', { danger: true });
+      logoutBtn.onclick = function () { openLogoutConfirm(card); };
+      card.appendChild(pwBtn);
+      card.appendChild(logoutBtn);
+    }
+    function openLogoutConfirm(card) {
+      card.innerHTML = '';
+      var q = document.createElement('div');
+      q.style.cssText = 'font-size:14px;font-weight:650;margin-bottom:6px;';
+      q.textContent = '确认退出登录？';
+      card.appendChild(q);
+      var d = document.createElement('div');
+      d.style.cssText = 'font-size:12px;color:#5d6778;margin-bottom:16px;';
+      d.textContent = '退出后需要重新输入密码才能进入门户。';
+      card.appendChild(d);
+      var cancel = accBtn('取消');
+      cancel.style.marginBottom = '8px';
+      cancel.onclick = closeAccountModal;
+      var ok = accBtn('确认退出', { danger: true, primary: true });
+      ok.onclick = function () {
+        fetch('/api/auth/logout', { method: 'POST', credentials: 'include' })
+          .then(function () { window.location.href = '/login'; });
+      };
+      card.appendChild(cancel);
+      card.appendChild(ok);
+    }
+    function openPasswordForm(card) {
+      card.innerHTML = '';
+      var title = document.createElement('div');
+      title.style.cssText = 'font-size:14px;font-weight:650;margin-bottom:8px;';
+      title.textContent = '修改账户密码';
+      card.appendChild(title);
+
+      card.appendChild(accLabel('当前密码'));
+      var oldPw = accInput('password', '输入当前密码');
+      card.appendChild(oldPw);
+      card.appendChild(accLabel('新密码（至少 4 位）'));
+      var newPw = accInput('password', '输入新密码');
+      card.appendChild(newPw);
+      card.appendChild(accLabel('确认新密码'));
+      var newPw2 = accInput('password', '再次输入新密码');
+      card.appendChild(newPw2);
+
+      var hint = document.createElement('div');
+      hint.style.cssText = 'min-height:16px;font-size:11.5px;color:#ef4444;margin-top:8px;';
+      card.appendChild(hint);
+
+      var cancel = accBtn('取消');
+      cancel.style.marginTop = '6px';
+      cancel.onclick = closeAccountModal;
+      var submit = accBtn('提交修改', { primary: true });
+      submit.style.marginTop = '8px';
+      submit.onclick = function () {
+        hint.textContent = '';
+        if (!oldPw.value || !newPw.value) { hint.textContent = '请填写完整'; return; }
+        if (newPw.value.length < 4) { hint.textContent = '新密码至少 4 位'; return; }
+        if (newPw.value !== newPw2.value) { hint.textContent = '两次输入的新密码不一致'; return; }
+        submit.disabled = true;
+        submit.textContent = '提交中…';
+        fetch('/api/auth/password', {
+          method: 'POST',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ oldPassword: oldPw.value, newPassword: newPw.value }),
+        })
+          .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+          .then(function (res) {
+            if (!res.ok) {
+              hint.textContent = res.j.error || '修改失败';
+              submit.disabled = false;
+              submit.textContent = '提交修改';
+              return;
+            }
+            hint.style.color = '#10b981';
+            hint.textContent = '密码已修改，正在跳转登录…';
+            setTimeout(function () {
+              fetch('/api/auth/logout', { method: 'POST', credentials: 'include' })
+                .then(function () { window.location.href = '/login'; });
+            }, 900);
+          })
+          .catch(function () {
+            hint.textContent = '网络错误，请重试';
+            submit.disabled = false;
+            submit.textContent = '提交修改';
+          });
+      };
+      card.appendChild(submit);
+      card.appendChild(cancel);
+    }
+
     var cachedPlugins = null;
+
+    // ---- 顶部导航面板：展开/收起（localStorage 记忆，收起为贴顶小把手）----
+    var COLLAPSE_KEY = 'mei-topbar-collapsed';
+    function isCollapsed() {
+      try { return localStorage.getItem(COLLAPSE_KEY) === '1'; } catch (e) { return false; }
+    }
+    function ensureToggle() {
+      var t = document.getElementById('mei-topbar-toggle');
+      if (!t) {
+        t = document.createElement('div');
+        t.id = 'mei-topbar-toggle';
+        t.title = '展开导航面板';
+        t.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>';
+        t.onclick = function () { setCollapsed(false); };
+        (document.body || document.documentElement).appendChild(t);
+      }
+      t.style.display = isCollapsed() ? 'flex' : 'none';
+    }
+    function setCollapsed(collapsed) {
+      try { localStorage.setItem(COLLAPSE_KEY, collapsed ? '1' : '0'); } catch (e) {}
+      document.body.classList.toggle('mei-topbar-collapsed', collapsed);
+      var bar = document.getElementById('mei-topbar');
+      if (bar) bar.style.display = collapsed ? 'none' : 'flex';
+      ensureToggle();
+    }
+
     function render(plugins) {
       cachedPlugins = plugins;
       ensureBar();
@@ -321,10 +526,16 @@
     // 自愈：SPA hydration 可能移除顶栏，定期检查重建
     function ensureBar() {
       if (!document.body) { setTimeout(ensureBar, 50); return; }
+      ensureToggle();
       if (!document.getElementById('mei-topbar') && cachedPlugins) {
         var built = buildTopbar(cachedPlugins);
         document.body.insertBefore(built.bar, document.body.firstChild);
         renderUser(built.userSlot);
+        // 应用记忆的折叠态（默认展开）
+        if (isCollapsed()) {
+          document.getElementById('mei-topbar').style.display = 'none';
+          document.body.classList.add('mei-topbar-collapsed');
+        }
       }
     }
     var healCount = 0;
@@ -344,24 +555,13 @@
       .catch(function () { render([]); });
   }
 
-  // 注入 token 类应用的凭证到 localStorage（sun-panel 等）
+  // 注入 token 类应用的凭证到 localStorage
   // 同时检查子应用 cookie 是否需要刷新（repenetrate）
   // 嵌入模式也保留（应用嵌入后仍需登录态）
   fetch('/api/auth/me', { credentials: 'include' })
     .then(function (r) { return r.json(); })
     .then(function (d) {
       if (d.loggedIn && d.tokens) {
-        // sun-panel: token 存 AUTH_TOKEN key（与前端 store 一致）
-        if (d.tokens['sun-panel']) {
-          try {
-            var existing = localStorage.getItem('AUTH_TOKEN');
-            var parsed = existing ? JSON.parse(existing) : {};
-            parsed.token = d.tokens['sun-panel'];
-            localStorage.setItem('AUTH_TOKEN', JSON.stringify(parsed));
-          } catch (e) {
-            localStorage.setItem('AUTH_TOKEN', JSON.stringify({ token: d.tokens['sun-panel'] }));
-          }
-        }
         // mediago: apiKey 存 zustand persist localStorage（key=appstore-storage，state 为扁平字段）
         if (d.tokens['mediago']) {
           try {

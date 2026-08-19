@@ -331,36 +331,46 @@ export default function HomePage() {
   );
 }
 
-// ─── mei-allin：左侧中段可折叠浮动小面板（书架 / 设置 / 添加）───
+// ─── mei-allin：左侧中段浮动小面板（书架 / 设置 / 添加）───
+// 默认展开 + localStorage 记忆；收起态为紧贴左缘的渐变小把手
 function ShelfFloatingPanel() {
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState<boolean | null>(null);
+  useEffect(() => {
+    try {
+      setOpen(localStorage.getItem("mei-float-novels") !== "1");
+    } catch { setOpen(true); }
+  }, []);
+  const toggle = (next: boolean) => {
+    setOpen(next);
+    try { localStorage.setItem("mei-float-novels", next ? "0" : "1"); } catch {}
+  };
   const actions = [
     { href: "/novels/manage", label: "书架", d: "M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2zM22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z" },
     { href: "/novels/settings", label: "设置", d: "M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z" },
     { href: "/novels/new", label: "添加", d: "M12 5v14M5 12h14" },
   ];
+  if (open === null) return null;
+  if (!open) {
+    return (
+      <button onClick={() => toggle(true)} title="展开书架操作"
+        className="fixed left-0 top-1/2 -translate-y-1/2 z-40 h-16 w-6 flex items-center justify-center rounded-r-xl bg-gradient-to-b from-indigo-500 to-purple-500 text-white shadow-lg transition-all hover:w-8">
+        <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="m9 18 6-6-6-6" /></svg>
+      </button>
+    );
+  }
   return (
-    <div className="fixed left-2.5 top-1/2 -translate-y-1/2 z-40 flex flex-col items-center gap-1.5 p-1.5 rounded-2xl bg-white/80 backdrop-blur-md border border-[var(--border)] shadow-lg">
-      {!open ? (
-        <button onClick={() => setOpen(true)} title="展开书架操作"
-          className="w-10 h-10 rounded-xl flex items-center justify-center text-[var(--muted)] hover:bg-[var(--accent)] hover:text-[var(--primary)] transition-colors">
-          <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2zM22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z" /></svg>
-        </button>
-      ) : (
-        <>
-          {actions.map(a => (
-            <Link key={a.label} href={a.href} title={a.label}
-              className="w-10 h-10 rounded-xl flex flex-col items-center justify-center text-[var(--muted)] hover:bg-[var(--accent)] hover:text-[var(--primary)] transition-colors">
-              <svg className="h-4.5 w-4.5" style={{ width: 18, height: 18 }} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d={a.d} /></svg>
-              <span className="text-[9px] leading-none mt-0.5">{a.label}</span>
-            </Link>
-          ))}
-          <button onClick={() => setOpen(false)} title="收起"
-            className="w-10 h-8 rounded-xl flex items-center justify-center text-[var(--muted)] hover:bg-[var(--accent)] transition-colors">
-            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M15 6l-6 6 6 6" /></svg>
-          </button>
-        </>
-      )}
+    <div className="fixed left-2.5 top-1/2 -translate-y-1/2 z-40 flex flex-col items-center gap-1 p-1.5 rounded-2xl bg-white/80 backdrop-blur-md border border-[var(--border)] shadow-lg">
+      {actions.map(a => (
+        <Link key={a.label} href={a.href} title={a.label}
+          className="w-10 h-11 rounded-xl flex flex-col items-center justify-center text-[var(--muted)] hover:bg-[var(--accent)] hover:text-[var(--primary)] transition-colors">
+          <svg style={{ width: 18, height: 18 }} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d={a.d} /></svg>
+          <span className="text-[9px] leading-none mt-0.5">{a.label}</span>
+        </Link>
+      ))}
+      <button onClick={() => toggle(false)} title="收起"
+        className="w-10 h-8 rounded-xl flex items-center justify-center text-[var(--muted)] hover:bg-[var(--accent)] transition-colors">
+        <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M15 6l-6 6 6 6" /></svg>
+      </button>
     </div>
   );
 }

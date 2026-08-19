@@ -1,7 +1,6 @@
 // 子应用 token 同步：把 /api/auth/me 返回的 token 类应用凭证写入 localStorage
 // 设置集成页在挂载 iframe 前调用（嵌入模式不注入 topbar.js，需自行保证登录态）
 // 各 key/形状与子应用前端一致：
-//   sun-panel → AUTH_TOKEN            {token}
 //   mediago   → appstore-storage      {state:{...扁平字段, apiKey}, version}（zustand persist）
 //   ai-draw   → auth-storage          {state:{user, token}, version}
 
@@ -34,11 +33,6 @@ export async function syncAppTokens(): Promise<void> {
       } catch {}
     }
 
-    if (d.tokens['sun-panel']) {
-      mergeJson('AUTH_TOKEN', (p) => {
-        p.token = d.tokens!['sun-panel'];
-      });
-    }
     if (d.tokens['mediago']) {
       mergeJson('appstore-storage', (p) => {
         const state = (p.state && typeof p.state === 'object' ? p.state : {}) as Record<string, unknown>;

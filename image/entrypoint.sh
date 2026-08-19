@@ -63,47 +63,7 @@ fi
   done
 ) &
 
-# sun-panel 自动登录获取 token，注入 nginx header（后台）
-(
-  for i in $(seq 1 30); do
-    sleep 2
-    SP_RESP=$(curl -s -X POST http://127.0.0.1:3006/panel/api/login \
-      -H 'Content-Type: application/json' \
-      -d '{"username":"admin@sun.cc","password":"12345678"}' 2>/dev/null)
-    SP_TOKEN=$(echo "$SP_RESP" | grep -oE '"token":"[^"]*"' | sed 's/"token":"//;s/"//')
-    if [ -n "$SP_TOKEN" ]; then
-      # 生成 nginx 配置给 sun-panel API 注入 token header
-      cat > /etc/nginx/conf.d/01-sunpanel-token.conf <<EOF
-# sun-panel token 注入（自动生成，请勿手改）
-EOF
-      # 在 sun-panel 的 location /panel/api/ 块里注入 proxy_set_header token
-      sed -i '/location \/panel\/api\//,/}/ s/proxy_pass http:\/\/mei_sunpanel;/proxy_pass http:\/\/mei_sunpanel;\n        proxy_set_header token "'"$SP_TOKEN"'";/' /etc/nginx/conf.d/00-main.conf 2>/dev/null
-      nginx -s reload 2>/dev/null
-      echo "[mei-allin] sun-panel token 注入完成: ${SP_TOKEN:0:8}..."
-      break
-    fi
-  done
-) &
 
-# ---- sun-panel 初始化 conf + 改端口 ----
-SUNPANEL_DIR="/app/apps/sun-panel"
-if [ -d "$SUNPANEL_DIR" ]; then
-  cd "$SUNPANEL_DIR"
-  if [ ! -f conf/conf.ini ]; then
-    ./sun-panel -config >/dev/null 2>&1 || true
-  fi
-  # 设置端口为 3006（避免与 mei-link 的 3002 冲突）
-  if [ -f conf/conf.ini ]; then
-    sed -i 's/^http_port=.*/http_port=3006/' conf/conf.ini 2>/dev/null || true
-  fi
-  # 上传文件持久化：source_path 保持默认 ./uploads（Go router.Static 用它作为路由前缀 /uploads）
-  # 但把 ./uploads 做成软链接到 /data/sun-panel/uploads，文件持久化到数据卷
-  mkdir -p "$DATA_DIR/sun-panel/uploads" "$DATA_DIR/sun-panel/temp"
-  if [ ! -e uploads ]; then
-    ln -sf "$DATA_DIR/sun-panel/uploads" uploads
-  fi
-  cd /
-fi
 
 # ---- 启动 ----
 echo "[mei-allin] 启动 supervisord（nginx + shell + 各应用）"

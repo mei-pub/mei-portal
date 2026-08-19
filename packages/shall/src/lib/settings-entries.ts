@@ -38,7 +38,7 @@ export const SETTING_GROUPS: SettingGroup[] = [
     label: '主页面板',
     icon: 'lucide:layout-dashboard',
     entries: [
-      { id: 'panel-settings', name: '主页设置', url: '/panel/?meiPanel=setting&meiEmbed=1#/', icon: 'lucide:settings-2' },
+      { id: 'panel-settings', name: '主页设置', url: '/home-editor?meiEmbed=1', icon: 'lucide:settings-2' },
     ],
   },
   {

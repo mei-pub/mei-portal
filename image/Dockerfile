@@ -125,28 +125,7 @@ RUN cd apps/core && go mod download
 RUN cd apps/core && CGO_ENABLED=0 GOOS=linux GOARCH=${TARGETARCH} \
     go build -trimpath -ldflags="-s -w" -o /out/mediago-core ./cmd/server
 
-# ---- sun-panel（Go + Gin + Vue，basePath=/panel，vendored）----
-FROM node:22-bookworm-slim AS sunpanel-web-builder
-WORKDIR /build
-COPY third_party/sun-panel/ ./
-RUN corepack enable && corepack prepare pnpm@8 --activate
-RUN pnpm install --no-frozen-lockfile
-RUN pnpm run build
-FROM golang:1.21-bookworm AS sunpanel-go-builder
-WORKDIR /build
-ENV GOPROXY=https://goproxy.cn,direct
-RUN apt-get update && apt-get install -y --no-install-recommends bash gcc git musl-dev \
-    && rm -rf /var/lib/apt/lists/*
-COPY --from=sunpanel-web-builder /build /src
-WORKDIR /src/service
-RUN go env -w GO111MODULE=on \
-    && export PATH=$PATH:/go/bin \
-    && go install -a -v github.com/go-bindata/go-bindata/...@latest \
-    && go install -a -v github.com/elazarl/go-bindata-assetfs/...@latest \
-    && go-bindata-assetfs -o=assets/bindata.go -pkg=assets assets/... \
-    && go build -o /sun-panel --ldflags="-X sun-panel/global.RUNCODE=release -X sun-panel/global.ISDOCKER=docker" main.go
 
-# =============================================================================
 # ---- 运行时（必须最后一个 FROM）----
 # =============================================================================
 FROM node:22-bookworm-slim AS runtime
@@ -204,10 +183,6 @@ RUN mkdir -p /app/apps/mediago/deps && \
     find /app/deps-tmp -type f -exec cp {} /app/apps/mediago/deps/ \; && \
     chmod +x /app/apps/mediago/deps/* && \
     rm -rf /app/deps-tmp
-
-# ---- sun-panel ----
-COPY --from=sunpanel-go-builder /sun-panel ./apps/sun-panel/sun-panel
-COPY --from=sunpanel-web-builder /build/dist ./apps/sun-panel/web
 
 # ---- 配置 ----
 # 覆盖 debian nginx 默认配置：nginx.conf + conf.d/

@@ -92,19 +92,6 @@
     "hasSkin": false
   },
   {
-    "id": "sun-panel",
-    "name": "主页面板",
-    "description": "导航启动器面板（含自定义 JS/CSS）",
-    "icon": "lucide:layout-dashboard",
-    "category": "productivity",
-    "weight": 5,
-    "subdomainPrefix": "panel",
-    "endpoint": "",
-    "healthPath": "/panel",
-    "healthExpect": 200,
-    "hasSkin": false
-  },
-  {
     "id": "mediago",
     "name": "流媒体下载",
     "description": "m3u8/视频流下载工具",

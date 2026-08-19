@@ -18,6 +18,7 @@ import {
 } from 'lucide-react'
 import {Button, Loading} from '@/components/ui'
 import {ModelSelector} from '@/components/ai/ModelSelector'
+import {EngineSelector} from '@/components/ai/EngineSelector'
 import {useChatStore} from '@/stores/chatStore'
 import {selectIsEmpty, useEditorStore} from '@/stores/editorStore'
 import {useAIGenerate} from '@/hooks/useAIGenerate'
@@ -637,6 +638,8 @@ export function ChatPanel({ onCollapse }: ChatPanelProps) {
               </Button>
               <div className="h-3 w-[1px] bg-border mx-1" />
               <ModelSelector />
+              <div className="h-3 w-[1px] bg-border mx-1" />
+              <EngineSelector />
               {isProcessingFile && (
                 <span className="flex items-center text-xs text-muted ml-2">
                   <Loading size="sm" className="mr-1" />
