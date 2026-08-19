@@ -41,13 +41,15 @@ export interface PanelItem {
   url: string;
   lanUrl: string; // 内网地址（内网模式优先）
   icon: string; // lucide:xxx 或 http(s)/data:image（图片）
+  builtin?: string; // 关联的插件 id（内置应用物化；保留健康检查/开关关联）
 }
 
 export interface PanelConfig {
   background: PanelBackground;
   style: PanelStyle;
   groups: PanelGroup[];
-  items: PanelItem[]; // 自定义项（内置应用由系统自动渲染）
+  items: PanelItem[]; // 全部图标项（内置应用物化 + 自定义项）
+  removedBuiltin: string[]; // 用户删除过的内置应用 plugin id（同步时跳过）
 }
 
 export const DEFAULT_CONFIG: PanelConfig = {
@@ -69,6 +71,7 @@ export const DEFAULT_CONFIG: PanelConfig = {
   },
   groups: [],
   items: [],
+  removedBuiltin: [],
 };
 
 function clampNum(v: unknown, min: number, max: number, dft: number): number {
@@ -116,7 +119,7 @@ export function normalizeConfig(raw: unknown): PanelConfig {
       .map((g, i) => ({ id: str(g.id, 40, `g${Date.now()}-${i}`), name: str(g.name, 24) })),
     items: (Array.isArray(r.items) ? r.items : [])
       .filter((i) => i && i.title && i.url)
-      .slice(0, 200)
+      .slice(0, 300)
       .map((i, idx) => ({
         id: str(i.id, 40, `c${Date.now()}-${idx}`),
         groupId: str(i.groupId, 40),
@@ -125,8 +128,49 @@ export function normalizeConfig(raw: unknown): PanelConfig {
         url: str(i.url, 40 * 1024 * 1024),
         lanUrl: str(i.lanUrl, 40 * 1024 * 1024),
         icon: str(i.icon, 40 * 1024 * 1024, 'lucide:link'),
+        ...(i.builtin ? { builtin: str(i.builtin, 60) } : {}),
       })),
+    removedBuiltin: (Array.isArray(r.removedBuiltin) ? r.removedBuiltin : [])
+      .map((x) => str(x, 60))
+      .filter(Boolean)
+      .slice(0, 200),
   };
+}
+
+/**
+ * 同步内置应用到 items（物化）：
+ * - 新增的内置应用（含书架展开实例）自动添加为图标项
+ * - 已从系统移除的内置应用（plugins 中消失）自动删除对应项
+ * - 已存在的项不做任何覆盖（完全归用户管理：可编辑/排序/换组）
+ * - removedBuiltin 黑名单内的不同步（用户删除过的不再复活）
+ */
+export function syncBuiltinItems(
+  config: PanelConfig,
+  plugins: Array<{ id: string; name: string; description?: string; icon: string; url: string }>
+): { config: PanelConfig; changed: boolean } {
+  const removed = new Set(config.removedBuiltin);
+  const pluginIds = new Set(plugins.map((p) => p.id));
+  const existingBuiltin = new Set(config.items.filter((i) => i.builtin).map((i) => i.builtin as string));
+  let changed = false;
+  let items = config.items.filter((i) => {
+    if (i.builtin && !pluginIds.has(i.builtin)) { changed = true; return false; }
+    return true;
+  });
+  for (const p of plugins) {
+    if (removed.has(p.id) || existingBuiltin.has(p.id)) continue;
+    items.push({
+      id: `b-${p.id}`,
+      groupId: '',
+      title: p.name,
+      description: p.description || '',
+      url: p.url,
+      lanUrl: '',
+      icon: p.icon,
+      builtin: p.id,
+    });
+    changed = true;
+  }
+  return changed ? { config: { ...config, items }, changed } : { config, changed };
 }
 
 export function getPanelConfig(): PanelConfig {

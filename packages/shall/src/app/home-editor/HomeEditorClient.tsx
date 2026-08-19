@@ -423,6 +423,7 @@ function ItemsTab({ config, setConfig }: { config: PanelConfig; setConfig: (c: P
                 ? <img src={item.icon} alt="" style={{ width: 18, height: 18, objectFit: 'contain' }} />
                 : <MeiIcon icon={item.icon || 'lucide:link'} size={17} />}
               <span style={{ fontSize: 13, fontWeight: 600 }}>{item.title}</span>
+              {item.builtin && <span style={{ fontSize: 10, padding: '1px 6px', borderRadius: 99, background: 'rgba(16,185,129,0.1)', color: '#059669' }}>内置</span>}
               {item.lanUrl && <span style={{ fontSize: 10, padding: '1px 6px', borderRadius: 99, background: 'rgba(99,102,241,0.1)', color: 'var(--mei-primary)' }}>双地址</span>}
               <span style={{ fontSize: 11, color: 'var(--mei-text-faint)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                 {item.url}

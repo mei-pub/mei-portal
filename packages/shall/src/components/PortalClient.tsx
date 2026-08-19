@@ -1,20 +1,18 @@
 'use client';
-// 门户主页 —— 全量复刻 Sun-Panel 能力（风格/分组/图标项/双地址/搜索/时钟/监控/页脚）
-import { useEffect, useMemo, useRef, useState } from 'react';
+// 门户主页 —— 对齐 Sun-Panel 首页能力：
+// 内置应用物化为图标项统一管理；编辑模式（删除/添加）；右键菜单（打开/编辑/删除）；
+// 拖拽排序（组内+跨组）；编辑弹层；风格全套（Logo/时钟/搜索/背景/边距/页脚/监控）；内网双地址
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ClientPlugin } from '@/lib/categories';
 import TopBar from './TopBar';
-import AppCard from './AppCard';
 import MeiIcon from './MeiIcon';
 import { isSwitchable, isAppEnabled } from '@/lib/app-toggles';
+import { useHealth } from '@/lib/use-health';
 import type { PanelConfig, PanelItem } from '@/lib/panel-store';
 
 interface Item {
   plugin: ClientPlugin;
   url: string;
-}
-
-interface ResolvedItem extends Item {
-  disabled?: boolean;
 }
 
 const WEEKDAYS = ['星期日', '星期一', '星期二', '星期三', '星期四', '星期五', '星期六'];
@@ -25,14 +23,53 @@ const SEARCH_ENGINES: Record<string, string> = {
   baidu: 'https://www.baidu.com/s?wd=',
   duckduckgo: 'https://duckduckgo.com/?q=',
 };
-
+const GRADIENTS = [
+  'linear-gradient(135deg,#6366f1,#a855f7)', 'linear-gradient(135deg,#0ea5e9,#6366f1)',
+  'linear-gradient(135deg,#10b981,#0ea5e9)', 'linear-gradient(135deg,#f59e0b,#ef4444)',
+  'linear-gradient(135deg,#ec4899,#a855f7)', 'linear-gradient(135deg,#14b8a6,#84cc16)',
+  'linear-gradient(135deg,#f43f5e,#f59e0b)', 'linear-gradient(135deg,#8b5cf6,#ec4899)',
+  'linear-gradient(135deg,#3b82f6,#14b8a6)', 'linear-gradient(135deg,#a855f7,#f43f5e)',
+  'linear-gradient(135deg,#64748b,#334155)',
+];
+function hashGradient(id: string): string {
+  let h = 0;
+  for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) >>> 0;
+  return GRADIENTS[h % GRADIENTS.length];
+}
 function isImg(src: string): boolean {
   return /^https?:\/\//.test(src) || src.startsWith('data:image/');
 }
 
-// 自定义图标项卡片（复用 mei-app-card 玻璃样式）
-function ItemCard({ item, lanMode }: { item: PanelItem; lanMode: boolean }) {
+type HealthMap = Record<string, { ok: boolean; ms: number; loading: boolean }>;
+
+/* ============ 统一图标卡片 ============ */
+function UnifiedCard({
+  item, lanMode, health, disabled, editMode,
+  onEdit, onDelete, onContext, onDragStart, onDragOver, onDrop, isDragging,
+}: {
+  item: PanelItem;
+  lanMode: boolean;
+  health?: { ok: boolean; ms: number; loading: boolean };
+  disabled?: boolean;
+  editMode: boolean;
+  onEdit: () => void;
+  onDelete: () => void;
+  onContext: (e: React.MouseEvent) => void;
+  onDragStart: () => void;
+  onDragOver: (e: React.DragEvent) => void;
+  onDrop: () => void;
+  isDragging: boolean;
+}) {
   const href = lanMode && item.lanUrl ? item.lanUrl : item.url;
+  const external = /^https?:\/\//.test(href);
+  const status = !health
+    ? null
+    : health.loading
+    ? { color: 'var(--mei-text-faint)' }
+    : health.ok
+    ? { color: 'var(--mei-success)' }
+    : { color: 'var(--mei-danger)' };
+  const tileBg = item.builtin ? hashGradient(item.builtin) : 'linear-gradient(135deg,#64748b,#334155)';
   const iconNode = isImg(item.icon) ? (
     // eslint-disable-next-line @next/next/no-img-element
     <img src={item.icon} alt={item.title} style={{ width: 22, height: 22, objectFit: 'contain' }} />
@@ -40,84 +77,159 @@ function ItemCard({ item, lanMode }: { item: PanelItem; lanMode: boolean }) {
     <MeiIcon icon={item.icon || 'lucide:link'} size={22} />
   );
   return (
-    <a href={href} target="_blank" rel="noreferrer" style={{ textDecoration: 'none' }}>
-      <button className="mei-app-card" type="button">
-        <div className="mei-icon-tile" style={{ background: 'linear-gradient(135deg,#64748b,#334155)' }}>
-          {iconNode}
-        </div>
-        <div style={{ fontWeight: 650, fontSize: 14, lineHeight: 1.3, letterSpacing: 0.2 }}>{item.title}</div>
-        {item.description && (
-          <div
+    <div
+      style={{ textDecoration: 'none', display: 'flex', opacity: isDragging ? 0.35 : 1 }}
+      draggable={editMode}
+      onDragStart={onDragStart}
+      onDragOver={onDragOver}
+      onDrop={onDrop}
+    >
+      <button
+        className="mei-app-card"
+        data-disabled={disabled ? 'true' : undefined}
+        type="button"
+        onClick={() => { if (!editMode && !disabled) window.open(href, external ? '_blank' : '_self'); }}
+        onContextMenu={onContext}
+        title={editMode ? '拖拽排序 / 右键菜单' : item.title}
+      >
+        {status && (
+          <span
+            title={health?.ok ? `在线 ${health.ms}ms` : '离线'}
+            style={{ position: 'absolute', top: 12, right: 12, width: 7, height: 7, borderRadius: '50%', background: status.color, boxShadow: `0 0 8px ${status.color}` }}
+          />
+        )}
+        {editMode && (
+          <span
+            onClick={(e) => { e.stopPropagation(); onDelete(); }}
+            title="删除"
             style={{
-              color: 'var(--mei-text-muted)',
-              fontSize: 12,
-              lineHeight: 1.45,
-              display: '-webkit-box',
-              WebkitLineClamp: 2,
-              WebkitBoxOrient: 'vertical',
-              overflow: 'hidden',
+              position: 'absolute', top: 7, right: 7, width: 20, height: 20,
+              borderRadius: '50%', background: 'rgba(239,68,68,0.9)', color: '#fff',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontSize: 12, cursor: 'pointer', zIndex: 2, lineHeight: 1,
             }}
           >
+            ×
+          </span>
+        )}
+        <div className="mei-icon-tile" style={{ background: tileBg }}>{iconNode}</div>
+        <div style={{ fontWeight: 650, fontSize: 14, lineHeight: 1.3, letterSpacing: 0.2 }}>{item.title}</div>
+        {item.description && (
+          <div style={{ color: 'var(--mei-text-muted)', fontSize: 12, lineHeight: 1.45, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
             {item.description}
           </div>
         )}
-        <span
-          style={{
-            marginTop: 'auto',
-            paddingTop: 6,
-            fontSize: 10.5,
-            letterSpacing: 0.6,
-            color: 'var(--mei-text-faint)',
-            opacity: 0.85,
-            maxWidth: '100%',
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
-            whiteSpace: 'nowrap',
-          }}
-        >
-          {href.replace(/^https?:\/\//, '').split('/')[0]}
+        <span style={{ marginTop: 'auto', paddingTop: 6, fontSize: 10.5, letterSpacing: 0.6, color: 'var(--mei-text-faint)', opacity: 0.85, maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          {item.builtin ? (item.builtin.startsWith('tutorial-') ? '/novels' : `/${item.builtin.split('-')[0]}`) : href.replace(/^https?:\/\//, '').split('/')[0]}
         </span>
       </button>
-    </a>
+    </div>
   );
 }
 
-interface SystemInfo {
-  memory: { percent: number; used: number; total: number };
-  loadavg: number[];
-  cpuCount: number;
+/* ============ 编辑弹层（新增/编辑图标项） ============ */
+function ItemFormModal({
+  item, groups, onClose, onSubmit,
+}: {
+  item: PanelItem;
+  groups: { id: string; name: string }[];
+  onClose: () => void;
+  onSubmit: (item: PanelItem) => void;
+}) {
+  const [form, setForm] = useState<PanelItem>(item);
+  const input: React.CSSProperties = {
+    width: '100%', boxSizing: 'border-box', padding: '9px 12px', borderRadius: 10,
+    fontSize: 13, border: '1px solid var(--mei-border-strong)', outline: 'none',
+    color: 'var(--mei-text)', background: '#fff',
+  };
+  const label: React.CSSProperties = { display: 'block', fontSize: 12, fontWeight: 600, color: 'var(--mei-text-muted)', margin: '10px 0 4px' };
+  const readImg = (file: File, cb: (d: string) => void) => {
+    if (file.size > 30 * 1024 * 1024) { alert('图片过大（>30MB）'); return; }
+    const r = new FileReader();
+    r.onload = () => cb(String(r.result));
+    r.readAsDataURL(file);
+  };
+  return (
+    <div
+      style={{ position: 'fixed', inset: 0, zIndex: 1000, background: 'rgba(10,14,26,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+    >
+      <div
+        style={{ width: 380, maxWidth: 'calc(100vw - 32px)', borderRadius: 18, padding: 20, background: 'rgba(255,255,255,0.97)', border: '1px solid var(--mei-border-strong)', boxShadow: 'var(--mei-shadow-lg)' }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div style={{ fontSize: 15, fontWeight: 700 }}>{form.id ? '编辑图标项' : '添加图标项'}</div>
+        <label style={label}>标题</label>
+        <input style={input} value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} placeholder="必填" />
+        <label style={label}>描述</label>
+        <input style={input} value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} placeholder="可选" />
+        <label style={label}>地址</label>
+        <input style={input} value={form.url} onChange={(e) => setForm({ ...form, url: e.target.value })} placeholder="https://… 或 /path" />
+        <label style={label}>内网地址（可选，内网模式优先）</label>
+        <input style={input} value={form.lanUrl} onChange={(e) => setForm({ ...form, lanUrl: e.target.value })} placeholder="http://192.168.x.x…" />
+        <label style={label}>分组</label>
+        <select style={input} value={form.groupId} onChange={(e) => setForm({ ...form, groupId: e.target.value })}>
+          <option value="">常用（未分组）</option>
+          {groups.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}
+        </select>
+        <label style={label}>图标（lucide 名称或图片）</label>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <input style={{ ...input, flex: 1 }} value={isImg(form.icon) ? '' : form.icon} onChange={(e) => setForm({ ...form, icon: e.target.value })} placeholder="lucide:github" />
+          <label style={{ padding: '8px 12px', borderRadius: 10, border: '1px solid var(--mei-border-strong)', fontSize: 12, cursor: 'pointer', whiteSpace: 'nowrap' }}>
+            上传
+            <input type="file" accept="image/*" hidden onChange={(e) => { const f = e.target.files?.[0]; if (f) readImg(f, (d) => setForm({ ...form, icon: d })); }} />
+          </label>
+          <span style={{ display: 'inline-flex', color: 'var(--mei-text-muted)' }}>
+            {isImg(form.icon)
+              // eslint-disable-next-line @next/next/no-img-element
+              ? <img src={form.icon} alt="" style={{ width: 22, height: 22, objectFit: 'contain' }} />
+              : <MeiIcon icon={form.icon || 'lucide:link'} size={20} />}
+          </span>
+        </div>
+        <div style={{ display: 'flex', gap: 8, marginTop: 16 }}>
+          <button onClick={onClose} style={{ flex: 1, padding: 10, borderRadius: 12, border: '1px solid var(--mei-border-strong)', background: 'transparent', color: 'var(--mei-text-muted)', fontSize: 13, cursor: 'pointer' }}>取消</button>
+          <button
+            onClick={() => { if (form.title.trim() && form.url.trim()) onSubmit({ ...form, id: form.id || `c${Date.now()}` }); }}
+            style={{ flex: 1, padding: 10, borderRadius: 12, border: 'none', background: 'var(--mei-gradient)', color: '#fff', fontSize: 13, fontWeight: 650, cursor: 'pointer' }}
+          >
+            保存
+          </button>
+        </div>
+      </div>
+    </div>
+  );
 }
 
-export default function PortalClient({ items, panel }: { items: Item[]; panel: PanelConfig }) {
+/* ============ 主页 ============ */
+export default function PortalClient({ items, panel: initialPanel }: { items: Item[]; panel: PanelConfig }) {
+  const [panel, setPanel] = useState(initialPanel);
   const [query, setQuery] = useState('');
   const searchRef = useRef<HTMLInputElement>(null);
-  const [enabledTick, setEnabledTick] = useState(0);
   const [now, setNow] = useState<Date | null>(null);
-  const [username, setUsername] = useState<string>('');
-  const [sys, setSys] = useState<SystemInfo | null>(null);
+  const [sys, setSys] = useState<{ memory: { percent: number; used: number; total: number }; loadavg: number[]; cpuCount: number } | null>(null);
   const [lanMode, setLanMode] = useState(false);
+  const [editMode, setEditMode] = useState(false);
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; item: PanelItem } | null>(null);
+  const [editing, setEditing] = useState<PanelItem | null>(null);
+  const [dragId, setDragId] = useState<string | null>(null);
+  const [toast, setToast] = useState('');
+  const health = useHealth() as HealthMap;
+  const style = panel.style;
 
-  const style = panel?.style;
-
-  // 实时时钟
+  // 时钟
   useEffect(() => {
     setNow(new Date());
     const t = setInterval(() => setNow(new Date()), 1000);
     return () => clearInterval(t);
   }, []);
 
-  // 内网模式（localStorage，双地址项优先 lanUrl）
+  // 内网模式
   useEffect(() => {
     try { setLanMode(localStorage.getItem('mei-lan-mode') === '1'); } catch {}
-    const onLan = () => {
-      try { setLanMode(localStorage.getItem('mei-lan-mode') === '1'); } catch {}
-    };
+    const onLan = () => { try { setLanMode(localStorage.getItem('mei-lan-mode') === '1'); } catch {} };
     window.addEventListener('storage', onLan);
     window.addEventListener('mei-lan-change', onLan as EventListener);
-    return () => {
-      window.removeEventListener('storage', onLan);
-      window.removeEventListener('mei-lan-change', onLan as EventListener);
-    };
+    return () => { window.removeEventListener('storage', onLan); window.removeEventListener('mei-lan-change', onLan as EventListener); };
   }, []);
 
   // 系统监控
@@ -128,50 +240,6 @@ export default function PortalClient({ items, panel }: { items: Item[]; panel: P
     const t = setInterval(load, 5000);
     return () => clearInterval(t);
   }, [style?.systemMonitorShow]);
-
-  useEffect(() => {
-    fetch('/api/auth/me', { credentials: 'include' })
-      .then((r) => r.json())
-      .then((d) => { if (d.loggedIn) setUsername(d.username || 'admin'); })
-      .catch(() => {});
-  }, []);
-
-  useEffect(() => {
-    const onStore = () => setEnabledTick((t) => t + 1);
-    window.addEventListener('storage', onStore);
-    return () => window.removeEventListener('storage', onStore);
-  }, []);
-
-  const resolvedItems = useMemo<ResolvedItem[]>(() => {
-    return items.map((i) => {
-      const disabled = isSwitchable(i.plugin.id) && !isAppEnabled(i.plugin.id);
-      return disabled ? { ...i, disabled: true } : i;
-    });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [items, enabledTick]);
-
-  const q = query.trim().toLowerCase();
-  const matchText = (t: string) => !q || t.toLowerCase().includes(q);
-
-  const filteredBuiltin = useMemo(() => {
-    const list = resolvedItems.filter(
-      (i) => matchText(i.plugin.name) || matchText(i.plugin.description || '') || i.plugin.id.includes(q)
-    );
-    return [...list].sort((a, b) => a.plugin.name.localeCompare(b.plugin.name, 'zh-Hans-CN'));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [resolvedItems, query]);
-
-  const filteredItems = useMemo(() => {
-    return (panel?.items || []).filter((i) => matchText(i.title) || matchText(i.description));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [panel?.items, query]);
-
-  // 未分组 + 各分组的自定义项
-  const ungrouped = filteredItems.filter((i) => !i.groupId || !panel.groups.some((g) => g.id === i.groupId));
-  const grouped = (panel?.groups || []).map((g) => ({
-    group: g,
-    list: filteredItems.filter((i) => i.groupId === g.id),
-  })).filter((s) => s.list.length > 0);
 
   // ⌘K
   useEffect(() => {
@@ -186,43 +254,133 @@ export default function PortalClient({ items, panel }: { items: Item[]; panel: P
     return () => window.removeEventListener('keydown', onKey);
   }, []);
 
+  // 点击关闭右键菜单
+  useEffect(() => {
+    if (!contextMenu) return;
+    const close = () => setContextMenu(null);
+    window.addEventListener('click', close);
+    return () => window.removeEventListener('click', close);
+  }, [contextMenu]);
+
+  // 自动保存（items/groups/removedBuiltin 变更后调用）
+  const savePanel = useCallback(async (next: PanelConfig, tip = '已保存') => {
+    setPanel(next);
+    try {
+      const res = await fetch('/api/panel', {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' },
+        credentials: 'include', body: JSON.stringify(next),
+      });
+      if (!res.ok) { setToast('保存失败'); } else { setToast(tip); }
+    } catch { setToast('保存失败'); }
+    setTimeout(() => setToast(''), 1500);
+  }, []);
+
+  /* ---- 管理操作 ---- */
+  const upsertItem = (item: PanelItem) => {
+    const exists = panel.items.some((i) => i.id === item.id);
+    const next = exists
+      ? { ...panel, items: panel.items.map((i) => (i.id === item.id ? item : i)) }
+      : { ...panel, items: [...panel.items, item] };
+    setEditing(null);
+    savePanel(next, exists ? '已更新' : '已添加');
+  };
+
+  const deleteItem = (item: PanelItem) => {
+    if (!confirm(`删除「${item.title}」？`)) return;
+    const next: PanelConfig = {
+      ...panel,
+      items: panel.items.filter((i) => i.id !== item.id),
+      removedBuiltin: item.builtin && !panel.removedBuiltin.includes(item.builtin)
+        ? [...panel.removedBuiltin, item.builtin]
+        : panel.removedBuiltin,
+    };
+    savePanel(next, '已删除');
+  };
+
+  // 拖拽：把 dragId 项移动到 target 项之前（同组或跨组）
+  const moveBefore = (targetId: string) => {
+    if (!dragId || dragId === targetId) return;
+    const list = [...panel.items];
+    const from = list.findIndex((i) => i.id === dragId);
+    if (from < 0) return;
+    const [it] = list.splice(from, 1);
+    const to = list.findIndex((i) => i.id === targetId);
+    const target = to >= 0 ? list[to] : null;
+    it.groupId = target ? target.groupId : it.groupId;
+    list.splice(to >= 0 ? to : list.length, 0, it);
+    setDragId(null);
+    savePanel({ ...panel, items: list }, '已排序');
+  };
+  // 拖拽到组末尾（追加到该组最后一个项之后）
+  const moveToGroupEnd = (groupId: string) => {
+    if (!dragId) return;
+    const list = [...panel.items];
+    const from = list.findIndex((i) => i.id === dragId);
+    if (from < 0) return;
+    const [it] = list.splice(from, 1);
+    it.groupId = groupId;
+    let lastIdx = -1;
+    list.forEach((i, idx) => { if (i.groupId === groupId) lastIdx = idx; });
+    list.splice(lastIdx + 1, 0, it);
+    setDragId(null);
+    savePanel({ ...panel, items: list }, '已移动');
+  };
+
+  /* ---- 过滤与分组 ---- */
+  const q = query.trim().toLowerCase();
+  const matchText = (t: string, d: string) => !q || t.toLowerCase().includes(q) || d.toLowerCase().includes(q);
+  const visibleItems = useMemo(
+    () => panel.items.filter((i) => matchText(i.title, i.description)),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [panel.items, query]
+  );
+  const isSwitchedOff = (item: PanelItem) => !!(item.builtin && isSwitchable(item.builtin) && !isAppEnabled(item.builtin));
+  const healthOf = (item: PanelItem) => (item.builtin ? health[item.builtin] : undefined);
+
+  const ungrouped = visibleItems.filter((i) => !i.groupId || !panel.groups.some((g) => g.id === i.groupId));
+  const grouped = panel.groups
+    .map((g) => ({ group: g, list: visibleItems.filter((i) => i.groupId === g.id) }))
+    .filter((s) => s.list.length > 0 || editMode);
+
   function submitSearch() {
     const q = query.trim();
-    if (!q) return;
-    if (filteredBuiltin.length > 0 || filteredItems.length > 0) return;
+    if (!q || visibleItems.length > 0) return;
     const engine = SEARCH_ENGINES[style?.searchEngine || 'bing'] || SEARCH_ENGINES.bing;
     window.open(engine + encodeURIComponent(q), '_blank');
   }
 
-  const clock = now
-    ? { hh: pad(now.getHours()), mm: pad(now.getMinutes()), ss: pad(now.getSeconds()) }
-    : { hh: '--', mm: '--', ss: '--' };
-  const dateText = now
-    ? `${now.getFullYear()} 年 ${now.getMonth() + 1} 月 ${now.getDate()} 日 · ${WEEKDAYS[now.getDay()]}`
-    : '';
-
+  const clock = now ? { hh: pad(now.getHours()), mm: pad(now.getMinutes()), ss: pad(now.getSeconds()) } : { hh: '--', mm: '--', ss: '--' };
+  const dateText = now ? `${now.getFullYear()} 年 ${now.getMonth() + 1} 月 ${now.getDate()} 日 · ${WEEKDAYS[now.getDay()]}` : '';
   const maxW = style?.maxWidth || 1180;
-  const gridStyle: React.CSSProperties = {
-    maxWidth: maxW,
-    margin: `0 ${style?.marginX || 0}px`,
-  };
   const textColor = style?.iconTextColor || undefined;
+
+  const renderCard = (item: PanelItem) => (
+    <UnifiedCard
+      key={item.id}
+      item={item}
+      lanMode={lanMode}
+      health={healthOf(item)}
+      disabled={isSwitchedOff(item)}
+      editMode={editMode}
+      isDragging={dragId === item.id}
+      onEdit={() => setEditing(item)}
+      onDelete={() => deleteItem(item)}
+      onContext={(e) => {
+        e.preventDefault();
+        setContextMenu({ x: e.clientX, y: e.clientY, item });
+      }}
+      onDragStart={() => setDragId(item.id)}
+      onDragOver={(e) => e.preventDefault()}
+      onDrop={() => moveBefore(item.id)}
+    />
+  );
 
   return (
     <div style={{ minHeight: '100vh', position: 'relative' }}>
-      {/* 背景：自定义壁纸（可配遮罩/模糊）或默认极光 */}
+      {/* 背景 */}
       {panel?.background?.url ? (
         <>
-          <div
-            aria-hidden
-            style={{
-              position: 'fixed', inset: 0, zIndex: -3,
-              backgroundImage: `url(${panel.background.url})`,
-              backgroundSize: 'cover', backgroundPosition: 'center',
-              filter: panel.background.blur ? `blur(${panel.background.blur}px)` : undefined,
-              transform: panel.background.blur ? 'scale(1.06)' : undefined,
-            }}
-          />
+          <div aria-hidden style={{ position: 'fixed', inset: 0, zIndex: -3, backgroundImage: `url(${panel.background.url})`, backgroundSize: 'cover', backgroundPosition: 'center', filter: panel.background.blur ? `blur(${panel.background.blur}px)` : undefined, transform: panel.background.blur ? 'scale(1.06)' : undefined }} />
           <div aria-hidden style={{ position: 'fixed', inset: 0, zIndex: -2, background: `rgba(7,10,19,${panel.background.mask})` }} />
         </>
       ) : (
@@ -235,54 +393,36 @@ export default function PortalClient({ items, panel }: { items: Item[]; panel: P
 
       <main
         style={{
-          maxWidth: maxW,
-          margin: '0 auto',
-          paddingTop: `${style?.marginTop ?? 4}%`,
-          paddingBottom: `${style?.marginBottom ?? 6}%`,
-          paddingLeft: 'var(--mei-space-6)',
-          paddingRight: 'var(--mei-space-6)',
+          maxWidth: maxW, margin: '0 auto',
+          paddingTop: `${style?.marginTop ?? 4}%`, paddingBottom: `${style?.marginBottom ?? 6}%`,
+          paddingLeft: 'var(--mei-space-6)', paddingRight: 'var(--mei-space-6)',
         }}
       >
-        {/* ===== 顶部区：Logo + 时钟 + 系统监控 ===== */}
+        {/* Logo + 时钟 + 监控 */}
         <section style={{ textAlign: 'center', marginBottom: 30 }}>
           <div style={{ display: 'inline-flex', alignItems: 'center', gap: 14, flexWrap: 'wrap', justifyContent: 'center' }}>
             {style?.logoImage ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img src={style.logoImage} alt="logo" style={{ maxHeight: 56, maxWidth: 260, objectFit: 'contain' }} />
             ) : style?.logoText ? (
-              <span style={{ fontSize: 32, fontWeight: 800, letterSpacing: 1, color: textColor, textShadow: '0 2px 24px rgba(99,102,241,0.25)' }}>
-                {style.logoText}
-              </span>
+              <span style={{ fontSize: 32, fontWeight: 800, letterSpacing: 1, color: textColor, textShadow: '0 2px 24px rgba(99,102,241,0.25)' }}>{style.logoText}</span>
             ) : null}
-            {(style?.logoImage || style?.logoText) && (
-              <span style={{ color: 'var(--mei-text-faint)', fontSize: 20 }}>|</span>
-            )}
+            {(style?.logoImage || style?.logoText) && <span style={{ color: 'var(--mei-text-faint)', fontSize: 20 }}>|</span>}
             <span style={{ fontVariantNumeric: 'tabular-nums', fontSize: 34, fontWeight: 250, letterSpacing: 1, color: textColor, textShadow: '0 1px 18px rgba(99,102,241,0.18)' }}>
               {clock.hh}:{clock.mm}
-              {style?.clockShowSecond ? (
-                <span style={{ fontSize: 20, color: 'var(--mei-text-muted)' }}>:{clock.ss}</span>
-              ) : null}
+              {style?.clockShowSecond && <span style={{ fontSize: 20, color: 'var(--mei-text-muted)' }}>:{clock.ss}</span>}
             </span>
           </div>
           <div style={{ color: textColor || 'var(--mei-text-muted)', fontSize: 13, letterSpacing: 1.5, marginTop: 4 }}>{dateText}</div>
-
-          {/* 系统监控 */}
           {style?.systemMonitorShow && sys && (
-            <div
-              style={{
-                display: 'inline-flex', gap: 16, marginTop: 12, padding: '6px 16px',
-                borderRadius: 'var(--mei-radius-full)', background: 'var(--mei-surface)',
-                border: '1px solid var(--mei-border)', backdropFilter: 'blur(14px)',
-                fontSize: 12, color: 'var(--mei-text-muted)',
-              }}
-            >
+            <div style={{ display: 'inline-flex', gap: 16, marginTop: 12, padding: '6px 16px', borderRadius: 'var(--mei-radius-full)', background: 'var(--mei-surface)', border: '1px solid var(--mei-border)', backdropFilter: 'blur(14px)', fontSize: 12, color: 'var(--mei-text-muted)' }}>
               <span>内存 {sys.memory.percent}%（{sys.memory.used}/{sys.memory.total}MB）</span>
               <span>CPU 负载 {sys.loadavg[0]}（{sys.cpuCount} 核）</span>
             </div>
           )}
         </section>
 
-        {/* ===== 搜索框（可关闭；回车无匹配时用所选引擎搜索） ===== */}
+        {/* 搜索框 */}
         {style?.searchBoxShow !== false && (
           <section style={{ maxWidth: 560, margin: '0 auto 32px' }}>
             <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
@@ -305,76 +445,152 @@ export default function PortalClient({ items, panel }: { items: Item[]; panel: P
                 onFocus={(e) => { e.currentTarget.style.borderColor = 'rgba(99,102,248,0.55)'; e.currentTarget.style.boxShadow = 'var(--mei-glow)'; }}
                 onBlur={(e) => { e.currentTarget.style.borderColor = 'var(--mei-border)'; e.currentTarget.style.boxShadow = 'var(--mei-shadow-sm)'; }}
               />
-              <span
-                style={{
-                  position: 'absolute', right: 14, border: 'none',
-                  background: 'rgba(23,32,56,0.04)', borderRadius: 'var(--mei-radius-sm)',
-                  padding: '4px 8px', fontSize: 11.5, color: 'var(--mei-text-muted)',
-                  pointerEvents: 'none',
-                }}
-              >
+              <span style={{ position: 'absolute', right: 14, border: 'none', background: 'rgba(23,32,56,0.04)', borderRadius: 'var(--mei-radius-sm)', padding: '4px 8px', fontSize: 11.5, color: 'var(--mei-text-muted)', pointerEvents: 'none' }}>
                 {style?.searchEngine === 'google' ? 'Google' : style?.searchEngine === 'baidu' ? '百度' : style?.searchEngine === 'duckduckgo' ? 'Duck' : '必应'}
               </span>
             </div>
           </section>
         )}
 
-        {/* ===== 内置应用 ===== */}
-        {(filteredBuiltin.length > 0 || !q) && (
-          <section style={{ ...gridStyle, marginBottom: 26 }}>
-            <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 'var(--mei-space-3)' }}>
-              <span style={{ fontSize: 12, letterSpacing: 2, color: 'var(--mei-text-faint)' }}>全部应用 · {filteredBuiltin.length}</span>
-              {lanMode && <span style={{ fontSize: 11, color: 'var(--mei-primary)' }}>内网模式</span>}
-            </div>
-            <div className="mei-card-grid">
-              {filteredBuiltin.map(({ plugin, url, disabled }) => (
-                <a key={plugin.id} href={disabled ? undefined : url} style={{ textDecoration: 'none' }}>
-                  <AppCard plugin={plugin} url={url} disabled={disabled} onClick={() => {}} />
-                </a>
-              ))}
-            </div>
-          </section>
+        {/* 编辑模式提示条 */}
+        {editMode && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16, padding: '8px 14px', borderRadius: 'var(--mei-radius)', background: 'var(--mei-gradient-soft)', border: '1px solid rgba(99,102,241,0.3)', fontSize: 12, color: 'var(--mei-text-muted)' }}>
+            <MeiIcon icon="lucide:settings-2" size={14} />
+            编辑模式：拖拽卡片排序 / 跨组移动，右键或 × 删除，点击 + 添加。所有修改自动保存。
+          </div>
         )}
 
-        {/* ===== 自定义分组 ===== */}
+        {/* 未分组（常用） */}
+        <section
+          style={{ marginBottom: 26, margin: `0 ${style?.marginX || 0}px ${26}px` }}
+          onDragOver={(e) => e.preventDefault()}
+          onDrop={() => moveToGroupEnd('')}
+        >
+          <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 'var(--mei-space-3)' }}>
+            <span style={{ fontSize: 12, letterSpacing: 2, color: 'var(--mei-text-faint)' }}>常用 · {ungrouped.length}</span>
+            {lanMode && <span style={{ fontSize: 11, color: 'var(--mei-primary)' }}>内网模式</span>}
+          </div>
+          <div className="mei-card-grid">
+            {ungrouped.map(renderCard)}
+            {editMode && (
+              <button
+                onClick={() => setEditing({ id: '', groupId: '', title: '', description: '', url: '', lanUrl: '', icon: 'lucide:link' })}
+                style={{
+                  minHeight: 132, borderRadius: 'var(--mei-radius)', border: '2px dashed var(--mei-border-strong)',
+                  background: 'transparent', cursor: 'pointer', display: 'flex', flexDirection: 'column',
+                  alignItems: 'center', justifyContent: 'center', gap: 6, color: 'var(--mei-text-faint)', fontSize: 12,
+                }}
+              >
+                <span style={{ fontSize: 26, lineHeight: 1 }}>+</span>
+                添加图标项
+              </button>
+            )}
+          </div>
+        </section>
+
+        {/* 分组 */}
         {grouped.map(({ group, list }) => (
-          <section key={group.id} style={{ ...gridStyle, marginBottom: 26 }}>
-            <div style={{ fontSize: 12, letterSpacing: 2, color: 'var(--mei-text-faint)', marginBottom: 'var(--mei-space-3)' }}>
-              {group.name}
+          <section
+            key={group.id}
+            style={{ margin: `0 ${style?.marginX || 0}px ${26}px` }}
+            onDragOver={(e) => e.preventDefault()}
+            onDrop={() => moveToGroupEnd(group.id)}
+          >
+            <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 'var(--mei-space-3)' }}>
+              <span style={{ fontSize: 12, letterSpacing: 2, color: 'var(--mei-text-faint)' }}>{group.name} · {list.length}</span>
+              {editMode && (
+                <button
+                  onClick={() => setEditing({ id: '', groupId: group.id, title: '', description: '', url: '', lanUrl: '', icon: 'lucide:link' })}
+                  style={{ border: 'none', background: 'transparent', color: 'var(--mei-primary)', fontSize: 11, cursor: 'pointer' }}
+                >
+                  + 添加
+                </button>
+              )}
             </div>
             <div className="mei-card-grid">
-              {list.map((item) => <ItemCard key={item.id} item={item} lanMode={lanMode} />)}
+              {list.map(renderCard)}
             </div>
           </section>
         ))}
 
-        {/* ===== 未分组自定义项 ===== */}
-        {ungrouped.length > 0 && (
-          <section style={gridStyle}>
-            {grouped.length > 0 && (
-              <div style={{ fontSize: 12, letterSpacing: 2, color: 'var(--mei-text-faint)', marginBottom: 'var(--mei-space-3)' }}>其他链接</div>
-            )}
-            <div className="mei-card-grid">
-              {ungrouped.map((item) => <ItemCard key={item.id} item={item} lanMode={lanMode} />)}
-            </div>
-          </section>
-        )}
-
         {/* 空态 */}
-        {q && filteredBuiltin.length === 0 && filteredItems.length === 0 && (
-          <div className="mei-empty">
-            没有匹配「{query}」的应用，按 Enter 进行网页搜索
-          </div>
+        {q && visibleItems.length === 0 && (
+          <div className="mei-empty">没有匹配「{query}」的应用，按 Enter 进行网页搜索</div>
         )}
 
-        {/* ===== 页脚（自定义 HTML） ===== */}
+        {/* 页脚 */}
         {style?.footerHtml && (
-          <section
-            style={{ marginTop: 40, textAlign: 'center', color: 'var(--mei-text-muted)' }}
-            dangerouslySetInnerHTML={{ __html: style.footerHtml }}
-          />
+          <section style={{ marginTop: 40, textAlign: 'center', color: 'var(--mei-text-muted)' }} dangerouslySetInnerHTML={{ __html: style.footerHtml }} />
         )}
       </main>
+
+      {/* 右键菜单 */}
+      {contextMenu && (
+        <div
+          style={{
+            position: 'fixed', left: contextMenu.x, top: contextMenu.y, zIndex: 1001,
+            minWidth: 130, borderRadius: 12, padding: 5,
+            background: 'rgba(255,255,255,0.97)', border: '1px solid var(--mei-border-strong)',
+            boxShadow: 'var(--mei-shadow-lg)',
+          }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          {[
+            { label: '打开', fn: () => { const h = lanMode && contextMenu.item.lanUrl ? contextMenu.item.lanUrl : contextMenu.item.url; window.open(h, /^https?:\/\//.test(h) ? '_blank' : '_self'); } },
+            { label: '编辑', fn: () => setEditing(contextMenu.item) },
+            { label: '删除', fn: () => deleteItem(contextMenu.item), danger: true },
+          ].map((a) => (
+            <button
+              key={a.label}
+              onClick={() => { setContextMenu(null); a.fn(); }}
+              style={{
+                display: 'block', width: '100%', padding: '7px 12px', border: 'none',
+                background: 'transparent', borderRadius: 8, cursor: 'pointer', fontSize: 13,
+                color: a.danger ? 'var(--mei-danger)' : 'var(--mei-text)', textAlign: 'left',
+              }}
+            >
+              {a.label}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* 编辑/添加弹层 */}
+      {editing && (
+        <ItemFormModal
+          item={editing}
+          groups={panel.groups}
+          onClose={() => setEditing(null)}
+          onSubmit={upsertItem}
+        />
+      )}
+
+      {/* 编辑模式切换（右下浮动按钮） */}
+      <button
+        onClick={() => setEditMode((v) => !v)}
+        title={editMode ? '完成编辑' : '编辑主页'}
+        style={{
+          position: 'fixed', right: 22, bottom: 22, zIndex: 900,
+          width: 46, height: 46, borderRadius: '50%', border: 'none', cursor: 'pointer',
+          background: editMode ? 'linear-gradient(135deg,#10b981,#059669)' : 'var(--mei-gradient)',
+          color: '#fff', fontSize: 19, boxShadow: '0 8px 28px rgba(99,102,241,0.4)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+        }}
+      >
+        {editMode ? '✓' : '✎'}
+      </button>
+
+      {/* 保存 toast */}
+      {toast && (
+        <div style={{
+          position: 'fixed', left: '50%', bottom: 30, transform: 'translateX(-50%)', zIndex: 1002,
+          padding: '8px 20px', borderRadius: 'var(--mei-radius-full)',
+          background: 'rgba(13,18,32,0.85)', color: '#fff', fontSize: 13,
+          boxShadow: 'var(--mei-shadow-lg)',
+        }}>
+          {toast}
+        </div>
+      )}
     </div>
   );
 }
