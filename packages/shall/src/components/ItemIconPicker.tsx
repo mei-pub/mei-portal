@@ -259,7 +259,7 @@ export default function ItemIconPicker({
           </div>
           {(onlineLoading || onlineIcons.length > 0 || onlineError) && (
             <div style={{
-              maxHeight: 260, overflowY: 'auto', display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)',
+              maxHeight: 300, overflowY: 'auto', display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)',
               gap: 6, padding: 6, border: '1px solid var(--mei-border)', borderRadius: 10, marginBottom: 8,
             }}>
               {onlineLoading && <span style={{ gridColumn: '1/-1', textAlign: 'center', fontSize: 12, color: 'var(--mei-text-faint)', padding: 16 }}>搜索中…</span>}

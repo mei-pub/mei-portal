@@ -158,7 +158,7 @@ function ItemFormModal({
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
       <div
-        style={{ width: 540, maxWidth: 'calc(100vw - 32px)', borderRadius: 18, padding: 20, background: 'rgba(255,255,255,0.97)', border: '1px solid var(--mei-border-strong)', boxShadow: 'var(--mei-shadow-lg)' }}
+        style={{ width: 760, maxWidth: 'calc(100vw - 32px)', borderRadius: 18, padding: 20, background: 'rgba(255,255,255,0.97)', border: '1px solid var(--mei-border-strong)', boxShadow: 'var(--mei-shadow-lg)' }}
         onClick={(e) => e.stopPropagation()}
       >
         <div style={{ fontSize: 15, fontWeight: 700 }}>{form.id ? '编辑图标项' : '添加图标项'}</div>
