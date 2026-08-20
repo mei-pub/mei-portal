@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter, useParams } from "next/navigation";
 import Link from "next/link";
 import SitePanel from "@/components/SitePanel";
+import IconPicker from "@/components/IconPicker";
 
 export default function EditNovelPage() {
   const router = useRouter();
@@ -12,6 +13,7 @@ export default function EditNovelPage() {
   const novelId = params.id as string;
   const [form, setForm] = useState({ title: "", slug: "", author: "", description: "", cover_url: "", icon: "", icon_color: "", category: "", tags: [] as string[], status: "ongoing", rating: 0 });
   const [coverUploading, setCoverUploading] = useState(false);
+  const [iconUploading, setIconUploading] = useState(false);
   async function uploadCover(file: File) {
     setCoverUploading(true);
     try {
@@ -21,6 +23,17 @@ export default function EditNovelPage() {
       const data = await res.json();
       if (res.ok && data.dataUrl) setForm(f => ({ ...f, cover_url: data.dataUrl }));
     } catch {} finally { setCoverUploading(false); }
+  }
+
+  async function uploadIcon(file: File) {
+    setIconUploading(true);
+    try {
+      const fd = new FormData();
+      fd.append("image", file);
+      const res = await fetch("/novels/api/upload-image", { method: "POST", body: fd });
+      const data = await res.json();
+      if (res.ok && data.dataUrl) setForm((f) => ({ ...f, icon: data.dataUrl }));
+    } catch {} finally { setIconUploading(false); }
   }
   const [tagInput, setTagInput] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -121,7 +134,7 @@ export default function EditNovelPage() {
         </div>
         <form id="edit-novel-form" onSubmit={handleSubmit} className="space-y-5">
           <div>
-            <label className="block text-sm font-medium mb-1.5">
+            <label className="mei-label">
               小说标题 <span className="text-red-500">*</span>
             </label>
             <input
@@ -129,24 +142,24 @@ export default function EditNovelPage() {
               required
               value={form.title}
               onChange={e => setForm({ ...form, title: e.target.value })}
-              className="w-full px-3 py-2 text-sm rounded-lg border border-[var(--border)] bg-white focus:outline-none focus:ring-2 focus:ring-[var(--primary)]"
+              className="mei-input"
             />
           </div>
           <div>
-            <label className="block text-sm font-medium mb-1.5">
+            <label className="mei-label">
               英文标识 <span className="text-xs text-[var(--muted)] font-normal">（路径用，全局唯一；修改后旧路径失效）</span>
             </label>
             <input
               type="text"
               value={form.slug}
               onChange={e => setForm({ ...form, slug: e.target.value.toLowerCase() })}
-              className="w-full px-3 py-2 text-sm rounded-lg border border-[var(--border)] bg-white focus:outline-none focus:ring-2 focus:ring-[var(--primary)]"
+              className="mei-input"
               placeholder="小写字母/数字/中划线"
             />
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium mb-1.5">小说封面</label>
+              <label className="mei-label">小说封面</label>
               <div className="flex items-center gap-2">
                 {form.cover_url && (
                   // eslint-disable-next-line @next/next/no-img-element
@@ -164,41 +177,34 @@ export default function EditNovelPage() {
                 type="text"
                 value={form.cover_url}
                 onChange={e => setForm({ ...form, cover_url: e.target.value })}
-                className="mt-2 w-full px-3 py-2 text-xs rounded-lg border border-[var(--border)] bg-white focus:outline-none focus:ring-2 focus:ring-[var(--primary)]"
+                className="mei-input" style={{ marginTop: 8, fontSize: 12 }}
                 placeholder="或粘贴封面图地址"
               />
             </div>
-            <div>
-              <label className="block text-sm font-medium mb-1.5">Logo <span className="text-xs text-[var(--muted)] font-normal">（无封面时展示）</span></label>
-              <input
-                type="text"
-                value={form.icon}
-                onChange={e => setForm({ ...form, icon: e.target.value })}
-                className="w-full px-3 py-2 text-sm rounded-lg border border-[var(--border)] bg-white focus:outline-none focus:ring-2 focus:ring-[var(--primary)]"
-                placeholder="图片地址 / emoji"
+            <div style={{ gridColumn: "1 / -1" }}>
+              <label className="mei-label">Logo <span className="text-xs text-[var(--muted)] font-normal">（无封面时展示）</span></label>
+              <IconPicker
+                icon={form.icon}
+                color={form.icon_color}
+                title={form.title}
+                uploading={iconUploading}
+                onIcon={(v) => setForm({ ...form, icon: v })}
+                onColor={(v) => setForm({ ...form, icon_color: v })}
+                onUpload={(f) => uploadIcon(f)}
               />
-              <div className="mt-2 flex items-center gap-2">
-                <label className="text-xs text-[var(--muted)]">底色</label>
-                <input
-                  type="color"
-                  value={form.icon_color || "#6366f1"}
-                  onChange={e => setForm({ ...form, icon_color: e.target.value })}
-                  className="w-8 h-8 rounded cursor-pointer border border-[var(--border)]"
-                />
-              </div>
             </div>
           </div>
           <div>
-            <label className="block text-sm font-medium mb-1.5">作者</label>
+            <label className="mei-label">作者</label>
             <input
               type="text"
               value={form.author}
               onChange={e => setForm({ ...form, author: e.target.value })}
-              className="w-full px-3 py-2 text-sm rounded-lg border border-[var(--border)] bg-white focus:outline-none focus:ring-2 focus:ring-[var(--primary)]"
+              className="mei-input"
             />
           </div>
           <div>
-            <label className="block text-sm font-medium mb-1.5">简介</label>
+            <label className="mei-label">简介</label>
             <textarea
               rows={4}
               value={form.description}
@@ -208,27 +214,27 @@ export default function EditNovelPage() {
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium mb-1.5">分类</label>
+              <label className="mei-label">分类</label>
               <input
                 type="text"
                 value={form.category}
                 onChange={e => setForm({ ...form, category: e.target.value })}
-                className="w-full px-3 py-2 text-sm rounded-lg border border-[var(--border)] bg-white focus:outline-none focus:ring-2 focus:ring-[var(--primary)]"
+                className="mei-input"
               />
             </div>
             <div>
-              <label className="block text-sm font-medium mb-1.5">状态</label>
+              <label className="mei-label">状态</label>
               <select
                 value={form.status}
                 onChange={e => setForm({ ...form, status: e.target.value })}
-                className="w-full px-3 py-2 text-sm rounded-lg border border-[var(--border)] bg-white focus:outline-none focus:ring-2 focus:ring-[var(--primary)]"
+                className="mei-input"
               >
                 <option value="ongoing">连载中</option>
                 <option value="completed">已完结</option>
               </select>
             </div>
             <div>
-              <label className="block text-sm font-medium mb-1.5">评分</label>
+              <label className="mei-label">评分</label>
               <div className="flex items-center gap-2">
                 <input
                   type="range"
@@ -244,7 +250,7 @@ export default function EditNovelPage() {
             </div>
           </div>
           <div>
-            <label className="block text-sm font-medium mb-1.5">标签</label>
+            <label className="mei-label">标签</label>
             <div className="flex flex-wrap gap-1.5 mb-2">
               {form.tags.map((tag, i) => (
                 <span key={i} className="inline-flex items-center gap-1 px-2.5 py-0.5 text-xs bg-[var(--accent)] text-[var(--primary)] rounded-full">
@@ -267,7 +273,7 @@ export default function EditNovelPage() {
                   setTagInput("");
                 }
               }}
-              className="w-full px-3 py-2 text-sm rounded-lg border border-[var(--border)] bg-white focus:outline-none focus:ring-2 focus:ring-[var(--primary)]"
+              className="mei-input"
               placeholder="输入标签后按 Enter 或逗号添加"
             />
           </div>

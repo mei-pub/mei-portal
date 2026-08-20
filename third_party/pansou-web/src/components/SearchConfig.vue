@@ -54,7 +54,14 @@ const saveTimeout = ref<number | null>(null);
 const showExportModal = ref(false);
 
 // Tab状态
-const activeTab = ref<'channels' | 'plugins' | 'diskTypes' | 'detection'>('channels');
+// 磁力/电驴类搜索源（支持 magnet:/ed2k:// 链接的插件集合，独立 tab 配置）
+const MAGNET_PLUGIN_IDS = new Set([
+  'muou','zhizhen','fox4k','lou1','wanou','ouge','huban','cyg','pianku','qqpd','nyaa',
+  'erxiao','duoduo','qiwei','xiaoji','gying','lingjisp','xuexizhinan','meitizy','xys',
+  'dyyj','dyyjpro','yulinshufa','mizixing','jsnoteclub','yiove','panlian','xiaozhang',
+  'qupansou','shandian','clmao','cldi','clxiong','daishudj','djgou','haisou','hdr4k'
+]);
+const activeTab = ref<'channels' | 'plugins' | 'magnet' | 'diskTypes' | 'detection'>('channels');
 const detectionSettings = ref<DetectionSettings>(loadDetectionSettings());
 
 // 计算属性
@@ -67,6 +74,11 @@ const availablePlugins = computed(() => {
   if (!healthData.value) return [];
   return healthData.value.plugins || [];
 });
+
+// 网盘/网页类搜索插件（非磁力）
+const webPlugins = computed(() => availablePlugins.value.filter((p) => !MAGNET_PLUGIN_IDS.has(p)));
+// 磁力/电驴搜索源
+const magnetPlugins = computed(() => availablePlugins.value.filter((p) => MAGNET_PLUGIN_IDS.has(p)));
 
 // 统计信息
 const stats = computed(() => ({
@@ -227,6 +239,17 @@ const toggleAllPlugins = () => {
     selectedPlugins.value = [];
   } else {
     selectedPlugins.value = [...availablePlugins.value];
+  }
+};
+
+// 磁力/电驴源全选/取消
+const toggleAllMagnetPlugins = () => {
+  const allSelected = magnetPlugins.value.every((p) => selectedPlugins.value.includes(p));
+  if (allSelected) {
+    selectedPlugins.value = selectedPlugins.value.filter((p) => !magnetPlugins.value.includes(p));
+  } else {
+    const merged = new Set([...selectedPlugins.value, ...magnetPlugins.value]);
+    selectedPlugins.value = [...merged];
   }
 };
 
@@ -409,8 +432,16 @@ onMounted(() => {
           <span class="tab-label">搜索插件</span>
           <span class="tab-count">{{ availablePlugins.length }}</span>
         </button>
-        <button 
-          class="tab-button" 
+        <button
+          class="tab-button"
+          :class="{ 'active': activeTab === 'magnet' }"
+          @click="activeTab = 'magnet'"
+        >
+          <span class="tab-label">磁力搜索</span>
+          <span class="tab-count">{{ magnetPlugins.length }}</span>
+        </button>
+        <button
+          class="tab-button"
           :class="{ 'active': activeTab === 'diskTypes' }"
           @click="activeTab = 'diskTypes'"
         >
@@ -506,7 +537,7 @@ onMounted(() => {
           <div class="pane-header">
             <div class="pane-title">
               <h3>搜索插件配置</h3>
-              <span class="selected-count">已选 {{ selectedPlugins.length }} / {{ availablePlugins.length }}</span>
+              <span class="selected-count">已选 {{ selectedPlugins.length }} / {{ availablePlugins.length }}（含磁力源）</span>
             </div>
             <div class="pane-actions">
               <button @click="toggleAllPlugins" class="action-btn">
@@ -518,7 +549,7 @@ onMounted(() => {
           <div class="pane-content">
             <div class="items-grid">
               <div
-                v-for="plugin in availablePlugins"
+                v-for="plugin in webPlugins"
                 :key="plugin"
                 class="item-card plugin-card"
                 :class="{ 'selected': selectedPlugins.includes(plugin) }"
@@ -536,6 +567,45 @@ onMounted(() => {
                 </div>
               </div>
             </div>
+          </div>
+        </div>
+
+        <!-- 磁力/电驴搜索源配置 -->
+        <div v-show="activeTab === 'magnet'" class="tab-pane">
+          <div class="pane-header">
+            <div class="pane-title">
+              <h3>磁力 / 电驴搜索源</h3>
+              <span class="selected-count">已选 {{ selectedPlugins.filter(p => magnetPlugins.includes(p)).length }} / {{ magnetPlugins.length }}</span>
+            </div>
+            <div class="pane-actions">
+              <button @click="toggleAllMagnetPlugins" class="action-btn">
+                {{ magnetPlugins.every(p => selectedPlugins.includes(p)) ? '取消全选' : '全选' }}
+              </button>
+            </div>
+          </div>
+          <div class="pane-content">
+            <p class="pane-hint">支持 magnet: 磁力链接与 ed2k:// 电驴链接的资源搜索源；结果在「磁力」「电驴」网盘类型下展示。</p>
+            <div class="items-grid">
+              <div
+                v-for="plugin in magnetPlugins"
+                :key="plugin"
+                class="item-card plugin-card magnet-card"
+                :class="{ 'selected': selectedPlugins.includes(plugin) }"
+                @click="togglePlugin(plugin)"
+              >
+                <div class="item-content">
+                  <div class="item-name">{{ plugin }}</div>
+                </div>
+                <div class="item-actions">
+                  <div class="checkbox" :class="{ 'checked': selectedPlugins.includes(plugin) }">
+                    <svg v-if="selectedPlugins.includes(plugin)" class="check-icon" viewBox="0 0 20 20" fill="currentColor">
+                      <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" />
+                    </svg>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div v-if="magnetPlugins.length === 0" class="empty-hint">当前后端未注册磁力类搜索源</div>
           </div>
         </div>
 
@@ -1700,4 +1770,19 @@ onMounted(() => {
     font-size: 0.75rem;
   }
 }
+
+/* ===== 门户主应用风格对齐（覆盖默认样式） ===== */
+.pane-hint { font-size: 12px; color: #5d6778; margin: 0 0 12px; line-height: 1.6; }
+.empty-hint { font-size: 12.5px; color: #5d6778; padding: 18px; text-align: center; }
+.magnet-card.selected { border-color: #722ed1; background: rgba(114, 46, 209, 0.08); }
+.magnet-card.selected .checkbox { background: #722ed1; border-color: #722ed1; }
+.config-container { font-family: "PingFang SC", "Noto Sans SC", "Microsoft YaHei", sans-serif; }
+.config-content { background: rgba(255,255,255,0.86); border: 1px solid rgba(23,32,56,0.08); border-radius: 16px; box-shadow: 0 2px 10px rgba(23,32,56,0.07); backdrop-filter: blur(18px); overflow: hidden; }
+.tabs-nav { background: rgba(23,32,56,0.03); }
+.tab-button.active { background: linear-gradient(135deg,#6366f1,#a855f7); color: #fff; }
+.tab-button.active .tab-count { background: rgba(255,255,255,0.25); color: #fff; }
+.item-card { border-radius: 12px; transition: all .15s; }
+.item-card:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(23,32,56,0.1); }
+.action-btn.primary, .confirm-btn { background: linear-gradient(135deg,#6366f1,#a855f7); border: none; box-shadow: 0 4px 14px rgba(99,102,241,0.35); }
+.checkbox.checked { background: #6366f1; border-color: #6366f1; }
 </style>

@@ -24,6 +24,7 @@ interface CheckResult {
 
 const API_BASE = '/tv/api/admin/source';
 
+const BG = { minHeight: '100vh', background: '#f4f6fb' } as const;
 export default function MeiSourcesPage() {
   const [sources, setSources] = useState<SourceItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -141,13 +142,13 @@ export default function MeiSourcesPage() {
   const enabledCount = sources.filter((s) => !s.disabled).length;
 
   return (
-    <div className='min-h-screen bg-gray-50 text-gray-800 dark:bg-gray-950 dark:text-gray-200'>
-      <div className='mx-auto max-w-3xl px-4 py-6'>
+    <div className='min-h-screen text-[#1c2333]' style={{ background: '#f4f6fb' }}>
+      <div className='mx-auto max-w-3xl px-4 pt-[76px] pb-10'>
         {/* 头部 */}
         <div className='mb-5 flex flex-wrap items-center gap-3'>
           <div className='flex-1 min-w-[180px]'>
-            <h1 className='text-xl font-bold text-gray-900 dark:text-white'>影视源管理</h1>
-            <p className='mt-1 text-xs text-gray-500 dark:text-gray-400'>
+            <h1 className='text-xl font-bold text-[#1c2333]'>影视源管理</h1>
+            <p className='mt-1 text-xs text-[#5d6778]'>
               共 {sources.length} 个源 · {enabledCount} 个启用中；搜索与点播只会使用启用中的源
             </p>
           </div>
@@ -211,7 +212,7 @@ export default function MeiSourcesPage() {
                   {/* 信息 */}
                   <div className='min-w-0 flex-1'>
                     <div className='flex items-center gap-2'>
-                      <span className='truncate text-sm font-medium text-gray-900 dark:text-white'>{s.name}</span>
+                      <span className='truncate text-sm font-medium text-[#1c2333]'>{s.name}</span>
                       <span className={`flex-shrink-0 rounded px-1.5 py-0.5 text-[10px] ${
                         s.from === 'config'
                           ? 'bg-blue-50 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400'
@@ -268,14 +269,14 @@ export default function MeiSourcesPage() {
           onClick={(e) => { if (e.target === e.currentTarget) setAddOpen(false); }}
         >
           <div className='w-full max-w-md rounded-2xl bg-white p-5 shadow-xl dark:bg-gray-900'>
-            <h2 className='mb-4 text-base font-bold text-gray-900 dark:text-white'>添加影视源</h2>
+            <h2 className='mb-4 text-base font-bold text-[#1c2333]'>添加影视源</h2>
             {[
               { label: '名称', key: 'name' as const, ph: '例如：黑木耳' },
               { label: 'API 地址', key: 'api' as const, ph: 'https://…/api.php/provide/vod' },
               { label: '站点地址（可选）', key: 'detail' as const, ph: 'https://…' },
             ].map((f) => (
               <div key={f.key} className='mb-3'>
-                <label className='mb-1 block text-xs font-medium text-gray-500 dark:text-gray-400'>{f.label}</label>
+                <label className='mb-1 block text-xs font-medium text-[#5d6778]'>{f.label}</label>
                 <input
                   value={addForm[f.key]}
                   onChange={(e) => setAddForm((p) => ({ ...p, [f.key]: e.target.value }))}

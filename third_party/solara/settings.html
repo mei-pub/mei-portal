@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<!-- 音乐播放设置（门户风格原生页）：探索雷达风格 + 音乐源管理 -->
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>音乐播放设置</title>
+<style>
+:root {
+  --bg: #f4f6fb; --fg: #1c2333; --muted: #5d6778;
+  --border: rgba(23,32,56,0.08); --border-strong: rgba(23,32,56,0.14);
+  --primary: #6366f1; --gradient: linear-gradient(135deg,#6366f1,#a855f7);
+  --glow: 0 4px 14px rgba(99,102,241,0.35); --surface: rgba(255,255,255,0.86);
+}
+* { box-sizing: border-box; margin: 0; }
+body { background: var(--bg); color: var(--fg); font-family: "PingFang SC", "Noto Sans SC", "Microsoft YaHei", sans-serif; min-height: 100vh; }
+.wrap { max-width: 640px; margin: 0 auto; padding: 76px 20px 60px; }
+.back { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--muted); text-decoration: none; margin-bottom: 16px; }
+.back:hover { color: var(--primary); }
+h1 { font-size: 20px; font-weight: 800; display: flex; align-items: center; gap: 10px; }
+h1 .logo { width: 34px; height: 34px; border-radius: 10px; background: var(--gradient); display: inline-flex; align-items: center; justify-content: center; color: #fff; box-shadow: var(--glow); font-size: 16px; }
+.sub { font-size: 12.5px; color: var(--muted); margin: 6px 0 20px; }
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 18px; margin-bottom: 16px; box-shadow: 0 2px 10px rgba(23,32,56,0.07); backdrop-filter: blur(18px); }
+.card h2 { font-size: 14.5px; font-weight: 700; margin-bottom: 4px; }
+.hint { font-size: 12px; color: var(--muted); margin-bottom: 12px; line-height: 1.6; }
+.grid { display: flex; flex-wrap: wrap; gap: 8px; }
+.chip { display: inline-flex; align-items: center; gap: 6px; padding: 7px 14px; border-radius: 999px; border: 1px solid var(--border-strong); background: #fff; font-size: 12.5px; cursor: pointer; transition: all .15s; user-select: none; }
+.chip.on { background: var(--gradient); color: #fff; border-color: transparent; box-shadow: var(--glow); }
+.src-row { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 12px; border: 1px solid var(--border); background: rgba(255,255,255,0.6); margin-bottom: 8px; }
+.src-row .name { flex: 1; font-size: 13px; font-weight: 600; }
+.src-row .desc { font-size: 11px; color: var(--muted); }
+.toggle { position: relative; width: 38px; height: 22px; border-radius: 999px; background: rgba(23,32,56,0.15); cursor: pointer; transition: background .2s; flex-shrink: 0; border: none; }
+.toggle::after { content: ""; position: absolute; top: 3px; left: 3px; width: 16px; height: 16px; border-radius: 50%; background: #fff; transition: transform .2s; box-shadow: 0 1px 3px rgba(0,0,0,0.2); }
+.toggle.on { background: var(--primary); }
+.toggle.on::after { transform: translateX(16px); }
+.actions { position: sticky; bottom: 16px; display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px; }
+.btn { padding: 10px 24px; border-radius: 999px; border: none; font-size: 13px; font-weight: 650; cursor: pointer; }
+.btn-primary { background: var(--gradient); color: #fff; box-shadow: var(--glow); }
+.btn-ghost { background: rgba(255,255,255,0.9); border: 1px solid var(--border-strong); color: var(--fg); }
+.toast { position: fixed; top: 18px; left: 50%; transform: translateX(-50%); padding: 9px 20px; border-radius: 999px; background: rgba(28,35,51,0.92); color: #fff; font-size: 13px; opacity: 0; transition: opacity .25s; pointer-events: none; z-index: 100; }
+.toast.show { opacity: 1; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <a class="back" href="/music/">← 返回音乐播放</a>
+  <h1><span class="logo">♪</span>音乐播放设置</h1>
+  <p class="sub">探索雷达风格与音乐源管理，保存后立即生效（存储在浏览器本地）。</p>
+
+  <div class="card">
+    <h2>探索雷达风格</h2>
+    <p class="hint">选择喜欢的音乐风格，探索雷达将从中为您推荐歌曲（至少选择一个）。</p>
+    <div id="genreGrid" class="grid"></div>
+  </div>
+
+  <div class="card">
+    <h2>音乐源管理</h2>
+    <p class="hint">启停搜索结果中使用的音乐平台（内置源参考 coco-downloader 平台实现）。至少保留一个启用源。</p>
+    <div id="sourceList"></div>
+  </div>
+
+  <div class="actions">
+    <button class="btn btn-ghost" onclick="resetSources()">恢复默认源</button>
+    <button class="btn btn-primary" onclick="saveAll()">保存设置</button>
+  </div>
+</div>
+<div id="toast" class="toast"></div>
+
+<script>
+var GENRES = ["流行","摇滚","古典音乐","民谣","电子","嘻哈","爵士","轻音乐","R&B","金属","朋克","蓝调","雷鬼","世界音乐","拉丁","新世纪","古风","动漫","影视原声","说唱"];
+var SOURCES = [
+  { value: "netease", label: "网易云音乐", desc: "曲库全，推荐准确" },
+  { value: "qq", label: "QQ音乐", desc: "腾讯音乐平台" },
+  { value: "kugou", label: "酷狗音乐", desc: "酷狗曲库" },
+  { value: "kuwo", label: "酷我音乐", desc: "无损音质支持好" },
+  { value: "migu", label: "咪咕音乐", desc: "中国移动音乐平台" },
+  { value: "joox", label: "JOOX音乐", desc: "东南亚曲库" },
+  { value: "bilibili", label: "哔哩哔哩", desc: "B站音频区" },
+  { value: "ximalaya", label: "喜马拉雅", desc: "有声内容" }
+];
+var DEFAULT_SOURCES = ["netease", "kuwo", "joox", "bilibili"];
+
+function toast(msg) {
+  var t = document.getElementById("toast");
+  t.textContent = msg;
+  t.classList.add("show");
+  setTimeout(function () { t.classList.remove("show"); }, 2200);
+}
+function loadGenres() {
+  try {
+    var raw = localStorage.getItem("radarSettings");
+    if (raw) {
+      var d = JSON.parse(raw);
+      if (d && Array.isArray(d.genres) && d.genres.length) return d.genres;
+    }
+  } catch (e) {}
+  return GENRES.slice();
+}
+function loadSources() {
+  try {
+    var raw = localStorage.getItem("mei-music-sources");
+    if (raw) {
+      var list = JSON.parse(raw);
+      if (Array.isArray(list) && list.length) return list;
+    }
+  } catch (e) {}
+  return DEFAULT_SOURCES.slice();
+}
+
+var selGenres = loadGenres();
+var selSources = loadSources();
+
+function renderGenres() {
+  var g = document.getElementById("genreGrid");
+  g.innerHTML = "";
+  GENRES.forEach(function (name) {
+    var b = document.createElement("button");
+    b.className = "chip" + (selGenres.indexOf(name) >= 0 ? " on" : "");
+    b.textContent = name;
+    b.onclick = function () {
+      var i = selGenres.indexOf(name);
+      if (i >= 0) selGenres.splice(i, 1); else selGenres.push(name);
+      b.classList.toggle("on");
+    };
+    g.appendChild(b);
+  });
+}
+function renderSources() {
+  var box = document.getElementById("sourceList");
+  box.innerHTML = "";
+  SOURCES.forEach(function (s) {
+    var on = selSources.indexOf(s.value) >= 0;
+    var row = document.createElement("div");
+    row.className = "src-row";
+    row.innerHTML = '<div class="name">' + s.label + '<div class="desc">' + s.desc + "</div></div>";
+    var t = document.createElement("button");
+    t.className = "toggle" + (on ? " on" : "");
+    t.setAttribute("aria-label", "启停 " + s.label);
+    t.onclick = function () {
+      var i = selSources.indexOf(s.value);
+      if (i >= 0) {
+        if (selSources.length === 1) { toast("至少保留一个启用源"); return; }
+        selSources.splice(i, 1);
+      } else {
+        selSources.push(s.value);
+      }
+      t.classList.toggle("on");
+    };
+    row.appendChild(t);
+    box.appendChild(row);
+  });
+}
+function resetSources() {
+  selSources = DEFAULT_SOURCES.slice();
+  renderSources();
+  toast("已恢复默认源（未保存）");
+}
+function saveAll() {
+  if (!selGenres.length) { toast("请至少选择一个风格"); return; }
+  if (!selSources.length) { toast("请至少保留一个启用源"); return; }
+  try {
+    localStorage.setItem("radarSettings", JSON.stringify({ genres: selGenres }));
+    localStorage.setItem("mei-music-sources", JSON.stringify(selSources));
+    // 若当前搜索源被停用，切到第一个启用源
+    var cur = localStorage.getItem("searchSource");
+    if (cur && selSources.indexOf(cur) < 0) localStorage.setItem("searchSource", selSources[0]);
+    toast("设置已保存，刷新播放器生效");
+  } catch (e) {
+    toast("保存失败：" + e.message);
+  }
+}
+renderGenres();
+renderSources();
+</script>
+</body>
+</html>

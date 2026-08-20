@@ -12,7 +12,8 @@ import {
   ManualPage,
   ProfilePage,
   ProjectsPage,
-  RegisterPage
+  RegisterPage,
+  SettingsPage
 } from '@/pages'
 import {ProtectedRoute} from '@/components/auth/ProtectedRoute'
 import {useSystemStore} from '@/stores/systemStore'
@@ -83,6 +84,7 @@ function App() {
             <Route path="/projects" element={<ProjectsPage />} />
             <Route path="/editor/:projectId" element={<EditorPage />} />
             <Route path="/editor/example/:projectId" element={<EditorPage mode="example" />} />
+            <Route path="/settings" element={<SettingsPage />} />
             <Route path="/profile" element={<ProfilePage />} />
             <Route path="/admin" element={<AdminPage />} />
           </Route>

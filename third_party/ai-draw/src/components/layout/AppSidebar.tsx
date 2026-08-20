@@ -111,15 +111,26 @@ export function AppSidebar({ onCreateProject }: AppSidebarProps) {
         </button>
       ) : (
         <div className="fixed left-3 top-1/2 -translate-y-1/2 z-40 flex flex-col items-center gap-1 p-1.5 rounded-2xl bg-white/75 dark:bg-gray-900/70 backdrop-blur-xl border border-black/10 dark:border-white/10 shadow-lg">
+          {/* 应用信息区：Logo + 名称（垂直布局，与其他应用面板统一） */}
+          <button
+            onClick={() => actions[0]?.onClick()}
+            title="AI 绘图"
+            className="flex w-[64px] flex-col items-center gap-1 rounded-xl px-1 py-1.5 transition-colors hover:bg-gray-900/5 dark:hover:bg-white/10"
+          >
+            <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-500 to-purple-500 text-white shadow-md">
+              <svg className="h-[18px] w-[18px]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m12 19 7-7 3 3-7 7-3-3z"/><path d="m18 13-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"/><path d="m2 2 7.586 7.586"/><circle cx="11" cy="11" r="2"/></svg>
+            </span>
+            <span className="w-full truncate text-center text-[10px] font-medium leading-tight text-gray-700 dark:text-gray-300">AI 绘图</span>
+          </button>
+          <div className="my-0.5 h-px w-8 bg-black/10 dark:bg-white/10" />
           {actions.map(a => (
             <button
               key={a.label}
               onClick={a.onClick}
               title={a.title}
-              className="w-10 h-11 rounded-xl flex flex-col items-center justify-center text-gray-500 hover:bg-gray-900/5 hover:text-indigo-600 dark:text-gray-400 dark:hover:bg-white/10 transition-colors"
+              className="w-10 h-10 rounded-xl flex items-center justify-center text-gray-500 hover:bg-gray-900/5 hover:text-indigo-600 dark:text-gray-400 dark:hover:bg-white/10 transition-colors"
             >
               {a.icon}
-              <span className="text-[9px] leading-none mt-0.5">{a.label}</span>
             </button>
           ))}
           <button

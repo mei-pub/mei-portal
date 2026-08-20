@@ -646,12 +646,28 @@ function buildAudioProxyUrl(url) {
     }
 }
 
-const SOURCE_OPTIONS = [
+// 音乐源：内置全集（参考 coco-downloader 平台实现补充），可通过设置页启停（localStorage mei-music-sources）
+const ALL_SOURCE_OPTIONS = [
     { value: "netease", label: "网易云音乐" },
+    { value: "qq", label: "QQ音乐" },
+    { value: "kugou", label: "酷狗音乐" },
     { value: "kuwo", label: "酷我音乐" },
+    { value: "migu", label: "咪咕音乐" },
     { value: "joox", label: "JOOX音乐" },
-    { value: "bilibili", label: "哔哩哔哩" }
+    { value: "bilibili", label: "哔哩哔哩" },
+    { value: "ximalaya", label: "喜马拉雅" }
 ];
+function loadEnabledSources() {
+    try {
+        const raw = localStorage.getItem("mei-music-sources");
+        if (!raw) return null; // 未配置：默认前四个（保持旧行为）
+        const list = JSON.parse(raw);
+        if (!Array.isArray(list)) return null;
+        const enabled = ALL_SOURCE_OPTIONS.filter(o => list.includes(o.value));
+        return enabled.length > 0 ? enabled : null;
+    } catch (e) { return null; }
+}
+const SOURCE_OPTIONS = loadEnabledSources() || ALL_SOURCE_OPTIONS.filter(o => ["netease", "kuwo", "joox", "bilibili"].includes(o.value));
 
 function normalizeSource(value) {
     const allowed = SOURCE_OPTIONS.map(option => option.value);

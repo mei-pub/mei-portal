@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter, useParams } from "next/navigation";
 import SitePanel from "@/components/SitePanel";
+import IconPicker from "@/components/IconPicker";
 
 export default function NewNovelPage() {
   const router = useRouter();
@@ -22,6 +23,7 @@ export default function NewNovelPage() {
     rating: 5,
   });
   const [coverUploading, setCoverUploading] = useState(false);
+  const [iconUploading, setIconUploading] = useState(false);
   async function uploadCover(file: File) {
     setCoverUploading(true);
     try {
@@ -31,6 +33,17 @@ export default function NewNovelPage() {
       const data = await res.json();
       if (res.ok && data.dataUrl) setForm(f => ({ ...f, cover_url: data.dataUrl }));
     } catch {} finally { setCoverUploading(false); }
+  }
+
+  async function uploadIcon(file: File) {
+    setIconUploading(true);
+    try {
+      const fd = new FormData();
+      fd.append("image", file);
+      const res = await fetch("/novels/api/upload-image", { method: "POST", body: fd });
+      const data = await res.json();
+      if (res.ok && data.dataUrl) setForm((f) => ({ ...f, icon: data.dataUrl }));
+    } catch {} finally { setIconUploading(false); }
   }
   const [tagInput, setTagInput] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -82,7 +95,7 @@ export default function NewNovelPage() {
         </div>
         <form id="novel-form" onSubmit={handleSubmit} className="space-y-5">
           <div>
-            <label className="block text-sm font-medium mb-1.5">
+            <label className="mei-label">
               小说标题 <span className="text-red-500">*</span>
             </label>
             <input
@@ -90,20 +103,20 @@ export default function NewNovelPage() {
               required
               value={form.title}
               onChange={e => setForm({ ...form, title: e.target.value })}
-              className="w-full px-3 py-2 text-sm rounded-lg border border-[var(--border)] bg-white focus:outline-none focus:ring-2 focus:ring-[var(--primary)]"
+              className="mei-input"
               placeholder="请输入小说标题"
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium mb-1.5">
+            <label className="mei-label">
               英文标识 <span className="text-xs text-[var(--muted)] font-normal">（路径用，全局唯一，留空自动生成）</span>
             </label>
             <input
               type="text"
               value={form.slug}
               onChange={e => setForm({ ...form, slug: e.target.value.toLowerCase() })}
-              className="w-full px-3 py-2 text-sm rounded-lg border border-[var(--border)] bg-white focus:outline-none focus:ring-2 focus:ring-[var(--primary)]"
+              className="mei-input"
               placeholder="如：doupo（小写字母/数字/中划线）"
             />
           </div>
@@ -111,7 +124,7 @@ export default function NewNovelPage() {
           {/* 封面 / Logo：有封面用封面渲染，无封面有 Logo 用 Logo 渲染 */}
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium mb-1.5">小说封面</label>
+              <label className="mei-label">小说封面</label>
               <div className="flex items-center gap-2">
                 {form.cover_url && (
                   // eslint-disable-next-line @next/next/no-img-element
@@ -129,44 +142,37 @@ export default function NewNovelPage() {
                 type="text"
                 value={form.cover_url}
                 onChange={e => setForm({ ...form, cover_url: e.target.value })}
-                className="mt-2 w-full px-3 py-2 text-xs rounded-lg border border-[var(--border)] bg-white focus:outline-none focus:ring-2 focus:ring-[var(--primary)]"
+                className="mei-input" style={{ marginTop: 8, fontSize: 12 }}
                 placeholder="或粘贴封面图地址"
               />
             </div>
-            <div>
-              <label className="block text-sm font-medium mb-1.5">Logo <span className="text-xs text-[var(--muted)] font-normal">（无封面时展示）</span></label>
-              <input
-                type="text"
-                value={form.icon}
-                onChange={e => setForm({ ...form, icon: e.target.value })}
-                className="w-full px-3 py-2 text-sm rounded-lg border border-[var(--border)] bg-white focus:outline-none focus:ring-2 focus:ring-[var(--primary)]"
-                placeholder="图片地址 / emoji"
+            <div style={{ gridColumn: "1 / -1" }}>
+              <label className="mei-label">Logo <span className="text-xs text-[var(--muted)] font-normal">（无封面时展示）</span></label>
+              <IconPicker
+                icon={form.icon}
+                color={form.icon_color}
+                title={form.title}
+                uploading={iconUploading}
+                onIcon={(v) => setForm({ ...form, icon: v })}
+                onColor={(v) => setForm({ ...form, icon_color: v })}
+                onUpload={(f) => uploadIcon(f)}
               />
-              <div className="mt-2 flex items-center gap-2">
-                <label className="text-xs text-[var(--muted)]">底色</label>
-                <input
-                  type="color"
-                  value={form.icon_color || "#6366f1"}
-                  onChange={e => setForm({ ...form, icon_color: e.target.value })}
-                  className="w-8 h-8 rounded cursor-pointer border border-[var(--border)]"
-                />
-              </div>
             </div>
           </div>
 
           <div>
-            <label className="block text-sm font-medium mb-1.5">作者</label>
+            <label className="mei-label">作者</label>
             <input
               type="text"
               value={form.author}
               onChange={e => setForm({ ...form, author: e.target.value })}
-              className="w-full px-3 py-2 text-sm rounded-lg border border-[var(--border)] bg-white focus:outline-none focus:ring-2 focus:ring-[var(--primary)]"
+              className="mei-input"
               placeholder="请输入作者名"
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium mb-1.5">简介</label>
+            <label className="mei-label">简介</label>
             <textarea
               rows={4}
               value={form.description}
@@ -178,17 +184,17 @@ export default function NewNovelPage() {
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium mb-1.5">分类</label>
+              <label className="mei-label">分类</label>
               <input
                 type="text"
                 value={form.category}
                 onChange={e => setForm({ ...form, category: e.target.value })}
-                className="w-full px-3 py-2 text-sm rounded-lg border border-[var(--border)] bg-white focus:outline-none focus:ring-2 focus:ring-[var(--primary)]"
+                className="mei-input"
                 placeholder="如：玄幻、武侠"
               />
             </div>
             <div>
-              <label className="block text-sm font-medium mb-1.5">评分</label>
+              <label className="mei-label">评分</label>
               <div className="flex items-center gap-2">
                 <input
                   type="range"
@@ -205,7 +211,7 @@ export default function NewNovelPage() {
           </div>
 
           <div>
-            <label className="block text-sm font-medium mb-1.5">标签</label>
+            <label className="mei-label">标签</label>
             <div className="flex flex-wrap gap-1.5 mb-2">
               {form.tags.map((tag, i) => (
                 <span key={i} className="inline-flex items-center gap-1 px-2.5 py-0.5 text-xs bg-[var(--accent)] text-[var(--primary)] rounded-full">
@@ -236,11 +242,11 @@ export default function NewNovelPage() {
           </div>
 
           <div>
-            <label className="block text-sm font-medium mb-1.5">状态</label>
+            <label className="mei-label">状态</label>
             <select
               value={form.status}
               onChange={e => setForm({ ...form, status: e.target.value })}
-              className="w-full px-3 py-2 text-sm rounded-lg border border-[var(--border)] bg-white focus:outline-none focus:ring-2 focus:ring-[var(--primary)]"
+              className="mei-input"
             >
               <option value="ongoing">连载中</option>
               <option value="completed">已完结</option>

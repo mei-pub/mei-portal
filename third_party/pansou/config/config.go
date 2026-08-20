@@ -116,7 +116,27 @@ func Init() {
 func getDefaultChannels() []string {
 	channelsEnv := os.Getenv("CHANNELS")
 	if channelsEnv == "" {
-		return []string{"tgsearchers6"}
+		// 内置 TG 频道源（网盘/资源分享类，可按需在设置页启停）
+		return []string{
+			"tgsearchers6",
+			"yunpanxunlei",
+			"tianyifc",
+			"BaiduCloudDisk",
+			"txyyzy",
+			"beshaozhilu",
+			"sharingcloudbaidupan",
+			"baiduyunpan",
+			"lepanshare",
+			"tianyirigeng",
+			"tytdyp",
+			"pangzilove",
+			"QiuShare",
+			"yyddhhy",
+			"shareAliyun",
+			"Quark_Movies",
+			"xunleiyunpan",
+			"ydypzy",
+		}
 	}
 	return strings.Split(channelsEnv, ",")
 }

@@ -110,21 +110,36 @@ const MediagoSidebar: FC = () => {
           </svg>
         </button>
       ) : (
-        // 展开态：左缘中段浮动玻璃面板（与 AI 绘图一致）
+        // 展开态：左缘中段浮动玻璃面板（统一应用面板：应用信息区 + 图标入口，只展示图标）
         <div className="fixed left-3 top-1/2 -translate-y-1/2 z-40 flex flex-col items-center gap-1 p-1.5 rounded-2xl bg-white/75 dark:bg-gray-900/70 backdrop-blur-xl border border-black/10 dark:border-white/10 shadow-lg">
+          {/* 应用信息区：Logo + 名称（垂直布局） */}
+          <button
+            onClick={() => navigate("/")}
+            title="媒体下载"
+            className="flex w-[64px] flex-col items-center gap-1 rounded-xl px-1 py-1.5 transition-colors hover:bg-gray-900/5 dark:hover:bg-white/10"
+          >
+            <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-500 to-purple-500 text-white shadow-md">
+              <svg className="h-[18px] w-[18px]" viewBox="0 0 24 24" {...stroke}>
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                <polyline points="7 10 12 15 17 10"/>
+                <line x1="12" y1="15" x2="12" y2="3"/>
+              </svg>
+            </span>
+            <span className="w-full truncate text-center text-[10px] font-medium leading-tight text-gray-700 dark:text-gray-300">媒体下载</span>
+          </button>
+          <div className="my-0.5 h-px w-8 bg-black/10 dark:bg-white/10" />
           {actions.map(a => (
             <button
               key={a.label}
               onClick={a.onClick}
               title={a.title}
-              className={`w-10 h-11 rounded-xl flex flex-col items-center justify-center transition-colors ${
+              className={`w-10 h-10 rounded-xl flex items-center justify-center transition-colors ${
                 a.active
                   ? "bg-indigo-600/10 text-indigo-600"
                   : "text-gray-500 hover:bg-gray-900/5 hover:text-indigo-600 dark:text-gray-400 dark:hover:bg-white/10"
               }`}
             >
               {a.icon}
-              <span className="text-[9px] leading-none mt-0.5">{a.label}</span>
             </button>
           ))}
           <button

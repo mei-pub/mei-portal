@@ -186,7 +186,24 @@ const App: FC = () => {
     <ConfigProvider
       locale={appLocale}
       componentSize={isWeb ? undefined : "small"}
-      theme={{ algorithm: getAlgorithm(theme) }}
+      theme={{
+        algorithm: getAlgorithm(theme),
+        // mei-allin：门户主应用风格令牌（主色/圆角/背景对齐 shell）
+        token: {
+          colorPrimary: "#6366f1",
+          colorLink: "#4f46e5",
+          borderRadius: 10,
+          colorBgLayout: "#f4f6fb",
+          fontFamily: '"PingFang SC","Noto Sans SC","Microsoft YaHei",-apple-system,sans-serif',
+        },
+        components: {
+          Button: { borderRadius: 999, controlHeight: 36 },
+          Card: { borderRadiusLG: 16 },
+          Input: { borderRadius: 10 },
+          Select: { borderRadius: 10 },
+          Modal: { borderRadiusLG: 16 },
+        },
+      }}
     >
       <AntdApp className="size-full overflow-hidden">
         <Routes>
