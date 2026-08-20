@@ -1,11 +1,11 @@
 import { NextResponse } from 'next/server';
 import { getAllNovels, createNovel } from '@/lib/db';
-import { requireAuth } from '@/lib/auth';
+import { requireSiteAccess } from "@/lib/auth";
 
 export async function GET(request: Request) {
-  const authResult = requireAuth(request);
-  if (authResult instanceof NextResponse) return authResult;
-  const libraryId = authResult;
+  const siteResult = requireSiteAccess(request, new URL(request.url).searchParams.get("site"));
+  if (siteResult instanceof NextResponse) return siteResult;
+  const libraryId = siteResult.id;
   try {
     const novels = getAllNovels(libraryId);
     return NextResponse.json(novels);
@@ -16,9 +16,9 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const authResult = requireAuth(request);
-  if (authResult instanceof NextResponse) return authResult;
-  const libraryId = authResult;
+  const siteResult = requireSiteAccess(request, new URL(request.url).searchParams.get("site"));
+  if (siteResult instanceof NextResponse) return siteResult;
+  const libraryId = siteResult.id;
   try {
     const body = await request.json();
     const { title, author, description, cover_url, category, tags, status } = body;

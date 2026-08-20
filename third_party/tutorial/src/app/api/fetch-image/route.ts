@@ -1,10 +1,10 @@
 import { NextResponse } from 'next/server';
-import { requireAuth } from '@/lib/auth';
+import { requireSiteAccess } from "@/lib/auth";
 
 // GET /api/fetch-image?url=xxx - 服务端代理下载图片，返回 base64
 export async function GET(request: Request) {
-  const authResult = requireAuth(request);
-  if (authResult instanceof NextResponse) return authResult;
+  const siteResult = requireSiteAccess(request, new URL(request.url).searchParams.get("site"));
+  if (siteResult instanceof NextResponse) return siteResult;
   try {
     const { searchParams } = new URL(request.url);
     const imageUrl = searchParams.get('url');

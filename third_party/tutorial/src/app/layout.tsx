@@ -1,6 +1,5 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
-import AuthProvider from "@/components/AuthProvider";
 import ToastContainer from "@/components/Toast";
 
 export const viewport: Viewport = {
@@ -12,12 +11,12 @@ export const viewport: Viewport = {
 };
 
 export const metadata: Metadata = {
-  title: "小说书架",
-  description: "小说阅读与管理平台",
+  title: "小说阅读",
+  description: "个人小说站点（普通/隐秘站点）",
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
-    title: "小说书架",
+    title: "小说阅读",
   },
   formatDetection: {
     telephone: false,
@@ -41,7 +40,7 @@ export default function RootLayout({
   return (
     <html lang="zh-CN" className="h-full antialiased">
       <body className="min-h-full flex flex-col" suppressHydrationWarning><script id="mei-topbar-script" src="/__shell/topbar.js" data-app="tutorial"></script>
-        <AuthProvider>{children}</AuthProvider>
+        {children}
         <ToastContainer />
       </body>
     </html>

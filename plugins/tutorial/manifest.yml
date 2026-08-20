@@ -1,9 +1,9 @@
 id: tutorial
-name: 小说书架
-description: 个人小说库，带蜘蛛纸牌游戏伪装
+name: 小说阅读
+description: 个人小说站点（普通/隐秘站点）
 icon: lucide:book-open
 category: productivity
-weight: 60
+weight: 80
 endpoint: http://tutorial:3000
 ingress:
   mode: subdomain

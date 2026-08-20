@@ -3,7 +3,7 @@ name: AI 绘图
 description: AI 驱动的绘图工具，支持 Excalidraw/Mermaid/Drawio
 icon: lucide:pen-tool
 category: utility
-weight: 10
+weight: 50
 endpoint: http://ai-draw:3000
 ingress:
   mode: subdomain

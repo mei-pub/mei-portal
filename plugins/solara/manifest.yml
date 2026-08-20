@@ -3,7 +3,7 @@ name: 音乐播放
 description: 沉浸式音乐播放器，专辑配色动态背景
 icon: lucide:music
 category: media
-weight: 40
+weight: 20
 endpoint: http://solara:8787
 ingress:
   mode: subdomain

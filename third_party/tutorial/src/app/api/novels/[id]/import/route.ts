@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createChapter, getNovelById } from '@/lib/db';
-import { requireAuth } from '@/lib/auth';
+import { requireSiteAccess } from "@/lib/auth";
 
 // 支持两种格式:
 // 1. { fullText } - 旧格式，系统自动拆分（保持向后兼容）
@@ -10,9 +10,9 @@ export async function POST(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const authResult = requireAuth(request);
-  if (authResult instanceof NextResponse) return authResult;
-  const libraryId = authResult;
+  const siteResult = requireSiteAccess(request, new URL(request.url).searchParams.get("site"));
+  if (siteResult instanceof NextResponse) return siteResult;
+  const libraryId = siteResult.id;
   try {
     const { id } = await params;
     const novelId = parseInt(id);

@@ -6,6 +6,7 @@ import MeiIcon from '@/components/MeiIcon';
 import ItemIconPicker, { isImgIcon, contrastColor } from '@/components/ItemIconPicker';
 import 'iconify-icon';
 import type { PanelConfig, PanelItem, PanelGroup } from '@/lib/panel-store';
+import { PRESET_GROUP_IDS } from '@/lib/panel-presets';
 
 type Tab = 'style' | 'groups' | 'items' | 'backup';
 
@@ -310,15 +311,19 @@ function GroupsTab({ config, setConfig }: { config: PanelConfig; setConfig: (c: 
               <span style={{ fontSize: 11, color: 'var(--mei-text-faint)' }}>{config.items.filter((i) => i.groupId === g.id).length} 项</span>
               <button onClick={() => move(idx, -1)} title="上移" style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: 'var(--mei-text-muted)' }}>↑</button>
               <button onClick={() => move(idx, 1)} title="下移" style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: 'var(--mei-text-muted)' }}>↓</button>
-              <button
-                onClick={() => {
-                  if (!confirm(`删除分组「${g.name}」？组内 ${config.items.filter((i) => i.groupId === g.id).length} 个项将移至未分组。`)) return;
-                  setConfig({ ...config, groups: config.groups.filter((x) => x.id !== g.id), items: config.items.map((i) => (i.groupId === g.id ? { ...i, groupId: '' } : i)) });
-                }}
-                style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: 'var(--mei-danger)', fontSize: 12 }}
-              >
-                删除
-              </button>
+              {PRESET_GROUP_IDS.has(g.id) ? (
+                <span style={{ fontSize: 11, color: 'var(--mei-text-faint)' }}>预设</span>
+              ) : (
+                <button
+                  onClick={() => {
+                    if (!confirm(`删除分组「${g.name}」？组内 ${config.items.filter((i) => i.groupId === g.id).length} 个项将移至未分组。`)) return;
+                    setConfig({ ...config, groups: config.groups.filter((x) => x.id !== g.id), items: config.items.map((i) => (i.groupId === g.id ? { ...i, groupId: '' } : i)) });
+                  }}
+                  style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: 'var(--mei-danger)', fontSize: 12 }}
+                >
+                  删除
+                </button>
+              )}
             </div>
           ))}
         </div>

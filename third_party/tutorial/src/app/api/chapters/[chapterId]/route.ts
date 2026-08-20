@@ -1,14 +1,14 @@
 import { NextResponse } from 'next/server';
 import { getChapterById, updateChapter, deleteChapter } from '@/lib/db';
-import { requireAuth } from '@/lib/auth';
+import { requireSiteAccess } from "@/lib/auth";
 
 export async function GET(
   request: Request,
   { params }: { params: Promise<{ chapterId: string }> }
 ) {
-  const authResult = requireAuth(request);
-  if (authResult instanceof NextResponse) return authResult;
-  const libraryId = authResult;
+  const siteResult = requireSiteAccess(request, new URL(request.url).searchParams.get("site"));
+  if (siteResult instanceof NextResponse) return siteResult;
+  const libraryId = siteResult.id;
   try {
     const { chapterId } = await params;
     const chapter = getChapterById(parseInt(chapterId), libraryId);
@@ -26,9 +26,9 @@ export async function PUT(
   request: Request,
   { params }: { params: Promise<{ chapterId: string }> }
 ) {
-  const authResult = requireAuth(request);
-  if (authResult instanceof NextResponse) return authResult;
-  const libraryId = authResult;
+  const siteResult = requireSiteAccess(request, new URL(request.url).searchParams.get("site"));
+  if (siteResult instanceof NextResponse) return siteResult;
+  const libraryId = siteResult.id;
   try {
     const { chapterId } = await params;
     const body = await request.json();
@@ -48,9 +48,9 @@ export async function DELETE(
   request: Request,
   { params }: { params: Promise<{ chapterId: string }> }
 ) {
-  const authResult = requireAuth(request);
-  if (authResult instanceof NextResponse) return authResult;
-  const libraryId = authResult;
+  const siteResult = requireSiteAccess(request, new URL(request.url).searchParams.get("site"));
+  if (siteResult instanceof NextResponse) return siteResult;
+  const libraryId = siteResult.id;
   try {
     const { chapterId } = await params;
     const ok = deleteChapter(parseInt(chapterId), libraryId);

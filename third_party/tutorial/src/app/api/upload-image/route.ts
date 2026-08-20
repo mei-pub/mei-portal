@@ -1,10 +1,10 @@
 import { NextResponse } from 'next/server';
-import { requireAuth } from '@/lib/auth';
+import { requireSiteAccess } from "@/lib/auth";
 
 // POST /api/upload-image - 图片上传，返回 base64 markdown 格式
 export async function POST(request: Request) {
-  const authResult = requireAuth(request);
-  if (authResult instanceof NextResponse) return authResult;
+  const siteResult = requireSiteAccess(request, new URL(request.url).searchParams.get("site"));
+  if (siteResult instanceof NextResponse) return siteResult;
   try {
     const formData = await request.formData();
     const file = formData.get('image') as File | null;

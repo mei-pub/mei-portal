@@ -15,7 +15,7 @@ export interface SettingGroup {
   entries: SettingEntry[];
 }
 
-// 分组顺序：主页面板 → 影视门户 → 音乐播放 → 流媒体下载 → 网盘搜索 → AI 绘图 → 小说书架 → 内网穿透
+// 分组顺序：主页面板 → 影视门户 → 音乐播放 → 媒体下载 → 网盘搜索 → AI 绘图 → 小说阅读 → 内网穿透
 export const SETTING_GROUPS: SettingGroup[] = [
   {
     id: 'sun-panel',
@@ -44,10 +44,10 @@ export const SETTING_GROUPS: SettingGroup[] = [
   },
   {
     id: 'mediago',
-    label: '流媒体下载',
+    label: '媒体下载',
     icon: 'lucide:download',
     entries: [
-      { id: 'mediago-settings', name: '流媒体下载设置', url: '/media/settings?meiEmbed=1', icon: 'lucide:settings-2' },
+      { id: 'mediago-settings', name: '媒体下载设置', url: '/media/settings?meiEmbed=1', icon: 'lucide:settings-2' },
     ],
   },
   {
@@ -71,10 +71,10 @@ export const SETTING_GROUPS: SettingGroup[] = [
   },
   {
     id: 'tutorial',
-    label: '小说书架',
+    label: '小说阅读',
     icon: 'lucide:book-open',
     entries: [
-      { id: 'novels-manage', name: '小说书架管理', url: '/novels/manage?meiEmbed=1', icon: 'lucide:library' },
+      { id: 'novels-manage', name: '小说站点管理', url: '/novels/manage?meiEmbed=1', icon: 'lucide:library' },
     ],
   },
   {

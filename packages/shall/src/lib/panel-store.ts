@@ -2,6 +2,8 @@
 // 风格（Logo/时钟/搜索/图标样式/背景/边距/页脚）+ 分组 + 图标项（双地址/图标图片）+ 系统监控开关
 import fs from 'node:fs';
 import path from 'node:path';
+import { PRESET_GROUPS, BUILTIN_GROUP_ID } from './panel-presets';
+export { PRESET_GROUPS, PRESET_GROUP_IDS, BUILTIN_GROUP_ID, DEFAULT_GROUP_ID } from './panel-presets';
 
 const DATA_DIR = process.env.DATA_DIR || '/data';
 const PANEL_FILE = path.join(DATA_DIR, 'shell', 'panel.json');
@@ -56,6 +58,8 @@ export interface PanelConfig {
   removedBuiltin: string[]; // 用户删除过的内置应用 plugin id（同步时跳过）
 }
 
+// 预设分组定义见 ./panel-presets（客户端/服务端共用）
+
 export const DEFAULT_CONFIG: PanelConfig = {
   background: { url: '', mask: 0.35, blur: 0 },
   style: {
@@ -74,7 +78,7 @@ export const DEFAULT_CONFIG: PanelConfig = {
     footerHtml: '',
     systemMonitorShow: false,
   },
-  groups: [],
+  groups: [...PRESET_GROUPS.map((g) => ({ id: g.id, name: g.name, iconStyle: undefined, iconColor: '' }))],
   items: [],
   removedBuiltin: [],
 };
@@ -101,10 +105,33 @@ export function normalizeConfig(raw: unknown): PanelConfig {
     .filter((g) => g && g.name)
     .slice(0, 24)
     .map((g, i) => ({ id: str(g.id, 40, `g${Date.now()}-${i}`), name: str(g.name, 24), iconStyle: ['icon', 'info'].includes(String(g.iconStyle)) ? g.iconStyle as 'icon' | 'info' : undefined, iconColor: /^#[0-9a-fA-F]{3,8}$/.test(String(g.iconColor)) ? String(g.iconColor) : '' }));
+  // 预设分组必须存在且在最前（保留用户自定义顺序在其后）
+  for (let i = PRESET_GROUPS.length - 1; i >= 0; i--) {
+    const p = PRESET_GROUPS[i];
+    const idx = groups.findIndex((g) => g.id === p.id);
+    if (idx >= 0) {
+      const [exist] = groups.splice(idx, 1);
+      groups.unshift({ ...exist, name: p.name });
+    } else {
+      groups.unshift({ id: p.id, name: p.name, iconStyle: undefined, iconColor: '' });
+    }
+  }
+  // 与预设分组重名的自定义分组合并进预设（item groupId 重映射后删除重复分组）
+  const presetNameDupes = new Map<string, string>(); // dupId -> presetId
+  for (const p of PRESET_GROUPS) {
+    for (const g of [...groups]) {
+      if (g.id !== p.id && g.name === p.name) {
+        presetNameDupes.set(g.id, p.id);
+        groups.splice(groups.indexOf(g), 1);
+      }
+    }
+  }
   // 兼容历史数据：groupId 可能存的是分组“名称”（老版本按名称匹配后未转换成 id，
   // 导致首页分组渲染全部落到「常用」），这里统一映射回分组 id
   const resolveGroupId = (gid: string): string => {
     if (!gid) return '';
+    const dup = presetNameDupes.get(gid);
+    if (dup) return dup;
     if (groups.some((g) => g.id === gid)) return gid;
     const byName = groups.find((g) => g.name === gid);
     return byName ? byName.id : gid;
@@ -172,11 +199,19 @@ export function syncBuiltinItems(
     if (i.builtin && !pluginIds.has(i.builtin)) { changed = true; return false; }
     return true;
   });
+  // 内置应用归组：从未分组（未定制过）的内置项默认进「内置应用」预设组
+  items = items.map((i) => {
+    if (i.builtin && !i.groupId) {
+      changed = true;
+      return { ...i, groupId: BUILTIN_GROUP_ID };
+    }
+    return i;
+  });
   for (const p of plugins) {
     if (removed.has(p.id) || existingBuiltin.has(p.id)) continue;
     items.push({
       id: `b-${p.id}`,
-      groupId: '',
+      groupId: BUILTIN_GROUP_ID,
       title: p.name,
       description: p.description || '',
       url: p.url,

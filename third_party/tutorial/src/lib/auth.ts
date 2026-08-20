@@ -1,13 +1,66 @@
 import { NextResponse } from 'next/server';
-import { getHiddenLibraries, getLibraries, getLibraryById } from './db';
+import { getLibraryBySlug, type Library } from './db';
 
-const AUTH_COOKIE = 'auth-token';
+// ─────────────────────────────────────────────
+// 小说站点访问模型（2026-08 重构）
+// - 普通站点（normal）：完全公开，无需任何凭证
+// - 隐秘站点（secret）：需「开启」——ns-open cookie 记录 {slug: 开启密码}
+//   开启入口：门户首页搜索框 open:{标识}:{密码} / close:{标识}:{密码}，
+//   或站点页内的密码门控（均走 /novels/api/gate）
+// - 站点管理（manage）：主密码解锁（mei-unlock cookie），与内容访问独立
+// ─────────────────────────────────────────────
+
+const OPEN_COOKIE = 'ns-open';
 const UNLOCK_COOKIE = 'mei-unlock';
 
+/** 解析 ns-open cookie：{ [slug]: password } */
+export function parseOpenCookie(request: Request): Record<string, string> {
+  const cookieHeader = request.headers.get('cookie') || '';
+  const match = cookieHeader.split(';').map(s => s.trim()).find(s => s.startsWith(OPEN_COOKIE + '='));
+  if (!match) return {};
+  try {
+    const parsed = JSON.parse(decodeURIComponent(match.slice(OPEN_COOKIE.length + 1)));
+    return parsed && typeof parsed === 'object' ? parsed as Record<string, string> : {};
+  } catch {
+    return {};
+  }
+}
+
+export function buildOpenCookieValue(open: Record<string, string>): string {
+  return `${OPEN_COOKIE}=${encodeURIComponent(JSON.stringify(open))}; Path=/; Max-Age=${30 * 24 * 3600}; SameSite=Lax`;
+}
+
+/** 站点是否已开启（普通站点恒 true；隐秘站点看 ns-open 里的密码是否匹配） */
+export function isSiteOpen(request: Request, site: Library): boolean {
+  if (site.type !== 'secret') return true;
+  const open = parseOpenCookie(request);
+  return open[site.slug] !== undefined && open[site.slug] === site.password;
+}
+
 /**
- * Master password from env; falls back to MEI_ADMIN_PASSWORD.
- * Empty/undefined = unlock feature disabled.
+ * 解析并校验站点访问：返回 Library，或 404（不存在）/403（未开启）响应。
+ * 内容类 API 统一走这里（?site={slug} 参数）。
  */
+export function requireSiteAccess(request: Request, slug: string | null): Library | NextResponse {
+  if (!slug) {
+    return NextResponse.json({ error: '缺少 site 参数' }, { status: 400 });
+  }
+  const site = getLibraryBySlug(slug);
+  if (!site) {
+    return NextResponse.json({ error: '站点不存在' }, { status: 404 });
+  }
+  if (!isSiteOpen(request, site)) {
+    return NextResponse.json({ error: '站点未开启' }, { status: 403 });
+  }
+  return site;
+}
+
+export function unauthorizedResponse(): NextResponse {
+  return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+}
+
+// ── 主密码（站点管理解锁，独立于内容访问） ──
+
 export function getMasterPassword(): string {
   return process.env.MEI_HIDDEN_LIBRARY_PASSWORD || process.env.MEI_ADMIN_PASSWORD || '';
 }
@@ -18,152 +71,24 @@ export function isMasterPassword(pw: string | undefined): boolean {
   return !!master && pw === master;
 }
 
-/**
- * Parse auth token from cookie: format is {libraryId}:{password}
- */
-export function parseAuthToken(request: Request): { libraryId: number; password: string } | null {
-  const cookieHeader = request.headers.get('cookie') || '';
-  const match = cookieHeader.split(';').map(s => s.trim()).find(s => s.startsWith(AUTH_COOKIE + '='));
-  if (!match) return null;
-  const token = decodeURIComponent(match.slice(AUTH_COOKIE.length + 1));
-  const sepIdx = token.indexOf(':');
-  if (sepIdx === -1) return null;
-  const libraryId = parseInt(token.slice(0, sepIdx));
-  const password = token.slice(sepIdx + 1);
-  if (isNaN(libraryId)) return null;
-  return { libraryId, password };
-}
-
-/**
- * Build auth cookie value: {libraryId}:{password}
- */
-export function buildAuthToken(libraryId: number, password: string): string {
-  return `${libraryId}:${password}`;
-}
-
-/**
- * Read the raw unlock cookie value ('' = absent).
- * 新语义：值为当前激活的隐藏书架 id；旧值 '1' 表示未指定（回落第一个隐藏书架）。
- */
-function readUnlockValue(request: Request): string {
+export function isUnlocked(request: Request): boolean {
   const cookieHeader = request.headers.get('cookie') || '';
   const match = cookieHeader
     .split(';')
     .map(s => s.trim())
     .find(s => s.startsWith(UNLOCK_COOKIE + '='));
-  return match ? decodeURIComponent(match.slice(UNLOCK_COOKIE.length + 1)) : '';
+  return match ? decodeURIComponent(match.slice(UNLOCK_COOKIE.length + 1)) !== '' : false;
 }
 
-/**
- * 当前激活（已打开）的隐藏书架 id：cookie 值对应书架必须存在且仍处于隐藏状态。
- * 值 '0' = 已解锁但未激活任何隐藏书架（解锁 ≠ 打开，门户自动解锁用）。
- * 同一时间仅允许一个隐藏书架打开（cookie 只存一个 id）。
- */
-export function getActiveHiddenId(request: Request): number | null {
-  const value = readUnlockValue(request);
-  if (!value || value === '0') return null;
-  const hidden = getHiddenLibraries();
-  if (hidden.length === 0) return null;
-  if (value === '1') return hidden[0].id; // 旧值兼容
-  const id = parseInt(value);
-  if (isNaN(id)) return null;
-  const lib = getLibraryById(id);
-  return lib && lib.hidden ? id : null;
-}
-
-/**
- * Whether the request carries the master unlock cookie.
- */
-export function isUnlocked(request: Request): boolean {
-  return readUnlockValue(request) !== '';
-}
-
-/**
- * Verify auth from request cookies against library password.
- * Returns the authenticated libraryId or null.
- * 主密码解锁（mei-unlock cookie 记录激活的隐藏书架 id）可无密码直接进入该隐藏书架。
- */
-export function verifyAuth(request: Request): number | null {
-  const parsed = parseAuthToken(request);
-  if (parsed) {
-    const library = getLibraryById(parsed.libraryId);
-    if (!library) return null;
-    // No password set on library = open access for that library
-    if (!library.password) return parsed.libraryId;
-    if (parsed.password === library.password) return parsed.libraryId;
-  }
-  // 主密码解锁：授予当前激活的隐藏书架访问权；仅解锁未激活时回落默认公开书架
-  // （覆盖门户登录自动解锁的场景：浏览器可能尚无 auth-token，nginx 整体透传 cookie）
-  if (isUnlocked(request)) {
-    const active = getActiveHiddenId(request);
-    if (active !== null) return active;
-    const fallback = getLibraries().find(l => !l.hidden);
-    if (fallback) return fallback.id;
-  }
-  return null;
-}
-
-/**
- * Set the master unlock cookie on a response (7 days).
- * value: 激活的隐藏书架 id；缺省 '1'（回落第一个隐藏书架，兼容旧语义）。
- */
-export function applyUnlockCookie(res: NextResponse, libraryId?: number): NextResponse {
-  const value = libraryId ? String(libraryId) : '1';
-  res.headers.append('Set-Cookie', `${UNLOCK_COOKIE}=${value}; Path=/; Max-Age=${7 * 24 * 3600}; SameSite=Lax`);
-  return res;
-}
-
-/**
- * 解锁但不激活任何隐藏书架（unlock=0，解锁 ≠ 打开）。
- * 用于门户登录自动解锁 / 管理页解锁：隐藏书架可见、可由用户显式打开。
- */
 export function applyUnlockOnlyCookie(res: NextResponse): NextResponse {
-  res.headers.append('Set-Cookie', `${UNLOCK_COOKIE}=0; Path=/; Max-Age=${7 * 24 * 3600}; SameSite=Lax`);
+  res.headers.append('Set-Cookie', `${UNLOCK_COOKIE}=1; Path=/; Max-Age=${7 * 24 * 3600}; SameSite=Lax`);
   return res;
 }
 
-/**
- * Clear the master unlock cookie.
- */
 export function clearUnlockCookie(res: NextResponse): NextResponse {
-  // 同时给 Max-Age=0 与 Expires=epoch，确保各类客户端（含 curl）都删除 cookie
   res.headers.append(
     'Set-Cookie',
     `${UNLOCK_COOKIE}=; Path=/; Max-Age=0; Expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax`
   );
   return res;
-}
-
-/**
- * Create a 401 Unauthorized response.
- */
-export function unauthorizedResponse(): NextResponse {
-  return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-}
-
-/**
- * Check auth and return 401 if unauthorized.
- * Returns the authenticated libraryId, or a 401 NextResponse.
- */
-export function requireAuth(request: Request): number | NextResponse {
-  const libraryId = verifyAuth(request);
-  if (libraryId === null) {
-    return unauthorizedResponse();
-  }
-  return libraryId;
-}
-
-/**
- * Build a Set-Cookie header for the auth token (7 days).
- */
-export function authCookieHeader(libraryId: number, password: string): string {
-  const token = buildAuthToken(libraryId, password);
-  return `${AUTH_COOKIE}=${encodeURIComponent(token)}; Path=/; Max-Age=${7 * 24 * 3600}; SameSite=Lax`;
-}
-
-/**
- * Build a Set-Cookie header that clears the auth token.
- */
-export function clearAuthCookieHeader(): string {
-  return `${AUTH_COOKIE}=; Path=/; Max-Age=0; Expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax`;
 }

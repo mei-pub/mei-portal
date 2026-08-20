@@ -1,550 +1,346 @@
 "use client";
-
-// 小说书架管理页（mei-allin 设置集成页挂载）
-// - 列表默认只展示公开书架；在蜘蛛纸牌输入过主密码（unlock cookie）后才展示隐藏书架
-// - 隐藏书架"打开"= 会话级激活（书架保持 hidden，仅当前浏览器可访问，同一时间仅一个）
-// - "隐藏"= 把已打开的隐藏书架重新隐藏（收回访问权）
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
+import Link from "next/link";
+import Navbar from "@/components/Navbar";
 import { showToast } from "@/components/Toast";
 
-interface LibraryRow {
+interface SiteRow {
   id: number;
+  slug: string;
   name: string;
-  hidden: boolean;
+  type: "normal" | "secret";
   hasPassword: boolean;
+  created_at: string;
 }
 
-interface SettingsData {
-  libraries: LibraryRow[];
-  authenticatedLibraryId: number | null;
-  unlocked: boolean;
-  activeHiddenId: number | null;
-}
-
-const API = "/novels/api";
-
+// 小说站点管理：需主密码解锁（与门户管理密码一致）
 export default function ManagePage() {
-  const [data, setData] = useState<SettingsData | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [unlocked, setUnlocked] = useState<boolean | null>(null);
+  const [masterPw, setMasterPw] = useState("");
+  const [unlockErr, setUnlockErr] = useState("");
+  const [sites, setSites] = useState<SiteRow[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [creating, setCreating] = useState(false);
+  const [form, setForm] = useState({ name: "", slug: "", type: "normal" as "normal" | "secret", password: "" });
+  const [editing, setEditing] = useState<SiteRow | null>(null);
+  const [editForm, setEditForm] = useState({ name: "", slug: "", password: "" });
   const [busy, setBusy] = useState(false);
 
-  // 新建书架
-  const [showCreate, setShowCreate] = useState(false);
-  const [newName, setNewName] = useState("");
-  const [newPassword, setNewPassword] = useState("");
-  const [newHidden, setNewHidden] = useState(false);
+  useEffect(() => {
+    // 尝试直接拉管理列表：403 = 未解锁
+    fetch("/novels/api/sites?manage=1")
+      .then(async (res) => {
+        if (res.status === 403) { setUnlocked(false); return; }
+        const data = await res.json();
+        setSites(Array.isArray(data) ? data : []);
+        setUnlocked(true);
+      })
+      .catch(() => setUnlocked(false));
+  }, []);
 
-  // 公开书架带密码时打开需要输入密码
-  const [passwordFor, setPasswordFor] = useState<LibraryRow | null>(null);
-  const [openPassword, setOpenPassword] = useState("");
+  async function unlock(e: React.FormEvent) {
+    e.preventDefault();
+    setUnlockErr("");
+    const res = await fetch("/novels/api/auth/unlock", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ password: masterPw }),
+    });
+    if (res.ok) {
+      setUnlocked(true);
+      refresh();
+    } else {
+      setUnlockErr("主密码错误");
+    }
+  }
 
-  // 修改书架（名称 / 密码 / 隐藏状态）
-  const [editFor, setEditFor] = useState<LibraryRow | null>(null);
-  const [editName, setEditName] = useState("");
-  const [editPassword, setEditPassword] = useState("");
-  const [editClearPassword, setEditClearPassword] = useState(false);
-  const [editHidden, setEditHidden] = useState(false);
-
-  // 管理页内直接输入主密码解锁（免绕道蜘蛛纸牌）
-  const [unlockInput, setUnlockInput] = useState("");
-  const [unlockHint, setUnlockHint] = useState("");
-
-  const reload = useCallback(async () => {
+  async function refresh() {
+    setLoading(true);
     try {
-      const res = await fetch(`${API}/settings`);
-      if (res.ok) {
-        setData(await res.json());
-      }
-    } catch {
-      /* 忽略，保留旧数据 */
+      const res = await fetch("/novels/api/sites?manage=1");
+      const data = await res.json();
+      setSites(Array.isArray(data) ? data : []);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }
 
-  useEffect(() => {
-    reload();
-  }, [reload]);
-
-  // 从蜘蛛纸牌等其他标签页解锁回来时自动刷新解锁状态（带节流，避免抖动）
-  useEffect(() => {
-    let last = Date.now();
-    const onVisible = () => {
-      if (document.visibilityState !== "visible") return;
-      if (Date.now() - last < 3000) return;
-      last = Date.now();
-      reload();
-    };
-    document.addEventListener("visibilitychange", onVisible);
-    return () => document.removeEventListener("visibilitychange", onVisible);
-  }, [reload]);
-
-  async function handleOpen(lib: LibraryRow, password?: string) {
+  async function createSite(e: React.FormEvent) {
+    e.preventDefault();
+    if (!form.name.trim()) return;
     setBusy(true);
     try {
-      const res = await fetch(`${API}/auth/${lib.hidden ? "open-hidden" : "login"}`, {
+      const res = await fetch("/novels/api/sites", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(lib.hidden ? { libraryId: lib.id } : { libraryId: lib.id, password: password || "" }),
+        body: JSON.stringify(form),
       });
-      const body = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        showToast(body.error || "打开失败", "error");
-        return;
+      const data = await res.json();
+      if (res.ok) {
+        showToast(`站点「${data.name}」已创建`, "success");
+        setForm({ name: "", slug: "", type: "normal", password: "" });
+        setCreating(false);
+        refresh();
+      } else {
+        showToast(data.error || "创建失败", "error");
       }
-      showToast(`已打开「${lib.name}」`, "success");
-      setPasswordFor(null);
-      setOpenPassword("");
-      await reload();
-    } catch {
-      showToast("打开失败", "error");
     } finally {
       setBusy(false);
     }
   }
 
-  function openEdit(lib: LibraryRow) {
-    setEditFor(lib);
-    setEditName(lib.name);
-    setEditPassword("");
-    setEditClearPassword(false);
-    setEditHidden(lib.hidden);
-  }
-
-  async function handleEdit() {
-    if (!editFor) return;
-    if (!editName.trim()) {
-      showToast("书架名称不能为空", "error");
-      return;
-    }
+  async function saveEdit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!editing) return;
     setBusy(true);
     try {
-      const payload: Record<string, unknown> = {
-        id: editFor.id,
-        name: editName.trim(),
-        hidden: editHidden,
-      };
-      if (editClearPassword) payload.clearPassword = true;
-      else if (editPassword) payload.password = editPassword;
-      const res = await fetch(`${API}/libraries/update`, {
+      const body: Record<string, string> = {};
+      if (editForm.name.trim() && editForm.name !== editing.name) body.name = editForm.name.trim();
+      if (editForm.slug.trim() && editForm.slug !== editing.slug) body.slug = editForm.slug.trim();
+      if (editForm.password) body.password = editForm.password;
+      const res = await fetch(`/novels/api/sites/${encodeURIComponent(editing.slug)}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
+        body: JSON.stringify(body),
       });
-      const body = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        showToast(body.error === "Master unlock required" ? "需先解锁才能修改隐藏状态" : body.error || "保存失败", "error");
-        return;
-      }
-      showToast("书架已更新", "success");
-      setEditFor(null);
-      await reload();
-    } catch {
-      showToast("保存失败", "error");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  // 管理页内解锁：输入主密码（仅解锁不激活书架，解锁 ≠ 打开；蜘蛛纸牌通道仍为解锁即读）
-  async function handleUnlock() {
-    if (!unlockInput.trim()) {
-      setUnlockHint("请输入主密码");
-      return;
-    }
-    setBusy(true);
-    try {
-      const res = await fetch(`${API}/auth/unlock`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ password: unlockInput.trim() }),
-      });
+      const data = await res.json();
       if (res.ok) {
-        showToast("已解锁，隐藏书架可见", "success");
-        setUnlockInput("");
-        setUnlockHint("");
-        setShowCreate(true);
-        await reload();
+        showToast("已保存", "success");
+        setEditing(null);
+        refresh();
       } else {
-        setUnlockHint("密码不正确");
+        showToast(data.error || "保存失败", "error");
       }
-    } catch {
-      setUnlockHint("解锁失败，请重试");
     } finally {
       setBusy(false);
     }
   }
 
-  async function handleRelock() {
-    setBusy(true);
-    try {
-      const res = await fetch(`${API}/auth/relock`, { method: "POST" });
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        showToast(body.error || "操作失败", "error");
-        return;
-      }
-      showToast("已重新隐藏", "success");
-      await reload();
-    } catch {
-      showToast("操作失败", "error");
-    } finally {
-      setBusy(false);
+  async function removeSite(site: SiteRow) {
+    if (!confirm(`删除站点「${site.name}」？站内所有小说与章节将一并删除，不可恢复。`)) return;
+    const res = await fetch(`/novels/api/sites?slug=${encodeURIComponent(site.slug)}`, { method: "DELETE" });
+    const data = await res.json();
+    if (res.ok) {
+      showToast("已删除", "success");
+      refresh();
+    } else {
+      showToast(data.error || "删除失败", "error");
     }
   }
 
-  async function handleDelete(lib: LibraryRow) {
-    if (!confirm(`确定要删除书架「${lib.name}」吗？该书架下的所有书籍和章节都会被删除。`)) return;
-    setBusy(true);
-    try {
-      const res = await fetch(`${API}/libraries?id=${lib.id}`, { method: "DELETE" });
-      const body = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        showToast(body.error || "删除失败", "error");
-        return;
-      }
-      showToast("书架已删除", "success");
-      await reload();
-    } catch {
-      showToast("删除失败", "error");
-    } finally {
-      setBusy(false);
-    }
+  if (unlocked === null) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-[var(--background)]">
+        <p className="text-[var(--muted)] text-sm">加载中...</p>
+      </div>
+    );
   }
 
-  async function handleCreate() {
-    if (!newName.trim()) {
-      showToast("请输入书架名称", "error");
-      return;
-    }
-    if (newHidden && !data?.unlocked) {
-      showToast("需先在蜘蛛纸牌中输入主密码才能创建隐藏书架", "error");
-      return;
-    }
-    setBusy(true);
-    try {
-      const res = await fetch(`${API}/libraries`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: newName.trim(), password: newPassword, hidden: newHidden }),
-      });
-      const body = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        showToast(body.error || "创建失败", "error");
-        return;
-      }
-      showToast("书架创建成功", "success");
-      setShowCreate(false);
-      setNewName("");
-      setNewPassword("");
-      setNewHidden(false);
-      await reload();
-    } catch {
-      showToast("创建失败", "error");
-    } finally {
-      setBusy(false);
-    }
+  if (!unlocked) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-[var(--background)] p-4">
+        <div className="w-full max-w-sm bg-white border border-[var(--border)] rounded-2xl shadow-lg p-6">
+          <h1 className="text-lg font-bold text-[var(--foreground)] mb-1">站点管理</h1>
+          <p className="text-xs text-[var(--muted)] mb-4">输入主密码解锁管理功能</p>
+          <form onSubmit={unlock} className="flex gap-2">
+            <input
+              type="password"
+              value={masterPw}
+              onChange={(e) => setMasterPw(e.target.value)}
+              placeholder="主密码"
+              autoFocus
+              className="flex-1 px-3 py-2 text-sm rounded-lg border border-[var(--border)] bg-white focus:outline-none focus:ring-2 focus:ring-[var(--primary)]"
+            />
+            <button type="submit" className="px-4 py-2 text-sm rounded-lg bg-[var(--primary)] text-white hover:bg-[var(--primary-hover)] transition-colors">
+              解锁
+            </button>
+          </form>
+          {unlockErr && <p className="mt-3 text-xs text-red-500 text-center">{unlockErr}</p>}
+          <Link href="/" className="block mt-4 text-xs text-[var(--muted)] hover:text-[var(--foreground)] text-center transition-colors">
+            返回站点列表
+          </Link>
+        </div>
+      </div>
+    );
   }
-
-  const libs = data?.libraries || [];
-  const currentId = data?.authenticatedLibraryId ?? null;
-  const activeHiddenId = data?.activeHiddenId ?? null;
 
   return (
-    <div className="min-h-screen bg-[var(--background)] text-[var(--foreground)]">
-      <div className="mx-auto max-w-3xl px-4 py-6">
-        <div className="mb-4 flex items-center justify-between">
-          <div>
-            <h1 className="text-lg font-semibold">小说书架管理</h1>
-            <p className="mt-1 text-xs text-[var(--muted)]">
-              {data?.unlocked
-                ? "已解锁：列表包含隐藏书架（隐藏书架仅当前浏览器可访问，同一时间只能打开一个）"
-                : "仅展示公开书架；解锁后可查看隐藏书架并创建隐藏书架"}
-            </p>
+    <>
+      <Navbar />
+      <main className="flex-1 max-w-3xl mx-auto w-full px-4 sm:px-6 py-6">
+        <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center gap-3">
+            <Link href="/" className="text-[var(--muted)] hover:text-[var(--foreground)] transition-colors">
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+              </svg>
+            </Link>
+            <h1 className="text-xl font-bold">小说站点管理</h1>
           </div>
           <button
-            onClick={() => setShowCreate((v) => !v)}
-            className="rounded-lg border border-[var(--primary)] px-4 py-1.5 text-sm text-[var(--primary)] transition-colors hover:bg-[var(--accent)]"
+            onClick={() => setCreating(!creating)}
+            className="px-4 py-2 text-sm rounded-lg bg-[var(--primary)] text-white hover:bg-[var(--primary-hover)] transition-colors"
           >
-            {showCreate ? "取消" : "新建书架"}
+            {creating ? "取消" : "新建站点"}
           </button>
         </div>
 
-        {/* 未解锁：页内直接输入主密码解锁（也可在蜘蛛纸牌中输入） */}
-        {!loading && data && !data.unlocked && (
-          <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 p-4">
-            <div className="text-sm font-medium text-amber-800">🔒 隐藏书架已锁定</div>
-            <p className="mt-1 text-xs text-amber-700">
-              输入主密码解锁后，列表将显示隐藏书架，并可在新建书架时勾选「创建为隐藏书架」。
-            </p>
-            <div className="mt-3 flex items-center gap-2">
-              <input
-                type="password"
-                value={unlockInput}
-                onChange={(e) => setUnlockInput(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") handleUnlock();
-                }}
-                className="w-56 rounded-lg border border-amber-300 bg-white px-3 py-1.5 text-sm focus:ring-2 focus:ring-amber-400 focus:outline-none"
-                placeholder="输入主密码"
-              />
-              <button
-                onClick={handleUnlock}
-                disabled={busy}
-                className="rounded-lg bg-amber-600 px-4 py-1.5 text-sm font-medium text-white transition-colors hover:bg-amber-700 disabled:opacity-50"
-              >
-                {busy ? "解锁中…" : "解锁"}
-              </button>
-              {unlockHint && <span className="text-xs text-red-600">{unlockHint}</span>}
-            </div>
-          </div>
-        )}
-
-        {showCreate && (
-          <div className="mb-4 space-y-3 rounded-xl border border-[var(--border)] bg-white p-4">
-            <div>
-              <label className="mb-1 block text-sm font-medium">书架名称</label>
-              <input
-                type="text"
-                value={newName}
-                onChange={(e) => setNewName(e.target.value)}
-                className="w-full rounded-lg border border-[var(--border)] bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[var(--primary)] focus:outline-none"
-                placeholder="输入书架名称"
-              />
+        {creating && (
+          <form onSubmit={createSite} className="bg-white rounded-xl border border-[var(--border)] p-5 mb-6 space-y-4">
+            <h2 className="font-semibold text-sm">新建小说站点</h2>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs font-medium text-[var(--muted)] mb-1">显示名称 *</label>
+                <input
+                  type="text"
+                  value={form.name}
+                  onChange={(e) => setForm({ ...form, name: e.target.value })}
+                  placeholder="如：天一阁"
+                  className="w-full px-3 py-2 text-sm rounded-lg border border-[var(--border)] focus:outline-none focus:ring-2 focus:ring-[var(--primary)]"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-[var(--muted)] mb-1">标识（路径用，留空自动生成）</label>
+                <input
+                  type="text"
+                  value={form.slug}
+                  onChange={(e) => setForm({ ...form, slug: e.target.value.toLowerCase() })}
+                  placeholder="如：tianyi（小写字母/数字/中划线）"
+                  className="w-full px-3 py-2 text-sm rounded-lg border border-[var(--border)] focus:outline-none focus:ring-2 focus:ring-[var(--primary)]"
+                />
+              </div>
             </div>
             <div>
-              <label className="mb-1 block text-sm font-medium">访问密码（可选）</label>
-              <input
-                type="password"
-                value={newPassword}
-                onChange={(e) => setNewPassword(e.target.value)}
-                className="w-full rounded-lg border border-[var(--border)] bg-white px-3 py-2 text-sm focus:ring-2 focus:ring-[var(--primary)] focus:outline-none"
-                placeholder="留空则不设密码"
-              />
+              <label className="block text-xs font-medium text-[var(--muted)] mb-2">站点类型（创建后不可修改）</label>
+              <div className="flex gap-3">
+                {(["normal", "secret"] as const).map((t) => (
+                  <button
+                    key={t}
+                    type="button"
+                    onClick={() => setForm({ ...form, type: t })}
+                    className={`flex-1 py-3 text-sm rounded-xl border transition-all ${form.type === t ? "border-[var(--primary)] bg-[var(--accent)] text-[var(--primary)] font-medium" : "border-[var(--border)] text-[var(--muted)] hover:border-[var(--primary)]/50"}`}
+                  >
+                    {t === "normal" ? "普通站点" : "隐秘站点"}
+                    <span className="block text-xs font-normal mt-1 opacity-70">
+                      {t === "normal" ? "公开可访问，无需密码" : "需要开启密码才能访问"}
+                    </span>
+                  </button>
+                ))}
+              </div>
             </div>
-            <label className="flex items-center gap-2 text-sm">
-              <input
-                type="checkbox"
-                checked={newHidden}
-                onChange={(e) => setNewHidden(e.target.checked)}
-                disabled={!data?.unlocked}
-              />
-              创建为隐藏书架
-              {!data?.unlocked && (
-                <span className="text-xs text-[var(--muted)]">（需先解锁：上方输入主密码，或在蜘蛛纸牌中输入）</span>
-              )}
-            </label>
-            <button
-              onClick={handleCreate}
-              disabled={busy}
-              className="w-full rounded-lg bg-[var(--primary)] py-2 text-sm font-medium text-white transition-colors hover:bg-[var(--primary-hover)] disabled:opacity-50"
-            >
-              {busy ? "创建中…" : "创建书架"}
-            </button>
-          </div>
-        )}
-
-        {loading ? (
-          <p className="py-10 text-center text-sm text-[var(--muted)]">加载中…</p>
-        ) : (
-          <div className="space-y-2">
-            {libs.map((lib) => {
-              const isCurrent = lib.id === currentId;
-              const isActiveHidden = lib.hidden && lib.id === activeHiddenId;
-              return (
-                <div
-                  key={lib.id}
-                  className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-[var(--border)] bg-white px-4 py-3"
-                >
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="text-sm font-medium">{lib.name}</span>
-                    {lib.hidden && (
-                      <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs text-amber-700">隐藏</span>
-                    )}
-                    {lib.hasPassword && (
-                      <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-600">有密码</span>
-                    )}
-                    {isCurrent && (
-                      <span className="rounded-full bg-[var(--primary)] px-2 py-0.5 text-xs text-white">当前</span>
-                    )}
-                    {isActiveHidden && (
-                      <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-xs text-emerald-700">已打开</span>
-                    )}
-                  </div>
-                  <div className="flex items-center gap-3">
-                    {isCurrent && (
-                      <a
-                        href="/novels"
-                        target="_blank"
-                        rel="noreferrer"
-                        className="text-sm text-[var(--primary)] transition-colors hover:text-[var(--primary-hover)]"
-                      >
-                        阅读
-                      </a>
-                    )}
-                    {!isCurrent && (
-                      <button
-                        onClick={() => (lib.hidden ? handleOpen(lib) : lib.hasPassword ? (setPasswordFor(lib), setOpenPassword("")) : handleOpen(lib))}
-                        disabled={busy}
-                        className="text-sm text-[var(--primary)] transition-colors hover:text-[var(--primary-hover)] disabled:opacity-50"
-                      >
-                        打开书架
-                      </button>
-                    )}
-                    {isActiveHidden && (
-                      <button
-                        onClick={handleRelock}
-                        disabled={busy}
-                        className="text-sm text-amber-600 transition-colors hover:text-amber-700 disabled:opacity-50"
-                      >
-                        隐藏
-                      </button>
-                    )}
-                    {!isCurrent && (
-                      <button
-                        onClick={() => handleDelete(lib)}
-                        disabled={busy}
-                        className="text-sm text-[var(--muted)] transition-colors hover:text-red-500 disabled:opacity-50"
-                      >
-                        删除
-                      </button>
-                    )}
-                    <button
-                      onClick={() => openEdit(lib)}
-                      disabled={busy}
-                      className="text-sm text-[var(--muted)] transition-colors hover:text-[var(--primary)] disabled:opacity-50"
-                    >
-                      编辑
-                    </button>
-                  </div>
-                </div>
-              );
-            })}
-            {libs.length === 0 && (
-              <p className="py-10 text-center text-sm text-[var(--muted)]">暂无书架</p>
+            {form.type === "secret" && (
+              <div>
+                <label className="block text-xs font-medium text-[var(--muted)] mb-1">开启密码 *</label>
+                <input
+                  type="password"
+                  value={form.password}
+                  onChange={(e) => setForm({ ...form, password: e.target.value })}
+                  placeholder="隐秘站点的开启密码"
+                  className="w-full px-3 py-2 text-sm rounded-lg border border-[var(--border)] focus:outline-none focus:ring-2 focus:ring-[var(--primary)]"
+                />
+                <p className="text-xs text-[var(--muted)] mt-1">开启方式：门户首页搜索框输入 open:标识:密码</p>
+              </div>
             )}
-          </div>
+            <button
+              type="submit"
+              disabled={busy || !form.name.trim() || (form.type === "secret" && !form.password)}
+              className="px-6 py-2 bg-[var(--primary)] text-white text-sm font-medium rounded-lg hover:bg-[var(--primary-hover)] transition-colors disabled:opacity-50"
+            >
+              创建
+            </button>
+          </form>
         )}
 
-        {/* 公开书架带密码时的打开弹窗 */}
-        {passwordFor && (
-          <div
-            className="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
-            onClick={() => setPasswordFor(null)}
-          >
-            <div
-              className="w-80 rounded-xl bg-white p-5 shadow-xl"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <h2 className="mb-3 text-sm font-semibold">打开「{passwordFor.name}」</h2>
-              <input
-                type="password"
-                autoFocus
-                value={openPassword}
-                onChange={(e) => setOpenPassword(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") handleOpen(passwordFor, openPassword);
-                }}
-                className="mb-3 w-full rounded-lg border border-[var(--border)] px-3 py-2 text-sm focus:ring-2 focus:ring-[var(--primary)] focus:outline-none"
-                placeholder="输入书架访问密码"
-              />
-              <div className="flex justify-end gap-2">
-                <button
-                  onClick={() => setPasswordFor(null)}
-                  className="rounded-lg border border-[var(--border)] px-3 py-1.5 text-sm text-[var(--muted)]"
-                >
-                  取消
-                </button>
-                <button
-                  onClick={() => handleOpen(passwordFor, openPassword)}
-                  disabled={busy}
-                  className="rounded-lg bg-[var(--primary)] px-3 py-1.5 text-sm text-white disabled:opacity-50"
-                >
-                  打开
-                </button>
+        {editing && (
+          <form onSubmit={saveEdit} className="bg-white rounded-xl border border-[var(--primary)] p-5 mb-6 space-y-4">
+            <h2 className="font-semibold text-sm">
+              编辑站点：{editing.name}
+              <span className="ml-2 text-xs font-normal text-[var(--muted)]">{editing.type === "secret" ? "隐秘站点" : "普通站点"}（类型不可修改）</span>
+            </h2>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs font-medium text-[var(--muted)] mb-1">显示名称</label>
+                <input
+                  type="text"
+                  value={editForm.name}
+                  onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
+                  className="w-full px-3 py-2 text-sm rounded-lg border border-[var(--border)] focus:outline-none focus:ring-2 focus:ring-[var(--primary)]"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-[var(--muted)] mb-1">标识（修改后旧路径失效）</label>
+                <input
+                  type="text"
+                  value={editForm.slug}
+                  onChange={(e) => setEditForm({ ...editForm, slug: e.target.value.toLowerCase() })}
+                  className="w-full px-3 py-2 text-sm rounded-lg border border-[var(--border)] focus:outline-none focus:ring-2 focus:ring-[var(--primary)]"
+                />
               </div>
             </div>
-          </div>
+            {editing.type === "secret" && (
+              <div>
+                <label className="block text-xs font-medium text-[var(--muted)] mb-1">开启密码（留空不修改）</label>
+                <input
+                  type="password"
+                  value={editForm.password}
+                  onChange={(e) => setEditForm({ ...editForm, password: e.target.value })}
+                  className="w-full px-3 py-2 text-sm rounded-lg border border-[var(--border)] focus:outline-none focus:ring-2 focus:ring-[var(--primary)]"
+                />
+              </div>
+            )}
+            <div className="flex gap-3">
+              <button type="submit" disabled={busy} className="px-6 py-2 bg-[var(--primary)] text-white text-sm font-medium rounded-lg hover:bg-[var(--primary-hover)] transition-colors disabled:opacity-50">
+                保存
+              </button>
+              <button type="button" onClick={() => setEditing(null)} className="px-6 py-2 text-sm text-[var(--muted)] border border-[var(--border)] rounded-lg hover:bg-[var(--accent)] transition-colors">
+                取消
+              </button>
+            </div>
+          </form>
         )}
 
-        {/* 修改书架弹窗：名称 / 密码 / 隐藏状态 */}
-        {editFor && (
-          <div
-            className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
-            onClick={() => setEditFor(null)}
-          >
-            <div
-              className="w-96 max-w-full rounded-xl bg-white p-5 shadow-xl"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <h2 className="mb-3 text-sm font-semibold">修改书架「{editFor.name}」</h2>
-              <div className="space-y-3">
-                <div>
-                  <label className="mb-1 block text-sm font-medium">书架名称</label>
-                  <input
-                    type="text"
-                    autoFocus
-                    value={editName}
-                    onChange={(e) => setEditName(e.target.value)}
-                    className="w-full rounded-lg border border-[var(--border)] px-3 py-2 text-sm focus:ring-2 focus:ring-[var(--primary)] focus:outline-none"
-                    placeholder="输入书架名称"
-                  />
+        <div className="space-y-3">
+          {loading ? (
+            <p className="text-center py-10 text-[var(--muted)] text-sm">加载中...</p>
+          ) : sites.length === 0 ? (
+            <p className="text-center py-10 text-[var(--muted)] text-sm">暂无站点</p>
+          ) : (
+            sites.map((site) => (
+              <div key={site.id} className="bg-white rounded-xl border border-[var(--border)] p-4 flex items-center gap-4">
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className="font-medium text-[var(--foreground)] truncate">{site.name}</span>
+                    <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${site.type === "secret" ? "bg-purple-100 text-purple-600" : "bg-green-100 text-green-600"}`}>
+                      {site.type === "secret" ? "隐秘" : "普通"}
+                    </span>
+                  </div>
+                  <div className="text-xs text-[var(--muted)] mt-1">
+                    标识 <code className="bg-gray-100 px-1 rounded">/{site.slug}</code> · 路径 <code className="bg-gray-100 px-1 rounded">/novels/s/{site.slug}</code>
+                  </div>
                 </div>
-                <div>
-                  <label className="mb-1 block text-sm font-medium">
-                    访问密码{editFor.hasPassword ? "（已设置）" : "（未设置）"}
-                  </label>
-                  <input
-                    type="password"
-                    value={editPassword}
-                    onChange={(e) => setEditPassword(e.target.value)}
-                    className="w-full rounded-lg border border-[var(--border)] px-3 py-2 text-sm focus:ring-2 focus:ring-[var(--primary)] focus:outline-none"
-                    placeholder={editClearPassword ? "将移除密码" : "留空则不修改"}
-                    disabled={editClearPassword}
-                  />
-                  {editFor.hasPassword && (
-                    <label className="mt-1.5 flex items-center gap-2 text-xs text-[var(--muted)]">
-                      <input
-                        type="checkbox"
-                        checked={editClearPassword}
-                        onChange={(e) => setEditClearPassword(e.target.checked)}
-                      />
-                      移除访问密码
-                    </label>
-                  )}
-                </div>
-                <label className="flex items-center gap-2 text-sm">
-                  <input
-                    type="checkbox"
-                    checked={editHidden}
-                    onChange={(e) => setEditHidden(e.target.checked)}
-                    disabled={!data?.unlocked}
-                  />
-                  隐藏书架
-                  {!data?.unlocked && (
-                    <span className="text-xs text-[var(--muted)]">（需先解锁才能修改）</span>
-                  )}
-                </label>
-              </div>
-              <div className="mt-4 flex justify-end gap-2">
-                <button
-                  onClick={() => setEditFor(null)}
-                  className="rounded-lg border border-[var(--border)] px-3 py-1.5 text-sm text-[var(--muted)]"
+                <Link
+                  href={`/s/${site.slug}`}
+                  className="px-3 py-1.5 text-xs rounded-lg border border-[var(--border)] text-[var(--muted)] hover:bg-[var(--accent)] transition-colors"
                 >
-                  取消
+                  进入
+                </Link>
+                <button
+                  onClick={() => { setEditing(site); setEditForm({ name: site.name, slug: site.slug, password: "" }); }}
+                  className="px-3 py-1.5 text-xs rounded-lg border border-[var(--border)] text-[var(--muted)] hover:bg-[var(--accent)] transition-colors"
+                >
+                  编辑
                 </button>
                 <button
-                  onClick={handleEdit}
-                  disabled={busy}
-                  className="rounded-lg bg-[var(--primary)] px-4 py-1.5 text-sm text-white disabled:opacity-50"
+                  onClick={() => removeSite(site)}
+                  className="px-3 py-1.5 text-xs rounded-lg border border-red-200 text-red-500 hover:bg-red-50 transition-colors"
                 >
-                  {busy ? "保存中…" : "保存"}
+                  删除
                 </button>
               </div>
-            </div>
-          </div>
-        )}
-      </div>
-    </div>
+            ))
+          )}
+        </div>
+      </main>
+    </>
   );
 }

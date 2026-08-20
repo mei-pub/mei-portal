@@ -3,7 +3,7 @@ name: 工具箱
 description: 隐私优先的本地工具集合（图片/PDF/文本等）
 icon: lucide:wrench
 category: utility
-weight: 50
+weight: 60
 endpoint: http://omni-tools:80
 ingress:
   mode: subdomain

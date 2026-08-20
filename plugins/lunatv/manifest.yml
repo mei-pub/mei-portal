@@ -3,7 +3,7 @@ name: 影视门户
 description: 豆瓣式影视聚合与播放
 icon: lucide:tv
 category: media
-weight: 30
+weight: 10
 endpoint: http://lunatv:3000
 ingress:
   mode: subdomain

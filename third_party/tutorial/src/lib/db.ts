@@ -75,20 +75,66 @@ try {
   // 列已存在，忽略
 }
 
-// ── DEFAULT_LIB_SEED: 首次启动若无 library 则创建默认无密码 library ──
+// ── 小说站点模型迁移（2026-08）：slug（标识，唯一/路由）+ type（normal|secret）──
+try {
+  db.exec("ALTER TABLE libraries ADD COLUMN slug TEXT");
+} catch { /* 列已存在 */ }
+try {
+  db.exec("ALTER TABLE libraries ADD COLUMN type TEXT NOT NULL DEFAULT 'normal'");
+} catch { /* 列已存在 */ }
+
+/** 标识合法化：小写字母/数字/中划线；无法得到有效字符时回落 site-{id} */
+export function slugifySite(name: string, fallbackId?: number): string {
+  const s = String(name || '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 40);
+  return s || `site-${fallbackId ?? Date.now()}`;
+}
+
+function uniqueSlug(base: string, excludeId?: number): string {
+  let slug = base;
+  let n = 2;
+  while (true) {
+    const row = excludeId
+      ? db.prepare('SELECT id FROM libraries WHERE slug = ? AND id != ?').get(slug, excludeId)
+      : db.prepare('SELECT id FROM libraries WHERE slug = ?').get(slug);
+    if (!row) return slug;
+    slug = `${base}-${n++}`;
+  }
+}
+
+// 类型回填：隐藏书架 → 隐秘站点；有访问密码的 → 隐秘站点（普通站点不允许密码）
+db.exec("UPDATE libraries SET type = 'secret' WHERE hidden = 1 OR (password IS NOT NULL AND password != '')");
+db.exec("UPDATE libraries SET password = '' WHERE type = 'normal' AND password != ''");
+// slug 回填（按 id 顺序，保证确定性；重名自动 -2/-3 去重）
+{
+  const rows = db.prepare('SELECT id, name, slug FROM libraries ORDER BY id').all() as { id: number; name: string; slug: string | null }[];
+  const upd = db.prepare('UPDATE libraries SET slug = ? WHERE id = ?');
+  for (const r of rows) {
+    if (!r.slug) upd.run(uniqueSlug(slugifySite(r.name, r.id)), r.id);
+  }
+}
+try {
+  db.exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_libraries_slug ON libraries(slug)');
+} catch { /* 已存在 */ }
+
+// ── DEFAULT_LIB_SEED: 首次启动若无站点则创建默认普通站点 ──
 const libCount = db.prepare('SELECT COUNT(*) as c FROM libraries').get() as { c: number };
 if (libCount && libCount.c === 0) {
-  db.prepare("INSERT INTO libraries (name, password) VALUES (?, ?)").run('我的书架', '');
-  console.log('[tutorial] 已创建默认书架');
+  db.prepare("INSERT INTO libraries (name, slug, type, password) VALUES (?, ?, 'normal', '')").run('我的书架', 'my-books');
+  console.log('[tutorial] 已创建默认小说站点');
 }
 
 // ── Interfaces ──
 
 export interface Library {
   id: number;
-  name: string;
-  password: string;
-  hidden: number;
+  slug: string; // 站点标识：唯一，路径路由的一部分（/novels/s/{slug}）
+  name: string; // 显示名称
+  type: 'normal' | 'secret'; // 普通站点（无密码公开）| 隐秘站点（开启密码，创建后不可改类型）
+  password: string; // 隐秘站点的开启密码；普通站点恒为空
   created_at: string;
   updated_at: string;
 }
@@ -162,22 +208,17 @@ export function calculateWordCount(content: string): number {
 }
 
 // ══════════════════════════════════════
-// Library (书库) CRUD
+// Site (小说站点) CRUD
 // ══════════════════════════════════════
 
 export function getLibraries(): Omit<Library, 'password'>[] {
-  const rows = db.prepare('SELECT id, name, hidden, created_at, updated_at FROM libraries ORDER BY id').all();
+  const rows = db.prepare('SELECT id, slug, name, type, created_at, updated_at FROM libraries ORDER BY id').all();
   return rows as Omit<Library, 'password'>[];
 }
 
-/** Get all libraries WITH passwords (only use for auth matching) */
+/** Get all sites WITH passwords (only use for auth matching) */
 export function getLibrariesWithPasswords(): Library[] {
   return db.prepare('SELECT * FROM libraries ORDER BY id').all() as Library[];
-}
-
-export function getHiddenLibraries(): Omit<Library, 'password'>[] {
-  const rows = db.prepare('SELECT id, name, hidden, created_at, updated_at FROM libraries WHERE hidden = 1 ORDER BY id').all();
-  return rows as Omit<Library, 'password'>[];
 }
 
 export function getLibraryById(id: number): Library | null {
@@ -185,28 +226,33 @@ export function getLibraryById(id: number): Library | null {
   return (row as Library) || null;
 }
 
-export function createLibrary(input: { name: string; password?: string; hidden?: boolean }): Library {
+export function getLibraryBySlug(slug: string): Library | null {
+  const row = db.prepare('SELECT * FROM libraries WHERE slug = ?').get(slug);
+  return (row as Library) || null;
+}
+
+export function createLibrary(input: { name: string; slug?: string; type?: 'normal' | 'secret'; password?: string }): Library {
   const now = new Date().toISOString();
-  const stmt = db.prepare('INSERT INTO libraries (name, password, hidden, created_at, updated_at) VALUES (?, ?, ?, ?, ?)');
-  const info = stmt.run(input.name, input.password || '', input.hidden ? 1 : 0, now, now);
+  const type = input.type === 'secret' ? 'secret' : 'normal';
+  const slug = uniqueSlug(slugifySite(input.slug || input.name));
+  const password = type === 'secret' ? (input.password || '') : '';
+  const stmt = db.prepare('INSERT INTO libraries (name, slug, type, password, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)');
+  const info = stmt.run(input.name, slug, type, password, now, now);
   return getLibraryById(info.lastInsertRowid as number)!;
 }
 
-export function setLibraryHidden(id: number, hidden: boolean): boolean {
-  const lib = getLibraryById(id);
-  if (!lib) return false;
-  const now = new Date().toISOString();
-  db.prepare('UPDATE libraries SET hidden = ?, updated_at = ? WHERE id = ?').run(hidden ? 1 : 0, now, id);
-  return true;
-}
-
-export function updateLibrary(id: number, input: { name?: string; password?: string }): boolean {
+/** 更新站点：名称/标识/密码可改，类型不可改（创建时指定） */
+export function updateLibrary(id: number, input: { name?: string; slug?: string; password?: string }): boolean {
   const lib = getLibraryById(id);
   if (!lib) return false;
   const now = new Date().toISOString();
   const name = input.name ?? lib.name;
-  const password = input.password !== undefined ? input.password : lib.password;
-  db.prepare('UPDATE libraries SET name = ?, password = ?, updated_at = ? WHERE id = ?').run(name, password, now, id);
+  const slug = input.slug !== undefined ? uniqueSlug(slugifySite(input.slug, id), id) : lib.slug;
+  // 普通站点密码恒为空
+  const password = lib.type === 'secret'
+    ? (input.password !== undefined ? input.password : lib.password)
+    : '';
+  db.prepare('UPDATE libraries SET name = ?, slug = ?, password = ?, updated_at = ? WHERE id = ?').run(name, slug, password, now, id);
   return true;
 }
 

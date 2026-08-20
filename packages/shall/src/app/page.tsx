@@ -1,11 +1,11 @@
-import { getPlugins, getPluginUrl, expandTutorialLibraries } from '@/lib/plugins';
+import { getPlugins, getPluginUrl } from '@/lib/plugins';
 import type { ClientPlugin } from '@/lib/categories';
 import { isLoggedIn, initUserIfNeeded } from '@/lib/auth';
 import { getPanelConfig, savePanelConfig, syncBuiltinItems } from '@/lib/panel-store';
 import { redirect } from 'next/navigation';
 import PortalClient from '@/components/PortalClient';
 
-// 强制动态渲染：expandTutorialLibraries 需要运行时 fetch tutorial
+// 强制动态渲染：面板配置 / 内置应用同步需在每次请求时运行
 export const dynamic = 'force-dynamic';
 
 export default async function HomePage() {
@@ -23,8 +23,8 @@ export default async function HomePage() {
     url: getPluginUrl(p, rootDomain),
   }));
 
-  // 多书架模式：异步展开 tutorial 为每个书架一个入口
-  const expanded = await expandTutorialLibraries(pluginsWithUrl);
+  // 小说阅读为单一固定入口（不再展开书架实例）
+  const expanded = pluginsWithUrl;
 
   // 转为客户端安全的数据（去 endpoint 等服务端字段）
   const items: { plugin: ClientPlugin; url: string }[] = expanded.map((p) => ({

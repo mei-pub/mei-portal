@@ -178,15 +178,12 @@
         .catch(function() {});
       bar.appendChild(brand);
 
-      // 应用切换（书架多实例：单个=书架名入口；多个=悬浮下拉，按钮显示当前书架名）
+      // 应用切换（小说阅读：固定入口 + 下拉站点面板，站点列表实时拉取）
       var apps = document.createElement('div');
       apps.className = 'mei-apps';
-      var currentLib = null;
-      try { currentLib = new URLSearchParams(window.location.search).get('lib'); } catch (e) {}
-      var libEntries = plugins.filter(function (p) { return /^tutorial-/.test(p.id); });
-      var libGroupActive = APP_ID === 'tutorial' || /^tutorial-/.test(APP_ID);
+      var tutorialPlugin = null;
       plugins.forEach(function (p) {
-        if (/^tutorial-/.test(p.id)) return; // 书架实例统一由下方聚合入口渲染
+        if (p.id === 'tutorial') { tutorialPlugin = p; return; }
         var isActive = p.id === APP_ID;
         var b = document.createElement('a');
         b.className = 'mei-btn' + (isActive ? ' active' : '');
@@ -195,56 +192,72 @@
         b.title = p.name;
         apps.appendChild(b);
       });
-      if (libEntries.length === 1) {
-        var lib = libEntries[0];
-        var b1 = document.createElement('a');
-        b1.className = 'mei-btn' + (libGroupActive ? ' active' : '');
-        b1.href = lib.url;
-        b1.textContent = lib.name;
-        b1.title = lib.name;
-        apps.appendChild(b1);
-      } else if (libEntries.length > 1) {
-        // 当前书架：URL ?lib=N 匹配；未进入则用第一个书架名
-        var current = libEntries[0];
-        if (currentLib) {
-          for (var i = 0; i < libEntries.length; i++) {
-            if (libEntries[i].id === 'tutorial-' + currentLib) { current = libEntries[i]; break; }
-          }
-        }
+      if (tutorialPlugin) {
+        var libGroupActive = APP_ID === 'tutorial';
         var wrap = document.createElement('div');
         wrap.style.position = 'relative';
         wrap.style.flexShrink = '0';
         var libBtn = document.createElement('button');
         libBtn.className = 'mei-btn' + (libGroupActive ? ' active' : '');
         libBtn.style.display = 'inline-flex';
-        libBtn.innerHTML = '<span style="max-width:96px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + current.name + '</span>' +
+        libBtn.innerHTML = '<span>' + tutorialPlugin.name + '</span>' +
           '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="margin-left:3px;opacity:.6"><path d="m6 9 6 6 6-6"/></svg>';
-        libBtn.title = '书架：' + current.name;
-        // 书架选择面板：挂到 body 并用 fixed 定位（.mei-apps 有 overflow-x:auto，
-        // 绝对定位的下拉会被裁剪——此前「我的书架」点不出面板的根因）
+        libBtn.title = '小说阅读 · 站点面板';
+        // 站点面板：挂 body + fixed 定位（.mei-apps 有 overflow-x:auto，绝对定位会被裁剪）
         var libMenu = document.createElement('div');
         libMenu.id = 'mei-lib-menu';
-        libMenu.style.cssText = 'position:fixed;display:none;width:180px;padding:8px;z-index:10003;';
-        libEntries.forEach(function (l) {
-          var item = document.createElement('a');
-          item.className = 'mei-menu-link';
-          item.href = l.url;
-          item.textContent = l.name;
-          if (l.id === current.id) {
-            item.style.color = 'var(--mei-primary, #6366f1)';
-            item.style.fontWeight = '600';
-          }
-          libMenu.appendChild(item);
-        });
+        libMenu.style.cssText = 'position:fixed;display:none;width:200px;padding:8px;z-index:10003;';
         function closeLibMenu() { libMenu.style.display = 'none'; }
+        function renderSites(list) {
+          libMenu.innerHTML = '';
+          if (!list.length) {
+            var empty = document.createElement('div');
+            empty.style.cssText = 'padding:10px;font-size:12.5px;color:#9aa3b8;text-align:center;';
+            empty.textContent = '暂无站点';
+            libMenu.appendChild(empty);
+          } else {
+            list.forEach(function (s) {
+              var item = document.createElement('a');
+              item.className = 'mei-menu-link';
+              item.href = '/novels/s/' + encodeURIComponent(s.slug);
+              item.textContent = s.name;
+              if (s.type === 'secret') {
+                var tag = document.createElement('span');
+                tag.textContent = '隐';
+                tag.style.cssText = 'margin-left:auto;font-size:10px;padding:1px 5px;border-radius:99px;background:rgba(168,85,247,.12);color:#a855f7;flex-shrink:0;';
+                item.appendChild(tag);
+              }
+              libMenu.appendChild(item);
+            });
+          }
+          var sep = document.createElement('div');
+          sep.style.cssText = 'height:1px;background:rgba(23,32,56,0.08);margin:5px 4px;';
+          libMenu.appendChild(sep);
+          var manage = document.createElement('a');
+          manage.className = 'mei-menu-link';
+          manage.href = '/novels/manage';
+          manage.style.color = '#9aa3b8';
+          manage.style.fontSize = '12px';
+          manage.textContent = '站点管理';
+          libMenu.appendChild(manage);
+        }
+        var sitesLoaded = false;
         libBtn.onclick = function (e) {
           e.stopPropagation();
           var open = libMenu.style.display === 'block';
           if (open) { closeLibMenu(); return; }
           var rect = libBtn.getBoundingClientRect();
-          libMenu.style.left = Math.max(8, Math.min(rect.left, window.innerWidth - 196)) + 'px';
+          libMenu.style.left = Math.max(8, Math.min(rect.left, window.innerWidth - 216)) + 'px';
           libMenu.style.top = (rect.bottom + 8) + 'px';
           libMenu.style.display = 'block';
+          // 每次打开都实时拉取（开启/关闭隐秘站点后立即生效）
+          sitesLoaded = false;
+          renderSites([]);
+          libMenu.firstChild.textContent = '加载中...';
+          fetch('/api/novels/sites', { credentials: 'include' })
+            .then(function (r) { return r.json(); })
+            .then(function (list) { sitesLoaded = true; renderSites(Array.isArray(list) ? list : []); })
+            .catch(function () { renderSites([]); });
         };
         libMenu.onclick = function (e) { e.stopPropagation(); };
         document.addEventListener('click', closeLibMenu);

@@ -481,8 +481,37 @@ export default function PortalClient({ items, panel: initialPanel }: { items: It
     setPageIdx(i => Math.max(0, Math.min(pages.length - 1, i + dir)));
   };
 
+  // 隐秘小说站点命令：open:{标识}:{密码} / close:{标识}:{密码}
+  const GATE_CMD = /^(open|close):([A-Za-z0-9][A-Za-z0-9-]*):(.+)$/;
+  async function runGateCommand(action: 'open' | 'close', slug: string, password: string) {
+    try {
+      const res = await fetch('/api/novels/gate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ action, slug, password }),
+      });
+      const data = await res.json().catch(() => ({} as Record<string, unknown>));
+      if (res.ok) {
+        setToast(action === 'open' ? `隐秘站点「${data.name || slug}」已开启` : `隐秘站点「${data.name || slug}」已关闭`);
+      } else {
+        setToast(String(data.error || '操作失败'));
+      }
+    } catch {
+      setToast('小说服务暂不可用');
+    }
+    setTimeout(() => setToast(''), 2000);
+  }
+
   function submitSearch() {
     const q = query.trim();
+    // 隐秘站点命令优先（无论是否有应用匹配）
+    const gate = q.match(GATE_CMD);
+    if (gate) {
+      setQuery('');
+      void runGateCommand(gate[1] as 'open' | 'close', gate[2], gate[3]);
+      return;
+    }
     if (!q || visibleItems.length > 0) return;
     const engine = SEARCH_ENGINES[style?.searchEngine || 'bing'] || SEARCH_ENGINES.bing;
     window.open(engine + encodeURIComponent(q), '_blank');
