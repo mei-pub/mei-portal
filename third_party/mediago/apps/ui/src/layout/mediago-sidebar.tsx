@@ -1,10 +1,14 @@
 // mei-allin：左侧浮动操作面板 —— 与 AI 绘图等应用的 AppSidebar 同一组件结构，仅内容不同
 // 三个入口：新建（弹层）、下载中（切换主体）、已完成（切换主体）
 // 固定悬浮于左缘中段；收起态为左缘渐变把手；展开/收起 localStorage 记忆
-import { Modal } from "antd";
-import { type FC, useEffect, useState } from "react";
+import { type FC, useEffect, useRef, useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
-import DownloadForm from "@/components/download-form";
+import { useShallow } from "zustand/react/shallow";
+import DownloadForm, {
+  type DownloadFormItem,
+  type DownloadFormRef,
+} from "@/components/download-form";
+import { downloadFormSelector, useConfigStore } from "@/store/config";
 
 const STORE_KEY = "mei-float-mediago";
 
@@ -12,7 +16,19 @@ const MediagoSidebar: FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const [open, setOpen] = useState<boolean | null>(null);
-  const [newFormOpen, setNewFormOpen] = useState(false);
+  // DownloadForm 自带 Modal，通过 ref.openModal 驱动（外包一层 Modal 会导致弹层空白）
+  const newFormRef = useRef<DownloadFormRef>(null);
+  const { lastIsBatch, lastDownloadTypes } = useConfigStore(
+    useShallow(downloadFormSelector),
+  );
+
+  const openNewForm = () => {
+    const item: DownloadFormItem = {
+      batch: lastIsBatch,
+      type: lastDownloadTypes,
+    };
+    newFormRef.current?.openModal(item);
+  };
 
   // 初始：记忆优先，默认展开
   useEffect(() => {
@@ -49,7 +65,7 @@ const MediagoSidebar: FC = () => {
           <path d="M12 5v14M5 12h14"/>
         </svg>
       ),
-      onClick: () => setNewFormOpen(true),
+      onClick: openNewForm,
     },
     {
       label: "下载中",
@@ -123,25 +139,15 @@ const MediagoSidebar: FC = () => {
         </div>
       )}
 
-      {/* 新建弹层 */}
-      <Modal
-        open={newFormOpen}
-        onCancel={() => setNewFormOpen(false)}
-        footer={null}
-        title={null}
-        width="700px"
-        styles={{ body: { paddingTop: 8 } }}
-        destroyOnHidden
-      >
-        <DownloadForm
-          id="mediago-sidebar-new"
-          destroyOnClose
-          onConfirm={() => {
-            setNewFormOpen(false);
-            navigate("/");
-          }}
-        />
-      </Modal>
+      {/* 新建弹层（DownloadForm 内部自渲染 Modal，ref 驱动；新建成功后回到下载列表） */}
+      <DownloadForm
+        id="mediago-sidebar-new"
+        ref={newFormRef}
+        destroyOnClose
+        onConfirm={() => {
+          navigate("/");
+        }}
+      />
     </>
   );
 };

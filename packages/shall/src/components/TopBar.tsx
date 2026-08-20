@@ -31,8 +31,16 @@ export default function TopBar({
   const [logoutConfirm, setLogoutConfirm] = useState(false);
   const [bgMask, setBgMask] = useState(0.35);
   const [bgBlur, setBgBlur] = useState(0);
+  const [themeMode, setThemeMode] = useState<'light' | 'dark'>('light');
   const bgUrlRef = useRef('');
+  // 配置未加载完成前禁止保存，否则会把背景图 url 清成空串
+  const bgLoadedRef = useRef(false);
   const menuRef = useRef<HTMLDivElement>(null);
+
+  // 广播面板配置变更（PortalClient 监听后实时刷新背景遮罩/模糊/主题）
+  function broadcastPanelChange() {
+    window.dispatchEvent(new CustomEvent('mei-panel-change', { detail: { source: 'topbar' } }));
+  }
 
   useEffect(() => {
     fetch('/api/auth/me', { credentials: 'include' })
@@ -72,22 +80,33 @@ export default function TopBar({
       .catch(() => {});
   }, []);
 
-  // 加载面板背景配置
+  // 加载面板背景配置（含首页深浅主色调）
   useEffect(() => {
-    fetch('/api/panel', { credentials: 'include' })
+    const load = () => fetch('/api/panel', { credentials: 'include' })
       .then(r => r.json())
       .then(cfg => {
         if (cfg?.background) {
           setBgMask(cfg.background.mask ?? 0.35);
           setBgBlur(cfg.background.blur ?? 0);
           bgUrlRef.current = cfg.background.url || '';
+          bgLoadedRef.current = true;
         }
+        setThemeMode(cfg?.style?.themeMode === 'dark' ? 'dark' : 'light');
       })
       .catch(() => {});
+    load();
+    // 其他入口（主页设置/首页操作）保存配置后同步本地状态；自己广播的跳过
+    const onChange = (e: Event) => {
+      if ((e as CustomEvent).detail?.source === 'topbar') return;
+      load();
+    };
+    window.addEventListener('mei-panel-change', onChange);
+    return () => window.removeEventListener('mei-panel-change', onChange);
   }, []);
 
   // 保存遮罩/模糊到面板配置（必须带上当前背景图 url，否则会清空背景；服务端会与其余字段合并）
   function saveBg(patch: { mask?: number; blur?: number }) {
+    if (!bgLoadedRef.current) return;
     const mask = patch.mask ?? bgMask;
     const blur = patch.blur ?? bgBlur;
     if (patch.mask !== undefined) setBgMask(mask);
@@ -95,10 +114,19 @@ export default function TopBar({
     fetch('/api/panel', {
       method: 'PUT', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
       body: JSON.stringify({ background: { url: bgUrlRef.current, mask, blur } }),
-    }).catch(() => {});
+    }).then(() => broadcastPanelChange()).catch(() => {});
   }
   function saveBgMask(mask: number) { saveBg({ mask }); }
   function saveBgBlur(blur: number) { saveBg({ blur }); }
+
+  // 首页深浅主色调切换：深色背景 → dark（文字浅色）；浅色背景 → light（文字深色）
+  function saveThemeMode(mode: 'light' | 'dark') {
+    setThemeMode(mode);
+    fetch('/api/panel', {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
+      body: JSON.stringify({ style: { themeMode: mode } }),
+    }).then(() => broadcastPanelChange()).catch(() => {});
+  }
 
   const sliderThumb = { width: 14, height: 14, borderRadius: '50%', background: '#fff', boxShadow: '0 1px 3px rgba(0,0,0,0.3)' } as const;
   const sliderTrack = { width: '100%', height: 4, borderRadius: 2, background: 'var(--mei-border-strong)', WebkitAppearance: 'none', appearance: 'none', outline: 'none', cursor: 'pointer' } as const;
@@ -294,6 +322,38 @@ export default function TopBar({
               背景模糊
             </div>
             {bgBlurSlider}
+            <div
+              style={{
+                padding: '8px 10px 4px',
+                fontSize: 11,
+                color: 'var(--mei-text-faint)',
+                fontWeight: 700,
+                letterSpacing: 1.5,
+              }}
+            >
+              首页主题
+            </div>
+            {/* 深浅切换：深色背景用「深色」（文字自动变浅），浅色背景用「浅色」 */}
+            <div style={{ display: 'flex', gap: 6, padding: '2px 10px 8px' }}>
+              {(['light', 'dark'] as const).map((m) => (
+                <button
+                  key={m}
+                  onClick={() => saveThemeMode(m)}
+                  style={{
+                    flex: 1, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 5,
+                    padding: '6px 0', borderRadius: 'var(--mei-radius-full)', cursor: 'pointer', fontSize: 12,
+                    border: themeMode === m ? 'none' : '1px solid var(--mei-border-strong)',
+                    background: themeMode === m ? 'var(--mei-gradient)' : 'transparent',
+                    color: themeMode === m ? '#fff' : 'var(--mei-text-muted)',
+                    fontWeight: themeMode === m ? 650 : 400,
+                    transition: 'var(--mei-transition)',
+                  }}
+                >
+                  <MeiIcon icon={m === 'light' ? 'lucide:sun' : 'lucide:moon'} size={13} />
+                  {m === 'light' ? '浅色' : '深色'}
+                </button>
+              ))}
+            </div>
 
             <a
               href="/settings"

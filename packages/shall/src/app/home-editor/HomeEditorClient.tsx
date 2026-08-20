@@ -210,6 +210,13 @@ function StyleTab({ config, setConfig }: { config: PanelConfig; setConfig: (c: P
             </select>
           </div>
           <div>
+            <label style={label}>首页主色调（深色背景选深色，文字自动变浅）</label>
+            <select style={input} value={config.style.themeMode} onChange={(e) => setStyle({ themeMode: e.target.value as 'light' | 'dark' })}>
+              <option value="light">浅色（深色文字）</option>
+              <option value="dark">深色（浅色文字）</option>
+            </select>
+          </div>
+          <div>
             <label style={label}>图标文字颜色（壁纸场景可调白）</label>
             <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
               <input type="color" value={config.style.iconTextColor || '#1c2333'} onChange={(e) => setStyle({ iconTextColor: e.target.value })} style={{ width: 44, height: 34, border: '1px solid var(--mei-border-strong)', borderRadius: 8, background: '#fff', cursor: 'pointer' }} />

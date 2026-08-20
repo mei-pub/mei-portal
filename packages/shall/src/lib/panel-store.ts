@@ -20,6 +20,7 @@ export interface PanelStyle {
   searchEngine: 'bing' | 'google' | 'baidu' | 'duckduckgo';
   iconStyle: 'icon' | 'info'; // icon=纯图标 info=图标+标题+描述
   iconTextColor: string; // 图标文字颜色（壁纸场景可调白）
+  themeMode: 'light' | 'dark'; // 首页主色调：深色背景用 dark（文字浅色），浅色背景用 light
   marginTop: number; // %
   marginBottom: number; // %
   marginX: number; // px
@@ -65,6 +66,7 @@ export const DEFAULT_CONFIG: PanelConfig = {
     searchEngine: 'bing',
     iconStyle: 'info',
     iconTextColor: '',
+    themeMode: 'light',
     marginTop: 4,
     marginBottom: 6,
     marginX: 0,
@@ -109,6 +111,7 @@ export function normalizeConfig(raw: unknown): PanelConfig {
       searchEngine: engine,
       iconStyle: st.iconStyle === 'icon' ? 'icon' : 'info',
       iconTextColor: /^#[0-9a-fA-F]{3,8}$/.test(String(st.iconTextColor)) ? String(st.iconTextColor) : '',
+      themeMode: st.themeMode === 'dark' ? 'dark' : 'light',
       marginTop: clampNum(st.marginTop, 0, 40, 4),
       marginBottom: clampNum(st.marginBottom, 0, 40, 6),
       marginX: clampNum(st.marginX, 0, 120, 0),

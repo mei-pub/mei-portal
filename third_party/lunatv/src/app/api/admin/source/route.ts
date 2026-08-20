@@ -3,59 +3,106 @@
 import { NextRequest, NextResponse } from 'next/server';
 
 import { getAuthInfoFromCookie } from '@/lib/auth';
-import { getConfig } from '@/lib/config';
-import { db } from '@/lib/db';
+import { API_CONFIG, getConfig, persistAdminConfig, resetSourcesToDefault } from '@/lib/config';
 
 export const runtime = 'nodejs';
 
 // 支持的操作类型
-type Action = 'add' | 'disable' | 'enable' | 'delete' | 'sort' | 'batch_disable' | 'batch_enable' | 'batch_delete';
+type Action = 'add' | 'disable' | 'enable' | 'delete' | 'sort' | 'batch_disable' | 'batch_enable' | 'batch_delete' | 'check' | 'reset';
 
 interface BaseBody {
   action?: Action;
 }
 
-export async function POST(request: NextRequest) {
-  const storageType = process.env.NEXT_PUBLIC_STORAGE_TYPE || 'localstorage';
-  if (storageType === 'localstorage') {
-    return NextResponse.json(
-      {
-        error: '不支持本地存储进行管理员配置',
-      },
-      { status: 400 }
-    );
-  }
+const STORAGE_TYPE = process.env.NEXT_PUBLIC_STORAGE_TYPE || 'localstorage';
 
+/**
+ * 权限校验：
+ * - localstorage 单密码模式：cookie 里带明文 password（登录签发），与 PASSWORD 比对；
+ *   未配置 PASSWORD 时视为开放（与登录中间件行为一致）
+ * - 其余模式：必须带 username，owner/admin 身份在下方按原逻辑校验
+ */
+function checkAuth(request: NextRequest, adminConfigUsers?: { username: string; role: string; banned?: boolean }[]): { ok: boolean; username?: string } {
+  const authInfo = getAuthInfoFromCookie(request);
+  if (STORAGE_TYPE === 'localstorage') {
+    const envPassword = process.env.PASSWORD;
+    if (!envPassword) return { ok: true };
+    return { ok: !!authInfo && authInfo.password === envPassword };
+  }
+  const username = authInfo?.username;
+  if (!username) return { ok: false };
+  if (username === process.env.USERNAME) return { ok: true, username };
+  const userEntry = adminConfigUsers?.find((u) => u.username === username);
+  if (!userEntry || userEntry.role !== 'admin' || userEntry.banned) return { ok: false };
+  return { ok: true, username };
+}
+
+// GET /api/admin/source — 列出全部影视源（影视源管理页数据源）
+export async function GET(request: NextRequest) {
+  try {
+    const adminConfig = await getConfig();
+    const auth = checkAuth(request, adminConfig.UserConfig.Users as any);
+    if (!auth.ok) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+    return NextResponse.json(
+      { sources: adminConfig.SourceConfig },
+      { headers: { 'Cache-Control': 'no-store' } }
+    );
+  } catch (error) {
+    console.error('获取视频源列表失败:', error);
+    return NextResponse.json({ error: '获取视频源列表失败' }, { status: 500 });
+  }
+}
+
+export async function POST(request: NextRequest) {
   try {
     const body = (await request.json()) as BaseBody & Record<string, any>;
     const { action } = body;
 
-    const authInfo = getAuthInfoFromCookie(request);
-    if (!authInfo || !authInfo.username) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-    const username = authInfo.username;
-
-    // 基础校验
-    const ACTIONS: Action[] = ['add', 'disable', 'enable', 'delete', 'sort', 'batch_disable', 'batch_enable', 'batch_delete'];
-    if (!username || !action || !ACTIONS.includes(action)) {
-      return NextResponse.json({ error: '参数格式错误' }, { status: 400 });
-    }
-
     // 获取配置与存储
     const adminConfig = await getConfig();
 
+    // 基础校验
+    const ACTIONS: Action[] = ['add', 'disable', 'enable', 'delete', 'sort', 'batch_disable', 'batch_enable', 'batch_delete', 'check', 'reset'];
+    if (!action || !ACTIONS.includes(action)) {
+      return NextResponse.json({ error: '参数格式错误' }, { status: 400 });
+    }
+
     // 权限与身份校验
-    if (username !== process.env.USERNAME) {
-      const userEntry = adminConfig.UserConfig.Users.find(
-        (u) => u.username === username
-      );
-      if (!userEntry || userEntry.role !== 'admin' || userEntry.banned) {
-        return NextResponse.json({ error: '权限不足' }, { status: 401 });
-      }
+    const auth = checkAuth(request, adminConfig.UserConfig.Users as any);
+    if (!auth.ok) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     switch (action) {
+      case 'check': {
+        // 轻量可用性检测：按 key 请求一次 ?ac=videolist，校验返回 JSON 且含视频列表
+        const { key } = body as { key?: string };
+        if (!key) return NextResponse.json({ error: '缺少 key 参数' }, { status: 400 });
+        const entry = adminConfig.SourceConfig.find((s) => s.key === key);
+        if (!entry) return NextResponse.json({ error: '源不存在' }, { status: 404 });
+        const started = Date.now();
+        try {
+          const res = await fetch(`${entry.api}?ac=videolist&wd=${encodeURIComponent('斗罗大陆')}`, {
+            headers: API_CONFIG.search.headers,
+            signal: AbortSignal.timeout(8000),
+          });
+          if (!res.ok) {
+            return NextResponse.json({ ok: false, key, ms: Date.now() - started, error: `HTTP ${res.status}` });
+          }
+          const data = await res.json();
+          const count = Array.isArray(data?.list) ? data.list.length : 0;
+          return NextResponse.json({ ok: count > 0, key, ms: Date.now() - started, count });
+        } catch (e) {
+          return NextResponse.json({ ok: false, key, ms: Date.now() - started, error: (e as Error).message });
+        }
+      }
+      case 'reset': {
+        // 恢复内置热门源（覆盖现有源列表）
+        const config = await resetSourcesToDefault();
+        return NextResponse.json({ ok: true, sources: config.SourceConfig });
+      }
       case 'add': {
         const { key, name, api, detail } = body as {
           key?: string;
@@ -223,8 +270,8 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: '未知操作' }, { status: 400 });
     }
 
-    // 持久化到存储
-    await db.saveAdminConfig(adminConfig);
+    // 持久化（localstorage 模式写文件，其余写 db）并刷新内存缓存
+    await persistAdminConfig(adminConfig);
 
     return NextResponse.json(
       { ok: true },

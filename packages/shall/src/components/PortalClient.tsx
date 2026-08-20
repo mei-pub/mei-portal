@@ -241,10 +241,14 @@ export default function PortalClient({ items, panel: initialPanel }: { items: It
   const [panel, setPanel] = useState(initialPanel);
   // 客户端同步配置（确保 hydration 后拿到最新配置；无论背景图有无都同步，保证删除背景也生效）
   useEffect(() => {
-    fetch('/api/panel', { credentials: 'include' })
+    const sync = () => fetch('/api/panel', { credentials: 'include' })
       .then(r => r.json())
       .then(cfg => { if (cfg && cfg.background && cfg.style) setPanel(cfg); })
       .catch(() => {});
+    sync();
+    // 顶栏滑块/主题切换保存后广播 mei-panel-change，这里实时刷新（否则遮罩/模糊/主题不生效）
+    window.addEventListener('mei-panel-change', sync);
+    return () => window.removeEventListener('mei-panel-change', sync);
   }, []);
   const [query, setQuery] = useState('');
   const searchRef = useRef<HTMLInputElement>(null);
@@ -268,6 +272,16 @@ export default function PortalClient({ items, panel: initialPanel }: { items: It
     setNow(new Date());
     const t = setInterval(() => setNow(new Date()), 1000);
     return () => clearInterval(t);
+  }, []);
+
+  // 子应用登录态刷新：门户首页加载时补发各子应用 cookie（每个浏览器会话一次）
+  // 与注入顶栏 topbar.js 共用 sessionStorage 标记，避免重复调用
+  useEffect(() => {
+    try {
+      if (sessionStorage.getItem('mei-repenetrated')) return;
+      sessionStorage.setItem('mei-repenetrated', '1');
+      fetch('/api/auth/repenetrate', { method: 'POST', credentials: 'include' }).catch(() => {});
+    } catch {}
   }, []);
 
   // 内网模式
@@ -366,6 +380,8 @@ export default function PortalClient({ items, panel: initialPanel }: { items: It
         credentials: 'include', body: JSON.stringify(next),
       });
       if (!res.ok) { setToast('保存失败'); } else { setToast(tip); }
+      // 广播配置变更（顶栏滑块/主题状态同步）
+      window.dispatchEvent(new CustomEvent('mei-panel-change', { detail: { source: 'portal' } }));
     } catch { setToast('保存失败'); }
     setTimeout(() => setToast(''), 1500);
   }, []);
@@ -465,6 +481,8 @@ export default function PortalClient({ items, panel: initialPanel }: { items: It
   const clock = now ? { hh: pad(now.getHours()), mm: pad(now.getMinutes()), ss: pad(now.getSeconds()) } : { hh: '--', mm: '--', ss: '--' };
   const dateText = now ? `${now.getFullYear()} 年 ${now.getMonth() + 1} 月 ${now.getDate()} 日 · ${WEEKDAYS[now.getDay()]}` : '';
   const maxW = style?.maxWidth || 1180;
+  // 深浅主色调：深色背景 → 文字浅色（dark）；浅色背景 → 文字深色（light，默认）
+  const themeMode = style?.themeMode === 'dark' ? 'dark' : 'light';
   const textColor = style?.iconTextColor || undefined;
 
   const iconMode = style?.iconStyle === 'icon';
@@ -502,12 +520,14 @@ export default function PortalClient({ items, panel: initialPanel }: { items: It
 
   return (
     // isolation: isolate 让负 z-index 的背景层在本组件层叠上下文内绘制，避免被 body 背景遮盖
-    <div style={{ minHeight: '100vh', position: 'relative', isolation: 'isolate' }}>
+    // data-mei-theme：深浅主色调适配（深色背景文字浅色，浅色背景文字深色），变量覆写见 globals.css
+    <div data-mei-theme={themeMode} style={{ minHeight: '100vh', position: 'relative', isolation: 'isolate' }}>
       {/* 背景 */}
       {panel?.background?.url ? (
         <>
           <div aria-hidden style={{ position: 'fixed', inset: 0, zIndex: -3, backgroundImage: `url(${panel.background.url})`, backgroundSize: 'cover', backgroundPosition: 'center', filter: panel.background.blur ? `blur(${panel.background.blur}px)` : undefined, transform: panel.background.blur ? 'scale(1.06)' : undefined }} />
-          <div aria-hidden style={{ position: 'fixed', inset: 0, zIndex: -2, background: `rgba(7,10,19,${panel.background.mask})` }} />
+          {/* 遮罩颜色随主色调：深色主题压暗背景保证浅文字可读；浅色主题提亮背景保证深文字可读 */}
+          <div aria-hidden style={{ position: 'fixed', inset: 0, zIndex: -2, background: themeMode === 'dark' ? `rgba(7,10,19,${panel.background.mask})` : `rgba(244,247,252,${panel.background.mask})` }} />
         </>
       ) : (
         <div className="mei-aurora" aria-hidden>

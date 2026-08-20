@@ -46,7 +46,9 @@ export class AuthService {
     const hash = scryptSync(password, stored.salt, 32);
     if (user !== stored.user || !timingSafeEqual(hash, Buffer.from(stored.hash, "hex"))) return null;
     const token = randomBytes(32).toString("base64url");
-    this.sessions.set(token, Date.now() + 86400000);
+    // mei-allin：会话 30 天，与门户 mei-auth cookie 生命周期对齐
+    // （此前 24h：浏览器 cookie 还有效但服务端会话已过期 → 打开管理页又要二次登录）
+    this.sessions.set(token, Date.now() + 30 * 86400000);
     await this.persistSessions();
     return token;
   }

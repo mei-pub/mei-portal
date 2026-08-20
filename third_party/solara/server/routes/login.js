@@ -5,7 +5,8 @@
 
 const { Router } = require('express');
 
-const MAX_AGE_SECONDS = 48 * 60 * 60; // 48 小时
+// mei-allin：30 天，与门户 mei-auth cookie 对齐（原 48h，过期后 /music 会被 302 踢回登录页）
+const MAX_AGE_SECONDS = 30 * 24 * 60 * 60;
 
 /**
  * @param {string|null} password

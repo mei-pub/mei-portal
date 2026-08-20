@@ -136,12 +136,24 @@
       '#mei-topbar .mei-menu-link{display:flex;align-items:center;gap:8px;width:100%;padding:7px 10px;border:none;',
       'background:transparent;cursor:pointer;border-radius:10px;color:#1c2333;font-size:13px;text-align:left;text-decoration:none;}',
       '#mei-topbar .mei-menu-link:hover{background:rgba(23,32,56,0.05);}',
+      /* 书架选择面板（挂 body 下，fixed 定位，避免被 .mei-apps 的 overflow 裁剪） */
+      '#mei-lib-menu{background:rgba(255,255,255,0.94);-webkit-backdrop-filter:blur(28px) saturate(1.6);backdrop-filter:blur(28px) saturate(1.6);',
+      'border:1px solid rgba(23,32,56,0.1);border-radius:18px;',
+      'box-shadow:0 20px 48px rgba(23,32,56,0.18),0 0 0 1px rgba(99,102,241,0.08),inset 0 1px 0 rgba(255,255,255,0.95);',
+      'font-family:"Inter","Noto Sans SC","PingFang SC",sans-serif;}',
+      '#mei-lib-menu *{box-sizing:border-box;}',
+      '#mei-lib-menu .mei-menu-link{display:flex;align-items:center;gap:8px;width:100%;padding:7px 10px;border:none;',
+      'background:transparent;cursor:pointer;border-radius:10px;color:#1c2333;font-size:13px;text-align:left;text-decoration:none;}',
+      '#mei-lib-menu .mei-menu-link:hover{background:rgba(23,32,56,0.05);}',
       '@media(max-width:640px){#mei-topbar .mei-brand-text{display:none;}}',
     ].join('');
     document.head.appendChild(style);
 
     // 顶栏用 position:sticky 自然占位，无需 padding-top
     function buildTopbar(plugins) {
+      // 重建前清理旧的书架面板（SPA heal 重建顶栏时避免残留多个）
+      var staleLibMenu = document.getElementById('mei-lib-menu');
+      if (staleLibMenu) staleLibMenu.remove();
       var bar = document.createElement('div');
       bar.id = 'mei-topbar';
 
@@ -208,10 +220,11 @@
         libBtn.innerHTML = '<span style="max-width:96px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + current.name + '</span>' +
           '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="margin-left:3px;opacity:.6"><path d="m6 9 6 6 6-6"/></svg>';
         libBtn.title = '书架：' + current.name;
+        // 书架选择面板：挂到 body 并用 fixed 定位（.mei-apps 有 overflow-x:auto，
+        // 绝对定位的下拉会被裁剪——此前「我的书架」点不出面板的根因）
         var libMenu = document.createElement('div');
-        libMenu.className = 'mei-menu';
-        libMenu.style.cssText += 'left:0;right:auto;top:40px;width:180px;';
-        libMenu.style.display = 'none';
+        libMenu.id = 'mei-lib-menu';
+        libMenu.style.cssText = 'position:fixed;display:none;width:180px;padding:8px;z-index:10003;';
         libEntries.forEach(function (l) {
           var item = document.createElement('a');
           item.className = 'mei-menu-link';
@@ -223,10 +236,23 @@
           }
           libMenu.appendChild(item);
         });
-        libBtn.onclick = function (e) { e.stopPropagation(); var open = libMenu.style.display === 'block'; libMenu.style.display = open ? 'none' : 'block'; };
-        document.addEventListener('click', function () { libMenu.style.display = 'none'; });
+        function closeLibMenu() { libMenu.style.display = 'none'; }
+        libBtn.onclick = function (e) {
+          e.stopPropagation();
+          var open = libMenu.style.display === 'block';
+          if (open) { closeLibMenu(); return; }
+          var rect = libBtn.getBoundingClientRect();
+          libMenu.style.left = Math.max(8, Math.min(rect.left, window.innerWidth - 196)) + 'px';
+          libMenu.style.top = (rect.bottom + 8) + 'px';
+          libMenu.style.display = 'block';
+        };
+        libMenu.onclick = function (e) { e.stopPropagation(); };
+        document.addEventListener('click', closeLibMenu);
+        document.addEventListener('keydown', function (e) { if (e.key === 'Escape') closeLibMenu(); });
+        window.addEventListener('resize', closeLibMenu);
+        window.addEventListener('scroll', closeLibMenu, true);
+        document.body.appendChild(libMenu);
         wrap.appendChild(libBtn);
-        wrap.appendChild(libMenu);
         apps.appendChild(wrap);
       }
       bar.appendChild(apps);

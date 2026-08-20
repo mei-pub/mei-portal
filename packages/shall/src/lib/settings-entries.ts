@@ -15,14 +15,31 @@ export interface SettingGroup {
   entries: SettingEntry[];
 }
 
+// 分组顺序：主页面板 → 影视门户 → 音乐播放 → 流媒体下载 → 网盘搜索 → AI 绘图 → 小说书架 → 内网穿透
 export const SETTING_GROUPS: SettingGroup[] = [
   {
-    id: 'pansou',
-    label: '网盘搜索',
-    icon: 'lucide:search',
+    id: 'sun-panel',
+    label: '主页面板',
+    icon: 'lucide:layout-dashboard',
     entries: [
-      { id: 'pansou-config', name: '网盘搜索设置', url: '/search/?view=config&meiEmbed=1', icon: 'lucide:settings-2' },
-      { id: 'pansou-api', name: '网盘搜 API', url: '/search/?view=api&meiEmbed=1', icon: 'lucide:plug' },
+      { id: 'panel-settings', name: '主页设置', url: '/home-editor?meiEmbed=1', icon: 'lucide:settings-2' },
+    ],
+  },
+  {
+    id: 'lunatv',
+    label: '影视门户',
+    icon: 'lucide:tv',
+    entries: [
+      { id: 'tv-settings', name: '影视设置', url: '/tv/mei-settings?meiEmbed=1', icon: 'lucide:settings-2' },
+      { id: 'tv-sources', name: '影视源管理', url: '/tv/mei-sources?meiEmbed=1', icon: 'lucide:database' },
+    ],
+  },
+  {
+    id: 'solara',
+    label: '音乐播放',
+    icon: 'lucide:music',
+    entries: [
+      { id: 'solara-settings', name: '音乐播放器设置', url: '/music/?meiSettings=1&meiEmbed=1', icon: 'lucide:settings-2' },
     ],
   },
   {
@@ -34,19 +51,12 @@ export const SETTING_GROUPS: SettingGroup[] = [
     ],
   },
   {
-    id: 'sun-panel',
-    label: '主页面板',
-    icon: 'lucide:layout-dashboard',
+    id: 'pansou',
+    label: '网盘搜索',
+    icon: 'lucide:search',
     entries: [
-      { id: 'panel-settings', name: '主页设置', url: '/home-editor?meiEmbed=1', icon: 'lucide:settings-2' },
-    ],
-  },
-  {
-    id: 'solara',
-    label: '音乐播放',
-    icon: 'lucide:music',
-    entries: [
-      { id: 'solara-settings', name: '音乐播放器设置', url: '/music/?meiSettings=1&meiEmbed=1', icon: 'lucide:settings-2' },
+      { id: 'pansou-config', name: '网盘搜索设置', url: '/search/?view=config&meiEmbed=1', icon: 'lucide:settings-2' },
+      { id: 'pansou-api', name: '网盘搜 API', url: '/search/?view=api&meiEmbed=1', icon: 'lucide:plug' },
     ],
   },
   {
@@ -60,11 +70,11 @@ export const SETTING_GROUPS: SettingGroup[] = [
     ],
   },
   {
-    id: 'lunatv',
-    label: '影视门户',
-    icon: 'lucide:tv',
+    id: 'tutorial',
+    label: '小说书架',
+    icon: 'lucide:book-open',
     entries: [
-      { id: 'tv-settings', name: '影视设置', url: '/tv/mei-settings?meiEmbed=1', icon: 'lucide:settings-2' },
+      { id: 'novels-manage', name: '小说书架管理', url: '/novels/manage?meiEmbed=1', icon: 'lucide:library' },
     ],
   },
   {
@@ -74,14 +84,6 @@ export const SETTING_GROUPS: SettingGroup[] = [
     entries: [
       { id: 'link-server', name: '隧道服务器设置', url: '/link/?meiView=settings&meiEmbed=1', icon: 'lucide:server' },
       { id: 'link-logs', name: '隧道运行日志', url: '/link/?meiView=logs&meiEmbed=1', icon: 'lucide:scroll-text' },
-    ],
-  },
-  {
-    id: 'tutorial',
-    label: '小说书架',
-    icon: 'lucide:book-open',
-    entries: [
-      { id: 'novels-manage', name: '小说书架管理', url: '/novels/manage?meiEmbed=1', icon: 'lucide:library' },
     ],
   },
 ];

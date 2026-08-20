@@ -137,8 +137,10 @@ export async function expandTutorialLibraries(
   if (!tutorial) return plugins;
 
   try {
+    // mei-unlock=0：主密码“仅解锁”语义，让隐藏书架也出现在展开列表里，
+    // 否则顶栏「我的书架」只剩一个公开书架时退化为直链、点不出书架选择面板
     const res = await fetch('http://127.0.0.1:3001/novels/api/libraries', {
-      headers: { Cookie: 'auth-token=1%3A' },
+      headers: { Cookie: 'auth-token=1%3A; mei-unlock=0' },
       signal: AbortSignal.timeout(3000),
     });
     if (!res.ok) return plugins;

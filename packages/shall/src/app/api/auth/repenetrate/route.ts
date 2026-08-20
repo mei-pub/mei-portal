@@ -24,15 +24,21 @@ function persistCookie(cookie: string): string {
  * 仅对默认 admin 用户有效（子应用用 MEI_ADMIN_PASSWORD 初始化）。
  * 若用户改过子应用密码，此端点对该应用会失败（不影响其他应用）。
  */
-export async function POST(_req: NextRequest) {
+export async function POST(req: NextRequest) {
   initUserIfNeeded();
   if (!isLoggedIn()) {
     return NextResponse.json({ ok: false, error: '未登录' }, { status: 401 });
   }
+  // 可选：{ "app": "mei-link" } 只重登指定应用（nginx 子路径同步注入用，避免全量登录开销）
+  let app: string | undefined;
+  try {
+    const b = await req.json();
+    if (b && typeof b.app === 'string' && b.app) app = b.app;
+  } catch { /* 无 body = 全量 */ }
   // 使用环境凭据重新登录各子应用
   const username = process.env.MEI_ADMIN_USER || 'admin';
   const password = process.env.MEI_ADMIN_PASSWORD || 'mei-allin';
-  const results = await proxyLoginAll(username, password);
+  const results = await proxyLoginAll(username, password, app);
   const tokens: Record<string, string> = {};
   for (const r of results) {
     if (r.token) tokens[r.appId] = r.token;

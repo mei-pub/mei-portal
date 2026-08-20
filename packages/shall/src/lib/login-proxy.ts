@@ -36,6 +36,7 @@ const meilinkAdapter: AppLoginAdapter = {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ user: username, password }),
+        signal: AbortSignal.timeout(4000),
       });
       return { success: res.ok, cookies: extractSetCookies(res) };
     } catch {
@@ -151,11 +152,13 @@ const tutorialUnlockAdapter: AppLoginAdapter = {
 
 const ADAPTERS: AppLoginAdapter[] = [meilinkAdapter, lunatvAdapter, solaraAdapter, mediagoAdapter, aidrawAdapter, tutorialUnlockAdapter];
 
-/** 并发代理登录所有已注册应用 */
+/** 并发代理登录所有已注册应用；appId 指定时只登录该应用（供子路径同步注入按需刷新） */
 export async function proxyLoginAll(
   username: string,
-  password: string
+  password: string,
+  appId?: string
 ): Promise<AppLoginResult[]> {
+  const adapters = appId ? ADAPTERS.filter((a) => a.appId === appId) : ADAPTERS;
   return Promise.all(
     ADAPTERS.map(async (a) => {
       try {

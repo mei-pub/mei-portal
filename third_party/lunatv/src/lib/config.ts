@@ -1,5 +1,8 @@
 /* eslint-disable @typescript-eslint/no-explicit-any, no-console, @typescript-eslint/no-non-null-assertion */
 
+import fs from 'node:fs/promises';
+import path from 'node:path';
+
 import { db } from '@/lib/db';
 
 import { AdminConfig } from './admin.types';
@@ -55,6 +58,69 @@ export const API_CONFIG = {
 
 // 在模块加载时根据环境决定配置来源
 let cachedConfig: AdminConfig;
+
+const MEI_STORAGE_TYPE = process.env.NEXT_PUBLIC_STORAGE_TYPE || 'localstorage';
+
+// mei-allin：内置热门影视源（苹果CMS 采集 API 格式，api + ?ac=videolist 即可点播）
+// localstorage 模式下服务端无数据库，初始配置从这里兜底，保证开箱即可点播
+export const MEI_DEFAULT_CONFIG_FILE = JSON.stringify({
+  cache_time: 7200,
+  api_site: {
+    heimuer: { name: '黑木耳', api: 'https://www.heimuer.cc/api.php/provide/vod', detail: 'https://www.heimuer.cc' },
+    ffzy: { name: '非凡资源', api: 'http://api.ffzyapi.com/api.php/provide/vod', detail: 'http://api.ffzyapi.com' },
+    liangzi: { name: '量子资源', api: 'https://cj.lziapi.com/api.php/provide/vod', detail: 'https://cj.lziapi.com' },
+    guangsu: { name: '光速资源', api: 'https://api.guangsuapi.com/api.php/provide/vod', detail: 'https://api.guangsuapi.com' },
+    wolong: { name: '卧龙资源', api: 'https://collect.wolongzyw.com/api.php/provide/vod', detail: 'https://collect.wolongzyw.com' },
+    hongniu: { name: '红牛资源', api: 'https://www.hongniuzy2.com/api.php/provide/vod', detail: 'https://www.hongniuzy2.com' },
+    jisu: { name: '极速资源', api: 'https://jszyapi.com/api.php/provide/vod', detail: 'https://jszyapi.com' },
+    suoni: { name: '索尼资源', api: 'https://suoniapi.com/api.php/provide/vod', detail: 'https://suoniapi.com' },
+    baofeng: { name: '暴风资源', api: 'https://bfzyapi.com/api.php/provide/vod', detail: 'https://bfzyapi.com' },
+    tianya: { name: '天涯资源', api: 'https://tyyszy.com/api.php/provide/vod', detail: 'https://tyyszy.com' },
+    wujin: { name: '无尽资源', api: 'https://api.wujinapi.me/api.php/provide/vod', detail: 'https://api.wujinapi.me' },
+    ruyi: { name: '如意资源', api: 'https://cj.rycjapi.com/api.php/provide/vod', detail: 'https://cj.rycjapi.com' },
+    modu: { name: '魔都资源', api: 'https://www.mdzyapi.com/api.php/provide/vod', detail: 'https://www.mdzyapi.com' },
+    ikun: { name: '爱坤资源', api: 'https://ikunzyapi.com/api.php/provide/vod', detail: 'https://ikunzyapi.com' },
+  },
+});
+
+// ---- localstorage 模式的文件持久化（服务端无 db，管理配置落盘到 DATA_DIR）----
+const LOCAL_ADMIN_FILE = path.join(
+  process.env.DATA_DIR || '/data',
+  'lunatv',
+  'admin-config.json'
+);
+
+async function loadLocalAdminConfig(): Promise<AdminConfig | null> {
+  try {
+    return JSON.parse(await fs.readFile(LOCAL_ADMIN_FILE, 'utf8')) as AdminConfig;
+  } catch {
+    return null;
+  }
+}
+
+async function saveLocalAdminConfig(config: AdminConfig): Promise<void> {
+  await fs.mkdir(path.dirname(LOCAL_ADMIN_FILE), { recursive: true });
+  await fs.writeFile(LOCAL_ADMIN_FILE, JSON.stringify(config, null, 2));
+}
+
+/** 持久化管理配置：localstorage 模式写文件，其余写 db；同时刷新内存缓存 */
+export async function persistAdminConfig(config: AdminConfig): Promise<void> {
+  cachedConfig = config;
+  if (MEI_STORAGE_TYPE === 'localstorage') {
+    await saveLocalAdminConfig(config);
+    return;
+  }
+  await db.saveAdminConfig(config);
+}
+
+/** 重置为内置热门源（保留站点/用户等其他配置） */
+export async function resetSourcesToDefault(): Promise<AdminConfig> {
+  const config = await getConfig();
+  const fresh = await getInitConfig(MEI_DEFAULT_CONFIG_FILE);
+  config.SourceConfig = fresh.SourceConfig;
+  await persistAdminConfig(config);
+  return config;
+}
 
 
 // 从配置文件补充管理员配置
@@ -296,21 +362,29 @@ export async function getConfig(): Promise<AdminConfig> {
     return cachedConfig;
   }
 
-  // 读 db
+  // 读配置：localstorage 模式读本地文件（服务端无 db），其余读 db
   let adminConfig: AdminConfig | null = null;
-  try {
-    adminConfig = await db.getAdminConfig();
-  } catch (e) {
-    console.error('获取管理员配置失败:', e);
+  if (MEI_STORAGE_TYPE === 'localstorage') {
+    adminConfig = await loadLocalAdminConfig();
+  } else {
+    try {
+      adminConfig = await db.getAdminConfig();
+    } catch (e) {
+      console.error('获取管理员配置失败:', e);
+    }
   }
 
-  // db 中无配置，执行一次初始化
+  // 无配置时执行一次初始化（内置热门源兜底，保证开箱可点播）
   if (!adminConfig) {
-    adminConfig = await getInitConfig("");
+    adminConfig = await getInitConfig(MEI_DEFAULT_CONFIG_FILE);
   }
   adminConfig = configSelfCheck(adminConfig);
   cachedConfig = adminConfig;
-  db.saveAdminConfig(cachedConfig);
+  try {
+    await persistAdminConfig(cachedConfig);
+  } catch (e) {
+    console.error('保存管理员配置失败:', e);
+  }
   return cachedConfig;
 }
 
@@ -397,17 +471,20 @@ export function configSelfCheck(adminConfig: AdminConfig): AdminConfig {
 
 export async function resetConfig() {
   let originConfig: AdminConfig | null = null;
-  try {
-    originConfig = await db.getAdminConfig();
-  } catch (e) {
-    console.error('获取管理员配置失败:', e);
+  if (MEI_STORAGE_TYPE === 'localstorage') {
+    originConfig = await loadLocalAdminConfig();
+  } else {
+    try {
+      originConfig = await db.getAdminConfig();
+    } catch (e) {
+      console.error('获取管理员配置失败:', e);
+    }
   }
   if (!originConfig) {
     originConfig = {} as AdminConfig;
   }
-  const adminConfig = await getInitConfig(originConfig.ConfigFile, originConfig.ConfigSubscribtion);
-  cachedConfig = adminConfig;
-  await db.saveAdminConfig(adminConfig);
+  const adminConfig = await getInitConfig(originConfig.ConfigFile || MEI_DEFAULT_CONFIG_FILE, originConfig.ConfigSubscribtion);
+  await persistAdminConfig(adminConfig);
 
   return;
 }
