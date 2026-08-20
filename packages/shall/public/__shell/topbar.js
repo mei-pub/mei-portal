@@ -157,11 +157,11 @@
       var bar = document.createElement('div');
       bar.id = 'mei-topbar';
 
-      // 品牌
+      // 品牌（默认 Logo，可被面板配置的图片/文字覆盖）
       var brand = document.createElement('a');
       brand.className = 'mei-brand';
       brand.href = '/';
-      brand.innerHTML = '<span class="mei-logo"></span><span class="mei-brand-text" id="mei-brand-text">mei-allin</span>';
+      brand.innerHTML = '<img src="/logo.svg" alt="logo" style="width:22px;height:22px;border-radius:7px;flex-shrink:0;" /><span class="mei-brand-text" id="mei-brand-text">mei-allin</span>';
       // 从面板配置加载品牌名
       fetch('/api/panel', { credentials: 'include' })
         .then(function(r) { return r.json(); })

@@ -22,8 +22,6 @@ export default function TopBar({
   const [menuOpen, setMenuOpen] = useState(false);
   const [loggedIn, setLoggedIn] = useState(false);
   // 账户操作：修改密码 / 退出确认
-  const [brandLogo, setBrandLogo] = useState('');
-  const [brandName, setBrandName] = useState('mei-allin');
   const [pwOpen, setPwOpen] = useState(false);
   const [pwForm, setPwForm] = useState({ old: '', next: '', confirm: '' });
   const [pwHint, setPwHint] = useState('');
@@ -31,7 +29,6 @@ export default function TopBar({
   const [logoutConfirm, setLogoutConfirm] = useState(false);
   const [bgMask, setBgMask] = useState(0.35);
   const [bgBlur, setBgBlur] = useState(0);
-  const [themeMode, setThemeMode] = useState<'light' | 'dark'>('light');
   const bgUrlRef = useRef('');
   // 配置未加载完成前禁止保存，否则会把背景图 url 清成空串
   const bgLoadedRef = useRef(false);
@@ -67,19 +64,6 @@ export default function TopBar({
     };
   }, []);
 
-  // 加载面板品牌配置
-  useEffect(() => {
-    fetch('/api/panel', { credentials: 'include' })
-      .then(r => r.json())
-      .then(cfg => {
-        if (cfg?.style) {
-          if (cfg.style.logoImage) setBrandLogo(cfg.style.logoImage);
-          if (cfg.style.logoText) setBrandName(cfg.style.logoText);
-        }
-      })
-      .catch(() => {});
-  }, []);
-
   // 加载面板背景配置（含首页深浅主色调）
   useEffect(() => {
     const load = () => fetch('/api/panel', { credentials: 'include' })
@@ -91,7 +75,6 @@ export default function TopBar({
           bgUrlRef.current = cfg.background.url || '';
           bgLoadedRef.current = true;
         }
-        setThemeMode(cfg?.style?.themeMode === 'dark' ? 'dark' : 'light');
       })
       .catch(() => {});
     load();
@@ -118,15 +101,6 @@ export default function TopBar({
   }
   function saveBgMask(mask: number) { saveBg({ mask }); }
   function saveBgBlur(blur: number) { saveBg({ blur }); }
-
-  // 首页深浅主色调切换：深色背景 → dark（文字浅色）；浅色背景 → light（文字深色）
-  function saveThemeMode(mode: 'light' | 'dark') {
-    setThemeMode(mode);
-    fetch('/api/panel', {
-      method: 'PUT', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
-      body: JSON.stringify({ style: { themeMode: mode } }),
-    }).then(() => broadcastPanelChange()).catch(() => {});
-  }
 
   const sliderThumb = { width: 14, height: 14, borderRadius: '50%', background: '#fff', boxShadow: '0 1px 3px rgba(0,0,0,0.3)' } as const;
   const sliderTrack = { width: '100%', height: 4, borderRadius: 2, background: 'var(--mei-border-strong)', WebkitAppearance: 'none', appearance: 'none', outline: 'none', cursor: 'pointer' } as const;
@@ -202,20 +176,25 @@ export default function TopBar({
         borderBottom: transparent ? 'none' : '1px solid var(--mei-border)',
       }}
     >
-      {/* 品牌 */}
-      <a href="/" style={{ display: 'flex', alignItems: 'center', gap: 10, fontWeight: 700 }}>
-        <span
-          style={{
-            width: 28,
-            height: 28,
-            borderRadius: 9,
-            background: 'var(--mei-gradient)',
-            boxShadow: '0 0 16px rgba(129,140,248,0.45), inset 0 1px 0 rgba(255,255,255,0.3)',
-            display: 'inline-block',
-            flexShrink: 0,
-          }}
-        />
-        {brandLogo ? <img src={brandLogo} alt="logo" style={{ height: 24, maxWidth: 120, objectFit: 'contain' }} /> : <span style={{ fontSize: 17, letterSpacing: 0.5, color: 'var(--mei-text)' }}>{brandName}</span>}
+      {/* 首页入口：圆形主页 icon（不再展示品牌 Logo 与文字） */}
+      <a
+        href="/"
+        title="返回主页"
+        aria-label="返回主页"
+        style={{
+          display: 'inline-flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          width: 36,
+          height: 36,
+          borderRadius: '50%',
+          background: 'var(--mei-gradient)',
+          color: '#fff',
+          boxShadow: '0 4px 14px rgba(99,102,241,0.35), inset 0 1px 0 rgba(255,255,255,0.25)',
+          flexShrink: 0,
+        }}
+      >
+        <MeiIcon icon="lucide:home" size={17} />
       </a>
 
       {/* 搜索（无搜索功能的页面隐藏） */}
@@ -322,38 +301,6 @@ export default function TopBar({
               背景模糊
             </div>
             {bgBlurSlider}
-            <div
-              style={{
-                padding: '8px 10px 4px',
-                fontSize: 11,
-                color: 'var(--mei-text-faint)',
-                fontWeight: 700,
-                letterSpacing: 1.5,
-              }}
-            >
-              首页主题
-            </div>
-            {/* 深浅切换：深色背景用「深色」（文字自动变浅），浅色背景用「浅色」 */}
-            <div style={{ display: 'flex', gap: 6, padding: '2px 10px 8px' }}>
-              {(['light', 'dark'] as const).map((m) => (
-                <button
-                  key={m}
-                  onClick={() => saveThemeMode(m)}
-                  style={{
-                    flex: 1, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 5,
-                    padding: '6px 0', borderRadius: 'var(--mei-radius-full)', cursor: 'pointer', fontSize: 12,
-                    border: themeMode === m ? 'none' : '1px solid var(--mei-border-strong)',
-                    background: themeMode === m ? 'var(--mei-gradient)' : 'transparent',
-                    color: themeMode === m ? '#fff' : 'var(--mei-text-muted)',
-                    fontWeight: themeMode === m ? 650 : 400,
-                    transition: 'var(--mei-transition)',
-                  }}
-                >
-                  <MeiIcon icon={m === 'light' ? 'lucide:sun' : 'lucide:moon'} size={13} />
-                  {m === 'light' ? '浅色' : '深色'}
-                </button>
-              ))}
-            </div>
 
             <a
               href="/settings"

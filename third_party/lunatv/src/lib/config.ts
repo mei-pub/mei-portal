@@ -62,26 +62,57 @@ let cachedConfig: AdminConfig;
 const MEI_STORAGE_TYPE = process.env.NEXT_PUBLIC_STORAGE_TYPE || 'localstorage';
 
 // mei-allin：内置热门影视源（苹果CMS 采集 API 格式，api + ?ac=videolist 即可点播）
-// localstorage 模式下服务端无数据库，初始配置从这里兜底，保证开箱即可点播
+// 2026-08 实测可用性筛选：索尼/天涯（拒绝搜索）、卧龙（WAF）、无尽（CF 盾）已剔除，
+// 换入百度云/新浪/豪华/金鹰。detail 一律留空——非空会走脆弱的 HTML 详情页正则解析，
+// JSON 详情（?ac=videolist&ids=）才是稳定路径。
 export const MEI_DEFAULT_CONFIG_FILE = JSON.stringify({
   cache_time: 7200,
   api_site: {
-    heimuer: { name: '黑木耳', api: 'https://www.heimuer.cc/api.php/provide/vod', detail: 'https://www.heimuer.cc' },
-    ffzy: { name: '非凡资源', api: 'http://api.ffzyapi.com/api.php/provide/vod', detail: 'http://api.ffzyapi.com' },
-    liangzi: { name: '量子资源', api: 'https://cj.lziapi.com/api.php/provide/vod', detail: 'https://cj.lziapi.com' },
-    guangsu: { name: '光速资源', api: 'https://api.guangsuapi.com/api.php/provide/vod', detail: 'https://api.guangsuapi.com' },
-    wolong: { name: '卧龙资源', api: 'https://collect.wolongzyw.com/api.php/provide/vod', detail: 'https://collect.wolongzyw.com' },
-    hongniu: { name: '红牛资源', api: 'https://www.hongniuzy2.com/api.php/provide/vod', detail: 'https://www.hongniuzy2.com' },
-    jisu: { name: '极速资源', api: 'https://jszyapi.com/api.php/provide/vod', detail: 'https://jszyapi.com' },
-    suoni: { name: '索尼资源', api: 'https://suoniapi.com/api.php/provide/vod', detail: 'https://suoniapi.com' },
-    baofeng: { name: '暴风资源', api: 'https://bfzyapi.com/api.php/provide/vod', detail: 'https://bfzyapi.com' },
-    tianya: { name: '天涯资源', api: 'https://tyyszy.com/api.php/provide/vod', detail: 'https://tyyszy.com' },
-    wujin: { name: '无尽资源', api: 'https://api.wujinapi.me/api.php/provide/vod', detail: 'https://api.wujinapi.me' },
-    ruyi: { name: '如意资源', api: 'https://cj.rycjapi.com/api.php/provide/vod', detail: 'https://cj.rycjapi.com' },
-    modu: { name: '魔都资源', api: 'https://www.mdzyapi.com/api.php/provide/vod', detail: 'https://www.mdzyapi.com' },
-    ikun: { name: '爱坤资源', api: 'https://ikunzyapi.com/api.php/provide/vod', detail: 'https://ikunzyapi.com' },
+    heimuer: { name: '黑木耳', api: 'https://www.heimuer.cc/api.php/provide/vod' },
+    liangzi: { name: '量子资源', api: 'https://cj.lziapi.com/api.php/provide/vod' },
+    baofeng: { name: '暴风资源', api: 'https://bfzyapi.com/api.php/provide/vod' },
+    jinying: { name: '金鹰资源', api: 'https://jyzyapi.com/api.php/provide/vod' },
+    baiduyun: { name: '百度云资源', api: 'https://api.apibdzy.com/api.php/provide/vod' },
+    xinlang: { name: '新浪资源', api: 'https://api.xinlangapi.com/xinlangapi.php/provide/vod' },
+    haohua: { name: '豪华资源', api: 'https://hhzyapi.com/api.php/provide/vod' },
+    guangsu: { name: '光速资源', api: 'https://api.guangsuapi.com/api.php/provide/vod' },
+    jisu: { name: '极速资源', api: 'https://jszyapi.com/api.php/provide/vod' },
+    hongniu: { name: '红牛资源', api: 'https://www.hongniuzy2.com/api.php/provide/vod' },
+    ffzy: { name: '非凡资源', api: 'http://api.ffzyapi.com/api.php/provide/vod' },
+    ruyi: { name: '如意资源', api: 'https://cj.rycjapi.com/api.php/provide/vod' },
+    modu: { name: '魔都资源', api: 'https://www.mdzyapi.com/api.php/provide/vod' },
+    ikun: { name: '爱坤资源', api: 'https://ikunzyapi.com/api.php/provide/vod' },
   },
 });
+
+// 内置源目录同步：新默认源自动补入（保留用户停用状态），
+// 已从默认集剔除的旧内置源（from=config 且不在新清单）自动移除；自定义源不动
+function mergeDefaultSources(config: AdminConfig): AdminConfig {
+  try {
+    const defaults = (JSON.parse(MEI_DEFAULT_CONFIG_FILE) as ConfigFileStruct).api_site || {};
+    const existing = new Map((config.SourceConfig || []).map((s) => [s.key, s]));
+    const merged: AdminConfig['SourceConfig'] = [];
+    for (const [key, site] of Object.entries(defaults)) {
+      const old = existing.get(key);
+      merged.push({
+        key,
+        name: site.name,
+        api: site.api,
+        detail: undefined,
+        from: 'config',
+        disabled: old?.disabled === true,
+      });
+      existing.delete(key);
+    }
+    for (const s of Array.from(existing.values())) {
+      if (s.from !== 'config') merged.push(s);
+    }
+    config.SourceConfig = merged;
+  } catch (e) {
+    console.error('同步内置源目录失败:', e);
+  }
+  return config;
+}
 
 // ---- localstorage 模式的文件持久化（服务端无 db，管理配置落盘到 DATA_DIR）----
 const LOCAL_ADMIN_FILE = path.join(
@@ -379,6 +410,10 @@ export async function getConfig(): Promise<AdminConfig> {
     adminConfig = await getInitConfig(MEI_DEFAULT_CONFIG_FILE);
   }
   adminConfig = configSelfCheck(adminConfig);
+  // localstorage 模式：内置源目录与最新默认清单同步（新源自动补入、旧源自动剔除）
+  if (MEI_STORAGE_TYPE === 'localstorage') {
+    adminConfig = mergeDefaultSources(adminConfig);
+  }
   cachedConfig = adminConfig;
   try {
     await persistAdminConfig(cachedConfig);

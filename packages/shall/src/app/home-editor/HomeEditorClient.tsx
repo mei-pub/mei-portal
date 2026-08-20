@@ -167,15 +167,18 @@ function StyleTab({ config, setConfig }: { config: PanelConfig; setConfig: (c: P
         <h2 style={{ fontSize: 14, fontWeight: 650, margin: '0 0 12px' }}>Logo 与时钟</h2>
         <label style={label}>Logo 文字</label>
         <input style={input} value={config.style.logoText} onChange={(e) => setStyle({ logoText: e.target.value })} placeholder="留空则不显示" />
-        <label style={{ ...label, marginTop: 10 }}>Logo 图片（优先于文字）</label>
+        <label style={{ ...label, marginTop: 10 }}>Logo 图片（优先于文字，留空使用默认 Logo）</label>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-          <input style={input} placeholder="图片地址或上传" value={config.style.logoImage} onChange={(e) => setStyle({ logoImage: e.target.value })} />
+          {/* 默认/当前 Logo 预览 */}
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={config.style.logoImage || '/logo.svg'} alt="logo" style={{ width: 34, height: 34, borderRadius: 9, objectFit: 'contain', border: '1px solid var(--mei-border)', background: '#fff', flexShrink: 0 }} />
+          <input style={input} placeholder="图片地址或上传（留空 = 默认 Logo）" value={config.style.logoImage} onChange={(e) => setStyle({ logoImage: e.target.value })} />
           <label style={{ padding: '8px 14px', borderRadius: 10, border: '1px solid var(--mei-border-strong)', fontSize: 12, cursor: 'pointer', whiteSpace: 'nowrap' }}>
             上传
             <input type="file" accept="image/*" hidden onChange={(e) => { const f = e.target.files?.[0]; if (f) readImageFile(f, (d) => setStyle({ logoImage: d })); }} />
           </label>
           {config.style.logoImage && (
-            <button onClick={() => setStyle({ logoImage: '' })} style={{ border: 'none', background: 'transparent', color: 'var(--mei-danger)', fontSize: 12, cursor: 'pointer' }}>清除</button>
+            <button onClick={() => setStyle({ logoImage: '' })} style={{ border: 'none', background: 'transparent', color: 'var(--mei-danger)', fontSize: 12, cursor: 'pointer', whiteSpace: 'nowrap' }}>重置为默认</button>
           )}
         </div>
         <label style={{ ...label, marginTop: 10, display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -367,16 +370,27 @@ function ItemsTab({ config, setConfig }: { config: PanelConfig; setConfig: (c: P
         <div style={{ border: '1px dashed var(--mei-border-strong)', borderRadius: 12, padding: 14, marginBottom: 14, display: 'grid', gap: 8 }}>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
             <input style={input} placeholder="标题（必填）" value={editing.title} onChange={(e) => setEditing({ ...editing, title: e.target.value })} />
-            <input
+            {/* 分组用下拉（值为分组 id，避免名称/id 混淆导致首页渲染不到分组） */}
+            <select
               style={input}
-              placeholder="分组名（输入新名称自动创建）"
-              value={editing.groupId}
-              onChange={(e) => setEditing({ ...editing, groupId: e.target.value })}
-              list="edit-group-list"
-            />
-            <datalist id="edit-group-list">
-              {config.groups.map((g) => <option key={g.id} value={g.name} />)}
-            </datalist>
+              value={config.groups.some((g) => g.id === editing.groupId) ? editing.groupId : ''}
+              onChange={(e) => {
+                if (e.target.value === '__new__') {
+                  const n = prompt('新分组名称');
+                  if (n && n.trim()) {
+                    const g = { id: `g${Date.now()}`, name: n.trim() };
+                    setConfig({ ...config, groups: [...config.groups, g] });
+                    setEditing({ ...editing, groupId: g.id });
+                  }
+                } else {
+                  setEditing({ ...editing, groupId: e.target.value });
+                }
+              }}
+            >
+              <option value=''>未分组</option>
+              {config.groups.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}
+              <option value='__new__'>＋ 新建分组…</option>
+            </select>
           </div>
           <input style={input} placeholder="描述（可选）" value={editing.description} onChange={(e) => setEditing({ ...editing, description: e.target.value })} />
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
@@ -399,12 +413,8 @@ function ItemsTab({ config, setConfig }: { config: PanelConfig; setConfig: (c: P
             <button
               onClick={() => {
                 if (!editing.title.trim() || !editing.url.trim()) return;
-                let groupId = editing.groupId;
-                if (groupId && !config.groups.some(g => g.name === groupId.trim() || g.id === groupId)) {
-                  const newGroup = { id: `g${Date.now()}`, name: groupId.trim() };
-                  config.groups.push(newGroup);
-                  groupId = newGroup.id;
-                }
+                // groupId 只能是分组 id（下拉保证）；历史数据若存的是名称，服务端 normalize 会映射回 id
+                const groupId = config.groups.some((g) => g.id === editing.groupId) ? editing.groupId : '';
                 const item = { ...editing, groupId, id: editing.id || `c${Date.now()}` };
                 const exists = config.items.some((i) => i.id === item.id);
                 setConfig({ ...config, items: exists ? config.items.map((i) => (i.id === item.id ? item : i)) : [...config.items, item] });
@@ -455,6 +465,11 @@ function ItemsTab({ config, setConfig }: { config: PanelConfig; setConfig: (c: P
               <span style={{ fontSize: 13, fontWeight: 600 }}>{item.title}</span>
               {item.builtin && <span style={{ fontSize: 10, padding: '1px 6px', borderRadius: 99, background: 'rgba(16,185,129,0.1)', color: '#059669' }}>内置</span>}
               {item.lanUrl && <span style={{ fontSize: 10, padding: '1px 6px', borderRadius: 99, background: 'rgba(99,102,241,0.1)', color: 'var(--mei-primary)' }}>双地址</span>}
+              {item.groupId && config.groups.find((g) => g.id === item.groupId) && (
+                <span style={{ fontSize: 10, padding: '1px 6px', borderRadius: 99, background: 'rgba(245,158,11,0.12)', color: '#d97706' }}>
+                  {config.groups.find((g) => g.id === item.groupId)!.name}
+                </span>
+              )}
               <span style={{ fontSize: 11, color: 'var(--mei-text-faint)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                 {item.url}
               </span>

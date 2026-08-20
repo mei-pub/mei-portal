@@ -388,19 +388,29 @@ export default function PortalClient({ items, panel: initialPanel }: { items: It
 
   /* ---- 管理操作 ---- */
   const upsertItem = async (item: PanelItem) => {
-    // 自动创建新分组：如果 groupId 是一个新名称（不在现有分组列表中），则自动创建分组
-    let groupId = item.groupId;
-    const groupExists = !groupId || !groupId.trim() || panel.groups.some(g => g.name === groupId.trim() || g.id === groupId);
-    if (!groupExists && groupId.trim()) {
-      const newGroup = { id: `g${Date.now()}`, name: groupId.trim() };
-      setPanel({ ...panel, groups: [...panel.groups, newGroup] });
-      groupId = newGroup.id;
+    // 分组归一：输入可能是分组 id 或分组名称（datalist 选出来的是名称）；
+    // 名称必须映射回 id，否则渲染时匹配不上分组，全部落到「常用」
+    let groupId = item.groupId.trim();
+    let groups = panel.groups;
+    if (groupId) {
+      const byId = groups.find((g) => g.id === groupId);
+      const byName = groups.find((g) => g.name === groupId);
+      if (byId) {
+        groupId = byId.id;
+      } else if (byName) {
+        groupId = byName.id;
+      } else {
+        // 自动创建新分组（必须进入保存的 next，否则只改了本地状态，服务端没有该分组）
+        const newGroup = { id: `g${Date.now()}`, name: groupId };
+        groups = [...groups, newGroup];
+        groupId = newGroup.id;
+      }
     }
-    const finalItem = { ...item, groupId: groupExists ? groupId : groupId };
+    const finalItem = { ...item, groupId };
     const exists = panel.items.some((i) => i.id === finalItem.id);
     const next = exists
-      ? { ...panel, items: panel.items.map((i) => (i.id === finalItem.id ? finalItem : i)) }
-      : { ...panel, items: [...panel.items, finalItem] };
+      ? { ...panel, groups, items: panel.items.map((i) => (i.id === finalItem.id ? finalItem : i)) }
+      : { ...panel, groups, items: [...panel.items, finalItem] };
     setEditing(null);
     savePanel(next, exists ? '已更新' : '已添加');
   };
@@ -547,13 +557,13 @@ export default function PortalClient({ items, panel: initialPanel }: { items: It
         {/* Logo + 时钟 + 监控 */}
         <section style={{ textAlign: 'center', marginBottom: 30 }}>
           <div style={{ display: 'inline-flex', alignItems: 'center', gap: 14, flexWrap: 'wrap', justifyContent: 'center' }}>
-            {style?.logoImage ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={style.logoImage} alt="logo" style={{ maxHeight: 56, maxWidth: 260, objectFit: 'contain' }} />
-            ) : style?.logoText ? (
+            {/* Logo：未设置自定义图片时用默认 Logo */}
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={style?.logoImage || '/logo.svg'} alt="logo" style={{ maxHeight: 56, maxWidth: style?.logoImage ? 260 : 56, objectFit: 'contain', borderRadius: style?.logoImage ? undefined : 14 }} />
+            {style?.logoText ? (
               <span style={{ fontSize: 32, fontWeight: 800, letterSpacing: 1, color: textColor, textShadow: '0 2px 24px rgba(99,102,241,0.25)' }}>{style.logoText}</span>
             ) : null}
-            {(style?.logoImage || style?.logoText) && <span style={{ color: 'var(--mei-text-faint)', fontSize: 20 }}>|</span>}
+            <span style={{ color: 'var(--mei-text-faint)', fontSize: 20 }}>|</span>
             <span style={{ fontVariantNumeric: 'tabular-nums', fontSize: 34, fontWeight: 250, letterSpacing: 1, color: textColor, textShadow: '0 1px 18px rgba(99,102,241,0.18)' }}>
               {clock.hh}:{clock.mm}
               {style?.clockShowSecond && <span style={{ fontSize: 20, color: 'var(--mei-text-muted)' }}>:{clock.ss}</span>}

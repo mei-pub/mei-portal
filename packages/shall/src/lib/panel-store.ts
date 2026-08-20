@@ -97,6 +97,18 @@ export function normalizeConfig(raw: unknown): PanelConfig {
   const engine = ['bing', 'google', 'baidu', 'duckduckgo'].includes(String(st.searchEngine))
     ? (st.searchEngine as PanelStyle['searchEngine'])
     : 'bing';
+  const groups = (Array.isArray(r.groups) ? r.groups : [])
+    .filter((g) => g && g.name)
+    .slice(0, 24)
+    .map((g, i) => ({ id: str(g.id, 40, `g${Date.now()}-${i}`), name: str(g.name, 24), iconStyle: ['icon', 'info'].includes(String(g.iconStyle)) ? g.iconStyle as 'icon' | 'info' : undefined, iconColor: /^#[0-9a-fA-F]{3,8}$/.test(String(g.iconColor)) ? String(g.iconColor) : '' }));
+  // 兼容历史数据：groupId 可能存的是分组“名称”（老版本按名称匹配后未转换成 id，
+  // 导致首页分组渲染全部落到「常用」），这里统一映射回分组 id
+  const resolveGroupId = (gid: string): string => {
+    if (!gid) return '';
+    if (groups.some((g) => g.id === gid)) return gid;
+    const byName = groups.find((g) => g.name === gid);
+    return byName ? byName.id : gid;
+  };
   return {
     background: {
       url: str(bg.url, 40 * 1024 * 1024),
@@ -119,16 +131,13 @@ export function normalizeConfig(raw: unknown): PanelConfig {
       footerHtml: str(st.footerHtml, 8000),
       systemMonitorShow: st.systemMonitorShow === true,
     },
-    groups: (Array.isArray(r.groups) ? r.groups : [])
-      .filter((g) => g && g.name)
-      .slice(0, 24)
-      .map((g, i) => ({ id: str(g.id, 40, `g${Date.now()}-${i}`), name: str(g.name, 24), iconStyle: ['icon', 'info'].includes(String(g.iconStyle)) ? g.iconStyle as 'icon' | 'info' : undefined, iconColor: /^#[0-9a-fA-F]{3,8}$/.test(String(g.iconColor)) ? String(g.iconColor) : '' })),
+    groups,
     items: (Array.isArray(r.items) ? r.items : [])
       .filter((i) => i && i.title && i.url)
       .slice(0, 300)
       .map((i, idx) => ({
         id: str(i.id, 40, `c${Date.now()}-${idx}`),
-        groupId: str(i.groupId, 40),
+        groupId: resolveGroupId(str(i.groupId, 40)),
         title: str(i.title, 30),
         description: str(i.description, 80),
         url: str(i.url, 40 * 1024 * 1024),

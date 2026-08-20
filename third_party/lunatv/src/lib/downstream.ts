@@ -18,6 +18,10 @@ interface ApiSearchItem {
   type_name?: string;
 }
 
+// m3u8 链接判定：允许带 query/hash（如 index.m3u8?token=…），
+// 此前用 endsWith('.m3u8') 会把这类链接全部丢掉 → 集数为 0 → 结果被过滤（“解析问题”根因）
+const M3U8_URL_TEST = /\.m3u8($|\?|#)/;
+
 /**
  * 通用的带缓存搜索函数
  */
@@ -86,7 +90,7 @@ async function searchWithCache(
             const episode_title_url = title_url.split('$');
             if (
               episode_title_url.length === 2 &&
-              episode_title_url[1].endsWith('.m3u8')
+              M3U8_URL_TEST.test(episode_title_url[1])
             ) {
               matchTitles.push(episode_title_url[0]);
               matchEpisodes.push(episode_title_url[1]);
@@ -249,7 +253,7 @@ export async function getDetailFromApi(
         const episode_title_url = title_url.split('$');
         if (
           episode_title_url.length === 2 &&
-          episode_title_url[1].endsWith('.m3u8')
+          M3U8_URL_TEST.test(episode_title_url[1])
         ) {
           matchTitles.push(episode_title_url[0]);
           matchEpisodes.push(episode_title_url[1]);

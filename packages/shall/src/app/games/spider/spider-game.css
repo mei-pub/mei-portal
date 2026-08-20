@@ -1,8 +1,0 @@
-/* 蜘蛛纸牌游戏页专属样式 —— 仅引入 Tailwind utilities，跳过 base 重置避免与 Shell globals.css 冲突
- * Tailwind preflight (base) 会重置 h1/h2/button 等元素样式，污染 Shell 门户
- * 策略：只用 utilities（工具类），preflight 在 tailwind.config.ts 的 corePlugins.preflight=false 已禁用
- * 这里不引入 @tailwind base，避免编译后的 preflight CSS 覆盖 Shell 样式
- */
-@tailwind utilities;
-
-/* 蜘蛛纸牌页面级隔离：所有 Tailwind 工具类只在 .spider-game scope 内生效 */

@@ -1,19 +1,5 @@
 [
   {
-    "id": "spider",
-    "name": "蜘蛛纸牌",
-    "description": "经典单人纸牌游戏，输入书架密码可解锁隐藏书架",
-    "icon": "game-icons:spider",
-    "category": "game",
-    "weight": 100,
-    "subdomainPrefix": "games",
-    "url": "/games/spider",
-    "endpoint": "",
-    "healthPath": "/games/spider",
-    "healthExpect": 200,
-    "hasSkin": false
-  },
-  {
     "id": "tutorial",
     "name": "小说书架",
     "description": "个人小说库",

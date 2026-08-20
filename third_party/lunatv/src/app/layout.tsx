@@ -102,6 +102,14 @@ export default async function RootLayout({
           content='width=device-width, initial-scale=1.0, viewport-fit=cover'
         />
         <link rel='apple-touch-icon' href='/icons/icon-192x192.png' />
+        {/* mei-allin：basePath=/tv 部署下，前端根相对 /api/* 请求会打到门户 Shell（404）。
+            在应用代码执行前包裹 fetch / EventSource，把根相对 /api/* 重写为 /tv/api/*；
+            已带 /tv/ 前缀或绝对 http(s) URL 不处理。 */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `(function(){var P='/tv';function rw(u){try{if(typeof u==='string'&&u.charAt(0)==='/'&&u.indexOf('/api/')===0&&u.indexOf(P+'/api/')!==0){return P+u;}if(u&&typeof u==='object'&&typeof u.url==='string'){var n=rw(u.url);if(n!==u.url){return new Request(n,u);}}}catch(e){}return u;}var of=window.fetch;window.fetch=function(i,init){return of.call(this,rw(i),init);};var OE=window.EventSource;window.EventSource=function(u,c){return new OE(rw(u),c);};window.EventSource.prototype=OE.prototype;})();`,
+          }}
+        />
         {/* 将配置序列化后直接写入脚本，浏览器端可通过 window.RUNTIME_CONFIG 获取 */}
         {/* eslint-disable-next-line @next/next/no-sync-scripts */}
         <script

@@ -1,6 +1,9 @@
 import { NextRequest } from 'next/server';
 
 // 从cookie获取认证信息 (服务端使用)
+// mei-allin：单密码（localstorage）模式下 cookie 只有 {role, password} 没有 username，
+// 而下游各 API 路由都要求 authInfo.username，否则 401 导致搜索/详情全部不可用。
+// 这里在密码有效时合成 username，保证全链路 API 兼容。
 export function getAuthInfoFromCookie(request: NextRequest): {
   password?: string;
   username?: string;
@@ -16,6 +19,13 @@ export function getAuthInfoFromCookie(request: NextRequest): {
   try {
     const decoded = decodeURIComponent(authCookie.value);
     const authData = JSON.parse(decoded);
+    if (!authData.username && authData.password) {
+      const envPassword = process.env.PASSWORD;
+      // 未配置密码（开放访问）或密码匹配时，合成 username
+      if (!envPassword || authData.password === envPassword) {
+        authData.username = process.env.USERNAME || 'admin';
+      }
+    }
     return authData;
   } catch (error) {
     return null;
