@@ -3,7 +3,7 @@
 import { useEffect, useState, useMemo, useRef } from "react";
 import Link from "next/link";
 import { useSite } from "@/components/SiteContext";
-import SitePanel, { SiteGlyph } from "@/components/SitePanel";
+import SitePanel from "@/components/SitePanel";
 
 // 书籍图标渲染：封面样式 > Logo 样式 > 默认首字母卡片（多样式同屏兼容）
 function NovelThumb({ novel, size = "md" }: { novel: { title: string; cover_url?: string; icon?: string; icon_color?: string }; size?: "md" }) {
@@ -295,18 +295,7 @@ export default function HomePage() {
       {/* 左侧站点面板：站点信息 + 站点/切换站点/添加（与书籍/章节页共享） */}
       <SitePanel />
       <main className="flex-1 max-w-6xl mx-auto w-full px-4 sm:px-6 pt-4 sm:pt-6 pb-6">
-        {/* 站点信息头（继承图标项属性的 Logo + 描述） */}
-        <div className="mb-5 flex items-center gap-4">
-          <SiteGlyph icon={site.icon} color={site.iconColor} size={52} />
-          <div className="min-w-0">
-            <h1 className="text-xl font-bold text-[var(--foreground)] truncate">{site.name}</h1>
-            {site.description ? (
-              <p className="text-[13px] text-[var(--muted)] mt-0.5 line-clamp-2">{site.description}</p>
-            ) : (
-              <p className="text-[13px] text-[var(--muted)] mt-0.5">/{site.slug} · 共 {novels.length} 本</p>
-            )}
-          </div>
-        </div>
+        {/* 站点信息集中在左侧面板展示，页面内不再重复渲染 */}
         <div className="mb-6">
           <FilterBar categories={categories} allTags={allTags} selectedCategory={selectedCategory} selectedTag={selectedTag} sortBy={sortBy} search={search} onSearch={setSearch}
             onCategoryChange={setSelectedCategory} onTagChange={setSelectedTag} onSortChange={setSortBy}

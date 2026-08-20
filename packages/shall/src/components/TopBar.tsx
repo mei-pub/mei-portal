@@ -20,13 +20,6 @@ export default function TopBar({
   transparent?: boolean;
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
-  const [loggedIn, setLoggedIn] = useState(false);
-  // 账户操作：修改密码 / 退出确认
-  const [pwOpen, setPwOpen] = useState(false);
-  const [pwForm, setPwForm] = useState({ old: '', next: '', confirm: '' });
-  const [pwHint, setPwHint] = useState('');
-  const [pwBusy, setPwBusy] = useState(false);
-  const [logoutConfirm, setLogoutConfirm] = useState(false);
   const [bgMask, setBgMask] = useState(0.35);
   const [bgBlur, setBgBlur] = useState(0);
   const bgUrlRef = useRef('');
@@ -39,12 +32,6 @@ export default function TopBar({
     window.dispatchEvent(new CustomEvent('mei-panel-change', { detail: { source: 'topbar' } }));
   }
 
-  useEffect(() => {
-    fetch('/api/auth/me', { credentials: 'include' })
-      .then((r) => r.json())
-      .then((d) => setLoggedIn(!!d.loggedIn))
-      .catch(() => {});
-  }, []);
 
   // 点击外部 / ESC 关闭下拉
   useEffect(() => {
@@ -128,35 +115,6 @@ export default function TopBar({
       </div>
     </div>
   );
-
-  function logout() {
-    fetch('/api/auth/logout', { method: 'POST', credentials: 'include' })
-      .then(() => { window.location.href = '/login'; });
-  }
-
-  function submitPassword() {
-    setPwHint('');
-    if (!pwForm.old || !pwForm.next) { setPwHint('请填写完整'); return; }
-    if (pwForm.next.length < 4) { setPwHint('新密码至少 4 位'); return; }
-    if (pwForm.next !== pwForm.confirm) { setPwHint('两次输入的新密码不一致'); return; }
-    setPwBusy(true);
-    fetch('/api/auth/password', {
-      method: 'POST',
-      credentials: 'include',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ oldPassword: pwForm.old, newPassword: pwForm.next }),
-    })
-      .then(async (r) => {
-        const j = await r.json().catch(() => ({}));
-        if (!r.ok) { setPwHint(j.error || '修改失败'); setPwBusy(false); return; }
-        setPwHint('密码已修改，即将前往重新登录…');
-        setTimeout(() => {
-          fetch('/api/auth/logout', { method: 'POST', credentials: 'include' })
-            .then(() => { window.location.href = '/login'; });
-        }, 900);
-      })
-      .catch(() => { setPwHint('网络错误，请重试'); setPwBusy(false); });
-  }
 
   return (
     <header
@@ -263,18 +221,27 @@ export default function TopBar({
               zIndex: 999,
             }}
           >
-            {/* 应用开关已移除，顶部不再展示分割线 */}
-            <div
+            {/* 设置入口（第一项，直达设置中心） */}
+            <a
+              href="/settings"
               style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8,
+                width: '100%',
                 padding: '8px 10px',
-                fontSize: 11,
-                color: 'var(--mei-text-faint)',
-                fontWeight: 700,
-                letterSpacing: 1.5,
+                borderRadius: 'var(--mei-radius-sm)',
+                color: 'var(--mei-text)',
+                fontSize: 13,
+                textDecoration: 'none',
               }}
+              onClick={() => setMenuOpen(false)}
             >
-              集成开关
-            </div>
+              <MeiIcon icon="lucide:settings" size={15} />
+              设置
+            </a>
+            <div style={{ height: 1, background: 'var(--mei-border)', margin: '6px 0' }} />
+            {/* 主页内网模式开关（分组标题已去除，逻辑不变） */}
             <PanelNetModeToggle />
             <div style={{ height: 1, background: 'var(--mei-border)', margin: '6px 0' }} />
             <div
@@ -301,227 +268,9 @@ export default function TopBar({
               背景模糊
             </div>
             {bgBlurSlider}
-
-            <a
-              href="/settings"
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 8,
-                width: '100%',
-                padding: '8px 10px',
-                borderRadius: 'var(--mei-radius-sm)',
-                color: 'var(--mei-text)',
-                fontSize: 13,
-                textDecoration: 'none',
-              }}
-              onClick={() => setMenuOpen(false)}
-            >
-              <MeiIcon icon="lucide:settings" size={15} />
-              设置集成页
-            </a>
-            {loggedIn && (
-              <>
-                <button
-                  onClick={() => { setMenuOpen(false); setPwOpen(true); setPwForm({ old: '', next: '', confirm: '' }); setPwHint(''); }}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 8,
-                    width: '100%',
-                    padding: '8px 10px',
-                    border: 'none',
-                    background: 'transparent',
-                    borderRadius: 'var(--mei-radius-sm)',
-                    color: 'var(--mei-text)',
-                    cursor: 'pointer',
-                    fontSize: 13,
-                    textAlign: 'left',
-                  }}
-                >
-                  修改账户密码
-                </button>
-                <button
-                  onClick={() => { setMenuOpen(false); setLogoutConfirm(true); }}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 8,
-                    width: '100%',
-                    padding: '8px 10px',
-                    border: 'none',
-                    background: 'transparent',
-                    borderRadius: 'var(--mei-radius-sm)',
-                    color: 'var(--mei-danger)',
-                    cursor: 'pointer',
-                    fontSize: 13,
-                    textAlign: 'left',
-                  }}
-                >
-                  退出登录
-                </button>
-              </>
-            )}
           </div>
         )}
       </div>
-
-      {/* 修改密码弹层 */}
-      {pwOpen && (
-        <div
-          style={{
-            position: 'fixed',
-            inset: 0,
-            zIndex: 1000,
-            background: 'rgba(10,14,26,0.45)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-          }}
-          onClick={(e) => { if (e.target === e.currentTarget) setPwOpen(false); }}
-        >
-          <div
-            style={{
-              width: 340,
-              maxWidth: 'calc(100vw - 32px)',
-              borderRadius: 18,
-              padding: 20,
-              background: 'rgba(255,255,255,0.97)',
-              border: '1px solid var(--mei-border-strong)',
-              boxShadow: 'var(--mei-shadow-lg)',
-            }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 12 }}>修改账户密码</div>
-            {[
-              { label: '当前密码', key: 'old' as const, ph: '输入当前密码' },
-              { label: '新密码（至少 4 位）', key: 'next' as const, ph: '输入新密码' },
-              { label: '确认新密码', key: 'confirm' as const, ph: '再次输入新密码' },
-            ].map((f) => (
-              <div key={f.key}>
-                <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: 'var(--mei-text-muted)', margin: '10px 0 4px' }}>{f.label}</label>
-                <input
-                  type="password"
-                  value={pwForm[f.key]}
-                  placeholder={f.ph}
-                  onChange={(e) => setPwForm((p) => ({ ...p, [f.key]: e.target.value }))}
-                  style={{
-                    width: '100%',
-                    boxSizing: 'border-box',
-                    padding: '9px 12px',
-                    borderRadius: 10,
-                    fontSize: 13,
-                    border: '1px solid var(--mei-border-strong)',
-                    outline: 'none',
-                    color: 'var(--mei-text)',
-                    background: '#fff',
-                  }}
-                />
-              </div>
-            ))}
-            <div style={{ minHeight: 16, fontSize: 11.5, color: 'var(--mei-danger)', marginTop: 8 }}>{pwHint}</div>
-            <button
-              onClick={submitPassword}
-              disabled={pwBusy}
-              style={{
-                width: '100%',
-                marginTop: 6,
-                padding: 10,
-                border: 'none',
-                borderRadius: 12,
-                background: 'var(--mei-gradient)',
-                color: '#fff',
-                cursor: 'pointer',
-                fontSize: 13,
-                opacity: pwBusy ? 0.6 : 1,
-              }}
-            >
-              {pwBusy ? '提交中…' : '提交修改'}
-            </button>
-            <button
-              onClick={() => setPwOpen(false)}
-              style={{
-                width: '100%',
-                marginTop: 8,
-                padding: 10,
-                borderRadius: 12,
-                border: '1px solid var(--mei-border-strong)',
-                background: 'transparent',
-                color: 'var(--mei-text-muted)',
-                cursor: 'pointer',
-                fontSize: 13,
-              }}
-            >
-              取消
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* 退出登录确认 */}
-      {logoutConfirm && (
-        <div
-          style={{
-            position: 'fixed',
-            inset: 0,
-            zIndex: 1000,
-            background: 'rgba(10,14,26,0.45)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-          }}
-          onClick={(e) => { if (e.target === e.currentTarget) setLogoutConfirm(false); }}
-        >
-          <div
-            style={{
-              width: 320,
-              maxWidth: 'calc(100vw - 32px)',
-              borderRadius: 18,
-              padding: 20,
-              background: 'rgba(255,255,255,0.97)',
-              border: '1px solid var(--mei-border-strong)',
-              boxShadow: 'var(--mei-shadow-lg)',
-            }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div style={{ fontSize: 14, fontWeight: 650, marginBottom: 6 }}>确认退出登录？</div>
-            <div style={{ fontSize: 12, color: 'var(--mei-text-muted)', marginBottom: 16 }}>
-              退出后需要重新输入密码才能进入门户。
-            </div>
-            <button
-              onClick={() => setLogoutConfirm(false)}
-              style={{
-                width: '100%',
-                padding: 10,
-                marginBottom: 8,
-                borderRadius: 12,
-                border: '1px solid var(--mei-border-strong)',
-                background: 'transparent',
-                color: 'var(--mei-text-muted)',
-                cursor: 'pointer',
-                fontSize: 13,
-              }}
-            >
-              取消
-            </button>
-            <button
-              onClick={logout}
-              style={{
-                width: '100%',
-                padding: 10,
-                border: 'none',
-                borderRadius: 12,
-                background: 'linear-gradient(135deg,#ef4444,#f97316)',
-                color: '#fff',
-                cursor: 'pointer',
-                fontSize: 13,
-              }}
-            >
-              确认退出
-            </button>
-          </div>
-        </div>
-      )}
     </header>
   );
 }

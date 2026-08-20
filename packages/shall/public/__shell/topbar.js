@@ -265,84 +265,19 @@
       bar.appendChild(spacer);
 
       // 设置齿轮下拉（内联 SVG，不依赖 emoji/CDN）
+      // 设置入口：直达设置中心（不再展开面板；内网模式开关只在首页设置面板里）
       var GEAR_SVG = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>';
-      var gearWrap = document.createElement('div');
-      gearWrap.className = 'mei-gear-wrap';
-      var gear = document.createElement('button');
+      var gear = document.createElement('a');
       gear.className = 'mei-gear';
+      gear.href = '/settings';
+      gear.title = '设置';
+      gear.setAttribute('aria-label', '设置');
       gear.innerHTML = GEAR_SVG;
       gear.style.display = 'inline-flex';
       gear.style.alignItems = 'center';
       gear.style.justifyContent = 'center';
-      gear.title = '设置';
-      var menu = document.createElement('div');
-      menu.className = 'mei-menu';
-      menu.style.display = 'none';
-      gear.onclick = function (e) {
-        e.stopPropagation();
-        var open = menu.style.display === 'block';
-        menu.style.display = open ? 'none' : 'block';
-        gear.classList.toggle('open', !open);
-      };
-      document.addEventListener('click', function () {
-        menu.style.display = 'none';
-        gear.classList.remove('open');
-      });
-      // ESC 关闭下拉
-      document.addEventListener('keydown', function (e) {
-        if (e.key === 'Escape') {
-          menu.style.display = 'none';
-          gear.classList.remove('open');
-        }
-      });
-
-      // 集成开关：主页内网模式
-      var lanRow = document.createElement('button');
-      lanRow.className = 'mei-switch' + (isLanMode() ? '' : ' off');
-      lanRow.style.flexDirection = 'column';
-      lanRow.style.alignItems = 'flex-start';
-      lanRow.style.gap = '2px';
-      var lanLabel = document.createElement('span');
-      lanLabel.className = 'mei-switch-label';
-      lanLabel.style.cssText = 'width:100%;display:flex;align-items:center;';
-      lanLabel.textContent = '主页内网模式';
-      var lanTrack = document.createElement('span');
-      lanTrack.className = 'mei-track' + (isLanMode() ? ' on' : '');
-      lanTrack.style.marginLeft = 'auto';
-      lanTrack.innerHTML = '<span class="mei-knob"></span>';
-      lanLabel.appendChild(lanTrack);
-      lanRow.appendChild(lanLabel);
-      var lanDesc = document.createElement('span');
-      lanDesc.style.cssText = 'font-size:10.5px;color:#9aa3b8;line-height:1.3;text-align:left;';
-      lanDesc.textContent = '开启后主页自定义链接优先使用内网地址打开';
-      lanRow.appendChild(lanDesc);
-      lanRow.onclick = function (e) {
-        e.stopPropagation();
-        var next = !isLanMode();
-        setLanMode(next);
-        lanRow.classList.toggle('off', !next);
-        lanTrack.classList.toggle('on', next);
-      };
-      menu.appendChild(lanRow);
-
-      var sep3 = document.createElement('div');
-      sep3.className = 'mei-menu-sep';
-      menu.appendChild(sep3);
-
-      var settings = document.createElement('a');
-      settings.className = 'mei-menu-link';
-      settings.href = '/settings';
-      settings.innerHTML = GEAR_SVG.replace('width="16" height="16"', 'width="15" height="15"') + '<span style="margin-left:8px;">设置集成页</span>';
-      menu.appendChild(settings);
-
-      gearWrap.appendChild(gear);
-      gearWrap.appendChild(menu);
-      bar.appendChild(gearWrap);
-
-      // 用户/登录区（由 renderUser 异步填充）
-      var userSlot = document.createElement('div');
-      userSlot.style.flexShrink = '0';
-      bar.appendChild(userSlot);
+      gear.style.flexShrink = '0';
+      bar.appendChild(gear);
 
       // 收起顶栏按钮
       var collapseBtn = document.createElement('button');
@@ -352,186 +287,19 @@
       collapseBtn.onclick = function (e) { e.stopPropagation(); setCollapsed(true); };
       bar.appendChild(collapseBtn);
 
-      return { bar: bar, userSlot: userSlot };
+      return { bar: bar };
     }
-
-    // 异步加载用户态（用户名点击打开账户弹层：修改密码 / 退出登录）
-    function renderUser(slot) {
-      fetch('/api/auth/me', { credentials: 'include' })
-        .then(function (r) { return r.json(); })
-        .then(function (d) {
-          slot.innerHTML = '';
-          if (d.loggedIn) {
-            var a = document.createElement('button');
-            a.className = 'mei-user';
-            a.title = '账户';
-            a.textContent = d.username || 'admin';
-            a.onclick = function (e) { e.stopPropagation(); openAccountModal(d.username || 'admin'); };
-            slot.appendChild(a);
-          } else {
-            var a2 = document.createElement('a');
-            a2.className = 'mei-login';
-            a2.href = '/login';
-            a2.textContent = '登录';
-            slot.appendChild(a2);
-          }
-        })
-        .catch(function () {});
-    }
-
-    // ---- 账户弹层（vanilla 模态：主菜单 / 退出确认 / 修改密码表单）----
-    function closeAccountModal() {
-      var m = document.getElementById('mei-account-modal');
-      if (m) m.remove();
-    }
-    function accountModalShell() {
-      closeAccountModal();
-      var overlay = document.createElement('div');
-      overlay.id = 'mei-account-modal';
-      overlay.style.cssText = 'position:fixed;inset:0;z-index:10002;background:rgba(10,14,26,0.45);display:flex;align-items:center;justify-content:center;';
-      overlay.onclick = function (e) { if (e.target === overlay) closeAccountModal(); };
-      var card = document.createElement('div');
-      card.style.cssText = 'width:320px;max-width:calc(100vw - 32px);border-radius:18px;padding:20px;' +
-        'background:rgba(255,255,255,0.96);-webkit-backdrop-filter:blur(28px) saturate(1.6);backdrop-filter:blur(28px) saturate(1.6);' +
-        'border:1px solid rgba(23,32,56,0.1);box-shadow:0 24px 64px rgba(23,32,56,0.24);color:#1c2333;font-size:13px;';
-      overlay.appendChild(card);
-      document.body.appendChild(overlay);
-      return card;
-    }
-    function accBtn(text, opts) {
-      var b = document.createElement(opts && opts.primary ? 'button' : 'button');
-      b.textContent = text;
-      b.style.cssText = 'width:100%;padding:10px 12px;border-radius:12px;cursor:pointer;font-size:13px;transition:all .15s;' +
-        (opts && opts.primary
-          ? 'border:none;background:linear-gradient(135deg,#6366f1,#a855f7);color:#fff;box-shadow:0 4px 14px rgba(99,102,241,0.35);'
-          : opts && opts.danger
-          ? 'border:1px solid rgba(239,68,68,0.35);background:rgba(239,68,68,0.06);color:#ef4444;'
-          : 'border:1px solid rgba(23,32,56,0.12);background:transparent;color:#3d465a;');
-      return b;
-    }
-    function accLabel(text) {
-      var l = document.createElement('div');
-      l.textContent = text;
-      l.style.cssText = 'display:block;font-size:12px;font-weight:600;color:#5d6778;margin:10px 0 4px;';
-      return l;
-    }
-    function accInput(type, placeholder) {
-      var i = document.createElement('input');
-      i.type = type;
-      i.placeholder = placeholder;
-      i.style.cssText = 'width:100%;box-sizing:border-box;padding:9px 12px;border-radius:10px;font-size:13px;' +
-        'border:1px solid rgba(23,32,56,0.15);outline:none;color:#1c2333;background:#fff;';
-      return i;
-    }
-    function openAccountModal(username) {
-      var card = accountModalShell();
-      var title = document.createElement('div');
-      title.style.cssText = 'font-size:15px;font-weight:700;margin-bottom:2px;';
-      title.textContent = username;
-      card.appendChild(title);
-      var sub = document.createElement('div');
-      sub.style.cssText = 'font-size:11px;color:#9aa3b8;margin-bottom:14px;';
-      sub.textContent = 'MEI ALLIN 账户';
-      card.appendChild(sub);
-
-      var pwBtn = accBtn('修改账户密码');
-      pwBtn.style.marginBottom = '8px';
-      pwBtn.onclick = function () { openPasswordForm(card); };
-      var logoutBtn = accBtn('退出登录', { danger: true });
-      logoutBtn.onclick = function () { openLogoutConfirm(card); };
-      card.appendChild(pwBtn);
-      card.appendChild(logoutBtn);
-    }
-    function openLogoutConfirm(card) {
-      card.innerHTML = '';
-      var q = document.createElement('div');
-      q.style.cssText = 'font-size:14px;font-weight:650;margin-bottom:6px;';
-      q.textContent = '确认退出登录？';
-      card.appendChild(q);
-      var d = document.createElement('div');
-      d.style.cssText = 'font-size:12px;color:#5d6778;margin-bottom:16px;';
-      d.textContent = '退出后需要重新输入密码才能进入门户。';
-      card.appendChild(d);
-      var cancel = accBtn('取消');
-      cancel.style.marginBottom = '8px';
-      cancel.onclick = closeAccountModal;
-      var ok = accBtn('确认退出', { danger: true, primary: true });
-      ok.onclick = function () {
-        fetch('/api/auth/logout', { method: 'POST', credentials: 'include' })
-          .then(function () { window.location.href = '/login'; });
-      };
-      card.appendChild(cancel);
-      card.appendChild(ok);
-    }
-    function openPasswordForm(card) {
-      card.innerHTML = '';
-      var title = document.createElement('div');
-      title.style.cssText = 'font-size:14px;font-weight:650;margin-bottom:8px;';
-      title.textContent = '修改账户密码';
-      card.appendChild(title);
-
-      card.appendChild(accLabel('当前密码'));
-      var oldPw = accInput('password', '输入当前密码');
-      card.appendChild(oldPw);
-      card.appendChild(accLabel('新密码（至少 4 位）'));
-      var newPw = accInput('password', '输入新密码');
-      card.appendChild(newPw);
-      card.appendChild(accLabel('确认新密码'));
-      var newPw2 = accInput('password', '再次输入新密码');
-      card.appendChild(newPw2);
-
-      var hint = document.createElement('div');
-      hint.style.cssText = 'min-height:16px;font-size:11.5px;color:#ef4444;margin-top:8px;';
-      card.appendChild(hint);
-
-      var cancel = accBtn('取消');
-      cancel.style.marginTop = '6px';
-      cancel.onclick = closeAccountModal;
-      var submit = accBtn('提交修改', { primary: true });
-      submit.style.marginTop = '8px';
-      submit.onclick = function () {
-        hint.textContent = '';
-        if (!oldPw.value || !newPw.value) { hint.textContent = '请填写完整'; return; }
-        if (newPw.value.length < 4) { hint.textContent = '新密码至少 4 位'; return; }
-        if (newPw.value !== newPw2.value) { hint.textContent = '两次输入的新密码不一致'; return; }
-        submit.disabled = true;
-        submit.textContent = '提交中…';
-        fetch('/api/auth/password', {
-          method: 'POST',
-          credentials: 'include',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ oldPassword: oldPw.value, newPassword: newPw.value }),
-        })
-          .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
-          .then(function (res) {
-            if (!res.ok) {
-              hint.textContent = res.j.error || '修改失败';
-              submit.disabled = false;
-              submit.textContent = '提交修改';
-              return;
-            }
-            hint.style.color = '#10b981';
-            hint.textContent = '密码已修改，正在跳转登录…';
-            setTimeout(function () {
-              fetch('/api/auth/logout', { method: 'POST', credentials: 'include' })
-                .then(function () { window.location.href = '/login'; });
-            }, 900);
-          })
-          .catch(function () {
-            hint.textContent = '网络错误，请重试';
-            submit.disabled = false;
-            submit.textContent = '提交修改';
-          });
-      };
-      card.appendChild(submit);
-      card.appendChild(cancel);
-    }
-
-    var cachedPlugins = null;
 
     // ---- 顶部导航面板：展开/收起（localStorage 记忆，收起为贴顶小把手）----
     var COLLAPSE_KEY = 'mei-topbar-collapsed';
+    // 沉浸页（影视播放页）：顶栏默认收起（不写记忆，用户可手动展开）
+    function isImmersivePath() {
+      try {
+        return APP_ID === 'lunatv' && window.location.pathname.indexOf('/tv/play') === 0;
+      } catch (e) { return false; }
+    }
     function isCollapsed() {
+      if (isImmersivePath() && localStorage.getItem(COLLAPSE_KEY) !== '0') return true;
       try { return localStorage.getItem(COLLAPSE_KEY) === '1'; } catch (e) { return false; }
     }
     function ensureToggle() {
@@ -566,7 +334,6 @@
       if (!document.getElementById('mei-topbar') && cachedPlugins) {
         var built = buildTopbar(cachedPlugins);
         document.body.insertBefore(built.bar, document.body.firstChild);
-        renderUser(built.userSlot);
         // 应用记忆的折叠态（默认展开）
         if (isCollapsed()) {
           document.getElementById('mei-topbar').style.display = 'none';

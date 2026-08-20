@@ -78,15 +78,22 @@ const ITEMS: NavItem[] = [
 export default function FloatingNav({ activePath }: { activePath?: string }) {
   const pathname = usePathname();
   const current = activePath ?? pathname;
+  // 播放/直播页默认收起（沉浸观看）；其余页默认展开。localStorage 记忆优先
+  const immersive = current.includes('/play') || current.includes('/live');
   const [open, setOpen] = useState(true);
 
-  // 初始状态：localStorage 记忆优先，默认展开
+  // 初始状态：localStorage 记忆优先；无记忆时播放页收起、其他页展开
   useEffect(() => {
     try {
       const saved = localStorage.getItem(STORE_KEY);
       if (saved === '1') setOpen(false);
-    } catch {}
-  }, []);
+      else if (saved === '0') setOpen(true);
+      else setOpen(!immersive);
+    } catch {
+      setOpen(!immersive);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [current]);
 
   const toggle = (next: boolean) => {
     setOpen(next);
@@ -108,6 +115,18 @@ export default function FloatingNav({ activePath }: { activePath?: string }) {
     </button>
   ) : (
     <div className='fixed left-3 top-1/2 z-40 hidden -translate-y-1/2 md:flex md:flex-col md:items-center md:gap-1 md:rounded-2xl md:border md:border-black/10 md:bg-white/75 md:p-1.5 md:shadow-lg md:backdrop-blur-xl dark:border-white/10 dark:bg-gray-900/70'>
+      {/* 应用信息区：Logo + 名称（垂直布局，与其他应用面板统一） */}
+      <Link
+        href='/'
+        title='影视门户'
+        className='flex w-[64px] flex-col items-center gap-1 rounded-xl px-1 py-1.5 transition-colors hover:bg-gray-900/5 dark:hover:bg-white/10'
+      >
+        <span className='flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-green-500 to-emerald-600 text-white shadow-md'>
+          <svg width='18' height='18' viewBox='0 0 24 24' fill='none' stroke='currentColor' strokeWidth='2' strokeLinecap='round' strokeLinejoin='round'><rect width='20' height='15' x='2' y='7' rx='2' ry='2'/><polyline points='17 2 12 7 7 2'/></svg>
+        </span>
+        <span className='w-full truncate text-center text-[10px] font-medium leading-tight text-gray-700 dark:text-gray-300'>影视门户</span>
+      </Link>
+      <div className='my-0.5 h-px w-8 bg-black/10 dark:bg-white/10' />
       {ITEMS.map((item) => {
         const isActive =
           item.href === '/' ? current === '/' : current.startsWith(item.href.split('?')[0]);

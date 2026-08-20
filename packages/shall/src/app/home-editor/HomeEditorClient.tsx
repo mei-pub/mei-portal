@@ -3,12 +3,11 @@
 // 分区：风格设置（背景/Logo/时钟/搜索/图标样式/边距/页脚/监控）/ 分组管理 / 图标项管理（图标上传/拖拽排序/双地址）/ 导入导出
 import { useCallback, useEffect, useRef, useState } from 'react';
 import MeiIcon from '@/components/MeiIcon';
-import ItemIconPicker, { isImgIcon, contrastColor } from '@/components/ItemIconPicker';
 import 'iconify-icon';
 import type { PanelConfig, PanelItem, PanelGroup } from '@/lib/panel-store';
 import { PRESET_GROUP_IDS } from '@/lib/panel-presets';
 
-type Tab = 'style' | 'groups' | 'items' | 'backup';
+type Tab = 'style' | 'groups' | 'backup';
 
 export default function HomeEditorClient() {
   const [config, setConfig] = useState<PanelConfig | null>(null);
@@ -55,13 +54,12 @@ export default function HomeEditorClient() {
   const tabs: { id: Tab; label: string; icon: string; desc: string }[] = [
     { id: 'style', label: '风格设置', icon: 'lucide:palette', desc: '背景 / Logo / 布局' },
     { id: 'groups', label: '分组管理', icon: 'lucide:folder', desc: '分组与拖拽排序' },
-    { id: 'items', label: '图标项管理', icon: 'lucide:layout-grid', desc: '应用与链接项' },
     { id: 'backup', label: '导入导出', icon: 'lucide:database', desc: '配置备份恢复' },
   ];
 
   return (
     <div style={{ minHeight: '100vh', background: 'var(--mei-bg)', color: 'var(--mei-text)' }}>
-      <div style={{ maxWidth: 920, margin: '0 auto', padding: '28px 20px 120px' }}>
+      <div style={{ maxWidth: 1080, margin: '0 auto', padding: '28px 24px 120px' }}>
         {/* 页头 */}
         <div style={{ marginBottom: 22 }}>
           <h1 style={{ fontSize: 22, fontWeight: 800, margin: '0 0 6px', letterSpacing: 0.3 }}>主页设置</h1>
@@ -111,7 +109,6 @@ export default function HomeEditorClient() {
           <div style={{ flex: 1, minWidth: 0 }}>
             {tab === 'style' && <StyleTab config={config} setConfig={setConfig} />}
             {tab === 'groups' && <GroupsTab config={config} setConfig={setConfig} />}
-            {tab === 'items' && <ItemsTab config={config} setConfig={setConfig} />}
             {tab === 'backup' && <BackupTab config={config} reload={reload} />}
           </div>
         </div>
@@ -391,169 +388,9 @@ function GroupsTab({ config, setConfig }: { config: PanelConfig; setConfig: (c: 
   );
 }
 
-/* ==================== 图标项管理 ==================== */
-function ItemsTab({ config, setConfig }: { config: PanelConfig; setConfig: (c: PanelConfig) => void }) {
-  const [editing, setEditing] = useState<PanelItem | null>(null);
-  const dragIdx = useRef<number | null>(null);
-
-  const input: React.CSSProperties = {
-    width: '100%', boxSizing: 'border-box', padding: '8px 12px', borderRadius: 10,
-    fontSize: 13, border: '1px solid var(--mei-border-strong)', outline: 'none',
-    color: 'var(--mei-text)', background: '#fff',
-  };
-
-  const readImageFile = (file: File, cb: (dataUrl: string) => void) => {
-    if (file.size > 30 * 1024 * 1024) { alert('图标过大（>30MB）'); return; }
-    const reader = new FileReader();
-    reader.onload = () => cb(String(reader.result));
-    reader.readAsDataURL(file);
-  };
-
-  const moveItem = (from: number, to: number) => {
-    if (to < 0 || to >= config.items.length) return;
-    const items = [...config.items];
-    const [it] = items.splice(from, 1);
-    items.splice(to, 0, it);
-    setConfig({ ...config, items });
-  };
-
-  const isImg = (s: string) => /^https?:\/\//.test(s) || s.startsWith('data:image/');
-
-  return (
-    <section style={{ background: 'var(--mei-surface)', border: '1px solid var(--mei-border)', borderRadius: 'var(--mei-radius)', padding: 16 }}>
-      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}>
-        <button
-          onClick={() => setEditing({ id: '', groupId: '', title: '', description: '', url: '', lanUrl: '', icon: 'lucide:link', iconColor: '' })}
-          style={{ padding: '6px 16px', borderRadius: 'var(--mei-radius-full)', border: '1px solid var(--mei-primary)', background: 'transparent', color: 'var(--mei-primary)', fontSize: 13, cursor: 'pointer' }}
-        >
-          + 添加图标项
-        </button>
-      </div>
-
-      {editing && (
-        <div style={{ border: '1px dashed var(--mei-border-strong)', borderRadius: 12, padding: 14, marginBottom: 14, display: 'grid', gap: 8 }}>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-            <input style={input} placeholder="标题（必填）" value={editing.title} onChange={(e) => setEditing({ ...editing, title: e.target.value })} />
-            {/* 分组用下拉（值为分组 id，避免名称/id 混淆导致首页渲染不到分组） */}
-            <select
-              style={input}
-              value={config.groups.some((g) => g.id === editing.groupId) ? editing.groupId : ''}
-              onChange={(e) => {
-                if (e.target.value === '__new__') {
-                  const n = prompt('新分组名称');
-                  if (n && n.trim()) {
-                    const g = { id: `g${Date.now()}`, name: n.trim() };
-                    setConfig({ ...config, groups: [...config.groups, g] });
-                    setEditing({ ...editing, groupId: g.id });
-                  }
-                } else {
-                  setEditing({ ...editing, groupId: e.target.value });
-                }
-              }}
-            >
-              <option value=''>未分组</option>
-              {config.groups.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}
-              <option value='__new__'>＋ 新建分组…</option>
-            </select>
-          </div>
-          <input style={input} placeholder="描述（可选）" value={editing.description} onChange={(e) => setEditing({ ...editing, description: e.target.value })} />
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-            <input style={input} placeholder="地址（https://… 或 /path，必填）" value={editing.url} onChange={(e) => setEditing({ ...editing, url: e.target.value })} />
-            <input style={input} placeholder="内网地址（可选，内网模式优先）" value={editing.lanUrl} onChange={(e) => setEditing({ ...editing, lanUrl: e.target.value })} />
-          </div>
-          <div>
-            <label style={{ display: 'block', fontSize: 12, color: 'var(--mei-text-muted)', marginBottom: 4 }}>图标（图标库 / 文字 / 图片，含底色）</label>
-            <ItemIconPicker
-              icon={editing.icon}
-              iconColor={editing.iconColor || ''}
-              title={editing.title}
-              itemUrl={editing.url}
-              onIcon={(icon) => setEditing({ ...editing, icon })}
-              onColor={(c) => setEditing({ ...editing, iconColor: c })}
-            />
-          </div>
-          <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-            <button onClick={() => setEditing(null)} style={{ padding: '7px 16px', borderRadius: 10, border: '1px solid var(--mei-border)', background: 'transparent', fontSize: 13, cursor: 'pointer' }}>取消</button>
-            <button
-              onClick={() => {
-                if (!editing.title.trim() || !editing.url.trim()) return;
-                // groupId 只能是分组 id（下拉保证）；历史数据若存的是名称，服务端 normalize 会映射回 id
-                const groupId = config.groups.some((g) => g.id === editing.groupId) ? editing.groupId : '';
-                const item = { ...editing, groupId, id: editing.id || `c${Date.now()}` };
-                const exists = config.items.some((i) => i.id === item.id);
-                setConfig({ ...config, items: exists ? config.items.map((i) => (i.id === item.id ? item : i)) : [...config.items, item] });
-                setEditing(null);
-              }}
-              style={{ padding: '7px 16px', borderRadius: 10, border: 'none', background: 'var(--mei-gradient)', color: '#fff', fontSize: 13, cursor: 'pointer' }}
-            >
-              {editing.id ? '保存修改' : '添加'}
-            </button>
-          </div>
-        </div>
-      )}
-
-      {config.items.length === 0 ? (
-        <p style={{ fontSize: 12, color: 'var(--mei-text-muted)', textAlign: 'center', padding: '14px 0' }}>
-          暂无自定义图标项（内置应用由系统自动管理）
-        </p>
-      ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-          {config.items.map((item, idx) => (
-            <div
-              key={item.id}
-              draggable
-              onDragStart={() => { dragIdx.current = idx; }}
-              onDragOver={(e) => e.preventDefault()}
-              onDrop={() => { if (dragIdx.current !== null && dragIdx.current !== idx) moveItem(dragIdx.current, idx); dragIdx.current = null; }}
-              style={{
-                display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px',
-                borderRadius: 10, border: '1px solid var(--mei-border)', background: 'rgba(255,255,255,0.6)',
-                cursor: 'grab',
-              }}
-            >
-              <span style={{ color: 'var(--mei-text-faint)', fontSize: 11, cursor: 'grab' }} title="拖拽排序">⠿</span>
-              <span
-                style={{
-                  width: 26, height: 26, borderRadius: 8, display: 'inline-flex',
-                  alignItems: 'center', justifyContent: 'center', flexShrink: 0,
-                  background: item.iconColor === 'gradient' ? 'linear-gradient(135deg,#6366f1,#a855f7)' : (item.iconColor || (item.builtin ? 'linear-gradient(135deg,#6366f1,#a855f7)' : '#ffffff')),
-                  color: contrastColor(item.iconColor || (item.builtin ? 'gradient' : '#ffffff')),
-                  border: (!item.iconColor || item.iconColor === '#ffffff') && !item.builtin ? '1px solid rgba(23,32,56,0.1)' : undefined,
-                }}
-              >
-                {isImg(item.icon)
-                  // eslint-disable-next-line @next/next/no-img-element
-                  ? <img src={item.icon} alt="" style={{ width: 16, height: 16, objectFit: 'contain' }} />
-                  : <MeiIcon icon={item.icon || 'lucide:link'} size={15} />}
-              </span>
-              <span style={{ fontSize: 13, fontWeight: 600 }}>{item.title}</span>
-              {item.builtin && <span style={{ fontSize: 10, padding: '1px 6px', borderRadius: 99, background: 'rgba(16,185,129,0.1)', color: '#059669' }}>内置</span>}
-              {item.lanUrl && <span style={{ fontSize: 10, padding: '1px 6px', borderRadius: 99, background: 'rgba(99,102,241,0.1)', color: 'var(--mei-primary)' }}>双地址</span>}
-              {item.groupId && config.groups.find((g) => g.id === item.groupId) && (
-                <span style={{ fontSize: 10, padding: '1px 6px', borderRadius: 99, background: 'rgba(245,158,11,0.12)', color: '#d97706' }}>
-                  {config.groups.find((g) => g.id === item.groupId)!.name}
-                </span>
-              )}
-              <span style={{ fontSize: 11, color: 'var(--mei-text-faint)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                {item.url}
-              </span>
-              <button onClick={() => setEditing(item)} style={{ border: 'none', background: 'transparent', color: 'var(--mei-primary)', fontSize: 12, cursor: 'pointer' }}>编辑</button>
-              <button
-                onClick={() => { if (confirm(`删除「${item.title}」？`)) setConfig({ ...config, items: config.items.filter((i) => i.id !== item.id) }); }}
-                style={{ border: 'none', background: 'transparent', color: 'var(--mei-danger)', fontSize: 12, cursor: 'pointer' }}
-              >
-                删除
-              </button>
-            </div>
-          ))}
-        </div>
-      )}
-    </section>
-  );
-}
-
-/* ==================== 导入导出 ==================== */
+/* ==================== 导入导出（两个子 tab，按方式给出行动路径） ==================== */
 function BackupTab({ config, reload }: { config: PanelConfig; reload: () => void }) {
+  const [sub, setSub] = useState<'export' | 'import'>('export');
   const [msg, setMsg] = useState('');
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -565,7 +402,7 @@ function BackupTab({ config, reload }: { config: PanelConfig; reload: () => void
         method: 'PUT', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify(parsed),
       });
       if (!res.ok) { setMsg('导入失败：格式不正确'); return; }
-      setMsg('导入成功');
+      setMsg('导入成功，刷新生效');
       reload();
     } catch {
       setMsg('导入失败：JSON 解析错误');
@@ -579,25 +416,69 @@ function BackupTab({ config, reload }: { config: PanelConfig; reload: () => void
     a.download = `mei-panel-backup-${new Date().toISOString().slice(0, 10)}.json`;
     a.click();
     URL.revokeObjectURL(a.href);
+    setMsg('已导出 JSON 配置文件');
   }
 
-  const btn: React.CSSProperties = {
-    padding: '10px 20px', borderRadius: 'var(--mei-radius-full)', fontSize: 13,
-    cursor: 'pointer', border: '1px solid var(--mei-border-strong)', background: 'transparent', color: 'var(--mei-text)',
+  const card: React.CSSProperties = {
+    background: 'var(--mei-surface)', border: '1px solid var(--mei-border)',
+    borderRadius: 'var(--mei-radius-lg)', padding: 18, boxShadow: 'var(--mei-shadow-sm)',
+  };
+  const btnPrimary: React.CSSProperties = {
+    padding: '10px 22px', borderRadius: 'var(--mei-radius-full)', fontSize: 13, fontWeight: 600,
+    cursor: 'pointer', border: 'none', background: 'var(--mei-gradient)', color: '#fff', boxShadow: 'var(--mei-glow)',
   };
 
   return (
-    <section style={{ background: 'var(--mei-surface)', border: '1px solid var(--mei-border)', borderRadius: 'var(--mei-radius)', padding: 16 }}>
-      <h2 style={{ fontSize: 14, fontWeight: 650, margin: '0 0 6px' }}>配置备份与恢复</h2>
+    <section style={card}>
+      <h2 style={{ fontSize: 15, fontWeight: 700, margin: '0 0 4px' }}>配置备份与恢复</h2>
       <p style={{ fontSize: 12, color: 'var(--mei-text-muted)', margin: '0 0 14px' }}>
-        导出当前主页配置（风格/分组/图标项）为 JSON；导入将覆盖现有配置。
+        备份内容：主页风格、分组与图标项配置（JSON 格式）。
       </p>
-      <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-        <button onClick={doExport} style={{ ...btn, border: 'none', background: 'var(--mei-gradient)', color: '#fff' }}>导出配置</button>
-        <button onClick={() => fileRef.current?.click()} style={btn}>导入配置</button>
-        <input ref={fileRef} type="file" accept="application/json,.json" hidden onChange={(e) => { const f = e.target.files?.[0]; if (f) doImport(f); }} />
+      {/* 子 tab */}
+      <div style={{ display: 'inline-flex', gap: 4, padding: 4, borderRadius: 'var(--mei-radius-full)', background: 'rgba(23,32,56,0.06)', marginBottom: 16 }}>
+        {(['export', 'import'] as const).map((k) => (
+          <button
+            key={k}
+            onClick={() => { setSub(k); setMsg(''); }}
+            style={{
+              padding: '6px 18px', borderRadius: 'var(--mei-radius-full)', border: 'none', fontSize: 13, cursor: 'pointer',
+              background: sub === k ? '#fff' : 'transparent',
+              color: sub === k ? 'var(--mei-text)' : 'var(--mei-text-muted)',
+              fontWeight: sub === k ? 650 : 400,
+              boxShadow: sub === k ? '0 1px 4px rgba(23,32,56,0.12)' : 'none',
+              transition: 'var(--mei-transition)',
+            }}
+          >
+            {k === 'export' ? '导出' : '导入'}
+          </button>
+        ))}
       </div>
-      {msg && <p style={{ fontSize: 12, color: 'var(--mei-text-muted)', marginTop: 10 }}>{msg}</p>}
+
+      {sub === 'export' ? (
+        <div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 14px', borderRadius: 12, border: '1px solid var(--mei-border)', background: 'rgba(255,255,255,0.6)', marginBottom: 12 }}>
+            <MeiIcon icon="lucide:file-json" size={18} />
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: 13, fontWeight: 600 }}>导出为 JSON 文件</div>
+              <div style={{ fontSize: 11.5, color: 'var(--mei-text-muted)', marginTop: 2 }}>下载当前全部主页配置，可用于迁移或存档</div>
+            </div>
+            <button onClick={doExport} style={btnPrimary}>立即导出</button>
+          </div>
+        </div>
+      ) : (
+        <div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 14px', borderRadius: 12, border: '1px solid var(--mei-border)', background: 'rgba(255,255,255,0.6)', marginBottom: 12 }}>
+            <MeiIcon icon="lucide:upload" size={18} />
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: 13, fontWeight: 600 }}>从 JSON 文件导入</div>
+              <div style={{ fontSize: 11.5, color: 'var(--mei-text-muted)', marginTop: 2 }}>选择之前导出的配置文件，导入将覆盖现有配置</div>
+            </div>
+            <button onClick={() => fileRef.current?.click()} style={btnPrimary}>选择文件</button>
+            <input ref={fileRef} type="file" accept="application/json,.json" hidden onChange={(e) => { const f = e.target.files?.[0]; if (f) doImport(f); }} />
+          </div>
+        </div>
+      )}
+      {msg && <p style={{ fontSize: 12, color: msg.includes('失败') ? 'var(--mei-danger)' : 'var(--mei-success)', marginTop: 4 }}>{msg}</p>}
     </section>
   );
 }

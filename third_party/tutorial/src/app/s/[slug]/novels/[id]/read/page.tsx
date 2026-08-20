@@ -641,7 +641,8 @@ export default function ReaderPage() {
   }
 
   return (
-    <div className="h-screen flex flex-col overflow-hidden" style={{ background: theme.bg, color: theme.text }}>
+    // fixed inset-0：覆盖门户注入顶栏区域，避免顶部留白（沉浸式阅读）
+    <div className="fixed inset-0 z-[10090] flex flex-col overflow-hidden" style={{ background: theme.bg, color: theme.text }}>
       {/* Top Bar */}
       <div className={`shrink-0 border-b px-4 py-2 flex items-center justify-between text-sm transition-all duration-300 ${showBars ? "translate-y-0 opacity-100" : "-translate-y-full opacity-0 h-0 py-0 overflow-hidden"}`}
         style={{ background: theme.bg, borderColor: theme.text + "20" }}>

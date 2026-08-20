@@ -72,45 +72,39 @@ export default function SitePanel() {
     );
   }
 
+  // 统一应用面板：站点信息区（Logo+名称垂直布局，首个入口上方）+ 图标入口（只展示图标，title 提示）
   return (
-    <div className="fixed left-2.5 top-1/2 -translate-y-1/2 z-40 w-44 rounded-2xl bg-white/85 backdrop-blur-md border border-[var(--border)] shadow-lg overflow-hidden">
-      {/* 站点信息（继承图标项属性渲染） */}
-      <div className="px-3 pt-3 pb-2.5 border-b border-[var(--border)]">
-        <div className="flex items-center gap-2.5">
-          <SiteGlyph icon={site.icon} color={site.iconColor} size={30} />
-          <div className="min-w-0">
-            <div className="text-[13px] font-semibold text-[var(--foreground)] truncate">{site.name}</div>
-            <div className="text-[10px] text-[var(--muted)] truncate">/{site.slug} · {site.type === "secret" ? "隐秘站点" : "普通站点"}</div>
-          </div>
-        </div>
-        {site.description && (
-          <p className="mt-1.5 text-[11px] leading-relaxed text-[var(--muted)] line-clamp-2">{site.description}</p>
-        )}
-      </div>
+    <div className="fixed left-3 top-1/2 -translate-y-1/2 z-40 flex flex-col items-center gap-1 rounded-2xl border border-black/10 bg-white/75 p-1.5 shadow-lg backdrop-blur-xl w-[76px]">
+      {/* 站点信息区：Logo + 名称（垂直布局） */}
+      <Link href={`/s/${site.slug}`} title={`${site.name}（${site.type === "secret" ? "隐秘站点" : "普通站点"}）${site.description ? "\n" + site.description : ""}`}
+        className="flex flex-col items-center gap-1 px-1 py-1.5 rounded-xl hover:bg-black/5 transition-colors w-full">
+        <SiteGlyph icon={site.icon} color={site.iconColor} size={34} />
+        <span className="text-[10px] leading-tight font-medium text-[var(--foreground)] w-full text-center truncate">{site.name}</span>
+      </Link>
+      <div className="h-px w-8 bg-black/10 my-0.5" />
 
-      {/* 操作项 */}
-      <div className="p-1.5">
-        <Link href={`/s/${site.slug}`} className="flex items-center gap-2 px-2.5 py-2 rounded-xl text-[12.5px] text-[var(--foreground)] hover:bg-[var(--accent)] transition-colors">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="text-[var(--muted)]"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2zM22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z" /></svg>
-          站点
-        </Link>
-        <button
-          onClick={() => { setSwitchOpen(!switchOpen); loadOthers(); }}
-          className="w-full flex items-center gap-2 px-2.5 py-2 rounded-xl text-[12.5px] text-[var(--foreground)] hover:bg-[var(--accent)] transition-colors"
-        >
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="text-[var(--muted)]"><path d="m17 2 4 4-4 4"/><path d="M3 11v-1a4 4 0 0 1 4-4h14"/><path d="m7 22-4-4 4-4"/><path d="M21 13v1a4 4 0 0 1-4 4H3"/></svg>
-          切换站点
-          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.4} strokeLinecap="round" strokeLinejoin="round" className={`ml-auto text-[var(--muted)] transition-transform ${switchOpen ? "rotate-180" : ""}`}><path d="m6 9 6 6 6-6"/></svg>
+      {/* 入口：站点 */}
+      <Link href={`/s/${site.slug}`} title="站点首页"
+        className="flex h-10 w-10 items-center justify-center rounded-xl text-gray-600 hover:bg-black/5 hover:text-indigo-600 transition-colors">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2zM22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z" /></svg>
+      </Link>
+
+      {/* 入口：切换站点（弹出子面板） */}
+      <div className="relative">
+        <button onClick={() => { setSwitchOpen(!switchOpen); loadOthers(); }} title="切换站点"
+          className={`flex h-10 w-10 items-center justify-center rounded-xl transition-colors ${switchOpen ? "bg-indigo-100 text-indigo-600" : "text-gray-600 hover:bg-black/5 hover:text-indigo-600"}`}>
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><path d="m17 2 4 4-4 4"/><path d="M3 11v-1a4 4 0 0 1 4-4h14"/><path d="m7 22-4-4 4-4"/><path d="M21 13v1a4 4 0 0 1-4 4H3"/></svg>
         </button>
         {switchOpen && (
-          <div className="mt-1 mb-1 rounded-xl bg-gray-50 border border-[var(--border)] overflow-hidden">
+          <div className="absolute left-full top-0 ml-2 w-44 rounded-2xl border border-black/10 bg-white/90 backdrop-blur-xl shadow-xl p-1.5 z-50">
             {others === null ? (
               <p className="px-3 py-2.5 text-[11px] text-[var(--muted)]">加载中...</p>
             ) : others.length === 0 ? (
               <p className="px-3 py-2.5 text-[11px] text-[var(--muted)]">没有其他站点可以切换</p>
             ) : (
               others.map((s) => (
-                <Link key={s.slug} href={`/s/${s.slug}`} className="flex items-center gap-2 px-3 py-2 text-[12px] text-[var(--foreground)] hover:bg-[var(--accent)] transition-colors">
+                <Link key={s.slug} href={`/s/${s.slug}`} title={s.name}
+                  className="flex items-center gap-2 px-2.5 py-2 rounded-xl text-[12px] text-[var(--foreground)] hover:bg-[var(--accent)] transition-colors">
                   <SiteGlyph icon={s.icon} color={s.iconColor} size={16} />
                   <span className="truncate">{s.name}</span>
                   {s.type === "secret" && <span className="ml-auto text-[9px] px-1 py-0.5 rounded-full bg-purple-100 text-purple-600 flex-shrink-0">隐</span>}
@@ -119,14 +113,17 @@ export default function SitePanel() {
             )}
           </div>
         )}
-        <Link href={`/s/${site.slug}/novels/new`} className="flex items-center gap-2 px-2.5 py-2 rounded-xl text-[12.5px] text-[var(--foreground)] hover:bg-[var(--accent)] transition-colors">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="text-[var(--muted)]"><path d="M12 5v14M5 12h14"/></svg>
-          添加
-        </Link>
       </div>
 
-      <button onClick={() => toggle(false)} title="收起"
-        className="w-full py-1.5 flex items-center justify-center text-[var(--muted)] hover:bg-[var(--accent)] transition-colors border-t border-[var(--border)]">
+      {/* 入口：添加（新小说） */}
+      <Link href={`/s/${site.slug}/novels/new`} title="添加小说"
+        className="flex h-10 w-10 items-center justify-center rounded-xl text-gray-600 hover:bg-black/5 hover:text-indigo-600 transition-colors">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><path d="M12 5v14M5 12h14"/></svg>
+      </Link>
+
+      <div className="h-px w-8 bg-black/10 my-0.5" />
+      <button onClick={() => toggle(false)} title="收起面板"
+        className="flex h-7 w-7 items-center justify-center rounded-lg text-gray-400 hover:bg-black/5 hover:text-gray-600 transition-colors">
         <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M15 6l-6 6 6 6" /></svg>
       </button>
     </div>

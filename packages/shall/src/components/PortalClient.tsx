@@ -566,15 +566,6 @@ export default function PortalClient({ items, panel: initialPanel }: { items: It
   const textColor = style?.iconTextColor || undefined;
 
   const iconMode = style?.iconStyle === 'icon';
-  // 分组标题行操作按钮样式（新增 / 布局切换常驻入口）
-  const groupOpBtn: React.CSSProperties = {
-    display: 'inline-flex', alignItems: 'center', gap: 4,
-    border: '1px solid var(--mei-border)', background: 'var(--mei-surface)',
-    backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)',
-    borderRadius: 'var(--mei-radius-full)', padding: '4px 10px',
-    color: 'var(--mei-text-muted)', fontSize: 11.5, cursor: 'pointer',
-    transition: 'var(--mei-transition)',
-  };
   const renderCard = (item: PanelItem, pageIconMode: boolean) => (
     <UnifiedCard
       key={item.id}
@@ -732,13 +723,13 @@ export default function PortalClient({ items, panel: initialPanel }: { items: It
                 onDragOver={(e) => e.preventDefault()}
                 onDrop={() => moveToGroupEnd(page.id === 'default' ? '' : page.id)}
               >
-                {/* 分组标题行：左侧名称，右侧常驻操作入口（布局切换 + 新增） */}
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 'var(--mei-space-3)' }}>
+                {/* 分组标题行：名称 + hover 显示的操作区（布局切换 toggle + 新增图标按钮） */}
+                <div className="mei-group-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 'var(--mei-space-3)' }}>
                   <span style={{ fontSize: 12, letterSpacing: 2, color: 'var(--mei-text-faint)' }}>
                     {page.name} · {page.items.length}
                     {lanMode && <span style={{ marginLeft: 8, fontSize: 11, letterSpacing: 0, color: 'var(--mei-primary)' }}>内网模式</span>}
                   </span>
-                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                  <span className="mei-group-ops" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
                     <button
                       onClick={() => {
                         if (page.group) {
@@ -750,19 +741,19 @@ export default function PortalClient({ items, panel: initialPanel }: { items: It
                           savePanel({ ...panel, style: { ...panel.style, iconStyle: next as 'icon' | 'info' } }, next === 'icon' ? '已切换为图标布局' : '已切换为卡片布局');
                         }
                       }}
-                      title={pageIconMode ? '切换为卡片布局' : '切换为图标布局'}
-                      style={groupOpBtn}
+                      title={pageIconMode ? '当前：图标布局（点击切换为卡片布局）' : '当前：卡片布局（点击切换为图标布局）'}
+                      className="mei-layout-toggle"
+                      style={{ cursor: 'pointer' }}
                     >
-                      <MeiIcon icon={pageIconMode ? 'lucide:layout-grid' : 'lucide:layout-template'} size={13} />
-                      {pageIconMode ? '卡片布局' : '图标布局'}
+                      <span className={pageIconMode ? '' : 'on'}><MeiIcon icon="lucide:layout-template" size={12} /></span>
+                      <span className={pageIconMode ? 'on' : ''}><MeiIcon icon="lucide:layout-grid" size={12} /></span>
                     </button>
                     <button
                       onClick={() => setEditing({ id: '', groupId: page.id === 'default' ? '' : page.id, title: '', description: '', url: '', lanUrl: '', icon: 'lucide:link', iconColor: '' })}
                       title="新增图标项"
-                      style={groupOpBtn}
+                      className="mei-group-op-btn"
                     >
                       <MeiIcon icon="lucide:plus" size={13} />
-                      新增
                     </button>
                   </span>
                 </div>

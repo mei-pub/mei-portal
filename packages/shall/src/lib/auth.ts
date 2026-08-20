@@ -96,6 +96,15 @@ export function getUsername(): string | null {
   return loadUser()?.username || null;
 }
 
+/** 修改账户名（需旧密码校验；改名后旧会话失效需重新登录） */
+export function changeUsername(oldPassword: string, newUsername: string): boolean {
+  const u = loadUser();
+  if (!u || !newUsername || !/^[a-zA-Z0-9_-]{2,32}$/.test(newUsername)) return false;
+  if (hashPassword(oldPassword, u.salt) !== u.hash) return false;
+  saveUser({ ...u, username: newUsername });
+  return true;
+}
+
 export function isInitialized(): boolean {
   return loadUser() !== null;
 }

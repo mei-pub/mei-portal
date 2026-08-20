@@ -1,11 +1,12 @@
-// 设置集成页 —— 左栏数据源：按系统分组，挂载各子应用的设置入口
-// url 为同源子路径深链，统一带 ?meiEmbed=1 使 nginx 不注入门户顶栏
+// 设置中心 —— 左栏数据源：应用设置 / 文档与帮助 / 系统设置 三大分组
+// 全部原生化：入口为直达链接（不再 iframe 内嵌）
 
 export interface SettingEntry {
   id: string;
   name: string;
-  url: string;
+  url: string; // 直达原生页面；action='logout' 时为弹层动作
   icon: string;
+  action?: 'logout';
 }
 
 export interface SettingGroup {
@@ -15,76 +16,48 @@ export interface SettingGroup {
   entries: SettingEntry[];
 }
 
-// 分组顺序：主页面板 → 影视门户 → 音乐播放 → 媒体下载 → 网盘搜索 → AI 绘图 → 小说阅读 → 内网穿透
 export const SETTING_GROUPS: SettingGroup[] = [
   {
-    id: 'sun-panel',
-    label: '主页面板',
-    icon: 'lucide:layout-dashboard',
+    id: 'apps',
+    label: '应用设置',
+    icon: 'lucide:layout-grid',
     entries: [
-      { id: 'panel-settings', name: '主页设置', url: '/home-editor?meiEmbed=1', icon: 'lucide:settings-2' },
+      { id: 'panel-settings', name: '主页设置', url: '/home-editor', icon: 'lucide:layout-dashboard' },
+      { id: 'tv-settings', name: '影视设置', url: '/tv/mei-settings', icon: 'lucide:tv' },
+      { id: 'tv-sources', name: '影视源管理', url: '/tv/mei-sources', icon: 'lucide:database' },
+      { id: 'solara-settings', name: '音乐播放设置', url: '/music/?meiSettings=1', icon: 'lucide:music' },
+      { id: 'mediago-settings', name: '媒体下载设置', url: '/media/settings', icon: 'lucide:download' },
+      { id: 'pansou-config', name: '网盘搜索设置', url: '/search/?view=config', icon: 'lucide:search' },
+      { id: 'draw-settings', name: 'AI 绘图设置', url: '/draw/profile', icon: 'lucide:pen-tool' },
+      { id: 'novels-manage', name: '小说站点管理', url: '/novels/manage', icon: 'lucide:book-open' },
+      { id: 'novels-backup', name: '站点数据备份', url: '/novels/backup', icon: 'lucide:database' },
+      { id: 'link-server', name: '隧道服务器设置', url: '/link/?meiView=settings', icon: 'lucide:server' },
+      { id: 'link-logs', name: '隧道运行日志', url: '/link/?meiView=logs', icon: 'lucide:scroll-text' },
     ],
   },
   {
-    id: 'lunatv',
-    label: '影视门户',
-    icon: 'lucide:tv',
-    entries: [
-      { id: 'tv-settings', name: '影视设置', url: '/tv/mei-settings?meiEmbed=1', icon: 'lucide:settings-2' },
-      { id: 'tv-sources', name: '影视源管理', url: '/tv/mei-sources?meiEmbed=1', icon: 'lucide:database' },
-    ],
-  },
-  {
-    id: 'solara',
-    label: '音乐播放',
-    icon: 'lucide:music',
-    entries: [
-      { id: 'solara-settings', name: '音乐播放器设置', url: '/music/?meiSettings=1&meiEmbed=1', icon: 'lucide:settings-2' },
-    ],
-  },
-  {
-    id: 'mediago',
-    label: '媒体下载',
-    icon: 'lucide:download',
-    entries: [
-      { id: 'mediago-settings', name: '媒体下载设置', url: '/media/settings?meiEmbed=1', icon: 'lucide:settings-2' },
-    ],
-  },
-  {
-    id: 'pansou',
-    label: '网盘搜索',
-    icon: 'lucide:search',
-    entries: [
-      { id: 'pansou-config', name: '网盘搜索设置', url: '/search/?view=config&meiEmbed=1', icon: 'lucide:settings-2' },
-      { id: 'pansou-api', name: '网盘搜 API', url: '/search/?view=api&meiEmbed=1', icon: 'lucide:plug' },
-    ],
-  },
-  {
-    id: 'ai-draw',
-    label: 'AI 绘图',
-    icon: 'lucide:pen-tool',
-    entries: [
-      { id: 'draw-profile', name: '绘图个人设置', url: '/draw/profile?meiEmbed=1', icon: 'lucide:user' },
-      { id: 'draw-admin', name: '绘图系统设置', url: '/draw/admin?meiEmbed=1', icon: 'lucide:shield' },
-      { id: 'draw-manual', name: '绘图使用手册', url: '/draw/docs/manual?meiEmbed=1', icon: 'lucide:book-open' },
-    ],
-  },
-  {
-    id: 'tutorial',
-    label: '小说阅读',
+    id: 'docs',
+    label: '文档与帮助',
     icon: 'lucide:book-open',
     entries: [
-      { id: 'novels-manage', name: '小说站点管理', url: '/novels/manage?meiEmbed=1', icon: 'lucide:library' },
-      { id: 'novels-backup', name: '数据备份', url: '/novels/backup?meiEmbed=1', icon: 'lucide:database' },
+      { id: 'help-portal', name: '门户使用指南', url: '/settings/help/portal', icon: 'lucide:home' },
+      { id: 'help-tv', name: '影视门户帮助', url: '/settings/help/lunatv', icon: 'lucide:tv' },
+      { id: 'help-music', name: '音乐播放帮助', url: '/settings/help/solara', icon: 'lucide:music' },
+      { id: 'help-media', name: '媒体下载帮助', url: '/settings/help/mediago', icon: 'lucide:download' },
+      { id: 'help-pansou', name: '网盘搜索与 API', url: '/settings/help/pansou', icon: 'lucide:search' },
+      { id: 'help-draw', name: 'AI 绘图使用手册', url: '/settings/help/ai-draw', icon: 'lucide:pen-tool' },
+      { id: 'help-novels', name: '小说阅读帮助', url: '/settings/help/tutorial', icon: 'lucide:book-open' },
+      { id: 'help-link', name: '内网穿透帮助', url: '/settings/help/mei-link', icon: 'lucide:network' },
+      { id: 'help-tools', name: '工具箱帮助', url: '/settings/help/omni-tools', icon: 'lucide:wrench' },
     ],
   },
   {
-    id: 'mei-link',
-    label: '内网穿透',
-    icon: 'lucide:network',
+    id: 'system',
+    label: '系统设置',
+    icon: 'lucide:settings',
     entries: [
-      { id: 'link-server', name: '隧道服务器设置', url: '/link/?meiView=settings&meiEmbed=1', icon: 'lucide:server' },
-      { id: 'link-logs', name: '隧道运行日志', url: '/link/?meiView=logs&meiEmbed=1', icon: 'lucide:scroll-text' },
+      { id: 'account', name: '账号与安全', url: '/settings/account', icon: 'lucide:user-cog' },
+      { id: 'logout', name: '退出登录', url: '#logout', icon: 'lucide:log-out', action: 'logout' },
     ],
   },
 ];

@@ -1,11 +1,19 @@
 import type { Metadata } from 'next';
 import './globals.css';
+import { getPanelConfig } from '@/lib/panel-store';
 
-export const metadata: Metadata = {
-  title: 'mei-allin',
-  description: '统一应用门户',
-  manifest: '/manifest.json',
-};
+// 标题/描述跟随主页设置（logoText），图标用默认 Logo（src/app/icon.svg）
+export async function generateMetadata(): Promise<Metadata> {
+  let brand = 'mei-allin';
+  try {
+    const panel = getPanelConfig();
+    if (panel.style.logoText) brand = panel.style.logoText;
+  } catch {}
+  return {
+    title: brand,
+    description: '统一应用门户',
+  };
+}
 
 export const dynamic = 'force-dynamic';
 
