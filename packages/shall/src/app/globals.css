@@ -13,9 +13,17 @@ body {
   padding: 0;
   min-height: 100vh;
   font-family: var(--mei-font);
-  background: var(--mei-bg);
   color: var(--mei-text);
   -webkit-font-smoothing: antialiased;
+}
+
+/* 背景只放在 html（画布）上：若 body 也带不透明背景，
+ * 按 CSS 绘制顺序它会盖住 z-index 为负的固定背景层（壁纸/极光），导致背景图不可见 */
+html {
+  background: var(--mei-bg);
+}
+body {
+  background: transparent;
 }
 
 /* ===== 极光动态背景：三团流动粉彩渐变 + 颗粒噪点 ===== */
@@ -189,10 +197,10 @@ body {
   color: var(--mei-text-muted);
 }
 
-/* ===== 紧凑卡片模式（水平布局，描述+路径在图标右侧，压缩纵向高度）===== */
-.mei-card-grid[data-mode='compact'] { grid-template-columns: repeat(4, 1fr); }
+/* ===== 紧凑卡片模式（定宽 250px 不随容器拉宽；名称行路径居右 + 描述预留两行）===== */
+.mei-card-grid[data-mode='compact'] { grid-template-columns: repeat(auto-fill, 250px); }
 .mei-app-card[data-mode='compact'] {
-  min-height: 72px !important;
+  min-height: 88px !important;
   padding: 12px !important;
   flex-direction: row;
   align-items: center;
@@ -202,8 +210,8 @@ body {
 }
 .mei-app-card[data-mode='compact'] .mei-icon-tile svg { width: 22px; height: 22px; }
 
-/* ===== 图标模式（紧凑图标网格，Sun-Panel iconStyle=icon）===== */
-.mei-card-grid[data-mode='icon'] { grid-template-columns: repeat(8, 1fr); gap: var(--mei-space-2); }
+/* ===== 图标模式（定宽 104px 紧凑图标网格，Sun-Panel iconStyle=icon）===== */
+.mei-card-grid[data-mode='icon'] { grid-template-columns: repeat(auto-fill, 104px); gap: var(--mei-space-2); }
 .mei-app-card[data-mode='icon'] {
   align-items: center;
   min-height: 104px !important;
@@ -223,14 +231,14 @@ body {
 }
 @media (min-width: 769px) and (max-width: 1024px) {
   .mei-card-grid { grid-template-columns: repeat(3, 1fr); }
-  .mei-card-grid[data-mode='icon'] { grid-template-columns: repeat(6, 1fr); }
+  .mei-card-grid[data-mode='icon'] { grid-template-columns: repeat(auto-fill, 96px); }
 }
 @media (max-width: 768px) {
   .mei-card-grid { grid-template-columns: repeat(2, 1fr); gap: var(--mei-space-2); }
-  .mei-card-grid[data-mode='icon'] { grid-template-columns: repeat(4, 1fr); }
-  .mei-card-grid[data-mode='compact'] { grid-template-columns: repeat(2, 1fr); }
+  .mei-card-grid[data-mode='icon'] { grid-template-columns: repeat(auto-fill, 84px); }
+  .mei-card-grid[data-mode='compact'] { grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); }
   .mei-app-card { min-height: 112px !important; padding: var(--mei-space-3) !important; }
-  .mei-app-card[data-mode='compact'] { min-height: 64px !important; padding: 10px !important; }
+  .mei-app-card[data-mode='compact'] { min-height: 80px !important; padding: 10px !important; }
   .mei-app-card[data-mode='icon'] { min-height: 92px !important; padding: 8px 4px !important; }
   .mei-app-card[data-mode='icon'] .mei-icon-tile { width: 40px; height: 40px; }
 }

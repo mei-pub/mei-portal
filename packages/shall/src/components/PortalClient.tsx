@@ -44,7 +44,7 @@ type HealthMap = Record<string, { ok: boolean; ms: number; loading: boolean }>;
 /* ============ 统一图标卡片 ============ */
 function UnifiedCard({
   item, lanMode, health, disabled, editMode, iconMode,
-  onEdit, onDelete, onContext, onDragStart, onDragOver, onDrop, isDragging,
+  onEdit, onDelete, onContext, onDragStart, onDragOver, onDrop, isDragging, shouldBlockClick,
 }: {
   item: PanelItem;
   lanMode: boolean;
@@ -59,6 +59,7 @@ function UnifiedCard({
   onDragOver: (e: React.DragEvent) => void;
   onDrop: () => void;
   isDragging: boolean;
+  shouldBlockClick: () => boolean;
 }) {
   const href = lanMode && item.lanUrl ? item.lanUrl : item.url;
   const external = /^https?:\/\//.test(href);
@@ -82,6 +83,7 @@ function UnifiedCard({
   ) : (
     <MeiIcon icon={item.icon || 'lucide:link'} size={22} style={{ color: tileFg }} />
   );
+  const pathText = item.builtin ? (item.builtin.startsWith('tutorial-') ? '/novels' : `/${item.builtin.split('-')[0]}`) : href.replace(/^https?:\/\//, '').split('/')[0];
   return (
     <div
       style={{ textDecoration: 'none', display: 'flex', opacity: isDragging ? 0.35 : 1 }}
@@ -95,7 +97,7 @@ function UnifiedCard({
         data-disabled={disabled ? 'true' : undefined}
         data-mode={iconMode ? 'icon' : 'compact'}
         type="button"
-        onClick={() => { if (!editMode && !disabled) window.open(href, external ? '_blank' : '_self'); }}
+        onClick={() => { if (shouldBlockClick()) return; if (!editMode && !disabled) window.open(href, external ? '_blank' : '_self'); }}
         onContextMenu={onContext}
         title={editMode ? '拖拽排序 / 右键菜单' : item.title}
       >
@@ -119,21 +121,34 @@ function UnifiedCard({
             ×
           </span>
         )}
-        {/* 图标+描述+路径水平布局（自定义项和白底项压缩纵向空间） */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12, width: '100%' }}>
-          <div className="mei-icon-tile" style={{ flexShrink: 0, background: tileBg, color: tileFg, border: tileBg === '#ffffff' ? '1px solid rgba(23,32,56,0.1)' : undefined }}>{iconNode}</div>
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontWeight: 650, fontSize: 14, lineHeight: 1.3, letterSpacing: 0.2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.title}</div>
-            {item.description && (
-              <div style={{ color: 'var(--mei-text-muted)', fontSize: 12, lineHeight: 1.4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginTop: 2 }}>
+        {/* 图标模式：纵向居中（图标在上、名称在下）；卡片模式：图标 + 名称行（路径居右）+ 两行描述 */}
+        {iconMode ? (
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, width: '100%' }}>
+            <div className="mei-icon-tile" style={{ flexShrink: 0, background: tileBg, color: tileFg, border: tileBg === '#ffffff' ? '1px solid rgba(23,32,56,0.1)' : undefined }}>{iconNode}</div>
+            <div style={{ fontSize: 12, fontWeight: 600, lineHeight: 1.3, textAlign: 'center', width: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.title}</div>
+          </div>
+        ) : (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, width: '100%' }}>
+            <div className="mei-icon-tile" style={{ flexShrink: 0, background: tileBg, color: tileFg, border: tileBg === '#ffffff' ? '1px solid rgba(23,32,56,0.1)' : undefined }}>{iconNode}</div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              {/* 名称行：名称在左，路径居右对齐 */}
+              <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
+                <span style={{ fontWeight: 650, fontSize: 14, lineHeight: 1.3, letterSpacing: 0.2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }}>{item.title}</span>
+                <span style={{ marginLeft: 'auto', flexShrink: 1, minWidth: 0, maxWidth: '48%', color: 'var(--mei-text-faint)', fontSize: 10.5, letterSpacing: 0.5, opacity: 0.85, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', textAlign: 'right' }}>
+                  {pathText}
+                </span>
+              </div>
+              {/* 描述：固定预留两行高度，超出截断 */}
+              <div style={{
+                color: 'var(--mei-text-muted)', fontSize: 12, lineHeight: 1.4, marginTop: 3,
+                display: '-webkit-box', WebkitBoxOrient: 'vertical', WebkitLineClamp: 2,
+                overflow: 'hidden', minHeight: '2.8em', wordBreak: 'break-all',
+              }}>
                 {item.description}
               </div>
-            )}
-            <span style={{ color: 'var(--mei-text-faint)', fontSize: 10.5, letterSpacing: 0.5, opacity: 0.85, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'block', marginTop: 1 }}>
-              {item.builtin ? (item.builtin.startsWith('tutorial-') ? '/novels' : `/${item.builtin.split('-')[0]}`) : href.replace(/^https?:\/\//, '').split('/')[0]}
-            </span>
+            </div>
           </div>
-        </div>
+        )}
       </button>
     </div>
   );
@@ -157,6 +172,7 @@ function ItemFormModal({
   const label: React.CSSProperties = { display: 'block', fontSize: 12, fontWeight: 600, color: 'var(--mei-text-muted)', margin: '10px 0 4px' };
   return (
     <div
+      data-no-pagedrag
       style={{ position: 'fixed', inset: 0, zIndex: 1000, background: 'rgba(10,14,26,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
@@ -223,11 +239,11 @@ function ItemFormModal({
 /* ============ 主页 ============ */
 export default function PortalClient({ items, panel: initialPanel }: { items: Item[]; panel: PanelConfig }) {
   const [panel, setPanel] = useState(initialPanel);
-  // 客户端同步配置（确保 hydration 后背景图等 SSR 无法传递的字段生效）
+  // 客户端同步配置（确保 hydration 后拿到最新配置；无论背景图有无都同步，保证删除背景也生效）
   useEffect(() => {
     fetch('/api/panel', { credentials: 'include' })
       .then(r => r.json())
-      .then(cfg => { if (cfg?.background?.url) setPanel(cfg); })
+      .then(cfg => { if (cfg && cfg.background && cfg.style) setPanel(cfg); })
       .catch(() => {});
   }, []);
   const [query, setQuery] = useState('');
@@ -296,14 +312,20 @@ export default function PortalClient({ items, panel: initialPanel }: { items: It
   }, []);
 
   // 全局鼠标拖拽翻页（mousedown/mousemove/mouseup 全部全局监听，无区域限制）
+  // 防护：输入框/弹层内不触发；拖拽后抑制卡片点击，避免误打开应用
   const swiperRef = useRef<HTMLDivElement>(null);
+  const dragMovedRef = useRef(false);
   useEffect(() => {
     const mouseDown = (e: MouseEvent) => {
+      const t = e.target as HTMLElement | null;
+      if (t && t.closest('input, textarea, select, [contenteditable="true"], [data-no-pagedrag]')) return;
+      dragMovedRef.current = false;
       setDragPage({ startX: e.clientX, startIdx: pageIdx, offset: 0, active: true });
     };
     const mouseMove = (e: MouseEvent) => {
       if (dragPage?.active) {
         const d = e.clientX - dragPage.startX;
+        if (Math.abs(d) > 8) dragMovedRef.current = true;
         setDragPage({ ...dragPage, offset: d });
       }
     };
@@ -313,6 +335,8 @@ export default function PortalClient({ items, panel: initialPanel }: { items: It
         if (dragPage.offset < -threshold) setPageIdx(i => i + 1);
         else if (dragPage.offset > threshold) setPageIdx(i => Math.max(0, i - 1));
         setDragPage(null);
+        // click 事件在 mouseup 之后同步触发，先置标志再在宏任务中复位
+        setTimeout(() => { dragMovedRef.current = false; }, 0);
       }
     };
     document.addEventListener('mousedown', mouseDown);
@@ -444,7 +468,16 @@ export default function PortalClient({ items, panel: initialPanel }: { items: It
   const textColor = style?.iconTextColor || undefined;
 
   const iconMode = style?.iconStyle === 'icon';
-  const renderCard = (item: PanelItem) => (
+  // 分组标题行操作按钮样式（新增 / 布局切换常驻入口）
+  const groupOpBtn: React.CSSProperties = {
+    display: 'inline-flex', alignItems: 'center', gap: 4,
+    border: '1px solid var(--mei-border)', background: 'var(--mei-surface)',
+    backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)',
+    borderRadius: 'var(--mei-radius-full)', padding: '4px 10px',
+    color: 'var(--mei-text-muted)', fontSize: 11.5, cursor: 'pointer',
+    transition: 'var(--mei-transition)',
+  };
+  const renderCard = (item: PanelItem, pageIconMode: boolean) => (
     <UnifiedCard
       key={item.id}
       item={item}
@@ -452,7 +485,7 @@ export default function PortalClient({ items, panel: initialPanel }: { items: It
       health={healthOf(item)}
       disabled={isSwitchedOff(item)}
       editMode={editMode}
-      iconMode={iconMode}
+      iconMode={pageIconMode}
       isDragging={dragId === item.id}
       onEdit={() => setEditing(item)}
       onDelete={() => deleteItem(item)}
@@ -463,11 +496,13 @@ export default function PortalClient({ items, panel: initialPanel }: { items: It
       onDragStart={() => setDragId(item.id)}
       onDragOver={(e) => e.preventDefault()}
       onDrop={() => moveBefore(item.id)}
+      shouldBlockClick={() => dragMovedRef.current}
     />
   );
 
   return (
-    <div style={{ minHeight: '100vh', position: 'relative' }}>
+    // isolation: isolate 让负 z-index 的背景层在本组件层叠上下文内绘制，避免被 body 背景遮盖
+    <div style={{ minHeight: '100vh', position: 'relative', isolation: 'isolate' }}>
       {/* 背景 */}
       {panel?.background?.url ? (
         <>
@@ -580,45 +615,59 @@ export default function PortalClient({ items, panel: initialPanel }: { items: It
             </div>
           )}
           <div
+            ref={swiperRef}
             style={{
-              display: 'flex', transition: 'transform .3s cubic-bezier(0.25, 0.46, 0.45, 0.94)',
+              display: 'flex', alignItems: 'flex-start', transition: 'transform .3s cubic-bezier(0.25, 0.46, 0.45, 0.94)',
               transform: dragPage?.active ? `translateX(calc(-${pageIdx * 100}% + ${dragPage.offset}px))` : `translateX(-${pageIdx * 100}%)`,
             }}
           >
-            {pages.map((page, pi) => (
+            {pages.map((page, pi) => {
+              // 分组布局：分组级 iconStyle 优先，缺省跟随全局
+              const pageMode: 'icon' | 'compact' = page.group?.iconStyle === 'icon' ? 'icon' : page.group?.iconStyle === 'info' ? 'compact' : (iconMode ? 'icon' : 'compact');
+              const pageIconMode = pageMode === 'icon';
+              return (
               <section
                 key={page.id}
-                style={{ minWidth: '100%', boxSizing: 'border-box', paddingRight: style?.marginX || 0 }}
+                style={{ minWidth: '100%', width: '100%', flexShrink: 0, boxSizing: 'border-box', paddingRight: style?.marginX || 0 }}
                 onDragOver={(e) => e.preventDefault()}
                 onDrop={() => moveToGroupEnd(page.id === 'default' ? '' : page.id)}
               >
-                <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 'var(--mei-space-3)' }}>
-                  <span style={{ fontSize: 12, letterSpacing: 2, color: 'var(--mei-text-faint)' }}>{page.name} · {page.items.length}</span>
-                  {lanMode && <span style={{ fontSize: 11, color: 'var(--mei-primary)' }}>内网模式</span>}
-                  {page.id !== 'default' && page.group && (
+                {/* 分组标题行：左侧名称，右侧常驻操作入口（布局切换 + 新增） */}
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 'var(--mei-space-3)' }}>
+                  <span style={{ fontSize: 12, letterSpacing: 2, color: 'var(--mei-text-faint)' }}>
+                    {page.name} · {page.items.length}
+                    {lanMode && <span style={{ marginLeft: 8, fontSize: 11, letterSpacing: 0, color: 'var(--mei-primary)' }}>内网模式</span>}
+                  </span>
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
                     <button
                       onClick={() => {
-                        const next = page.group!.iconStyle === 'icon' ? 'info' : 'icon';
-                        const groups: PanelGroup[] = panel.groups.map(g => g.id === page.group!.id ? {...g, iconStyle: next as 'icon' | 'info'} : g);
-                        savePanel({...panel, groups}, '已更新分组样式');
+                        if (page.group) {
+                          const next = pageIconMode ? 'info' : 'icon';
+                          const groups: PanelGroup[] = panel.groups.map(g => g.id === page.group!.id ? { ...g, iconStyle: next as 'icon' | 'info' } : g);
+                          savePanel({ ...panel, groups }, next === 'icon' ? '已切换为图标布局' : '已切换为卡片布局');
+                        } else {
+                          const next = iconMode ? 'info' : 'icon';
+                          savePanel({ ...panel, style: { ...panel.style, iconStyle: next as 'icon' | 'info' } }, next === 'icon' ? '已切换为图标布局' : '已切换为卡片布局');
+                        }
                       }}
-                      title="切换分组图标样式"
-                      style={{ border: 'none', background: 'transparent', color: 'var(--mei-primary)', fontSize: 11, cursor: 'pointer', marginRight: 6 }}
+                      title={pageIconMode ? '切换为卡片布局' : '切换为图标布局'}
+                      style={groupOpBtn}
                     >
-                      {page.group.iconStyle === 'icon' ? '👁' : '📋'}
+                      <MeiIcon icon={pageIconMode ? 'lucide:layout-grid' : 'lucide:layout-template'} size={13} />
+                      {pageIconMode ? '卡片布局' : '图标布局'}
                     </button>
-                  )}
-                  {editMode && (
                     <button
                       onClick={() => setEditing({ id: '', groupId: page.id === 'default' ? '' : page.id, title: '', description: '', url: '', lanUrl: '', icon: 'lucide:link', iconColor: '' })}
-                      style={{ border: 'none', background: 'transparent', color: 'var(--mei-primary)', fontSize: 11, cursor: 'pointer' }}
+                      title="新增图标项"
+                      style={groupOpBtn}
                     >
-                      + 添加
+                      <MeiIcon icon="lucide:plus" size={13} />
+                      新增
                     </button>
-                  )}
+                  </span>
                 </div>
-                <div className="mei-card-grid" data-mode={page.group?.iconStyle === 'icon' ? 'icon' : (iconMode ? 'icon' : 'compact')}>
-                  {page.items.map(renderCard)}
+                <div className="mei-card-grid" data-mode={pageMode}>
+                  {page.items.map((item) => renderCard(item, pageIconMode))}
                   {editMode && pageIdx === pi && (
                     <button
                       onClick={() => setEditing({ id: '', groupId: page.id === 'default' ? '' : page.id, title: '', description: '', url: '', lanUrl: '', icon: 'lucide:link', iconColor: '' })}
@@ -630,7 +679,8 @@ export default function PortalClient({ items, panel: initialPanel }: { items: It
                   )}
                 </div>
               </section>
-            ))}
+              );
+            })}
           </div>
         </div>
 
@@ -648,6 +698,7 @@ export default function PortalClient({ items, panel: initialPanel }: { items: It
       {/* 右键菜单 */}
       {contextMenu && (
         <div
+          data-no-pagedrag
           style={{
             position: 'fixed', left: contextMenu.x, top: contextMenu.y, zIndex: 1001,
             minWidth: 130, borderRadius: 12, padding: 5,

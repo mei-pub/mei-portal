@@ -31,6 +31,7 @@ export default function TopBar({
   const [logoutConfirm, setLogoutConfirm] = useState(false);
   const [bgMask, setBgMask] = useState(0.35);
   const [bgBlur, setBgBlur] = useState(0);
+  const bgUrlRef = useRef('');
   const menuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -79,26 +80,25 @@ export default function TopBar({
         if (cfg?.background) {
           setBgMask(cfg.background.mask ?? 0.35);
           setBgBlur(cfg.background.blur ?? 0);
+          bgUrlRef.current = cfg.background.url || '';
         }
       })
       .catch(() => {});
   }, []);
 
-  // 保存遮罩/模糊到面板配置
-  function saveBgMask(mask: number) {
-    setBgMask(mask);
+  // 保存遮罩/模糊到面板配置（必须带上当前背景图 url，否则会清空背景；服务端会与其余字段合并）
+  function saveBg(patch: { mask?: number; blur?: number }) {
+    const mask = patch.mask ?? bgMask;
+    const blur = patch.blur ?? bgBlur;
+    if (patch.mask !== undefined) setBgMask(mask);
+    if (patch.blur !== undefined) setBgBlur(blur);
     fetch('/api/panel', {
       method: 'PUT', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
-      body: JSON.stringify({ background: { mask, blur: bgBlur, url: '' } }),
+      body: JSON.stringify({ background: { url: bgUrlRef.current, mask, blur } }),
     }).catch(() => {});
   }
-  function saveBgBlur(blur: number) {
-    setBgBlur(blur);
-    fetch('/api/panel', {
-      method: 'PUT', headers: { 'Content-Type': 'application/json' }, credentials: 'include',
-      body: JSON.stringify({ background: { mask: bgMask, blur, url: '' } }),
-    }).catch(() => {});
-  }
+  function saveBgMask(mask: number) { saveBg({ mask }); }
+  function saveBgBlur(blur: number) { saveBg({ blur }); }
 
   const sliderThumb = { width: 14, height: 14, borderRadius: '50%', background: '#fff', boxShadow: '0 1px 3px rgba(0,0,0,0.3)' } as const;
   const sliderTrack = { width: '100%', height: 4, borderRadius: 2, background: 'var(--mei-border-strong)', WebkitAppearance: 'none', appearance: 'none', outline: 'none', cursor: 'pointer' } as const;
@@ -256,7 +256,7 @@ export default function TopBar({
               zIndex: 999,
             }}
           >
-            <div style={{ height: 1, background: 'var(--mei-border)', margin: '6px 0' }} />
+            {/* 应用开关已移除，顶部不再展示分割线 */}
             <div
               style={{
                 padding: '8px 10px',

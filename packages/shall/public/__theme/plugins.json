@@ -39,19 +39,6 @@
     "hasSkin": true
   },
   {
-    "id": "sun-panel",
-    "name": "主页面板",
-    "description": "可作为经典启动器的导航面板（含自定义 JS/CSS）",
-    "icon": "lucide:layout-dashboard",
-    "category": "productivity",
-    "weight": 5,
-    "subdomainPrefix": "panel",
-    "endpoint": "http://sun-panel:3002",
-    "healthPath": "/",
-    "healthExpect": 200,
-    "hasSkin": true
-  },
-  {
     "id": "tutorial",
     "name": "小说书架",
     "description": "个人小说库，带蜘蛛纸牌游戏伪装",

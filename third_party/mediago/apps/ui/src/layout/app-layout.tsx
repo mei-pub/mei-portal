@@ -34,7 +34,7 @@ const App: FC = () => {
       }}
     >
       <div className="flex flex-1 min-h-0 overflow-hidden">
-        {/* 左侧面板 */}
+        {/* 左侧浮动面板（fixed 定位，不占布局空间，与 AI 绘图面板一致） */}
         <MediagoSidebar />
         <div className="flex-1 min-h-0 overflow-hidden mx-auto w-full max-w-[1200px]">
           <Outlet />
