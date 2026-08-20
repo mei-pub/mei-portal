@@ -44,7 +44,9 @@ export default async function HomePage() {
   // 主页面板配置（背景 + 风格 + 分组 + 图标项），mei-allin 自研主页
   let panel = getPanelConfig();
   // 内置应用物化：新增自动导入、消失自动移除、已存在不覆盖（归用户管理）
-  const synced = syncBuiltinItems(panel, expanded.map((p) => ({
+  // tutorial（小说阅读）除外：首页不展示「小说阅读」图标项，
+  // 各小说站点由 PortalClient 通过 /api/novels/sites 动态渲染为独立图标项
+  const synced = syncBuiltinItems(panel, expanded.filter((p) => p.id !== 'tutorial').map((p) => ({
     id: p.id, name: p.name, description: p.description, icon: p.icon, url: p.url,
   })));
   if (synced.changed) {

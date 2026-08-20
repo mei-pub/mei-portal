@@ -3,14 +3,25 @@
 import { useEffect, useState } from "react";
 import { useRouter, useParams } from "next/navigation";
 import Link from "next/link";
-import Navbar from "@/components/Navbar";
+import SitePanel from "@/components/SitePanel";
 
 export default function EditNovelPage() {
   const router = useRouter();
   const params = useParams();
   const slug = params.slug as string;
   const novelId = params.id as string;
-  const [form, setForm] = useState({ title: "", author: "", description: "", category: "", tags: [] as string[], status: "ongoing", rating: 0 });
+  const [form, setForm] = useState({ title: "", slug: "", author: "", description: "", cover_url: "", icon: "", icon_color: "", category: "", tags: [] as string[], status: "ongoing", rating: 0 });
+  const [coverUploading, setCoverUploading] = useState(false);
+  async function uploadCover(file: File) {
+    setCoverUploading(true);
+    try {
+      const fd = new FormData();
+      fd.append("image", file);
+      const res = await fetch("/novels/api/upload-image", { method: "POST", body: fd });
+      const data = await res.json();
+      if (res.ok && data.dataUrl) setForm(f => ({ ...f, cover_url: data.dataUrl }));
+    } catch {} finally { setCoverUploading(false); }
+  }
   const [tagInput, setTagInput] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -26,8 +37,12 @@ export default function EditNovelPage() {
         const data = await res.json();
         setForm({
           title: data.title,
+          slug: data.slug || "",
           author: data.author || "",
           description: data.description || "",
+          cover_url: data.cover_url || "",
+          icon: data.icon || "",
+          icon_color: data.icon_color || "",
           category: data.category || "",
           tags: data.tags || [],
           status: data.status || "ongoing",
@@ -52,7 +67,7 @@ export default function EditNovelPage() {
         body: JSON.stringify(form),
       });
       if (res.ok) {
-        router.push(`/novels/${novelId}`);
+        router.push(`/s/${slug}/novels/${novelId}`);
       }
     } catch (err) {
       console.error("Failed to update novel:", err);
@@ -64,7 +79,7 @@ export default function EditNovelPage() {
   if (loading) {
     return (
       <>
-        <Navbar />
+        <SitePanel />
         <div className="text-center py-20 text-[var(--muted)]">加载中...</div>
       </>
     );
@@ -72,7 +87,7 @@ export default function EditNovelPage() {
 
   return (
     <>
-      <Navbar />
+      <SitePanel />
       <main className="flex-1 max-w-2xl mx-auto w-full px-4 sm:px-6 py-6">
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-3">
@@ -116,6 +131,62 @@ export default function EditNovelPage() {
               onChange={e => setForm({ ...form, title: e.target.value })}
               className="w-full px-3 py-2 text-sm rounded-lg border border-[var(--border)] bg-white focus:outline-none focus:ring-2 focus:ring-[var(--primary)]"
             />
+          </div>
+          <div>
+            <label className="block text-sm font-medium mb-1.5">
+              英文标识 <span className="text-xs text-[var(--muted)] font-normal">（路径用，全局唯一；修改后旧路径失效）</span>
+            </label>
+            <input
+              type="text"
+              value={form.slug}
+              onChange={e => setForm({ ...form, slug: e.target.value.toLowerCase() })}
+              className="w-full px-3 py-2 text-sm rounded-lg border border-[var(--border)] bg-white focus:outline-none focus:ring-2 focus:ring-[var(--primary)]"
+              placeholder="小写字母/数字/中划线"
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium mb-1.5">小说封面</label>
+              <div className="flex items-center gap-2">
+                {form.cover_url && (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={form.cover_url} alt="封面" className="w-10 h-14 rounded object-cover border border-[var(--border)]" />
+                )}
+                <label className="px-3 py-2 text-xs rounded-lg border border-[var(--border)] cursor-pointer hover:bg-[var(--accent)] transition-colors">
+                  {coverUploading ? "上传中..." : "上传封面"}
+                  <input type="file" accept="image/*" hidden onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadCover(f); }} />
+                </label>
+                {form.cover_url && (
+                  <button type="button" onClick={() => setForm({ ...form, cover_url: "" })} className="text-xs text-red-400 hover:text-red-500">移除</button>
+                )}
+              </div>
+              <input
+                type="text"
+                value={form.cover_url}
+                onChange={e => setForm({ ...form, cover_url: e.target.value })}
+                className="mt-2 w-full px-3 py-2 text-xs rounded-lg border border-[var(--border)] bg-white focus:outline-none focus:ring-2 focus:ring-[var(--primary)]"
+                placeholder="或粘贴封面图地址"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium mb-1.5">Logo <span className="text-xs text-[var(--muted)] font-normal">（无封面时展示）</span></label>
+              <input
+                type="text"
+                value={form.icon}
+                onChange={e => setForm({ ...form, icon: e.target.value })}
+                className="w-full px-3 py-2 text-sm rounded-lg border border-[var(--border)] bg-white focus:outline-none focus:ring-2 focus:ring-[var(--primary)]"
+                placeholder="图片地址 / emoji"
+              />
+              <div className="mt-2 flex items-center gap-2">
+                <label className="text-xs text-[var(--muted)]">底色</label>
+                <input
+                  type="color"
+                  value={form.icon_color || "#6366f1"}
+                  onChange={e => setForm({ ...form, icon_color: e.target.value })}
+                  className="w-8 h-8 rounded cursor-pointer border border-[var(--border)]"
+                />
+              </div>
+            </div>
           </div>
           <div>
             <label className="block text-sm font-medium mb-1.5">作者</label>

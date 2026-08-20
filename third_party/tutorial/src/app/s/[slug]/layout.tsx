@@ -42,7 +42,7 @@ export default function SiteLayout({ children }: { children: React.ReactNode }) 
       .then(async (res) => {
         if (res.status === 404) { setStatus("notfound"); return; }
         const data = await res.json();
-        setSite({ slug: data.slug, name: data.name, type: data.type });
+        setSite({ slug: data.slug, name: data.name, type: data.type, icon: data.icon || "", iconColor: data.iconColor || "", description: data.description || "" });
         setStatus(data.accessible ? "ok" : "gate");
       })
       .catch(() => setStatus("notfound"));
@@ -85,7 +85,7 @@ export default function SiteLayout({ children }: { children: React.ReactNode }) 
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-[var(--background)] gap-3">
         <p className="text-[var(--foreground)] font-medium">站点不存在或已关闭</p>
-        <a href="/" className="text-sm text-[var(--primary)] hover:underline">返回站点列表</a>
+        <a href="/novels" className="text-sm text-[var(--primary)] hover:underline">返回站点列表</a>
       </div>
     );
   }
@@ -123,7 +123,7 @@ export default function SiteLayout({ children }: { children: React.ReactNode }) 
             </button>
           </form>
           {error && <p className="mt-3 text-xs text-red-500 text-center">{error}</p>}
-          <a href="/" className="block mt-4 text-xs text-[var(--muted)] hover:text-[var(--foreground)] text-center transition-colors">
+          <a href="/novels" className="block mt-4 text-xs text-[var(--muted)] hover:text-[var(--foreground)] text-center transition-colors">
             返回站点列表
           </a>
         </div>

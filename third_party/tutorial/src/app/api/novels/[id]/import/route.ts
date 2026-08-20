@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { createChapter, getNovelById } from '@/lib/db';
+import { createChapter, getNovelById, getNovelBySlug } from '@/lib/db';
 import { requireSiteAccess } from "@/lib/auth";
 
 // 支持两种格式:
@@ -15,7 +15,8 @@ export async function POST(
   const libraryId = siteResult.id;
   try {
     const { id } = await params;
-    const novelId = parseInt(id);
+    const n = Number(id);
+    const novelId = Number.isInteger(n) && String(n) === id ? n : (getNovelBySlug(id, libraryId)?.id ?? NaN);
 
     const novel = getNovelById(novelId, libraryId);
     if (!novel) {

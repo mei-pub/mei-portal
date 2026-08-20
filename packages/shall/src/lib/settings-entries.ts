@@ -75,6 +75,7 @@ export const SETTING_GROUPS: SettingGroup[] = [
     icon: 'lucide:book-open',
     entries: [
       { id: 'novels-manage', name: '小说站点管理', url: '/novels/manage?meiEmbed=1', icon: 'lucide:library' },
+      { id: 'novels-backup', name: '数据备份', url: '/novels/backup?meiEmbed=1', icon: 'lucide:database' },
     ],
   },
   {

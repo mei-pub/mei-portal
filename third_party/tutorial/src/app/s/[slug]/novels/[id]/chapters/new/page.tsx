@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter, useParams } from "next/navigation";
 import Link from "next/link";
-import Navbar from "@/components/Navbar";
+import SitePanel from "@/components/SitePanel";
 import MarkdownEditor from "@/components/MarkdownEditor";
 import { showToast } from "@/components/Toast";
 
@@ -34,7 +34,7 @@ export default function NewChapterPage() {
       });
       if (res.ok) {
         showToast("章节保存成功", "success");
-        setTimeout(() => router.push(`/novels/${novelId}`), 800);
+        setTimeout(() => router.push(`/s/${slug}/novels/${novelId}`), 800);
       } else {
         showToast("保存失败，请重试", "error");
       }
@@ -48,7 +48,7 @@ export default function NewChapterPage() {
 
   return (
     <>
-      <Navbar />
+      <SitePanel />
       <main className="flex-1 max-w-3xl mx-auto w-full px-4 sm:px-6 py-6">
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-3">

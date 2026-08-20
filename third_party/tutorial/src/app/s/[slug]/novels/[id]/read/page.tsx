@@ -77,6 +77,16 @@ export default function ReaderPage() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const novelId = params.id as string;
+
+  // 沉浸式阅读：隐藏门户注入顶栏（卸载时恢复）
+  useEffect(() => {
+    const bar = document.getElementById("mei-topbar");
+    if (bar) bar.style.display = "none";
+    return () => {
+      const b = document.getElementById("mei-topbar");
+      if (b) b.style.display = "";
+    };
+  }, []);
   const chapterIdParam = searchParams.get("chapter");
   const fulltextParam = searchParams.get("fulltext");
 
@@ -540,7 +550,7 @@ export default function ReaderPage() {
       // ESC → back to novel detail page (chapter list)
       if (e.key === "Escape") {
         e.preventDefault();
-        router.push(`/novels/${novelId}`);
+        router.push(`/s/${slug}/novels/${novelId}`);
         return;
       }
 
@@ -599,12 +609,12 @@ export default function ReaderPage() {
 
   function goNextChapter() {
     if (currentChapterIndex < chapters.length - 1) {
-      router.push(`/novels/${novelId}/read?chapter=${chapters[currentChapterIndex + 1].id}`);
+      router.push(`/s/${slug}/novels/${novelId}/read?chapter=${chapters[currentChapterIndex + 1].id}`);
     }
   }
   function goPrevChapter() {
     if (currentChapterIndex > 0) {
-      router.push(`/novels/${novelId}/read?chapter=${chapters[currentChapterIndex - 1].id}`);
+      router.push(`/s/${slug}/novels/${novelId}/read?chapter=${chapters[currentChapterIndex - 1].id}`);
     }
   }
   function jumpToChapter(chapterId: number) {
@@ -613,7 +623,7 @@ export default function ReaderPage() {
       const el = document.getElementById(`chapter-${chapters.findIndex(c => c.id === chapterId)}`);
       if (el) el.scrollIntoView({ behavior: "smooth" });
     } else {
-      router.push(`/novels/${novelId}/read?chapter=${chapterId}`);
+      router.push(`/s/${slug}/novels/${novelId}/read?chapter=${chapterId}`);
     }
   }
 
@@ -743,9 +753,9 @@ export default function ReaderPage() {
           </button>
       </div>
 
-      {/* Settings Panel */}
+      {/* Settings Panel：z-index 压过门户注入顶栏（10000），沉浸式覆盖全屏 */}
       {showSettings && (
-        <div className="fixed inset-0 z-[100] flex items-end justify-center" onClick={() => setShowSettings(false)}>
+        <div className="fixed inset-0 z-[10100] flex items-end justify-center" onClick={() => setShowSettings(false)}>
           <div className="absolute inset-0 bg-black/30" />
           <div className="relative w-full max-w-lg rounded-t-xl shadow-xl flex flex-col max-h-[70vh]"
             style={{ background: theme.bg }} onClick={e => e.stopPropagation()}>
@@ -846,9 +856,9 @@ export default function ReaderPage() {
         </div>
       )}
 
-      {/* Chapter List Panel */}
+      {/* Chapter List Panel：同设置面板，覆盖门户顶栏 */}
       {showChapterList && (
-        <div className="fixed inset-0 z-[100] flex items-end justify-center" onClick={() => setShowChapterList(false)}>
+        <div className="fixed inset-0 z-[10100] flex items-end justify-center" onClick={() => setShowChapterList(false)}>
           <div className="absolute inset-0 bg-black/30" />
           <div className="relative w-full max-w-lg rounded-t-xl shadow-xl max-h-[60vh] overflow-hidden flex flex-col"
             style={{ background: theme.bg }} onClick={e => e.stopPropagation()}>

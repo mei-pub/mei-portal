@@ -3,7 +3,7 @@
 import { useState, useCallback } from "react";
 import { useRouter, useParams } from "next/navigation";
 import Link from "next/link";
-import Navbar from "@/components/Navbar";
+import SitePanel from "@/components/SitePanel";
 import MarkdownEditor from "@/components/MarkdownEditor";
 import { showToast } from "@/components/Toast";
 
@@ -163,7 +163,7 @@ export default function ImportPage() {
       if (res.ok) {
         showToast("导入成功", "success");
         setStage("submit");
-        setTimeout(() => router.push(`/novels/${novelId}`), 1500);
+        setTimeout(() => router.push(`/s/${slug}/novels/${novelId}`), 1500);
       } else {
         showToast("导入失败", "error");
       }
@@ -182,7 +182,7 @@ export default function ImportPage() {
 
   return (
     <>
-      <Navbar />
+      <SitePanel />
       <main className="flex-1 max-w-4xl mx-auto w-full px-4 sm:px-6 py-4 sm:py-6">
         {/* 顶部导航 */}
         <div className="mb-6">

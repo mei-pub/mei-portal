@@ -17,7 +17,7 @@ export async function GET(request: Request) {
     }
     const visible = all
       .filter((s) => s.type !== 'secret' || isSiteOpen(request, s))
-      .map((s) => ({ slug: s.slug, name: s.name, type: s.type }));
+      .map((s) => ({ slug: s.slug, name: s.name, type: s.type, icon: s.icon, iconColor: s.icon_color, description: s.description }));
     return NextResponse.json(visible);
   } catch (error) {
     console.error('Failed to fetch sites:', error);
@@ -48,7 +48,13 @@ export async function POST(request: Request) {
     if (getLibraryBySlug(slug)) {
       return NextResponse.json({ error: `标识「${slug}」已被占用` }, { status: 409 });
     }
-    const site = createLibrary({ name, slug, type, password: type === 'secret' ? password : '' });
+    const site = createLibrary({
+      name, slug, type,
+      password: type === 'secret' ? password : '',
+      icon: String(body?.icon || ''),
+      iconColor: String(body?.iconColor || ''),
+      description: String(body?.description || ''),
+    });
     const { password: _pw, ...pub } = site;
     return NextResponse.json({ ...pub, hasPassword: !!site.password }, { status: 201 });
   } catch (error) {

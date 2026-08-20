@@ -1,5 +1,10 @@
 import { NextResponse } from 'next/server';
-import { getChaptersByNovelId, createChapter } from '@/lib/db';
+import { getChaptersByNovelId, createChapter, getNovelById, getNovelBySlug } from '@/lib/db';
+function resolveNovel(idOrSlug: string, libraryId: number) {
+  const n = Number(idOrSlug);
+  if (Number.isInteger(n) && String(n) === idOrSlug) return getNovelById(n, libraryId);
+  return getNovelBySlug(idOrSlug, libraryId);
+}
 import { requireSiteAccess } from "@/lib/auth";
 
 export async function GET(
@@ -11,7 +16,11 @@ export async function GET(
   const libraryId = siteResult.id;
   try {
     const { id } = await params;
-    const chapters = getChaptersByNovelId(parseInt(id), libraryId);
+    const target = resolveNovel(id, libraryId);
+    if (!target) {
+      return NextResponse.json({ error: 'Novel not found' }, { status: 404 });
+    }
+    const chapters = getChaptersByNovelId(target.id, libraryId);
     return NextResponse.json(chapters);
   } catch (error) {
     console.error('Failed to fetch chapters:', error);
@@ -36,7 +45,7 @@ export async function POST(
     }
 
     const chapter = createChapter({
-      novel_id: parseInt(id),
+      novel_id: resolveNovel(id, libraryId)!.id,
       library_id: libraryId,
       title,
       content,

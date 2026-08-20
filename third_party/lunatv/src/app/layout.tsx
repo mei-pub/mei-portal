@@ -109,7 +109,7 @@ export default async function RootLayout({
             （注入顶栏 topbar.js 依赖），不重写。 */}
         <script
           dangerouslySetInnerHTML={{
-            __html: `(function(){var P='/tv';var SHELL=/^\/api\/(auth(\/|$)|plugins|panel|health|system|novels)/;function rw(u){try{if(typeof u==='string'&&u.charAt(0)==='/'&&u.indexOf('/api/')===0&&u.indexOf(P+'/api/')!==0&&!SHELL.test(u)){return P+u;}if(u&&typeof u==='object'&&typeof u.url==='string'){var n=rw(u.url);if(n!==u.url){return new Request(n,u);}}}catch(e){}return u;}var of=window.fetch;window.fetch=function(i,init){return of.call(this,rw(i),init);};var OE=window.EventSource;window.EventSource=function(u,c){return new OE(rw(u),c);};window.EventSource.prototype=OE.prototype;})();`,
+            __html: `(function(){var P='/tv';var SHELL=/^\\/api\\/(auth(\\/|$)|plugins|panel|health|system|novels)/;function rw(u){try{if(typeof u==='string'&&u.charAt(0)==='/'&&u.indexOf('/api/')===0&&u.indexOf(P+'/api/')!==0&&!SHELL.test(u)){return P+u;}if(u&&typeof u==='object'&&typeof u.url==='string'){var n=rw(u.url);if(n!==u.url){return new Request(n,u);}}}catch(e){}return u;}var of=window.fetch;window.fetch=function(i,init){return of.call(this,rw(i),init);};var OE=window.EventSource;window.EventSource=function(u,c){return new OE(rw(u),c);};window.EventSource.prototype=OE.prototype;})();`,
           }}
         />
         {/* 将配置序列化后直接写入脚本，浏览器端可通过 window.RUNTIME_CONFIG 获取 */}

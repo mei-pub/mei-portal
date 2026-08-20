@@ -9,6 +9,9 @@ interface SiteRow {
   slug: string;
   name: string;
   type: "normal" | "secret";
+  icon: string;
+  icon_color: string;
+  description: string;
   hasPassword: boolean;
   created_at: string;
 }
@@ -21,9 +24,9 @@ export default function ManagePage() {
   const [sites, setSites] = useState<SiteRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [creating, setCreating] = useState(false);
-  const [form, setForm] = useState({ name: "", slug: "", type: "normal" as "normal" | "secret", password: "" });
+  const [form, setForm] = useState({ name: "", slug: "", type: "normal" as "normal" | "secret", password: "", icon: "", iconColor: "#6366f1", description: "" });
   const [editing, setEditing] = useState<SiteRow | null>(null);
-  const [editForm, setEditForm] = useState({ name: "", slug: "", password: "" });
+  const [editForm, setEditForm] = useState({ name: "", slug: "", password: "", icon: "", iconColor: "#6366f1", description: "" });
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
@@ -78,7 +81,7 @@ export default function ManagePage() {
       const data = await res.json();
       if (res.ok) {
         showToast(`站点「${data.name}」已创建`, "success");
-        setForm({ name: "", slug: "", type: "normal", password: "" });
+        setForm({ name: "", slug: "", type: "normal", password: "", icon: "", iconColor: "#6366f1", description: "" });
         setCreating(false);
         refresh();
       } else {
@@ -98,6 +101,9 @@ export default function ManagePage() {
       if (editForm.name.trim() && editForm.name !== editing.name) body.name = editForm.name.trim();
       if (editForm.slug.trim() && editForm.slug !== editing.slug) body.slug = editForm.slug.trim();
       if (editForm.password) body.password = editForm.password;
+      body.icon = editForm.icon;
+      body.iconColor = editForm.iconColor;
+      body.description = editForm.description;
       const res = await fetch(`/novels/api/sites/${encodeURIComponent(editing.slug)}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
@@ -241,6 +247,44 @@ export default function ManagePage() {
                 <p className="text-xs text-[var(--muted)] mt-1">开启方式：门户首页搜索框输入 open:标识:密码</p>
               </div>
             )}
+            {/* 图标项属性（门户首页图标项自定义渲染） */}
+            <div className="rounded-xl bg-[var(--accent)]/50 p-3.5 space-y-3">
+              <p className="text-xs font-medium text-[var(--muted)]">图标项属性（首页图标项 / 站点页展示）</p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs text-[var(--muted)] mb-1">图标（emoji / 图片地址）</label>
+                  <input
+                    type="text"
+                    value={form.icon}
+                    onChange={(e) => setForm({ ...form, icon: e.target.value })}
+                    placeholder="如：📚 或 https://…/logo.png"
+                    className="w-full px-3 py-2 text-sm rounded-lg border border-[var(--border)] focus:outline-none focus:ring-2 focus:ring-[var(--primary)]"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-[var(--muted)] mb-1">图标底色</label>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="color"
+                      value={form.iconColor}
+                      onChange={(e) => setForm({ ...form, iconColor: e.target.value })}
+                      className="w-9 h-9 rounded-lg cursor-pointer border border-[var(--border)]"
+                    />
+                    <span className="text-xs text-[var(--muted)]">{form.iconColor}</span>
+                  </div>
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs text-[var(--muted)] mb-1">站点描述</label>
+                <input
+                  type="text"
+                  value={form.description}
+                  onChange={(e) => setForm({ ...form, description: e.target.value })}
+                  placeholder="一句话介绍这个小说站点"
+                  className="w-full px-3 py-2 text-sm rounded-lg border border-[var(--border)] focus:outline-none focus:ring-2 focus:ring-[var(--primary)]"
+                />
+              </div>
+            </div>
             <button
               type="submit"
               disabled={busy || !form.name.trim() || (form.type === "secret" && !form.password)}
@@ -288,6 +332,38 @@ export default function ManagePage() {
                 />
               </div>
             )}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs font-medium text-[var(--muted)] mb-1">图标（emoji / 图片地址）</label>
+                <input
+                  type="text"
+                  value={editForm.icon}
+                  onChange={(e) => setEditForm({ ...editForm, icon: e.target.value })}
+                  className="w-full px-3 py-2 text-sm rounded-lg border border-[var(--border)] focus:outline-none focus:ring-2 focus:ring-[var(--primary)]"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-[var(--muted)] mb-1">图标底色</label>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="color"
+                    value={editForm.iconColor || "#6366f1"}
+                    onChange={(e) => setEditForm({ ...editForm, iconColor: e.target.value })}
+                    className="w-9 h-9 rounded-lg cursor-pointer border border-[var(--border)]"
+                  />
+                  <span className="text-xs text-[var(--muted)]">{editForm.iconColor}</span>
+                </div>
+              </div>
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-[var(--muted)] mb-1">站点描述</label>
+              <input
+                type="text"
+                value={editForm.description}
+                onChange={(e) => setEditForm({ ...editForm, description: e.target.value })}
+                className="w-full px-3 py-2 text-sm rounded-lg border border-[var(--border)] focus:outline-none focus:ring-2 focus:ring-[var(--primary)]"
+              />
+            </div>
             <div className="flex gap-3">
               <button type="submit" disabled={busy} className="px-6 py-2 bg-[var(--primary)] text-white text-sm font-medium rounded-lg hover:bg-[var(--primary-hover)] transition-colors disabled:opacity-50">
                 保存
@@ -307,6 +383,15 @@ export default function ManagePage() {
           ) : (
             sites.map((site) => (
               <div key={site.id} className="bg-white rounded-xl border border-[var(--border)] p-4 flex items-center gap-4">
+                {/* 站点图标（图标项属性） */}
+                {site.icon && /^(https?:)?\//.test(site.icon) ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={site.icon} alt="" className="w-9 h-9 rounded-lg object-cover flex-shrink-0" style={{ background: site.icon_color || "var(--accent)" }} />
+                ) : (
+                  <span className="w-9 h-9 rounded-lg flex items-center justify-center text-lg flex-shrink-0" style={{ background: site.icon_color || "linear-gradient(135deg,#6366f1,#a855f7)", color: site.icon && !site.icon.includes(":") ? undefined : "#fff" }}>
+                    {site.icon && !site.icon.includes(":") ? site.icon : site.name.slice(0, 1)}
+                  </span>
+                )}
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
                     <span className="font-medium text-[var(--foreground)] truncate">{site.name}</span>
@@ -314,9 +399,10 @@ export default function ManagePage() {
                       {site.type === "secret" ? "隐秘" : "普通"}
                     </span>
                   </div>
-                  <div className="text-xs text-[var(--muted)] mt-1">
+                  <div className="text-xs text-[var(--muted)] mt-1 truncate">
                     标识 <code className="bg-gray-100 px-1 rounded">/{site.slug}</code> · 路径 <code className="bg-gray-100 px-1 rounded">/novels/s/{site.slug}</code>
                   </div>
+                  {site.description && <div className="text-xs text-[var(--muted)] mt-0.5 truncate">{site.description}</div>}
                 </div>
                 <Link
                   href={`/s/${site.slug}`}
@@ -325,7 +411,7 @@ export default function ManagePage() {
                   进入
                 </Link>
                 <button
-                  onClick={() => { setEditing(site); setEditForm({ name: site.name, slug: site.slug, password: "" }); }}
+                  onClick={() => { setEditing(site); setEditForm({ name: site.name, slug: site.slug, password: "", icon: site.icon || "", iconColor: site.icon_color || "#6366f1", description: site.description || "" }); }}
                   className="px-3 py-1.5 text-xs rounded-lg border border-[var(--border)] text-[var(--muted)] hover:bg-[var(--accent)] transition-colors"
                 >
                   编辑

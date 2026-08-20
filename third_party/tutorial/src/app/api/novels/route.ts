@@ -21,13 +21,13 @@ export async function POST(request: Request) {
   const libraryId = siteResult.id;
   try {
     const body = await request.json();
-    const { title, author, description, cover_url, category, tags, status } = body;
+    const { title, slug, author, description, cover_url, icon, iconColor, icon_color, category, tags, status } = body;
 
     if (!title) {
       return NextResponse.json({ error: 'Title is required' }, { status: 400 });
     }
 
-    const novel = createNovel(libraryId, { title, author, description, cover_url, category, tags: tags || [], status });
+    const novel = createNovel(libraryId, { title, slug, author, description, cover_url, icon, iconColor: iconColor ?? icon_color, category, tags: tags || [], status });
     return NextResponse.json(novel, { status: 201 });
   } catch (error) {
     console.error('Failed to create novel:', error);

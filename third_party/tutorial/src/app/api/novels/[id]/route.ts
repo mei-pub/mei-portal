@@ -1,5 +1,10 @@
 import { NextResponse } from 'next/server';
-import { getNovelById, updateNovel, deleteNovel } from '@/lib/db';
+import { updateNovel, deleteNovel, getNovelById, getNovelBySlug } from '@/lib/db';
+function resolveNovel(idOrSlug: string, libraryId: number) {
+  const n = Number(idOrSlug);
+  if (Number.isInteger(n) && String(n) === idOrSlug) return getNovelById(n, libraryId);
+  return getNovelBySlug(idOrSlug, libraryId);
+}
 import { requireSiteAccess } from "@/lib/auth";
 
 export async function GET(
@@ -11,7 +16,7 @@ export async function GET(
   const libraryId = siteResult.id;
   try {
     const { id } = await params;
-    const novel = getNovelById(parseInt(id), libraryId);
+    const novel = resolveNovel(id, libraryId);
     if (!novel) {
       return NextResponse.json({ error: 'Novel not found' }, { status: 404 });
     }
@@ -32,8 +37,12 @@ export async function PUT(
   try {
     const { id } = await params;
     const body = await request.json();
-    const { title, author, description, cover_url, category, tags, status, rating } = body;
-    const ok = updateNovel(parseInt(id), libraryId, { title, author, description, cover_url, category, tags: tags || [], status, rating });
+    const { title, slug, author, description, cover_url, icon, iconColor, icon_color, category, tags, status, rating } = body;
+    const target = resolveNovel(id, libraryId);
+    if (!target) {
+      return NextResponse.json({ error: 'Novel not found' }, { status: 404 });
+    }
+    const ok = updateNovel(target.id, libraryId, { title, slug, author, description, cover_url, icon, iconColor: iconColor ?? icon_color, category, tags: tags || [], status, rating });
     if (!ok) {
       return NextResponse.json({ error: 'Novel not found' }, { status: 404 });
     }
@@ -53,7 +62,8 @@ export async function DELETE(
   const libraryId = siteResult.id;
   try {
     const { id } = await params;
-    const ok = deleteNovel(parseInt(id), libraryId);
+    const target = resolveNovel(id, libraryId);
+    const ok = target ? deleteNovel(target.id, libraryId) : false;
     if (!ok) {
       return NextResponse.json({ error: 'Novel not found' }, { status: 404 });
     }

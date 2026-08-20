@@ -82,6 +82,14 @@ try {
 try {
   db.exec("ALTER TABLE libraries ADD COLUMN type TEXT NOT NULL DEFAULT 'normal'");
 } catch { /* 列已存在 */ }
+// 站点图标项属性（供门户首页/站点页自定义渲染）
+try { db.exec("ALTER TABLE libraries ADD COLUMN icon TEXT NOT NULL DEFAULT ''"); } catch { /* 已存在 */ }
+try { db.exec("ALTER TABLE libraries ADD COLUMN icon_color TEXT NOT NULL DEFAULT ''"); } catch { /* 已存在 */ }
+try { db.exec("ALTER TABLE libraries ADD COLUMN description TEXT NOT NULL DEFAULT ''"); } catch { /* 已存在 */ }
+// 书籍：全局唯一英文标识（路径用，替代数字 id 防遍历）+ 图标项属性
+try { db.exec("ALTER TABLE novels ADD COLUMN slug TEXT"); } catch { /* 已存在 */ }
+try { db.exec("ALTER TABLE novels ADD COLUMN icon TEXT NOT NULL DEFAULT ''"); } catch { /* 已存在 */ }
+try { db.exec("ALTER TABLE novels ADD COLUMN icon_color TEXT NOT NULL DEFAULT ''"); } catch { /* 已存在 */ }
 
 /** 标识合法化：小写字母/数字/中划线；无法得到有效字符时回落 site-{id} */
 export function slugifySite(name: string, fallbackId?: number): string {
@@ -120,6 +128,29 @@ try {
   db.exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_libraries_slug ON libraries(slug)');
 } catch { /* 已存在 */ }
 
+// 书籍 slug 回填（全局唯一）
+function uniqueNovelSlug(base: string, excludeId?: number): string {
+  let slug = base;
+  let n = 2;
+  while (true) {
+    const row = excludeId
+      ? db.prepare('SELECT id FROM novels WHERE slug = ? AND id != ?').get(slug, excludeId)
+      : db.prepare('SELECT id FROM novels WHERE slug = ?').get(slug);
+    if (!row) return slug;
+    slug = `${base}-${n++}`;
+  }
+}
+{
+  const rows = db.prepare('SELECT id, title, slug FROM novels ORDER BY id').all() as { id: number; title: string; slug: string | null }[];
+  const upd = db.prepare('UPDATE novels SET slug = ? WHERE id = ?');
+  for (const r of rows) {
+    if (!r.slug) upd.run(uniqueNovelSlug(slugifySite(r.title, r.id).replace(/^site-/, 'novel-')), r.id);
+  }
+}
+try {
+  db.exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_novels_slug ON novels(slug)');
+} catch { /* 已存在 */ }
+
 // ── DEFAULT_LIB_SEED: 首次启动若无站点则创建默认普通站点 ──
 const libCount = db.prepare('SELECT COUNT(*) as c FROM libraries').get() as { c: number };
 if (libCount && libCount.c === 0) {
@@ -135,17 +166,23 @@ export interface Library {
   name: string; // 显示名称
   type: 'normal' | 'secret'; // 普通站点（无密码公开）| 隐秘站点（开启密码，创建后不可改类型）
   password: string; // 隐秘站点的开启密码；普通站点恒为空
+  icon: string; // 图标项属性：iconify 名 / 图片 URL / emoji
+  icon_color: string; // 图标底色（#hex）
+  description: string; // 站点描述（门户首页图标项副标题）
   created_at: string;
   updated_at: string;
 }
 
 export interface Novel {
   id: number;
+  slug: string; // 全局唯一英文标识，路径里替代数字 id（防遍历）
   library_id: number;
   title: string;
   author: string;
   description: string;
-  cover_url: string;
+  cover_url: string; // 封面（封面渲染样式）
+  icon: string; // Logo（无封面时的 Logo 渲染样式）：iconify 名 / 图片 URL / emoji
+  icon_color: string; // Logo 底色
   category: string;
   tags: string[];
   status: string;
@@ -212,7 +249,7 @@ export function calculateWordCount(content: string): number {
 // ══════════════════════════════════════
 
 export function getLibraries(): Omit<Library, 'password'>[] {
-  const rows = db.prepare('SELECT id, slug, name, type, created_at, updated_at FROM libraries ORDER BY id').all();
+  const rows = db.prepare('SELECT id, slug, name, type, icon, icon_color, description, created_at, updated_at FROM libraries ORDER BY id').all();
   return rows as Omit<Library, 'password'>[];
 }
 
@@ -231,18 +268,18 @@ export function getLibraryBySlug(slug: string): Library | null {
   return (row as Library) || null;
 }
 
-export function createLibrary(input: { name: string; slug?: string; type?: 'normal' | 'secret'; password?: string }): Library {
+export function createLibrary(input: { name: string; slug?: string; type?: 'normal' | 'secret'; password?: string; icon?: string; iconColor?: string; description?: string }): Library {
   const now = new Date().toISOString();
   const type = input.type === 'secret' ? 'secret' : 'normal';
   const slug = uniqueSlug(slugifySite(input.slug || input.name));
   const password = type === 'secret' ? (input.password || '') : '';
-  const stmt = db.prepare('INSERT INTO libraries (name, slug, type, password, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)');
-  const info = stmt.run(input.name, slug, type, password, now, now);
+  const stmt = db.prepare('INSERT INTO libraries (name, slug, type, password, icon, icon_color, description, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)');
+  const info = stmt.run(input.name, slug, type, password, input.icon || '', input.iconColor || '', input.description || '', now, now);
   return getLibraryById(info.lastInsertRowid as number)!;
 }
 
-/** 更新站点：名称/标识/密码可改，类型不可改（创建时指定） */
-export function updateLibrary(id: number, input: { name?: string; slug?: string; password?: string }): boolean {
+/** 更新站点：名称/标识/密码/图标项属性可改，类型不可改（创建时指定） */
+export function updateLibrary(id: number, input: { name?: string; slug?: string; password?: string; icon?: string; iconColor?: string; description?: string }): boolean {
   const lib = getLibraryById(id);
   if (!lib) return false;
   const now = new Date().toISOString();
@@ -252,7 +289,11 @@ export function updateLibrary(id: number, input: { name?: string; slug?: string;
   const password = lib.type === 'secret'
     ? (input.password !== undefined ? input.password : lib.password)
     : '';
-  db.prepare('UPDATE libraries SET name = ?, slug = ?, password = ?, updated_at = ? WHERE id = ?').run(name, slug, password, now, id);
+  const icon = input.icon ?? lib.icon;
+  const iconColor = input.iconColor ?? lib.icon_color;
+  const description = input.description ?? lib.description;
+  db.prepare('UPDATE libraries SET name = ?, slug = ?, password = ?, icon = ?, icon_color = ?, description = ?, updated_at = ? WHERE id = ?')
+    .run(name, slug, password, icon, iconColor, description, now, id);
   return true;
 }
 
@@ -272,50 +313,73 @@ export function getAllNovels(libraryId: number): Novel[] {
   return rows.map(r => parseNovelRow(r as Record<string, unknown>));
 }
 
-export function getNovelById(id: number, libraryId: number): (Novel & { chapters: Omit<Chapter, 'content'>[]; volumes: Volume[] }) | null {
-  const row = db.prepare('SELECT * FROM novels WHERE id = ? AND library_id = ?').get(id, libraryId);
-  if (!row) return null;
-  const novel = parseNovelRow(row as Record<string, unknown>);
-
+function attachNovelParts(novel: Novel): Novel & { chapters: Omit<Chapter, 'content'>[]; volumes: Volume[] } {
   const chapters = db.prepare(
     'SELECT id, novel_id, title, chapter_order, word_count, created_at FROM chapters WHERE novel_id = ? ORDER BY chapter_order ASC'
-  ).all(id) as Omit<Chapter, 'content'>[];
-
+  ).all(novel.id) as Omit<Chapter, 'content'>[];
   const volumes = db.prepare(
     'SELECT * FROM volumes WHERE novel_id = ?'
-  ).all(id) as Volume[];
-
+  ).all(novel.id) as Volume[];
   return { ...novel, chapters, volumes };
 }
 
-export function createNovel(libraryId: number, input: { title: string; author?: string; description?: string; cover_url?: string; category?: string; tags?: string[]; status?: string }): Novel {
+export function getNovelById(id: number, libraryId: number): (Novel & { chapters: Omit<Chapter, 'content'>[]; volumes: Volume[] }) | null {
+  const row = db.prepare('SELECT * FROM novels WHERE id = ? AND library_id = ?').get(id, libraryId);
+  if (!row) return null;
+  return attachNovelParts(parseNovelRow(row as Record<string, unknown>));
+}
+
+/** 按路径标识查书（站点内） */
+export function getNovelBySlug(slug: string, libraryId: number): (Novel & { chapters: Omit<Chapter, 'content'>[]; volumes: Volume[] }) | null {
+  const row = db.prepare('SELECT * FROM novels WHERE slug = ? AND library_id = ?').get(slug, libraryId);
+  if (!row) return null;
+  return attachNovelParts(parseNovelRow(row as Record<string, unknown>));
+}
+
+/** 生成全局唯一书籍标识 */
+export function makeNovelSlug(titleOrSlug: string): string {
+  return uniqueNovelSlug(slugifySite(titleOrSlug, Date.now()).replace(/^site-/, 'novel-'));
+}
+
+export function createNovel(libraryId: number, input: { title: string; slug?: string; author?: string; description?: string; cover_url?: string; icon?: string; iconColor?: string; category?: string; tags?: string[]; status?: string }): Novel {
   const now = new Date().toISOString();
+  const slug = makeNovelSlug(input.slug || input.title);
   const stmt = db.prepare(
-    `INSERT INTO novels (library_id, title, author, description, cover_url, category, tags, status, word_count, rating, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, 0, ?, ?)`
+    `INSERT INTO novels (slug, library_id, title, author, description, cover_url, icon, icon_color, category, tags, status, word_count, rating, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, ?, ?)`
   );
   const info = stmt.run(
-    libraryId, input.title, input.author || '', input.description || '',
-    input.cover_url || '', input.category || '', JSON.stringify(input.tags || []),
-    input.status || 'ongoing', now, now
+    slug, libraryId, input.title, input.author || '', input.description || '',
+    input.cover_url || '', input.icon || '', input.iconColor || '', input.category || '',
+    JSON.stringify(input.tags || []), input.status || 'ongoing', now, now
   );
   return parseNovelRow(
     db.prepare('SELECT * FROM novels WHERE id = ?').get(info.lastInsertRowid) as Record<string, unknown>
   );
 }
 
-export function updateNovel(id: number, libraryId: number, input: { title?: string; author?: string; description?: string; cover_url?: string; category?: string; tags?: string[]; status?: string; rating?: number }): boolean {
+export function updateNovel(id: number, libraryId: number, input: { title?: string; slug?: string; author?: string; description?: string; cover_url?: string; icon?: string; iconColor?: string; category?: string; tags?: string[]; status?: string; rating?: number }): boolean {
   const row = db.prepare('SELECT * FROM novels WHERE id = ? AND library_id = ?').get(id, libraryId);
   if (!row) return false;
   const existing = parseNovelRow(row as Record<string, unknown>);
   const now = new Date().toISOString();
+  let slug = existing.slug;
+  if (input.slug !== undefined && input.slug.trim()) {
+    const next = slugifySite(input.slug, id).replace(/^site-/, 'novel-');
+    const conflict = db.prepare('SELECT id FROM novels WHERE slug = ? AND id != ?').get(next, id);
+    if (conflict) return false;
+    slug = next;
+  }
   db.prepare(
-    `UPDATE novels SET title = ?, author = ?, description = ?, cover_url = ?, category = ?, tags = ?, status = ?, rating = ?, updated_at = ? WHERE id = ?`
+    `UPDATE novels SET slug = ?, title = ?, author = ?, description = ?, cover_url = ?, icon = ?, icon_color = ?, category = ?, tags = ?, status = ?, rating = ?, updated_at = ? WHERE id = ?`
   ).run(
+    slug,
     input.title ?? existing.title,
     input.author ?? existing.author,
     input.description ?? existing.description,
     input.cover_url ?? existing.cover_url,
+    input.icon ?? existing.icon,
+    input.iconColor ?? existing.icon_color,
     input.category ?? existing.category,
     JSON.stringify(input.tags ?? existing.tags),
     input.status ?? existing.status,

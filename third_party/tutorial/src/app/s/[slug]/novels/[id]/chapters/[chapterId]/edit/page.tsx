@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter, useParams } from "next/navigation";
 import Link from "next/link";
-import Navbar from "@/components/Navbar";
+import SitePanel from "@/components/SitePanel";
 import MarkdownEditor from "@/components/MarkdownEditor";
 
 export default function EditChapterPage() {
@@ -49,7 +49,7 @@ export default function EditChapterPage() {
         body: JSON.stringify(form),
       });
       if (res.ok) {
-        router.push(`/novels/${novelId}`);
+        router.push(`/s/${slug}/novels/${novelId}`);
       }
     } catch (err) {
       console.error("Failed to update chapter:", err);
@@ -61,7 +61,7 @@ export default function EditChapterPage() {
   if (loading) {
     return (
       <>
-        <Navbar />
+        <SitePanel />
         <div className="text-center py-20 text-[var(--muted)]">加载中...</div>
       </>
     );
@@ -69,7 +69,7 @@ export default function EditChapterPage() {
 
   return (
     <>
-      <Navbar />
+      <SitePanel />
       <main className="flex-1 max-w-3xl mx-auto w-full px-4 sm:px-6 py-6">
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-3">

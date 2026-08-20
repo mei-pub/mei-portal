@@ -230,16 +230,6 @@
               libMenu.appendChild(item);
             });
           }
-          var sep = document.createElement('div');
-          sep.style.cssText = 'height:1px;background:rgba(23,32,56,0.08);margin:5px 4px;';
-          libMenu.appendChild(sep);
-          var manage = document.createElement('a');
-          manage.className = 'mei-menu-link';
-          manage.href = '/novels/manage';
-          manage.style.color = '#9aa3b8';
-          manage.style.fontSize = '12px';
-          manage.textContent = '站点管理';
-          libMenu.appendChild(manage);
         }
         var sitesLoaded = false;
         libBtn.onclick = function (e) {

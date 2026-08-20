@@ -3,13 +3,43 @@
 import { useEffect, useState, useMemo, useRef } from "react";
 import Link from "next/link";
 import { useSite } from "@/components/SiteContext";
+import SitePanel, { SiteGlyph } from "@/components/SitePanel";
+
+// 书籍图标渲染：封面样式 > Logo 样式 > 默认首字母卡片（多样式同屏兼容）
+function NovelThumb({ novel, size = "md" }: { novel: { title: string; cover_url?: string; icon?: string; icon_color?: string }; size?: "md" }) {
+  const h = size === "md" ? "h-16 w-12" : "h-16 w-12";
+  if (novel.cover_url) {
+    // eslint-disable-next-line @next/next/no-img-element
+    return <img src={novel.cover_url} alt={novel.title} className={`${h} rounded-lg object-cover flex-shrink-0 shadow-sm`} />;
+  }
+  if (novel.icon && /^(https?:)?\//.test(novel.icon)) {
+    // eslint-disable-next-line @next/next/no-img-element
+    return <img src={novel.icon} alt={novel.title} className={`${h} rounded-lg object-contain flex-shrink-0 shadow-sm`} style={{ background: novel.icon_color || "var(--accent)" }} />;
+  }
+  if (novel.icon && novel.icon.includes(":")) {
+    // iconify 名（站点/书籍未引入 iconify 运行时，渲染渐变底 + 首字母）
+    return (
+      <span className={`${h} rounded-lg flex items-center justify-center flex-shrink-0 shadow-sm text-white font-bold text-lg`} style={{ background: novel.icon_color || "linear-gradient(135deg,#6366f1,#a855f7)" }}>
+        {novel.title.slice(0, 1)}
+      </span>
+    );
+  }
+  if (novel.icon) {
+    return <span className={`${h} rounded-lg flex items-center justify-center flex-shrink-0 shadow-sm text-2xl`} style={{ background: novel.icon_color || "var(--accent)" }}>{novel.icon}</span>;
+  }
+  return (
+    <span className={`${h} rounded-lg flex items-center justify-center flex-shrink-0 shadow-sm text-white font-bold text-lg`} style={{ background: "linear-gradient(135deg,#6366f1,#a855f7)" }}>
+      {novel.title.slice(0, 1)}
+    </span>
+  );
+}
 
 // FilterBar: 整合搜索、分类、标签、排序 - 协调设计
 function FilterBar({
   categories, allTags, selectedCategory, selectedTag, sortBy, search, onSearch,
-  onCategoryChange, onTagChange, onSortChange, onClearCategory, onClearTag, libraryName,
+  onCategoryChange, onTagChange, onSortChange, onClearCategory, onClearTag,
 }: {
-  categories: string[]; allTags: string[]; selectedCategory: string; selectedTag: string; sortBy: "default" | "rating"; search: string; onSearch: (v: string) => void; libraryName?: string;
+  categories: string[]; allTags: string[]; selectedCategory: string; selectedTag: string; sortBy: "default" | "rating"; search: string; onSearch: (v: string) => void; 
   onCategoryChange: (cat: string) => void; onTagChange: (tag: string) => void;
   onSortChange: (sort: "default" | "rating") => void;
   onClearCategory: () => void; onClearTag: () => void;
@@ -99,17 +129,11 @@ function FilterBar({
         </div>
 
         {/* 搜索框 */}
-        <div className="relative flex-1 max-w-[200px] ml-2">
+        <div className="relative flex-1 max-w-[240px] ml-2">
           <svg xmlns="http://www.w3.org/2000/svg" className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-[var(--muted)]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
           <input type="text" placeholder="搜索小说..." value={search} onChange={e => onSearch(e.target.value)}
             className="w-full pl-9 pr-4 py-2.5 text-sm rounded-full border border-[var(--border)] bg-gray-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[var(--primary)] focus:border-transparent" />
         </div>
-        {/* 当前书架名（Navbar 移除后放这里，靠右） */}
-        {libraryName && (
-          <span className="ml-auto pl-3 pr-1 text-sm font-semibold text-[var(--primary)] truncate max-w-[40%]" title={libraryName}>
-            {libraryName}
-          </span>
-        )}
       </div>
 
       {/* Mobile: 胶囊筛选按钮 */}
@@ -187,9 +211,13 @@ function FilterBar({
 
 interface Novel {
   id: number;
+  slug: string;
   title: string;
   author: string;
   description: string;
+  cover_url: string;
+  icon: string;
+  icon_color: string;
   category: string;
   tags: string[];
   status: string;
@@ -200,7 +228,6 @@ interface Novel {
 
 export default function HomePage() {
   const site = useSite();
-  const libraryName = site.name;
   const [novels, setNovels] = useState<Novel[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -265,13 +292,25 @@ export default function HomePage() {
 
   return (
     <>
-      {/* mei-allin：Navbar 顶栏移除（门户胶囊顶栏已提供导航），书架名移至筛选栏右侧 */}
-      <ShelfFloatingPanel slug={site.slug} />
+      {/* 左侧站点面板：站点信息 + 站点/切换站点/添加（与书籍/章节页共享） */}
+      <SitePanel />
       <main className="flex-1 max-w-6xl mx-auto w-full px-4 sm:px-6 pt-4 sm:pt-6 pb-6">
+        {/* 站点信息头（继承图标项属性的 Logo + 描述） */}
+        <div className="mb-5 flex items-center gap-4">
+          <SiteGlyph icon={site.icon} color={site.iconColor} size={52} />
+          <div className="min-w-0">
+            <h1 className="text-xl font-bold text-[var(--foreground)] truncate">{site.name}</h1>
+            {site.description ? (
+              <p className="text-[13px] text-[var(--muted)] mt-0.5 line-clamp-2">{site.description}</p>
+            ) : (
+              <p className="text-[13px] text-[var(--muted)] mt-0.5">/{site.slug} · 共 {novels.length} 本</p>
+            )}
+          </div>
+        </div>
         <div className="mb-6">
           <FilterBar categories={categories} allTags={allTags} selectedCategory={selectedCategory} selectedTag={selectedTag} sortBy={sortBy} search={search} onSearch={setSearch}
             onCategoryChange={setSelectedCategory} onTagChange={setSelectedTag} onSortChange={setSortBy}
-            onClearCategory={() => setSelectedCategory("")} onClearTag={() => setSelectedTag("")} libraryName={libraryName} />
+            onClearCategory={() => setSelectedCategory("")} onClearTag={() => setSelectedTag("")} />
         </div>
         {(selectedCategory || selectedTag) && (
           <div className="mb-4 flex items-center gap-2 text-sm text-[var(--muted)] flex-wrap">
@@ -294,10 +333,11 @@ export default function HomePage() {
             {filtered.map(novel => {
               const badgeType = getBadgeType(novel.rating || 0);
               return (
-              <Link key={novel.id} href={`/s/${site.slug}/novels/${novel.id}`}
-                className="block bg-white rounded-lg border border-[var(--border)] p-3 hover:shadow-md hover:border-[var(--primary)] transition-all cursor-pointer relative">
+              <Link key={novel.id} href={`/s/${site.slug}/novels/${novel.slug || novel.id}`}
+                className="flex gap-3 bg-white rounded-2xl border border-[var(--border)] p-3 hover:shadow-md hover:border-[var(--primary)] transition-all cursor-pointer relative overflow-hidden">
+                <NovelThumb novel={novel} />
                 {badgeType && (
-                  <div className={`absolute bottom-0 right-0 px-2 py-0.5 text-xs font-bold text-white rounded-tl-lg rounded-br-lg ${
+                  <div className={`absolute bottom-0 right-0 px-2 py-0.5 text-xs font-bold text-white rounded-tl-lg ${
                     badgeType === "masterpiece" ? "bg-gradient-to-r from-amber-500 to-red-500" :
                     badgeType === "good" ? "bg-gradient-to-r from-emerald-500 to-teal-500" :
                     "bg-gradient-to-r from-purple-600 to-pink-500"
@@ -324,49 +364,5 @@ export default function HomePage() {
         )}
       </main>
     </>
-  );
-}
-
-// ─── mei-allin：左侧中段浮动小面板（书架 / 设置 / 添加）───
-// 默认展开 + localStorage 记忆；收起态为紧贴左缘的渐变小把手
-function ShelfFloatingPanel({ slug }: { slug: string }) {
-  const [open, setOpen] = useState<boolean | null>(null);
-  useEffect(() => {
-    try {
-      setOpen(localStorage.getItem("mei-float-novels") !== "1");
-    } catch { setOpen(true); }
-  }, []);
-  const toggle = (next: boolean) => {
-    setOpen(next);
-    try { localStorage.setItem("mei-float-novels", next ? "0" : "1"); } catch {}
-  };
-  const actions = [
-    { href: "/", label: "站点", d: "M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2zM22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z" },
-    { href: "/novels/manage", label: "管理", d: "M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z" },
-    { href: `/s/${slug}/novels/new`, label: "添加", d: "M12 5v14M5 12h14" },
-  ];
-  if (open === null) return null;
-  if (!open) {
-    return (
-      <button onClick={() => toggle(true)} title="展开书架操作"
-        className="fixed left-0 top-1/2 -translate-y-1/2 z-40 h-16 w-6 flex items-center justify-center rounded-r-xl bg-gradient-to-b from-indigo-500 to-purple-500 text-white shadow-lg transition-all hover:w-8">
-        <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="m9 18 6-6-6-6" /></svg>
-      </button>
-    );
-  }
-  return (
-    <div className="fixed left-2.5 top-1/2 -translate-y-1/2 z-40 flex flex-col items-center gap-1 p-1.5 rounded-2xl bg-white/80 backdrop-blur-md border border-[var(--border)] shadow-lg">
-      {actions.map(a => (
-        <Link key={a.label} href={a.href} title={a.label}
-          className="w-10 h-11 rounded-xl flex flex-col items-center justify-center text-[var(--muted)] hover:bg-[var(--accent)] hover:text-[var(--primary)] transition-colors">
-          <svg style={{ width: 18, height: 18 }} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d={a.d} /></svg>
-          <span className="text-[9px] leading-none mt-0.5">{a.label}</span>
-        </Link>
-      ))}
-      <button onClick={() => toggle(false)} title="收起"
-        className="w-10 h-8 rounded-xl flex items-center justify-center text-[var(--muted)] hover:bg-[var(--accent)] transition-colors">
-        <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M15 6l-6 6 6 6" /></svg>
-      </button>
-    </div>
   );
 }

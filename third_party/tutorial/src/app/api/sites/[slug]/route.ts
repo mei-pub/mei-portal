@@ -17,6 +17,9 @@ export async function GET(
     slug: site.slug,
     name: site.name,
     type: site.type,
+    icon: site.icon,
+    iconColor: site.icon_color,
+    description: site.description,
     accessible: isSiteOpen(request, site),
   });
 }
@@ -40,7 +43,7 @@ export async function PUT(
     if (body.type !== undefined && body.type !== site.type) {
       return NextResponse.json({ error: '站点类型创建后不可修改' }, { status: 400 });
     }
-    const updates: { name?: string; slug?: string; password?: string } = {};
+    const updates: { name?: string; slug?: string; password?: string; icon?: string; iconColor?: string; description?: string } = {};
     if (body.name !== undefined) {
       const name = String(body.name).trim();
       if (!name) return NextResponse.json({ error: '站点名称不能为空' }, { status: 400 });
@@ -59,6 +62,9 @@ export async function PUT(
       if (!pw) return NextResponse.json({ error: '隐秘站点开启密码不能为空' }, { status: 400 });
       updates.password = pw;
     }
+    if (body.icon !== undefined) updates.icon = String(body.icon);
+    if (body.iconColor !== undefined) updates.iconColor = String(body.iconColor);
+    if (body.description !== undefined) updates.description = String(body.description);
     updateLibrary(site.id, updates);
     const fresh = getLibraryById(site.id)!;
     const { password: _pw, ...pub } = fresh;

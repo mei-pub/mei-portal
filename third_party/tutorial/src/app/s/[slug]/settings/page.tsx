@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useState, useRef } from "react";
 import Link from "next/link";
-import Navbar from "@/components/Navbar";
+import SitePanel from "@/components/SitePanel";
 import { useSite } from "@/components/SiteContext";
 import { showToast } from "@/components/Toast";
 
@@ -123,7 +123,7 @@ export default function SettingsPage() {
 
   return (
     <>
-      <Navbar />
+      <SitePanel />
       <main className="flex-1 max-w-2xl mx-auto w-full px-4 sm:px-6 py-6">
         <div className="flex items-center gap-3 mb-6">
           <Link

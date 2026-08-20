@@ -187,17 +187,26 @@ function ItemFormModal({
             <input style={input} value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} placeholder="必填" />
           </div>
           <div>
-            <label style={label}>分组（输入名称快速创建新分组）</label>
-            <input
+            <label style={label}>分组</label>
+            {/* 值为分组 id（编辑已有项时下拉能正确回显）；新名称通过「新建分组」生成随机唯一 id */}
+            <select
               style={input}
-              placeholder="留空=未分组，输入新名称=新建"
-              value={form.groupId}
-              onChange={(e) => setForm({ ...form, groupId: e.target.value })}
-              list="group-list"
-            />
-            <datalist id="group-list">
-              {groups.map((g) => <option key={g.id} value={g.name} />)}
-            </datalist>
+              value={groups.some((g) => g.id === form.groupId) ? form.groupId : ''}
+              onChange={(e) => {
+                if (e.target.value === '__new__') {
+                  const n = prompt('新分组名称');
+                  if (n && n.trim()) {
+                    setForm({ ...form, groupId: n.trim() }); // 名称交给 upsertItem 生成随机唯一 id
+                  }
+                } else {
+                  setForm({ ...form, groupId: e.target.value });
+                }
+              }}
+            >
+              <option value=''>未分组</option>
+              {groups.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}
+              <option value='__new__'>＋ 新建分组…</option>
+            </select>
           </div>
         </div>
         <label style={label}>描述</label>
@@ -239,6 +248,15 @@ function ItemFormModal({
 /* ============ 主页 ============ */
 export default function PortalClient({ items, panel: initialPanel }: { items: Item[]; panel: PanelConfig }) {
   const [panel, setPanel] = useState(initialPanel);
+  // 小说站点列表（首页站点图标项数据源，尊重 ns-open 可见性）
+  const [novelSites, setNovelSites] = useState<Array<{ slug: string; name: string; type: 'normal' | 'secret'; icon?: string; iconColor?: string; description?: string }>>([]);
+  const reloadNovelSites = useCallback(() => {
+    fetch('/api/novels/sites', { credentials: 'include' })
+      .then((r) => (r.ok ? r.json() : []))
+      .then((list) => setNovelSites(Array.isArray(list) ? list : []))
+      .catch(() => {});
+  }, []);
+  useEffect(() => { reloadNovelSites(); }, [reloadNovelSites]);
   // 客户端同步配置（确保 hydration 后拿到最新配置；无论背景图有无都同步，保证删除背景也生效）
   useEffect(() => {
     const sync = () => fetch('/api/panel', { credentials: 'include' })
@@ -400,8 +418,8 @@ export default function PortalClient({ items, panel: initialPanel }: { items: It
       } else if (byName) {
         groupId = byName.id;
       } else {
-        // 自动创建新分组（必须进入保存的 next，否则只改了本地状态，服务端没有该分组）
-        const newGroup = { id: `g${Date.now()}`, name: groupId };
+        // 新名称 → 自动创建新分组（随机唯一 id；必须进入保存的 next，否则服务端没有该分组）
+        const newGroup = { id: `g${Date.now()}${Math.random().toString(36).slice(2, 8)}`, name: groupId };
         groups = [...groups, newGroup];
         groupId = newGroup.id;
       }
@@ -467,13 +485,35 @@ export default function PortalClient({ items, panel: initialPanel }: { items: It
   const isSwitchedOff = (item: PanelItem) => !!(item.builtin && isSwitchable(item.builtin) && !isAppEnabled(item.builtin));
   const healthOf = (item: PanelItem) => (item.builtin ? health[item.builtin] : undefined);
 
+  // 小说站点：每个可见站点一个独立图标项（客户端动态获取，尊重 ns-open 可见性；编辑模式不注入）
+  const siteItems: PanelItem[] = useMemo(
+    () => (editMode ? [] : novelSites
+      .filter((s) => matchText(s.name, s.description || ''))
+      .map((s) => ({
+        id: `nsite-${s.slug}`,
+        groupId: 'g-novel-sites',
+        title: s.name,
+        description: s.description || (s.type === 'secret' ? '隐秘站点' : '小说站点'),
+        url: `/novels/s/${s.slug}`,
+        lanUrl: '',
+        icon: s.icon || 'lucide:book-open',
+        iconColor: s.iconColor || '',
+      }))),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [novelSites, editMode, query]
+  );
+
   const ungrouped = visibleItems.filter((i) => !i.groupId || !panel.groups.some((g) => g.id === i.groupId));
   const grouped = panel.groups
     .map((g) => ({ group: g, list: visibleItems.filter((i) => i.groupId === g.id) }))
     .filter((s) => s.list.length > 0 || editMode);
 
-  // 分页：第0页=常用(未分组)，1+页=分组
-  const pages: Array<{ id: string; name: string; items: PanelItem[]; group?: PanelGroup }> = [{ id: 'default', name: '常用', items: ungrouped }, ...grouped.map(g => ({ id: g.group.id, name: g.group.name, items: g.list, group: g.group }))].filter(p => p.items.length > 0 || editMode || query);
+  // 分页：第0页=常用(未分组)，1+页=分组，末页=小说站点（有可见站点时）
+  const pages: Array<{ id: string; name: string; items: PanelItem[]; group?: PanelGroup }> = [
+    { id: 'default', name: '常用', items: ungrouped },
+    ...grouped.map(g => ({ id: g.group.id, name: g.group.name, items: g.list, group: g.group })),
+    ...(siteItems.length > 0 ? [{ id: 'g-novel-sites', name: '小说站点', items: siteItems }] : []),
+  ].filter(p => p.items.length > 0 || editMode || query);
   const activePage = pages[pageIdx] || pages[0];
 
   // 分页切换（含方向键和拖拽）
@@ -494,6 +534,7 @@ export default function PortalClient({ items, panel: initialPanel }: { items: It
       const data = await res.json().catch(() => ({} as Record<string, unknown>));
       if (res.ok) {
         setToast(action === 'open' ? `隐秘站点「${data.name || slug}」已开启` : `隐秘站点「${data.name || slug}」已关闭`);
+        reloadNovelSites();
       } else {
         setToast(String(data.error || '操作失败'));
       }

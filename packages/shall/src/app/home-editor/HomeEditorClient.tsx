@@ -52,63 +52,97 @@ export default function HomeEditorClient() {
     return <div style={{ padding: 60, textAlign: 'center', color: 'var(--mei-text-muted)' }}>加载中…</div>;
   }
 
-  const tabs: { id: Tab; label: string }[] = [
-    { id: 'style', label: '风格设置' },
-    { id: 'groups', label: '分组管理' },
-    { id: 'items', label: '图标项管理' },
-    { id: 'backup', label: '导入导出' },
+  const tabs: { id: Tab; label: string; icon: string; desc: string }[] = [
+    { id: 'style', label: '风格设置', icon: 'lucide:palette', desc: '背景 / Logo / 布局' },
+    { id: 'groups', label: '分组管理', icon: 'lucide:folder', desc: '分组与拖拽排序' },
+    { id: 'items', label: '图标项管理', icon: 'lucide:layout-grid', desc: '应用与链接项' },
+    { id: 'backup', label: '导入导出', icon: 'lucide:database', desc: '配置备份恢复' },
   ];
 
   return (
     <div style={{ minHeight: '100vh', background: 'var(--mei-bg)', color: 'var(--mei-text)' }}>
-      <div style={{ maxWidth: 720, margin: '0 auto', padding: '24px 20px 80px' }}>
-        <h1 style={{ fontSize: 18, fontWeight: 750, margin: '0 0 4px' }}>主页设置</h1>
-        <p style={{ fontSize: 12, color: 'var(--mei-text-muted)', margin: '0 0 16px' }}>
-          内置应用由系统自动管理；此处管理主页风格、分组与自定义应用/链接。
-        </p>
-
-        {/* Tab 切换 */}
-        <div style={{ display: 'flex', gap: 6, marginBottom: 16, flexWrap: 'wrap' }}>
-          {tabs.map((t) => (
-            <button
-              key={t.id}
-              onClick={() => setTab(t.id)}
-              style={{
-                padding: '7px 16px',
-                borderRadius: 'var(--mei-radius-full)',
-                border: '1px solid ' + (tab === t.id ? 'transparent' : 'var(--mei-border-strong)'),
-                background: tab === t.id ? 'var(--mei-gradient)' : 'transparent',
-                color: tab === t.id ? '#fff' : 'var(--mei-text-muted)',
-                fontSize: 13,
-                cursor: 'pointer',
-              }}
-            >
-              {t.label}
-            </button>
-          ))}
+      <div style={{ maxWidth: 920, margin: '0 auto', padding: '28px 20px 120px' }}>
+        {/* 页头 */}
+        <div style={{ marginBottom: 22 }}>
+          <h1 style={{ fontSize: 22, fontWeight: 800, margin: '0 0 6px', letterSpacing: 0.3 }}>主页设置</h1>
+          <p style={{ fontSize: 12.5, color: 'var(--mei-text-muted)', margin: 0 }}>
+            内置应用由系统自动管理；此处管理主页风格、分组与自定义应用/链接。
+          </p>
         </div>
 
-        {tab === 'style' && <StyleTab config={config} setConfig={setConfig} />}
-        {tab === 'groups' && <GroupsTab config={config} setConfig={setConfig} />}
-        {tab === 'items' && <ItemsTab config={config} setConfig={setConfig} />}
-        {tab === 'backup' && <BackupTab config={config} reload={reload} />}
+        <div style={{ display: 'flex', gap: 20, alignItems: 'flex-start' }}>
+          {/* 侧边导航 */}
+          <nav
+            style={{
+              width: 168, flexShrink: 0, position: 'sticky', top: 76,
+              background: 'var(--mei-surface)', border: '1px solid var(--mei-border)',
+              borderRadius: 'var(--mei-radius-lg)', padding: 8,
+              display: 'flex', flexDirection: 'column', gap: 4,
+              boxShadow: 'var(--mei-shadow-sm)',
+            }}
+          >
+            {tabs.map((t) => {
+              const active = tab === t.id;
+              return (
+                <button
+                  key={t.id}
+                  onClick={() => setTab(t.id)}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 10, width: '100%',
+                    padding: '10px 12px', borderRadius: 'var(--mei-radius)',
+                    border: 'none', cursor: 'pointer', textAlign: 'left',
+                    background: active ? 'var(--mei-gradient)' : 'transparent',
+                    color: active ? '#fff' : 'var(--mei-text)',
+                    boxShadow: active ? 'var(--mei-glow)' : 'none',
+                    transition: 'var(--mei-transition)',
+                  }}
+                >
+                  <MeiIcon icon={t.icon} size={17} />
+                  <span>
+                    <span style={{ display: 'block', fontSize: 13, fontWeight: active ? 700 : 550 }}>{t.label}</span>
+                    <span style={{ display: 'block', fontSize: 10.5, opacity: active ? 0.85 : 0.55, marginTop: 1 }}>{t.desc}</span>
+                  </span>
+                </button>
+              );
+            })}
+          </nav>
 
-        {/* 保存条 */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12, position: 'sticky', bottom: 12 }}>
+          {/* 内容区 */}
+          <div style={{ flex: 1, minWidth: 0 }}>
+            {tab === 'style' && <StyleTab config={config} setConfig={setConfig} />}
+            {tab === 'groups' && <GroupsTab config={config} setConfig={setConfig} />}
+            {tab === 'items' && <ItemsTab config={config} setConfig={setConfig} />}
+            {tab === 'backup' && <BackupTab config={config} reload={reload} />}
+          </div>
+        </div>
+
+        {/* 悬浮保存条（毛玻璃） */}
+        <div
+          style={{
+            position: 'fixed', bottom: 20, left: '50%', transform: 'translateX(-50%)',
+            display: 'flex', alignItems: 'center', gap: 14,
+            padding: '10px 12px 10px 22px', borderRadius: 'var(--mei-radius-full)',
+            background: 'rgba(255,255,255,0.88)', backdropFilter: 'blur(20px) saturate(1.5)',
+            border: '1px solid var(--mei-border)', boxShadow: 'var(--mei-shadow)',
+            zIndex: 60,
+          }}
+        >
+          {message ? (
+            <span style={{ fontSize: 12.5, color: message.includes('失败') ? 'var(--mei-danger)' : 'var(--mei-success)' }}>{message}</span>
+          ) : (
+            <span style={{ fontSize: 12.5, color: 'var(--mei-text-faint)' }}>修改后记得保存</span>
+          )}
           <button
             onClick={() => save(config)}
             disabled={saving}
             style={{
-              padding: '10px 26px', borderRadius: 'var(--mei-radius-full)', border: 'none',
-              background: 'var(--mei-gradient)', color: '#fff', fontSize: 14, fontWeight: 650,
+              padding: '9px 24px', borderRadius: 'var(--mei-radius-full)', border: 'none',
+              background: 'var(--mei-gradient)', color: '#fff', fontSize: 13.5, fontWeight: 650,
               cursor: 'pointer', boxShadow: 'var(--mei-glow)', opacity: saving ? 0.6 : 1,
             }}
           >
             {saving ? '保存中…' : '保存设置'}
           </button>
-          {message && (
-            <span style={{ fontSize: 12, color: message.includes('失败') ? 'var(--mei-danger)' : 'var(--mei-success)' }}>{message}</span>
-          )}
         </div>
       </div>
     </div>
@@ -265,33 +299,39 @@ function StyleTab({ config, setConfig }: { config: PanelConfig; setConfig: (c: P
   );
 }
 
-/* ==================== 分组管理 ==================== */
+/* ==================== 分组管理（拖拽排序；预设分组内置只读） ==================== */
 function GroupsTab({ config, setConfig }: { config: PanelConfig; setConfig: (c: PanelConfig) => void }) {
   const [name, setName] = useState('');
+  const dragIdx = useRef<number | null>(null);
+  const [dragOver, setDragOver] = useState<number | null>(null);
   const input: React.CSSProperties = {
     flex: 1, padding: '8px 12px', borderRadius: 10, fontSize: 13,
     border: '1px solid var(--mei-border-strong)', outline: 'none', color: 'var(--mei-text)', background: '#fff',
   };
 
-  const move = (idx: number, dir: -1 | 1) => {
+  const moveGroup = (from: number, to: number) => {
+    if (to < 0 || to >= config.groups.length || from === to) return;
     const groups = [...config.groups];
-    const j = idx + dir;
-    if (j < 0 || j >= groups.length) return;
-    [groups[idx], groups[j]] = [groups[j], groups[idx]];
+    const [g] = groups.splice(from, 1);
+    groups.splice(to, 0, g);
     setConfig({ ...config, groups });
   };
 
   return (
-    <section style={{ background: 'var(--mei-surface)', border: '1px solid var(--mei-border)', borderRadius: 'var(--mei-radius)', padding: 16 }}>
+    <section style={{ background: 'var(--mei-surface)', border: '1px solid var(--mei-border)', borderRadius: 'var(--mei-radius-lg)', padding: 18, boxShadow: 'var(--mei-shadow-sm)' }}>
+      <h2 style={{ fontSize: 15, fontWeight: 700, margin: '0 0 4px' }}>分组管理</h2>
+      <p style={{ fontSize: 12, color: 'var(--mei-text-muted)', margin: '0 0 14px' }}>
+        拖动 ⠿ 手柄调整分组顺序；带「内置」标的为系统预设分组，名称只读、不可删除。
+      </p>
       <div style={{ display: 'flex', gap: 8, marginBottom: 14 }}>
-        <input style={input} placeholder="新分组名称" value={name} onChange={(e) => setName(e.target.value)} />
+        <input style={input} placeholder="新分组名称" value={name} onChange={(e) => setName(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && name.trim()) { setConfig({ ...config, groups: [...config.groups, { id: `g${Date.now()}${Math.random().toString(36).slice(2, 6)}`, name: name.trim() }] }); setName(''); } }} />
         <button
           onClick={() => {
             if (!name.trim()) return;
-            setConfig({ ...config, groups: [...config.groups, { id: `g${Date.now()}`, name: name.trim() }] });
+            setConfig({ ...config, groups: [...config.groups, { id: `g${Date.now()}${Math.random().toString(36).slice(2, 6)}`, name: name.trim() }] });
             setName('');
           }}
-          style={{ padding: '8px 16px', borderRadius: 10, border: 'none', background: 'var(--mei-gradient)', color: '#fff', fontSize: 13, cursor: 'pointer' }}
+          style={{ padding: '8px 16px', borderRadius: 10, border: 'none', background: 'var(--mei-gradient)', color: '#fff', fontSize: 13, cursor: 'pointer', whiteSpace: 'nowrap' }}
         >
           添加分组
         </button>
@@ -300,32 +340,51 @@ function GroupsTab({ config, setConfig }: { config: PanelConfig; setConfig: (c: 
         <p style={{ fontSize: 12, color: 'var(--mei-text-muted)', textAlign: 'center', padding: '14px 0' }}>暂无分组，自定义项将显示在「其他链接」</p>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          {config.groups.map((g, idx) => (
-            <div key={g.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', borderRadius: 10, border: '1px solid var(--mei-border)', background: 'rgba(255,255,255,0.6)' }}>
-              <MeiIcon icon="lucide:library" size={16} />
-              <input
-                value={g.name}
-                onChange={(e) => setConfig({ ...config, groups: config.groups.map((x) => (x.id === g.id ? { ...x, name: e.target.value } : x)) })}
-                style={{ ...input, border: 'none', background: 'transparent', padding: '4px 0', fontWeight: 600 }}
-              />
-              <span style={{ fontSize: 11, color: 'var(--mei-text-faint)' }}>{config.items.filter((i) => i.groupId === g.id).length} 项</span>
-              <button onClick={() => move(idx, -1)} title="上移" style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: 'var(--mei-text-muted)' }}>↑</button>
-              <button onClick={() => move(idx, 1)} title="下移" style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: 'var(--mei-text-muted)' }}>↓</button>
-              {PRESET_GROUP_IDS.has(g.id) ? (
-                <span style={{ fontSize: 11, color: 'var(--mei-text-faint)' }}>预设</span>
-              ) : (
-                <button
-                  onClick={() => {
-                    if (!confirm(`删除分组「${g.name}」？组内 ${config.items.filter((i) => i.groupId === g.id).length} 个项将移至未分组。`)) return;
-                    setConfig({ ...config, groups: config.groups.filter((x) => x.id !== g.id), items: config.items.map((i) => (i.groupId === g.id ? { ...i, groupId: '' } : i)) });
-                  }}
-                  style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: 'var(--mei-danger)', fontSize: 12 }}
-                >
-                  删除
-                </button>
-              )}
-            </div>
-          ))}
+          {config.groups.map((g, idx) => {
+            const preset = PRESET_GROUP_IDS.has(g.id);
+            return (
+              <div
+                key={g.id}
+                draggable
+                onDragStart={() => { dragIdx.current = idx; }}
+                onDragOver={(e) => { e.preventDefault(); setDragOver(idx); }}
+                onDragLeave={() => setDragOver((d) => (d === idx ? null : d))}
+                onDrop={() => { if (dragIdx.current !== null) moveGroup(dragIdx.current, idx); dragIdx.current = null; setDragOver(null); }}
+                onDragEnd={() => { dragIdx.current = null; setDragOver(null); }}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px',
+                  borderRadius: 12,
+                  border: `1px solid ${dragOver === idx ? 'var(--mei-primary)' : 'var(--mei-border)'}`,
+                  background: dragOver === idx ? 'rgba(99,102,241,0.06)' : 'rgba(255,255,255,0.7)',
+                  cursor: 'grab', transition: 'border-color .15s, background .15s',
+                }}
+              >
+                <span style={{ color: 'var(--mei-text-faint)', fontSize: 12, cursor: 'grab' }} title="拖拽排序">⠿</span>
+                <MeiIcon icon="lucide:library" size={16} />
+                <input
+                  value={g.name}
+                  readOnly={preset}
+                  onChange={(e) => setConfig({ ...config, groups: config.groups.map((x) => (x.id === g.id ? { ...x, name: e.target.value } : x)) })}
+                  style={{ ...input, border: 'none', background: 'transparent', padding: '4px 0', fontWeight: 600, color: preset ? 'var(--mei-text-muted)' : 'var(--mei-text)', cursor: preset ? 'default' : 'text' }}
+                />
+                {preset && (
+                  <span style={{ fontSize: 10, padding: '2px 8px', borderRadius: 99, background: 'rgba(99,102,241,0.12)', color: 'var(--mei-primary)', fontWeight: 700, letterSpacing: 0.5 }}>内置</span>
+                )}
+                <span style={{ fontSize: 11, color: 'var(--mei-text-faint)', whiteSpace: 'nowrap' }}>{config.items.filter((i) => i.groupId === g.id).length} 项</span>
+                {!preset && (
+                  <button
+                    onClick={() => {
+                      if (!confirm(`删除分组「${g.name}」？组内 ${config.items.filter((i) => i.groupId === g.id).length} 个项将移至未分组。`)) return;
+                      setConfig({ ...config, groups: config.groups.filter((x) => x.id !== g.id), items: config.items.map((i) => (i.groupId === g.id ? { ...i, groupId: '' } : i)) });
+                    }}
+                    style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: 'var(--mei-danger)', fontSize: 12 }}
+                  >
+                    删除
+                  </button>
+                )}
+              </div>
+            );
+          })}
         </div>
       )}
     </section>
@@ -478,8 +537,6 @@ function ItemsTab({ config, setConfig }: { config: PanelConfig; setConfig: (c: P
               <span style={{ fontSize: 11, color: 'var(--mei-text-faint)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                 {item.url}
               </span>
-              <button onClick={() => moveItem(idx, -1)} style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: 'var(--mei-text-muted)' }}>↑</button>
-              <button onClick={() => moveItem(idx, 1)} style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: 'var(--mei-text-muted)' }}>↓</button>
               <button onClick={() => setEditing(item)} style={{ border: 'none', background: 'transparent', color: 'var(--mei-primary)', fontSize: 12, cursor: 'pointer' }}>编辑</button>
               <button
                 onClick={() => { if (confirm(`删除「${item.title}」？`)) setConfig({ ...config, items: config.items.filter((i) => i.id !== item.id) }); }}

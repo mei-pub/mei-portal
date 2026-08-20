@@ -3,14 +3,18 @@
 import { useEffect, useState } from "react";
 import { useRouter, useParams } from "next/navigation";
 import Link from "next/link";
-import Navbar from "@/components/Navbar";
+import SitePanel from "@/components/SitePanel";
 import { showToast } from "@/components/Toast";
 
 interface Novel {
   id: number;
+  slug: string;
   title: string;
   author: string;
   description: string;
+  cover_url: string;
+  icon: string;
+  icon_color: string;
   category: string;
   tags: string[];
   status: string;
@@ -192,7 +196,7 @@ export default function NovelDetailPage() {
   if (loading) {
     return (
       <>
-        <Navbar />
+        <SitePanel />
         <div className="text-center py-20 text-[var(--muted)]">加载中...</div>
       </>
     );
@@ -201,7 +205,7 @@ export default function NovelDetailPage() {
   if (!novel) {
     return (
       <>
-        <Navbar />
+        <SitePanel />
         <div className="text-center py-20 text-[var(--muted)]">小说不存在</div>
       </>
     );
@@ -209,20 +213,34 @@ export default function NovelDetailPage() {
 
   return (
     <>
-      <Navbar />
+      <SitePanel />
       <main className="flex-1 max-w-4xl mx-auto w-full px-4 sm:px-6 py-6">
         {/* Back button */}
         <Link href={`/s/${slug}`} className="inline-flex items-center gap-1 text-sm text-[var(--muted)] hover:text-[var(--foreground)] mb-4 transition-colors">
           <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
           </svg>
-          返回书架
+          返回站点
         </Link>
 
-        {/* Novel Header */}
+        {/* Novel Header：封面/Logo 多样式渲染 */}
         <div className="bg-white rounded-xl border border-[var(--border)] p-6 mb-6">
           <div className="flex items-start justify-between">
-            <div>
+            <div className="flex items-start gap-4 min-w-0">
+              {(novel.cover_url || novel.icon) && (
+                novel.cover_url ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={novel.cover_url} alt={novel.title} className="w-20 h-28 rounded-lg object-cover shadow flex-shrink-0" />
+                ) : /^(https?:)?\//.test(novel.icon) ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={novel.icon} alt={novel.title} className="w-20 h-28 rounded-lg object-contain shadow flex-shrink-0" style={{ background: novel.icon_color || "var(--accent)" }} />
+                ) : (
+                  <span className="w-20 h-28 rounded-lg flex items-center justify-center shadow flex-shrink-0 text-3xl" style={{ background: novel.icon_color || "linear-gradient(135deg,#6366f1,#a855f7)" }}>
+                    {novel.icon.includes(":") ? novel.title.slice(0, 1) : novel.icon}
+                  </span>
+                )
+              )}
+            <div className="min-w-0">
               <h1 className="text-2xl font-bold flex items-center gap-2">
                 {novel.title}
                 {/* 角标 */}
@@ -260,6 +278,7 @@ export default function NovelDetailPage() {
               {novel.description && (
                 <p className="mt-3 text-sm text-[var(--muted)] leading-relaxed">{novel.description}</p>
               )}
+            </div>
             </div>
             <div className="flex items-center gap-2 ml-4">
               <Link
