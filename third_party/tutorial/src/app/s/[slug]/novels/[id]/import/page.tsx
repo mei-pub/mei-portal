@@ -206,7 +206,7 @@ export default function ImportPage() {
                 <button
                   onClick={handlePreview}
                   disabled={!fullText.trim()}
-                  className="px-4 py-1.5 bg-[var(--primary)] text-white text-sm font-medium rounded-lg hover:bg-[var(--primary-hover)] transition-colors disabled:opacity-50"
+                  className="mei-btn-primary"
                 >
                   预览拆分
                 </button>
@@ -215,7 +215,7 @@ export default function ImportPage() {
                 <button
                   onClick={handleSubmit}
                   disabled={submitting || chapters.length === 0}
-                  className="px-4 py-1.5 bg-[var(--primary)] text-white text-sm font-medium rounded-lg hover:bg-[var(--primary-hover)] transition-colors disabled:opacity-50"
+                  className="mei-btn-primary"
                 >
                   {submitting ? "导入中..." : `确认导入`}
                 </button>

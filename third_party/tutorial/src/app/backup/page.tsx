@@ -8,7 +8,7 @@ import Navbar from "@/components/Navbar";
 import { showToast } from "@/components/Toast";
 
 const card = "bg-white rounded-2xl border border-[var(--border)] p-5 space-y-4";
-const input = "w-full px-3 py-2 text-sm rounded-lg border border-[var(--border)] bg-white focus:outline-none focus:ring-2 focus:ring-[var(--primary)]";
+const input = "mei-input";
 const label = "block text-xs font-medium text-[var(--muted)] mb-1";
 const btnPrimary = "px-4 py-2 text-sm rounded-xl bg-[var(--primary)] text-white hover:bg-[var(--primary-hover)] transition-colors disabled:opacity-50";
 const btnGhost = "px-4 py-2 text-sm rounded-xl border border-[var(--border)] text-[var(--muted)] hover:bg-[var(--accent)] transition-colors disabled:opacity-50";

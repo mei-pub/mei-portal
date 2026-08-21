@@ -187,7 +187,7 @@ export default function SettingsPage() {
             <button
               type="submit"
               disabled={saving}
-              className="px-6 py-2 bg-[var(--primary)] text-white text-sm font-medium rounded-lg hover:bg-[var(--primary-hover)] transition-colors disabled:opacity-50"
+              className="mei-btn-primary"
             >
               {saving ? "保存中..." : "保存设置"}
             </button>
@@ -210,7 +210,7 @@ export default function SettingsPage() {
             <button
               onClick={handleExport}
               disabled={exporting || importing}
-              className="px-6 py-2 bg-[var(--primary)] text-white text-sm font-medium rounded-lg hover:bg-[var(--primary-hover)] transition-colors disabled:opacity-50"
+              className="mei-btn-primary"
             >
               {exporting ? "导出中..." : "导出备份"}
             </button>

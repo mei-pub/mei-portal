@@ -87,7 +87,7 @@ export default function NewNovelPage() {
               type="submit"
               form="novel-form"
               disabled={submitting}
-              className="px-4 py-2 bg-[var(--primary)] text-white text-sm font-medium rounded-lg hover:bg-[var(--primary-hover)] transition-colors disabled:opacity-50"
+              className="mei-btn-primary"
             >
               {submitting ? "创建中..." : "创建小说"}
             </button>

@@ -117,7 +117,7 @@ export default function SiteLayout({ children }: { children: React.ReactNode }) 
             <button
               type="submit"
               disabled={busy || !password}
-              className="px-4 py-2 text-sm rounded-lg bg-[var(--primary)] text-white hover:bg-[var(--primary-hover)] disabled:opacity-50 transition-colors"
+              className="mei-btn-primary"
             >
               开启
             </button>

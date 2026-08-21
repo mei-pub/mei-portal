@@ -155,9 +155,9 @@ export default function ManagePage() {
               onChange={(e) => setMasterPw(e.target.value)}
               placeholder="主密码"
               autoFocus
-              className="flex-1 px-3 py-2 text-sm rounded-lg border border-[var(--border)] bg-white focus:outline-none focus:ring-2 focus:ring-[var(--primary)]"
+              className="mei-input"
             />
-            <button type="submit" className="px-4 py-2 text-sm rounded-lg bg-[var(--primary)] text-white hover:bg-[var(--primary-hover)] transition-colors">
+            <button type="submit" className="mei-btn-primary">
               解锁
             </button>
           </form>
@@ -185,7 +185,7 @@ export default function ManagePage() {
           </div>
           <button
             onClick={() => setCreating(!creating)}
-            className="px-4 py-2 text-sm rounded-lg bg-[var(--primary)] text-white hover:bg-[var(--primary-hover)] transition-colors"
+            className="mei-btn-primary"
           >
             {creating ? "取消" : "新建站点"}
           </button>
@@ -202,7 +202,7 @@ export default function ManagePage() {
                   value={form.name}
                   onChange={(e) => setForm({ ...form, name: e.target.value })}
                   placeholder="如：天一阁"
-                  className="w-full px-3 py-2 text-sm rounded-lg border border-[var(--border)] focus:outline-none focus:ring-2 focus:ring-[var(--primary)]"
+                  className="mei-input"
                 />
               </div>
               <div>
@@ -212,7 +212,7 @@ export default function ManagePage() {
                   value={form.slug}
                   onChange={(e) => setForm({ ...form, slug: e.target.value.toLowerCase() })}
                   placeholder="如：tianyi（小写字母/数字/中划线）"
-                  className="w-full px-3 py-2 text-sm rounded-lg border border-[var(--border)] focus:outline-none focus:ring-2 focus:ring-[var(--primary)]"
+                  className="mei-input"
                 />
               </div>
             </div>
@@ -242,7 +242,7 @@ export default function ManagePage() {
                   value={form.password}
                   onChange={(e) => setForm({ ...form, password: e.target.value })}
                   placeholder="隐秘站点的开启密码"
-                  className="w-full px-3 py-2 text-sm rounded-lg border border-[var(--border)] focus:outline-none focus:ring-2 focus:ring-[var(--primary)]"
+                  className="mei-input"
                 />
                 <p className="text-xs text-[var(--muted)] mt-1">开启方式：门户首页搜索框输入 open:标识:密码</p>
               </div>
@@ -258,7 +258,7 @@ export default function ManagePage() {
                     value={form.icon}
                     onChange={(e) => setForm({ ...form, icon: e.target.value })}
                     placeholder="如：📚 或 https://…/logo.png"
-                    className="w-full px-3 py-2 text-sm rounded-lg border border-[var(--border)] focus:outline-none focus:ring-2 focus:ring-[var(--primary)]"
+                    className="mei-input"
                   />
                 </div>
                 <div>
@@ -281,14 +281,14 @@ export default function ManagePage() {
                   value={form.description}
                   onChange={(e) => setForm({ ...form, description: e.target.value })}
                   placeholder="一句话介绍这个小说站点"
-                  className="w-full px-3 py-2 text-sm rounded-lg border border-[var(--border)] focus:outline-none focus:ring-2 focus:ring-[var(--primary)]"
+                  className="mei-input"
                 />
               </div>
             </div>
             <button
               type="submit"
               disabled={busy || !form.name.trim() || (form.type === "secret" && !form.password)}
-              className="px-6 py-2 bg-[var(--primary)] text-white text-sm font-medium rounded-lg hover:bg-[var(--primary-hover)] transition-colors disabled:opacity-50"
+              className="mei-btn-primary"
             >
               创建
             </button>
@@ -308,7 +308,7 @@ export default function ManagePage() {
                   type="text"
                   value={editForm.name}
                   onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
-                  className="w-full px-3 py-2 text-sm rounded-lg border border-[var(--border)] focus:outline-none focus:ring-2 focus:ring-[var(--primary)]"
+                  className="mei-input"
                 />
               </div>
               <div>
@@ -317,7 +317,7 @@ export default function ManagePage() {
                   type="text"
                   value={editForm.slug}
                   onChange={(e) => setEditForm({ ...editForm, slug: e.target.value.toLowerCase() })}
-                  className="w-full px-3 py-2 text-sm rounded-lg border border-[var(--border)] focus:outline-none focus:ring-2 focus:ring-[var(--primary)]"
+                  className="mei-input"
                 />
               </div>
             </div>
@@ -328,7 +328,7 @@ export default function ManagePage() {
                   type="password"
                   value={editForm.password}
                   onChange={(e) => setEditForm({ ...editForm, password: e.target.value })}
-                  className="w-full px-3 py-2 text-sm rounded-lg border border-[var(--border)] focus:outline-none focus:ring-2 focus:ring-[var(--primary)]"
+                  className="mei-input"
                 />
               </div>
             )}
@@ -339,7 +339,7 @@ export default function ManagePage() {
                   type="text"
                   value={editForm.icon}
                   onChange={(e) => setEditForm({ ...editForm, icon: e.target.value })}
-                  className="w-full px-3 py-2 text-sm rounded-lg border border-[var(--border)] focus:outline-none focus:ring-2 focus:ring-[var(--primary)]"
+                  className="mei-input"
                 />
               </div>
               <div>
@@ -361,11 +361,11 @@ export default function ManagePage() {
                 type="text"
                 value={editForm.description}
                 onChange={(e) => setEditForm({ ...editForm, description: e.target.value })}
-                className="w-full px-3 py-2 text-sm rounded-lg border border-[var(--border)] focus:outline-none focus:ring-2 focus:ring-[var(--primary)]"
+                className="mei-input"
               />
             </div>
             <div className="flex gap-3">
-              <button type="submit" disabled={busy} className="px-6 py-2 bg-[var(--primary)] text-white text-sm font-medium rounded-lg hover:bg-[var(--primary-hover)] transition-colors disabled:opacity-50">
+              <button type="submit" disabled={busy} className="mei-btn-primary">
                 保存
               </button>
               <button type="button" onClick={() => setEditing(null)} className="px-6 py-2 text-sm text-[var(--muted)] border border-[var(--border)] rounded-lg hover:bg-[var(--accent)] transition-colors">

@@ -74,7 +74,7 @@ export default function NewChapterPage() {
               form="chapter-form"
               type="submit"
               disabled={submitting}
-              className="px-4 py-1.5 bg-[var(--primary)] text-white text-sm font-medium rounded-lg hover:bg-[var(--primary-hover)] transition-colors disabled:opacity-50"
+              className="mei-btn-primary"
             >
               {submitting ? "保存中..." : "保存章节"}
             </button>
@@ -91,7 +91,7 @@ export default function NewChapterPage() {
                 required
                 value={form.title}
                 onChange={e => setForm({ ...form, title: e.target.value })}
-                className="w-full px-3 py-2 text-sm rounded-lg border border-[var(--border)] bg-white focus:outline-none focus:ring-2 focus:ring-[var(--primary)]"
+                className="mei-input"
                 placeholder="第一章 开始"
               />
             </div>
@@ -102,7 +102,7 @@ export default function NewChapterPage() {
                 min={0}
                 value={form.chapter_order}
                 onChange={e => setForm({ ...form, chapter_order: parseInt(e.target.value) || 0 })}
-                className="w-full px-3 py-2 text-sm rounded-lg border border-[var(--border)] bg-white focus:outline-none focus:ring-2 focus:ring-[var(--primary)]"
+                className="mei-input"
               />
             </div>
           </div>
