@@ -14,6 +14,7 @@ import GyingManager from '@/components/GyingManager.vue';
 import PanlianManager from '@/components/PanlianManager.vue';
 import WeiboManager from '@/components/WeiboManager.vue';
 import ExportResultsModal from '@/components/ExportResultsModal.vue';
+import MeiPanel from '@/components/MeiPanel.vue';
 import { getDiskTypeName } from '@/utils/diskTypes';
 
 // 后端健康状态缓存（应用启动时获取一次）
@@ -1188,6 +1189,9 @@ onUnmounted(() => {
     <!-- 背景装饰 -->
     <div class="bg-decorative"></div>
     
+    <!-- 左侧窄面板（入口：搜索） -->
+    <MeiPanel @navigate-search="switchToSearch" />
+    
     <!-- 主要内容区域 -->
     <main
       ref="mainContentRef"
@@ -1196,6 +1200,16 @@ onUnmounted(() => {
     >
       <!-- 搜索页面 -->
       <div v-if="currentPage === 'search'" class="search-page">
+        <!-- 应用品牌横幅（对齐工具箱首页 Hero；仅未搜索时展示） -->
+        <div v-if="!hasSearched && !loading" class="mei-brand">
+          <div class="mei-brand-row">
+            <span class="mei-brand-tile">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+            </span>
+            <span class="mei-brand-name">网盘搜索</span>
+          </div>
+          <div class="mei-brand-desc">聚合搜索阿里云盘、夸克、百度等主流网盘资源</div>
+        </div>
         <!-- 搜索表单 -->
         <div class="search-form-block mb-6">
           <SearchForm 
@@ -1322,6 +1336,47 @@ onUnmounted(() => {
 /* 页面切换动画 */
 .search-page, .status-page {
   animation: fadeIn 0.3s ease-in-out;
+}
+
+/* 应用品牌横幅（对齐工具箱首页 Hero：渐变 Logo + 渐变名称居中） */
+.mei-brand {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  margin-bottom: 26px;
+  padding-top: 3vh;
+}
+.mei-brand-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.mei-brand-tile {
+  width: 46px;
+  height: 46px;
+  border-radius: 14px;
+  background: linear-gradient(135deg, #6366f1 0%, #a855f7 55%, #ec4899 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  box-shadow: 0 6px 20px rgba(99, 102, 241, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.35);
+}
+.mei-brand-name {
+  font-size: 34px;
+  font-weight: 800;
+  letter-spacing: -0.5px;
+  background: linear-gradient(135deg, #6366f1 0%, #a855f7 55%, #ec4899 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: transparent;
+}
+.mei-brand-desc {
+  margin-top: 6px;
+  font-size: 12.5px;
+  color: #5d6778;
 }
 
 @keyframes fadeIn {

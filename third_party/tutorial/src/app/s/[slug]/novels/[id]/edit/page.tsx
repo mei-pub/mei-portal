@@ -38,6 +38,7 @@ export default function EditNovelPage() {
   const [tagInput, setTagInput] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [novelSlug, setNovelSlug] = useState("");
 
   useEffect(() => {
     fetchNovel();
@@ -49,9 +50,9 @@ export default function EditNovelPage() {
       if (res.ok) {
         const data = await res.json();
         setForm({
-          title: data.title,
-          slug: data.slug || "",
-          author: data.author || "",
+         title: data.title,
+         slug: data.slug || "",
+         author: data.author || "",
           description: data.description || "",
           cover_url: data.cover_url || "",
           icon: data.icon || "",
@@ -59,10 +60,15 @@ export default function EditNovelPage() {
           category: data.category || "",
           tags: data.tags || [],
           status: data.status || "ongoing",
-          rating: data.rating || 0,
-        });
-      }
-    } catch (err) {
+        rating: data.rating || 0,
+       });
+       // 规范化路径：数字 id → slug
+       setNovelSlug(data.slug || "");
+       if (data.slug && novelId !== data.slug) {
+         router.replace(`/s/${slug}/novels/${data.slug}/edit`);
+       }
+     }
+   } catch (err) {
       console.error("Failed to fetch novel:", err);
     } finally {
       setLoading(false);
@@ -80,7 +86,7 @@ export default function EditNovelPage() {
         body: JSON.stringify(form),
       });
       if (res.ok) {
-        router.push(`/s/${slug}/novels/${novelId}`);
+        router.push(`/s/${slug}/novels/${form.slug || novelSlug || novelId}`);
       }
     } catch (err) {
       console.error("Failed to update novel:", err);
@@ -105,7 +111,7 @@ export default function EditNovelPage() {
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-3">
             <Link
-              href={`/s/${slug}/novels/${novelId}`}
+              href={`/s/${slug}/novels/${novelSlug || novelId}`}
               className="text-[var(--muted)] hover:text-[var(--foreground)] transition-colors"
             >
               <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>

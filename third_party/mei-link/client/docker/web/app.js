@@ -10,6 +10,11 @@ const icons = {
   trash: '<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3m-8 0 1 13h8l1-13M10 11v5m4-5v5"/></svg>',
   close: '<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg>',
   empty: '<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M7 8h10M9 16h6"/><circle cx="5" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg>',
+  power: '<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2v10"/><path d="M18.4 6.6a9 9 0 1 1-12.8 0"/></svg>',
+  refresh: '<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12a9 9 0 0 1 15.5-6.2L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-15.5 6.2L3 16"/><path d="M3 21v-5h5"/></svg>',
+  logout: '<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5"/><path d="M21 12H9"/></svg>',
+  collapseLeft: '<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg>',
+  collapseRight: '<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg>',
 };
 let tunnels = [];
 let events = [];
@@ -48,8 +53,16 @@ async function load() {
   if (!configuredForm) { fillConfig(serverConfig); configuredForm = true; }
 }
 function renderStatus(status) {
+  lastStatus = status || lastStatus;
   $("#statusText").textContent = status.connected ? "已连接" : status.running ? "连接中" : status.configured ? "未连接" : "未配置";
   $("#statusDot").className = `dot ${status.connected ? "ok" : status.running || status.configured ? "warn" : ""}`;
+  // 面板 连接/断开 单入口：按连接态切换图标与提示
+  const toggle = $("#panelToggle");
+  if (toggle) {
+    const connected = status.connected || status.running;
+    toggle.title = connected ? "断开" : "连接";
+    toggle.classList.toggle("on", connected);
+  }
 }
 function renderTunnels() {
   const target = $("#tunnelList");
@@ -211,14 +224,41 @@ $("#newTunnelButton").addEventListener("click", () => openTunnelDialog()); $("#c
 document.querySelectorAll('input[name="type"]').forEach(input => input.addEventListener("change", typeFields));
 $("#tunnelForm").addEventListener("submit", async event => { event.preventDefault(); const form = event.target; const button = $("#saveTunnelButton"); setBusy(button, true); try { const payload = tunnelPayload(form); const id = field(form, "id").value; await api(id ? `/api/tunnels/${encodeURIComponent(id)}` : "/api/tunnels", { method: id ? "PUT" : "POST", body: JSON.stringify(payload) }); closeTunnelDialog(); notify(id ? "隧道已更新" : "隧道已创建"); await load(); } catch (error) { notify(error.message, true); } finally { setBusy(button, false); } });
 $("#tunnelList").addEventListener("click", async event => { const action = event.target.closest("[data-edit],[data-toggle],[data-delete],[data-copy]"); if (!action) return; const id = action.dataset.edit || action.dataset.toggle || action.dataset.delete || action.dataset.copy; const tunnel = tunnels.find(item => item.id === id); if (!tunnel) return; try { if (action.dataset.edit) return openTunnelDialog(tunnel); if (action.dataset.copy) return copyText(tunnel.route || "", "访问地址已复制"); if (action.dataset.delete) { if (!confirm(`确定删除隧道“${tunnel.name}”吗？`)) return; await api(`/api/tunnels/${encodeURIComponent(tunnel.id)}`, { method: "DELETE" }); notify("隧道已删除"); } else { await api(`/api/tunnels/${encodeURIComponent(tunnel.id)}/toggle`, { method: "POST", body: JSON.stringify({ enabled: !tunnel.enabled }) }); notify(`隧道已${tunnel.enabled ? "停用" : "启用"}`); } await load(); } catch (error) { notify(error.message, true); } });
-$("#startButton").addEventListener("click", async event => { setBusy(event.currentTarget, true); try { await api("/api/control/start", { method: "POST" }); await load(); } catch (error) { notify(error.message, true); } finally { setBusy(event.currentTarget, false); } });
-$("#restartButton").addEventListener("click", async event => { setBusy(event.currentTarget, true); try { await api("/api/control/start", { method: "POST" }); notify("隧道管理器已重启"); await load(); } catch (error) { notify(error.message, true); } finally { setBusy(event.currentTarget, false); } });
-$("#stopButton").addEventListener("click", async event => { setBusy(event.currentTarget, true); try { await api("/api/control/stop", { method: "POST" }); await load(); } catch (error) { notify(error.message, true); } finally { setBusy(event.currentTarget, false); } });
+// 左侧窄面板行动点（req：添加隧道 / 连接或断开 / 重启 / 退出 全部收敛到面板）
+let lastStatus = { connected: false, running: false, configured: false };
+async function controlAction(action, event, okMessage) {
+  setBusy(event.currentTarget, true);
+  try { await api(`/api/control/${action}`, { method: "POST" }); if (okMessage) notify(okMessage); await load(); }
+  catch (error) { notify(error.message, true); }
+  finally { setBusy(event.currentTarget, false); }
+}
+$("#panelAddTunnel").addEventListener("click", () => openTunnelDialog());
+$("#panelToggle").addEventListener("click", async event => {
+  // 已连接或连接中 → 断开；否则 → 连接
+  const connected = lastStatus.connected || lastStatus.running;
+  await controlAction(connected ? "stop" : "start", event);
+});
+$("#panelRestart").addEventListener("click", async event => { await controlAction("start", event, "隧道管理器已重启"); });
+$("#panelLogout").addEventListener("click", async () => { clearInterval(polling); await api("/api/logout", { method: "POST" }); location.reload(); });
+// 面板收展（localStorage 记忆）
+(function initPanelToggle() {
+  const KEY = "mei-float-meilink";
+  const panel = $("#meiPanel");
+  const handle = $("#panelHandle");
+  const apply = open => {
+    panel.classList.toggle("hidden", !open);
+    handle.classList.toggle("hidden", open);
+  };
+  let open = true;
+  try { open = localStorage.getItem(KEY) !== "1"; } catch (e) {}
+  apply(open);
+  $("#panelCollapse").addEventListener("click", () => { open = false; try { localStorage.setItem(KEY, "1"); } catch (e) {} apply(false); });
+  handle.addEventListener("click", () => { open = true; try { localStorage.setItem(KEY, "0"); } catch (e) {} apply(true); });
+})();
 $("#refreshButton").addEventListener("click", () => load().catch(error => notify(error.message, true)));
 $("#copyLogsButton").addEventListener("click", () => copyText(formatLogs(), "运行日志已复制").catch(error => notify(error.message, true)));
 $("#exportLogsButton").addEventListener("click", () => { const blob = new Blob([formatLogs() || "尚无运行日志\n"], { type: "text/plain;charset=utf-8" }); const link = document.createElement("a"); link.href = URL.createObjectURL(blob); link.download = `meilink-log-${new Date().toISOString().replace(/[:.]/g, "-")}.txt`; link.click(); URL.revokeObjectURL(link.href); });
 $("#clearLogsButton").addEventListener("click", async () => { if (!events.length || !confirm("确定清空当前运行日志吗？")) return; try { await api("/api/events", { method: "DELETE" }); notify("运行日志已清空"); await load(); } catch (error) { notify(error.message, true); } });
-$("#logoutButton").addEventListener("click", async () => { clearInterval(polling); await api("/api/logout", { method: "POST" }); location.reload(); });
 
 (async function restoreSession() {
   try {

@@ -164,6 +164,8 @@ function ItemFormModal({
   onSubmit: (item: PanelItem) => void;
 }) {
   const [form, setForm] = useState<PanelItem>(item);
+  const [newGroup, setNewGroup] = useState(false);
+  const [newGroupName, setNewGroupName] = useState('');
   const input: React.CSSProperties = {
     width: '100%', boxSizing: 'border-box', padding: '9px 12px', borderRadius: 10,
     fontSize: 13, border: '1px solid var(--mei-border-strong)', outline: 'none',
@@ -188,25 +190,41 @@ function ItemFormModal({
           </div>
           <div>
             <label style={label}>分组</label>
-            {/* 值为分组 id（编辑已有项时下拉能正确回显）；新名称通过「新建分组」生成随机唯一 id */}
-            <select
-              style={input}
-              value={groups.some((g) => g.id === form.groupId) ? form.groupId : ''}
-              onChange={(e) => {
-                if (e.target.value === '__new__') {
-                  const n = prompt('新分组名称');
-                  if (n && n.trim()) {
-                    setForm({ ...form, groupId: n.trim() }); // 名称交给 upsertItem 生成随机唯一 id
+            {/* 选择已有分组（显示名称）或切换到新建模式输入名称；新名称在 upsertItem 生成随机唯一 id */}
+            {newGroup ? (
+              <div style={{ display: 'flex', gap: 6 }}>
+                <input
+                  style={input}
+                  value={newGroupName}
+                  autoFocus
+                  placeholder="输入新分组名称"
+                  onChange={(e) => { setNewGroupName(e.target.value); setForm({ ...form, groupId: e.target.value }); }}
+                  onKeyDown={(e) => { if (e.key === 'Escape') { setNewGroup(false); setNewGroupName(''); setForm({ ...form, groupId: '' }); } }}
+                />
+                <button
+                  type="button"
+                  onClick={() => { setNewGroup(false); setNewGroupName(''); setForm({ ...form, groupId: '' }); }}
+                  style={{ border: '1px solid var(--mei-border-strong)', borderRadius: 10, padding: '0 12px', cursor: 'pointer', fontSize: 13, color: 'var(--mei-text-muted)', whiteSpace: 'nowrap' }}
+                >取消</button>
+              </div>
+            ) : (
+              <select
+                style={input}
+                value={groups.some((g) => g.id === form.groupId) ? form.groupId : ''}
+                onChange={(e) => {
+                  if (e.target.value === '__new__') {
+                    setNewGroup(true);
+                    setNewGroupName('');
+                  } else {
+                    setForm({ ...form, groupId: e.target.value });
                   }
-                } else {
-                  setForm({ ...form, groupId: e.target.value });
-                }
-              }}
-            >
-              <option value=''>未分组</option>
-              {groups.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}
-              <option value='__new__'>＋ 新建分组…</option>
-            </select>
+                }}
+              >
+                <option value=''>未分组</option>
+                {groups.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}
+                <option value='__new__'>＋ 新建分组…</option>
+              </select>
+            )}
           </div>
         </div>
         <label style={label}>描述</label>

@@ -1,7 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import Navbar from "@/components/Navbar";
 import { showToast } from "@/components/Toast";
 
 interface SiteRow {
@@ -172,7 +171,6 @@ export default function ManagePage() {
 
   return (
     <>
-      <Navbar />
       <main className="flex-1 max-w-3xl mx-auto w-full px-4 sm:px-6 py-6">
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-3">
@@ -183,12 +181,20 @@ export default function ManagePage() {
             </Link>
             <h1 className="text-xl font-bold">小说站点管理</h1>
           </div>
-          <button
-            onClick={() => setCreating(!creating)}
-            className="mei-btn-primary"
-          >
-            {creating ? "取消" : "新建站点"}
-          </button>
+          <div className="flex items-center gap-2">
+            <Link
+              href="/backup"
+              className="px-4 py-2 text-sm border border-[var(--border)] text-[var(--muted)] rounded-lg hover:bg-[var(--accent)] transition-colors"
+            >
+              数据备份
+            </Link>
+            <button
+              onClick={() => setCreating(!creating)}
+              className="mei-btn-primary"
+            >
+              {creating ? "取消" : "新建站点"}
+            </button>
+          </div>
         </div>
 
         {creating && (

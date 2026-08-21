@@ -285,22 +285,23 @@
       collapseBtn.title = '收起导航面板';
       collapseBtn.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m18 15-6-6-6 6"/></svg>';
       collapseBtn.onclick = function (e) { e.stopPropagation(); setCollapsed(true); };
-      bar.appendChild(collapseBtn);
+     bar.appendChild(collapseBtn);
 
-      return { bar: bar };
-    }
+    return { bar: bar };
+  }
 
-    // ---- 顶部导航面板：展开/收起（localStorage 记忆，收起为贴顶小把手）----
+    var cachedPlugins = null;
+
+  // ---- 顶部导航面板：展开/收起（localStorage 记忆，收起为贴顶小把手）----
     var COLLAPSE_KEY = 'mei-topbar-collapsed';
-    // 沉浸页（影视播放页）：顶栏默认收起（不写记忆，用户可手动展开）
-    function isImmersivePath() {
-      try {
-        return APP_ID === 'lunatv' && window.location.pathname.indexOf('/tv/play') === 0;
-      } catch (e) { return false; }
-    }
+    // 应用可编程控制：mei-topbar-set {collapsed:boolean}（不写记忆，刷新即还原）
+    // 用途：影视播放页进入播放态、AI 绘图进入绘图/对话页时自动收起顶栏
+    var transientCollapsed = false;
     function isCollapsed() {
-      if (isImmersivePath() && localStorage.getItem(COLLAPSE_KEY) !== '0') return true;
       try { return localStorage.getItem(COLLAPSE_KEY) === '1'; } catch (e) { return false; }
+    }
+    function effectiveCollapsed() {
+      return transientCollapsed || isCollapsed();
     }
     function ensureToggle() {
       var t = document.getElementById('mei-topbar-toggle');
@@ -309,10 +310,10 @@
         t.id = 'mei-topbar-toggle';
         t.title = '展开导航面板';
         t.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>';
-        t.onclick = function () { setCollapsed(false); };
+        t.onclick = function () { transientCollapsed = false; setCollapsed(false); };
         (document.body || document.documentElement).appendChild(t);
       }
-      t.style.display = isCollapsed() ? 'flex' : 'none';
+      t.style.display = effectiveCollapsed() ? 'flex' : 'none';
     }
     function setCollapsed(collapsed) {
       try { localStorage.setItem(COLLAPSE_KEY, collapsed ? '1' : '0'); } catch (e) {}
@@ -321,6 +322,14 @@
       if (bar) bar.style.display = collapsed ? 'none' : 'flex';
       ensureToggle();
     }
+    window.addEventListener('mei-topbar-set', function (e) {
+      var detail = (e && e.detail) || {};
+      transientCollapsed = !!detail.collapsed;
+      document.body.classList.toggle('mei-topbar-collapsed', effectiveCollapsed());
+      var bar = document.getElementById('mei-topbar');
+      if (bar) bar.style.display = effectiveCollapsed() ? 'none' : 'flex';
+      ensureToggle();
+    });
 
     function render(plugins) {
       cachedPlugins = plugins;
@@ -334,8 +343,8 @@
       if (!document.getElementById('mei-topbar') && cachedPlugins) {
         var built = buildTopbar(cachedPlugins);
         document.body.insertBefore(built.bar, document.body.firstChild);
-        // 应用记忆的折叠态（默认展开）
-        if (isCollapsed()) {
+        // 应用折叠态（记忆或应用编程触发）
+        if (effectiveCollapsed()) {
           document.getElementById('mei-topbar').style.display = 'none';
           document.body.classList.add('mei-topbar-collapsed');
         }

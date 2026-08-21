@@ -192,7 +192,8 @@ export function syncBuiltinItems(
   plugins: Array<{ id: string; name: string; description?: string; icon: string; url: string }>
 ): { config: PanelConfig; changed: boolean } {
   const removed = new Set(config.removedBuiltin);
-  const pluginIds = new Set(plugins.map((p) => p.id));
+  // 小说阅读（tutorial）不作为单个内置图标项——其站点在首页作为独立图标项动态渲染
+  const pluginIds = new Set(plugins.filter((p) => p.id !== 'tutorial').map((p) => p.id));
   const existingBuiltin = new Set(config.items.filter((i) => i.builtin).map((i) => i.builtin as string));
   let changed = false;
   let items = config.items.filter((i) => {
@@ -208,6 +209,7 @@ export function syncBuiltinItems(
     return i;
   });
   for (const p of plugins) {
+    if (p.id === 'tutorial') continue; // 跳过小说阅读：站点在首页独立渲染
     if (removed.has(p.id) || existingBuiltin.has(p.id)) continue;
     items.push({
       id: `b-${p.id}`,

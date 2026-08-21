@@ -28,6 +28,9 @@ function DoubanPageClient() {
   const [currentPage, setCurrentPage] = useState(0);
   const [hasMore, setHasMore] = useState(true);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
+  // 加载更多失败：展示重试按钮，人工触发恢复加载（hasMore 不被错误永久置 false）
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [retryTick, setRetryTick] = useState(0);
   const [selectorsReady, setSelectorsReady] = useState(false);
   const observerRef = useRef<IntersectionObserver | null>(null);
   const loadingRef = useRef<HTMLDivElement>(null);
@@ -266,6 +269,7 @@ function DoubanPageClient() {
       setCurrentPage(0);
       setHasMore(true);
       setIsLoadingMore(false);
+      setLoadError(null);
 
       let data: DoubanResult;
 
@@ -523,6 +527,7 @@ function DoubanPageClient() {
             if (isSnapshotEqual(requestSnapshot, currentSnapshot)) {
               setDoubanData((prev) => [...prev, ...data.list]);
               setHasMore(data.list.length !== 0);
+              setLoadError(null);
             } else {
               console.log('参数不一致，不执行任何操作，避免设置过期数据');
             }
@@ -531,6 +536,10 @@ function DoubanPageClient() {
           }
         } catch (err) {
           console.error(err);
+          // 出错：保留已有数据，标记错误态展示重试入口（不再静默终止加载）
+          if (isSnapshotEqual(requestSnapshot, { ...currentParamsRef.current })) {
+            setLoadError(err instanceof Error ? err.message : '加载失败');
+          }
         } finally {
           setIsLoadingMore(false);
         }
@@ -540,6 +549,7 @@ function DoubanPageClient() {
     }
   }, [
     currentPage,
+    retryTick,
     type,
     primarySelection,
     secondarySelection,
@@ -551,7 +561,7 @@ function DoubanPageClient() {
   // 设置滚动监听
   useEffect(() => {
     // 如果没有更多数据或正在加载，则不设置监听
-    if (!hasMore || isLoadingMore || loading) {
+    if (!hasMore || isLoadingMore || loading || loadError) {
       return;
     }
 
@@ -577,7 +587,14 @@ function DoubanPageClient() {
         observerRef.current.disconnect();
       }
     };
-  }, [hasMore, isLoadingMore, loading]);
+  }, [hasMore, isLoadingMore, loading, loadError]);
+
+  // 人工重试加载更多：清除错误态并触发当前页重新拉取
+  const retryLoadMore = useCallback(() => {
+    setLoadError(null);
+    setHasMore(true);
+    setRetryTick((t) => t + 1);
+  }, []);
 
   // 处理选择器变化
   const handlePrimaryChange = useCallback(
@@ -753,7 +770,7 @@ function DoubanPageClient() {
         </div>
 
         {/* 内容展示区域 */}
-        <div className='max-w-[95%] mx-auto mt-8 overflow-visible'>
+        <div className='max-w-[85%] 2xl:max-w-[1500px] mx-auto mt-8 overflow-visible'>
           {/* 内容网格 */}
           {loading || !selectorsReady
             ? // 显示骨架屏
@@ -786,7 +803,7 @@ function DoubanPageClient() {
           }
 
           {/* 加载更多指示器 */}
-          {hasMore && !loading && (
+          {hasMore && !loading && !loadError && (
             <div
               ref={(el) => {
                 if (el && el.offsetParent !== null) {
@@ -806,9 +823,32 @@ function DoubanPageClient() {
             </div>
           )}
 
-          {/* 没有更多数据提示 */}
-          {!hasMore && doubanData.length > 0 && (
-            <div className='text-center text-gray-500 py-8'>已加载全部内容</div>
+          {/* 加载失败：提示 + 重试按钮（出错后不再静默终止） */}
+          {loadError && !loading && (
+            <div className='flex flex-col items-center gap-3 py-8'>
+              <span className='text-sm text-gray-500 dark:text-gray-400'>
+                加载失败：{loadError}
+              </span>
+              <button
+                onClick={retryLoadMore}
+                className='rounded-full bg-gradient-to-br from-indigo-500 to-purple-500 px-6 py-2 text-sm font-medium text-white shadow-md transition-transform hover:scale-105'
+              >
+                重试加载更多
+              </button>
+            </div>
+          )}
+
+          {/* 没有更多数据提示 + 人工重试入口 */}
+          {!hasMore && !loadError && doubanData.length > 0 && (
+            <div className='flex flex-col items-center gap-3 py-8'>
+              <span className='text-gray-500 dark:text-gray-400'>已加载全部内容</span>
+              <button
+                onClick={retryLoadMore}
+                className='rounded-full border border-gray-200 px-5 py-1.5 text-xs text-gray-500 transition-colors hover:border-indigo-400 hover:text-indigo-500 dark:border-gray-700 dark:text-gray-400'
+              >
+                重试加载更多
+              </button>
+            </div>
           )}
 
           {/* 空状态 */}

@@ -70,15 +70,16 @@ h1 .logo { width: 34px; height: 34px; border-radius: 10px; background: var(--gra
 var GENRES = ["流行","摇滚","古典音乐","民谣","电子","嘻哈","爵士","轻音乐","R&B","金属","朋克","蓝调","雷鬼","世界音乐","拉丁","新世纪","古风","动漫","影视原声","说唱"];
 var SOURCES = [
   { value: "netease", label: "网易云音乐", desc: "曲库全，推荐准确" },
-  { value: "qq", label: "QQ音乐", desc: "腾讯音乐平台" },
-  { value: "kugou", label: "酷狗音乐", desc: "酷狗曲库" },
+  { value: "qq", label: "QQ音乐", desc: "腾讯音乐平台（本地源直连）" },
+  { value: "kugou", label: "酷狗音乐", desc: "酷狗曲库（本地源直连）" },
   { value: "kuwo", label: "酷我音乐", desc: "无损音质支持好" },
-  { value: "migu", label: "咪咕音乐", desc: "中国移动音乐平台" },
+  { value: "migu", label: "咪咕音乐", desc: "中国移动音乐平台（本地源直连）" },
   { value: "joox", label: "JOOX音乐", desc: "东南亚曲库" },
-  { value: "bilibili", label: "哔哩哔哩", desc: "B站音频区" },
-  { value: "ximalaya", label: "喜马拉雅", desc: "有声内容" }
+  { value: "bilibili", label: "哔哩哔哩", desc: "B站音频区" }
 ];
-var DEFAULT_SOURCES = ["netease", "kuwo", "joox", "bilibili"];
+// qq/kugou/migu/kuwo 由服务端本地源直连实现（server/providers）；
+// 单源解析失败时前端会跨源匹配同名歌曲兜底播放
+var DEFAULT_SOURCES = ["netease", "qq", "kugou", "kuwo", "migu", "joox"];
 
 function toast(msg) {
   var t = document.getElementById("toast");

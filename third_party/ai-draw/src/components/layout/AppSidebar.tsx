@@ -44,6 +44,16 @@ export function AppSidebar({ onCreateProject }: AppSidebarProps) {
     setProjectsOpen(false)
   }, [location.pathname])
 
+  // 编辑页等可编程控制面板收展（不写记忆）
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent<{ collapsed?: boolean }>).detail || {}
+      setOpen(!detail.collapsed)
+    }
+    window.addEventListener('mei-panel-set', handler)
+    return () => window.removeEventListener('mei-panel-set', handler)
+  }, [])
+
   const toggle = (next: boolean) => {
     setOpen(next)
     try {
@@ -61,12 +71,14 @@ export function AppSidebar({ onCreateProject }: AppSidebarProps) {
 
   const actions = [
     {
-      label: '首页',
-      title: '系统首页',
+      label: '绘图',
+      title: '绘图',
       icon: (
-        <svg className="h-[18px] w-[18px]" viewBox="0 0 24 24" {...stroke}>
-          <path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
-          <path d="M9 22V12h6v10"/>
+        <svg className="h-[15px] w-[15px]" viewBox="0 0 24 24" {...stroke}>
+          <path d="m12 19 7-7 3 3-7 7-3-3z"/>
+          <path d="m18 13-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"/>
+          <path d="m2 2 7.586 7.586"/>
+          <circle cx="11" cy="11" r="2"/>
         </svg>
       ),
       onClick: () => navigate('/'),
@@ -75,7 +87,7 @@ export function AppSidebar({ onCreateProject }: AppSidebarProps) {
       label: '新建',
       title: '新建项目',
       icon: (
-        <svg className="h-[18px] w-[18px]" viewBox="0 0 24 24" {...stroke}>
+        <svg className="h-[15px] w-[15px]" viewBox="0 0 24 24" {...stroke}>
           <path d="M12 5v14M5 12h14"/>
         </svg>
       ),
@@ -85,7 +97,7 @@ export function AppSidebar({ onCreateProject }: AppSidebarProps) {
       label: '文件',
       title: '文件管理',
       icon: (
-        <svg className="h-[18px] w-[18px]" viewBox="0 0 24 24" {...stroke}>
+        <svg className="h-[15px] w-[15px]" viewBox="0 0 24 24" {...stroke}>
           <path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2z"/>
         </svg>
       ),
@@ -103,32 +115,32 @@ export function AppSidebar({ onCreateProject }: AppSidebarProps) {
         <button
           onClick={() => toggle(true)}
           title="展开菜单"
-          className="fixed left-0 top-1/2 z-40 h-16 w-6 -translate-y-1/2 flex items-center justify-center rounded-r-xl bg-gradient-to-b from-indigo-500 to-purple-500 text-white shadow-lg transition-all hover:w-8"
+          className="fixed left-0 top-1/2 z-40 h-14 w-5 -translate-y-1/2 flex items-center justify-center rounded-r-lg bg-gradient-to-b from-indigo-500 to-purple-500 text-white shadow-lg transition-all hover:w-7"
         >
           <svg className="h-4 w-4" viewBox="0 0 24 24" {...stroke}>
             <path d="m9 18 6-6-6-6"/>
           </svg>
         </button>
       ) : (
-        <div className="fixed left-3 top-1/2 -translate-y-1/2 z-40 flex flex-col items-center gap-1 p-1.5 rounded-2xl bg-white/75 dark:bg-gray-900/70 backdrop-blur-xl border border-black/10 dark:border-white/10 shadow-lg">
-          {/* 应用信息区：Logo + 名称（垂直布局，与其他应用面板统一） */}
+        <div className="fixed left-2 top-1/2 -translate-y-1/2 z-40 flex flex-col items-center gap-1 p-1 rounded-2xl bg-white/75 dark:bg-gray-900/70 backdrop-blur-xl border border-black/10 dark:border-white/10 shadow-lg">
+          {/* 应用信息区：Logo + 纵向名称（窄面板统一样式） */}
           <button
             onClick={() => actions[0]?.onClick()}
             title="AI 绘图"
-            className="flex w-[64px] flex-col items-center gap-1 rounded-xl px-1 py-1.5 transition-colors hover:bg-gray-900/5 dark:hover:bg-white/10"
+            className="flex flex-col items-center gap-1.5 rounded-xl px-0.5 py-1.5 transition-colors hover:bg-gray-900/5 dark:hover:bg-white/10"
           >
-            <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-500 to-purple-500 text-white shadow-md">
-              <svg className="h-[18px] w-[18px]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m12 19 7-7 3 3-7 7-3-3z"/><path d="m18 13-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"/><path d="m2 2 7.586 7.586"/><circle cx="11" cy="11" r="2"/></svg>
+            <span className="flex h-[30px] w-[30px] items-center justify-center rounded-lg bg-gradient-to-br from-indigo-500 to-purple-500 text-white shadow-md">
+              <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m12 19 7-7 3 3-7 7-3-3z"/><path d="m18 13-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"/><path d="m2 2 7.586 7.586"/><circle cx="11" cy="11" r="2"/></svg>
             </span>
-            <span className="w-full truncate text-center text-[10px] font-medium leading-tight text-gray-700 dark:text-gray-300">AI 绘图</span>
+            <span className="select-none text-[10px] font-medium leading-none tracking-[0.18em] text-gray-700 [writing-mode:vertical-rl] [text-orientation:upright] dark:text-gray-300">AI绘图</span>
           </button>
-          <div className="my-0.5 h-px w-8 bg-black/10 dark:bg-white/10" />
+          <div className="h-px w-6 bg-black/10 dark:bg-white/10" />
           {actions.map(a => (
             <button
               key={a.label}
               onClick={a.onClick}
               title={a.title}
-              className="w-10 h-10 rounded-xl flex items-center justify-center text-gray-500 hover:bg-gray-900/5 hover:text-indigo-600 dark:text-gray-400 dark:hover:bg-white/10 transition-colors"
+              className="h-[34px] w-[34px] rounded-xl flex items-center justify-center text-gray-500 hover:bg-gray-900/5 hover:text-indigo-600 dark:text-gray-400 dark:hover:bg-white/10 transition-colors"
             >
               {a.icon}
             </button>
@@ -136,7 +148,7 @@ export function AppSidebar({ onCreateProject }: AppSidebarProps) {
           <button
             onClick={() => toggle(false)}
             title="收起菜单"
-            className="w-10 h-8 rounded-xl flex items-center justify-center text-gray-400 hover:bg-gray-900/5 dark:hover:bg-white/10 transition-colors"
+            className="h-6 w-[34px] rounded-lg flex items-center justify-center text-gray-400 hover:bg-gray-900/5 dark:hover:bg-white/10 transition-colors"
           >
             <svg className="h-4 w-4" viewBox="0 0 24 24" {...stroke}>
               <path d="m15 18-6-6 6-6"/>

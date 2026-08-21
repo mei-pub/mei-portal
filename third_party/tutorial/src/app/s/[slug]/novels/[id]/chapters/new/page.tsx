@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter, useParams } from "next/navigation";
 import Link from "next/link";
 import SitePanel from "@/components/SitePanel";
@@ -14,6 +14,20 @@ export default function NewChapterPage() {
   const novelId = params.id as string;
   const [form, setForm] = useState({ title: "", content: "", chapter_order: 0 });
   const [submitting, setSubmitting] = useState(false);
+  const [novelSlug, setNovelSlug] = useState("");
+
+  // 获取小说 slug 用于路径规范化（防 id 遍历）
+  useEffect(() => {
+    fetch(`/novels/api/novels/${novelId}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (d?.slug) {
+          setNovelSlug(d.slug);
+          if (novelId !== d.slug) router.replace(`/s/${slug}/novels/${d.slug}/chapters/new`);
+        }
+      })
+      .catch(() => {});
+  }, [novelId, slug, router]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -34,7 +48,7 @@ export default function NewChapterPage() {
       });
       if (res.ok) {
         showToast("章节保存成功", "success");
-        setTimeout(() => router.push(`/s/${slug}/novels/${novelId}`), 800);
+        setTimeout(() => router.push(`/s/${slug}/novels/${novelSlug || novelId}`), 800);
       } else {
         showToast("保存失败，请重试", "error");
       }
@@ -53,7 +67,7 @@ export default function NewChapterPage() {
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-3">
             <Link
-              href={`/s/${slug}/novels/${novelId}`}
+              href={`/s/${slug}/novels/${novelSlug || novelId}`}
               className="text-[var(--muted)] hover:text-[var(--foreground)] transition-colors"
             >
               <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>

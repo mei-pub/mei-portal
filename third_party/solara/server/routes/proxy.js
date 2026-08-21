@@ -10,6 +10,7 @@
 
 const { Router } = require('express');
 const cache = require('../cache');
+const { getProvider } = require('../providers');
 
 const API_BASE_URL = process.env.API_BASE_URL || 'https://music-api.gdstudio.xyz/api.php';
 const KUWO_HOST_PATTERN = /(^|\.)kuwo\.cn$/i;
@@ -203,6 +204,19 @@ module.exports = function createProxyRouter() {
       return proxyKuwoAudio(target, req, res);
     }
 
+    // ── 本地音乐源（gdstudio 已下线的源在这里直连实现）──────────────────────
+    const source = req.query.source;
+    const types = req.query.types;
+    const provider = source ? getProvider(source) : null;
+    if (provider && types && provider[types]) {
+      return proxyLocalProvider(provider, types, req, res);
+    }
+
+    // 封面直链兜底：pic_id 为完整 URL 时直接 302（适用于本地源封面）
+    if (types === 'pic' && /^https?:\/\//.test(String(req.query.id || ''))) {
+      return res.redirect(String(req.query.id));
+    }
+
     // 重建完整 URL（含查询参数）给缓存 key 使用
     const fullUrl = `http://localhost${req.originalUrl}`;
     return proxyApiRequest(fullUrl, req, res);
@@ -210,3 +224,68 @@ module.exports = function createProxyRouter() {
 
   return router;
 };
+
+/** 本地源请求处理：与上游一致的响应结构 + 同样的 5 分钟缓存策略 */
+async function proxyLocalProvider(provider, types, req, res) {
+  const fullUrl = `http://localhost${req.originalUrl}`;
+  const cacheKey = buildCacheKey(fullUrl);
+  const bypassCache = req.query.nocache === 'true';
+
+  if (!bypassCache) {
+    const cached = cache.get(cacheKey);
+    if (cached) {
+      res.setHeader('Content-Type', cached.contentType || 'application/json');
+      res.setHeader('Access-Control-Allow-Origin', '*');
+      res.setHeader('X-Cache-Status', 'HIT');
+      res.setHeader('Access-Control-Expose-Headers', 'X-Cache-Status');
+      return res.send(cached.body);
+    }
+  }
+
+  try {
+    let body;
+    if (types === 'search') {
+      const list = await provider.search(
+        req.query.name || '',
+        parseInt(req.query.count, 10) || 20,
+        parseInt(req.query.pages, 10) || 1
+      );
+      body = JSON.stringify(list);
+    } else if (types === 'url') {
+      const info = await provider.url(String(req.query.id || ''));
+      body = JSON.stringify(info);
+    } else if (types === 'lyric') {
+      const info = await provider.lyric(String(req.query.id || ''));
+      body = JSON.stringify(info);
+    } else if (types === 'pic') {
+      // 本地源封面均为直链：优先 provider 解析，否则 id 本身是 URL
+      const picUrl = provider.pic
+        ? await provider.pic(String(req.query.id || ''))
+        : String(req.query.id || '');
+      if (/^https?:\/\//.test(picUrl)) return res.redirect(picUrl);
+      return res.status(404).send('No cover');
+    } else {
+      return res.status(400).send('Unsupported types');
+    }
+
+    const isEmptyResult = body.trim() === '[]';
+    const shouldCache = !isEmptyResult && !bypassCache;
+    if (shouldCache) {
+      cache.set(cacheKey, { body, contentType: 'application/json; charset=utf-8' }, 300);
+    }
+    res.setHeader('Content-Type', 'application/json; charset=utf-8');
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('X-Cache-Status', 'MISS');
+    res.setHeader('Access-Control-Expose-Headers', 'X-Cache-Status');
+    res.setHeader('Cache-Control', shouldCache ? 'public, max-age=300' : 'no-store');
+    return res.send(body);
+  } catch (err) {
+    console.error(`[LocalProvider ${types}]`, err.message || err);
+    // 与上游失败语义对齐：搜索失败返回空数组，其他返回 400
+    if (types === 'search') {
+      res.setHeader('Content-Type', 'application/json; charset=utf-8');
+      return res.send('[]');
+    }
+    return res.status(400).json({ error: err.message || 'local provider error' });
+  }
+}

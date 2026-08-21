@@ -1,9 +1,8 @@
 'use client';
-// 文档与帮助：各应用帮助页（原生渲染，门户风格）
-import Link from 'next/link';
+// 文档与帮助：各应用帮助页（原生渲染，门户风格，渲染于 SettingsShell 右侧容器）
 import { useParams } from 'next/navigation';
-import TopBar from '@/components/TopBar';
 import MeiIcon from '@/components/MeiIcon';
+import SettingsShell from '@/components/SettingsShell';
 
 interface HelpSection { title: string; body: string[] }
 interface HelpDoc { name: string; icon: string; intro: string; sections: HelpSection[] }
@@ -94,19 +93,17 @@ export default function HelpPage() {
 
   if (!doc) {
     return (
-      <div style={{ minHeight: '100vh', background: 'var(--mei-bg)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-        <p style={{ color: 'var(--mei-text-muted)' }}>帮助文档不存在</p>
-      </div>
+      <SettingsShell>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '60vh' }}>
+          <p style={{ color: 'var(--mei-text-muted)' }}>帮助文档不存在</p>
+        </div>
+      </SettingsShell>
     );
   }
 
   return (
-    <div style={{ minHeight: '100vh', background: 'var(--mei-bg)' }}>
-      <TopBar query="" onSearch={() => {}} showSearch={false} />
-      <div style={{ maxWidth: 720, margin: '0 auto', padding: '28px 20px 60px' }}>
-        <Link href="/settings" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 13, color: 'var(--mei-text-muted)', marginBottom: 18 }}>
-          <MeiIcon icon="lucide:arrow-left" size={14} /> 返回设置
-        </Link>
+    <SettingsShell>
+      <div style={{ maxWidth: 720, margin: '0 auto', padding: '4px 4px 40px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 8 }}>
           <span style={{ width: 42, height: 42, borderRadius: 12, background: 'var(--mei-gradient)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', color: '#fff', boxShadow: 'var(--mei-glow)' }}>
             <MeiIcon icon={doc.icon} size={20} />
@@ -124,6 +121,6 @@ export default function HelpPage() {
           </section>
         ))}
       </div>
-    </div>
+    </SettingsShell>
   );
 }

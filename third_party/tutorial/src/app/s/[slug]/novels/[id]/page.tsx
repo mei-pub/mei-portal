@@ -54,7 +54,11 @@ export default function NovelDetailPage() {
       const res = await fetch(`/novels/api/novels/${novelId}`);
       if (res.ok) {
         const data = await res.json();
-        setNovel(data);
+       setNovel(data);
+        // 规范化路径：数字 id → slug（防遍历，统一新路径体系）
+        if (data.slug && novelId !== data.slug) {
+          router.replace(`/s/${slug}/novels/${data.slug}`);
+        }
         // 默认插入位置为最后一个章节之后
         if (data.chapters?.length > 0) {
           setVolumePosition(data.chapters[data.chapters.length - 1].id);
@@ -211,6 +215,8 @@ export default function NovelDetailPage() {
     );
   }
 
+  // 规范路径标识：优先用 slug，防 id 遍历
+  const nid = novel.slug || novelId;
   return (
     <>
       <SitePanel />
@@ -282,7 +288,7 @@ export default function NovelDetailPage() {
             </div>
             <div className="flex items-center gap-2 ml-4">
               <Link
-                href={`/s/${slug}/novels/${novelId}/edit`}
+                href={`/s/${slug}/novels/${nid}/edit`}
                 className="p-2 text-[var(--muted)] hover:text-[var(--primary)] hover:bg-[var(--accent)] rounded-lg transition-colors"
                 title="编辑"
               >
@@ -306,7 +312,7 @@ export default function NovelDetailPage() {
               {novel.chapters && novel.chapters.length > 0 ? (
                 <>
                   <Link
-                    href={`/s/${slug}/novels/${novelId}/read`}
+                    href={`/s/${slug}/novels/${nid}/read`}
                     className="mei-btn-primary"
                   >
                     <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -315,7 +321,7 @@ export default function NovelDetailPage() {
                     <span className="hidden sm:inline">开始阅读</span>
                   </Link>
                   <Link
-                    href={`/s/${slug}/novels/${novelId}/read?fulltext=parallel`}
+                    href={`/s/${slug}/novels/${nid}/read?fulltext=parallel`}
                     className="inline-flex items-center gap-1.5 px-3 sm:px-5 py-2 text-sm border border-[var(--primary)] text-[var(--primary)] rounded-lg hover:bg-[var(--accent)] transition-colors"
                   >
                     <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -343,7 +349,7 @@ export default function NovelDetailPage() {
             </div>
             <div className="flex gap-3">
               <Link
-                href={`/s/${slug}/novels/${novelId}/chapters/new`}
+                href={`/s/${slug}/novels/${nid}/chapters/new`}
                 className="inline-flex items-center gap-1.5 px-3 sm:px-5 py-2 text-sm border border-[var(--primary)] text-[var(--primary)] rounded-lg hover:bg-[var(--accent)] transition-colors"
               >
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -352,7 +358,7 @@ export default function NovelDetailPage() {
                 <span className="hidden sm:inline">添加章节</span>
               </Link>
               <Link
-                href={`/s/${slug}/novels/${novelId}/import`}
+                href={`/s/${slug}/novels/${nid}/import`}
                 className="inline-flex items-center gap-1.5 px-3 sm:px-5 py-2 text-sm border border-[var(--border)] text-[var(--muted)] rounded-lg hover:bg-[var(--accent)] transition-colors"
               >
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -389,7 +395,7 @@ export default function NovelDetailPage() {
             <div className="text-center py-12 text-[var(--muted)]">
               <p className="mb-3">暂无章节</p>
               <Link
-                href={`/s/${slug}/novels/${novelId}/chapters/new`}
+                href={`/s/${slug}/novels/${nid}/chapters/new`}
                 className="text-sm text-[var(--primary)] hover:underline"
               >
                 添加第一个章节
@@ -449,7 +455,7 @@ export default function NovelDetailPage() {
                         {chapterIdx + 1}.
                       </span>
                       <Link
-                        href={`/s/${slug}/novels/${novelId}/read?chapter=${ch.id}`}
+                        href={`/s/${slug}/novels/${nid}/read?chapter=${ch.id}`}
                         className="text-sm hover:text-[var(--primary)] transition-colors truncate"
                       >
                         {ch.title}
@@ -460,7 +466,7 @@ export default function NovelDetailPage() {
                     </div>
                     <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity ml-2">
                       <Link
-                        href={`/s/${slug}/novels/${novelId}/chapters/${ch.id}/edit`}
+                        href={`/s/${slug}/novels/${nid}/chapters/${ch.id}/edit`}
                         className="p-1.5 text-[var(--muted)] hover:text-[var(--primary)] rounded-md transition-colors"
                         title="编辑章节"
                       >

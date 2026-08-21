@@ -1,9 +1,8 @@
 'use client';
-// 账号与安全：修改账户名 / 修改密码（门户原生实现）
+// 账号与安全：修改账户名 / 修改密码（门户原生实现，渲染于 SettingsShell 右侧容器）
 import { useEffect, useState } from 'react';
-import Link from 'next/link';
-import TopBar from '@/components/TopBar';
 import MeiIcon from '@/components/MeiIcon';
+import SettingsShell from '@/components/SettingsShell';
 
 const card: React.CSSProperties = {
   background: 'var(--mei-surface)', border: '1px solid var(--mei-border)',
@@ -79,12 +78,8 @@ export default function AccountPage() {
   });
 
   return (
-    <div style={{ minHeight: '100vh', background: 'var(--mei-bg)' }}>
-      <TopBar query="" onSearch={() => {}} showSearch={false} />
-      <div style={{ maxWidth: 560, margin: '0 auto', padding: '28px 20px 60px' }}>
-        <Link href="/settings" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 13, color: 'var(--mei-text-muted)', marginBottom: 16 }}>
-          <MeiIcon icon="lucide:arrow-left" size={14} /> 返回设置
-        </Link>
+    <SettingsShell>
+      <div style={{ maxWidth: 560, margin: '0 auto', padding: '4px 4px 40px' }}>
         <h1 style={{ fontSize: 20, fontWeight: 800, margin: '0 0 4px' }}>账号与安全</h1>
         <p style={{ fontSize: 12.5, color: 'var(--mei-text-muted)', margin: '0 0 20px' }}>
           当前账户：<b>{username || '…'}</b>。修改账户名或密码后需要重新登录。
@@ -120,6 +115,6 @@ export default function AccountPage() {
           {pwMsg && <p style={msgStyle(pwMsg)}>{pwMsg}</p>}
         </form>
       </div>
-    </div>
+    </SettingsShell>
   );
 }

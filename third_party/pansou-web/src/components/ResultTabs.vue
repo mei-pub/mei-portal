@@ -955,9 +955,11 @@ onUnmounted(() => {
 .tabs {
   display: flex;
   overflow-x: auto;
+  overflow-y: hidden;
   border-bottom: 1px solid #e5e7eb;
   background-color: #f9fafb;
   padding: 0 1rem;
+  scrollbar-width: thin;
 }
 
 .tab-button {

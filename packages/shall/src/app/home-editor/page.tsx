@@ -1,5 +1,6 @@
 import { redirect } from 'next/navigation';
 import { isLoggedIn, initUserIfNeeded } from '@/lib/auth';
+import SettingsShell from '@/components/SettingsShell';
 import HomeEditorClient from './HomeEditorClient';
 
 export const dynamic = 'force-dynamic';
@@ -10,5 +11,9 @@ export default async function HomeEditorPage() {
   if (!isLoggedIn()) {
     redirect('/login');
   }
-  return <HomeEditorClient />;
+  return (
+    <SettingsShell>
+      <HomeEditorClient />
+    </SettingsShell>
+  );
 }

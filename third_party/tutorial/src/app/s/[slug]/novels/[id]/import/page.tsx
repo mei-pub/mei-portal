@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { useRouter, useParams } from "next/navigation";
 import Link from "next/link";
 import SitePanel from "@/components/SitePanel";
@@ -26,6 +26,20 @@ export default function ImportPage() {
   const [fullText, setFullText] = useState("");
   const [chapters, setChapters] = useState<ChapterPreview[]>([]);
   const [submitting, setSubmitting] = useState(false);
+  const [novelSlug, setNovelSlug] = useState("");
+
+  // 获取小说 slug 用于路径规范化（防 id 遍历）
+  useEffect(() => {
+    fetch(`/novels/api/novels/${novelId}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (d?.slug) {
+          setNovelSlug(d.slug);
+          if (novelId !== d.slug) router.replace(`/s/${slug}/novels/${d.slug}/import`);
+        }
+      })
+      .catch(() => {});
+  }, [novelId, slug, router]);
 
   // 阶段1：拆分预览
   function handlePreview() {
@@ -163,7 +177,7 @@ export default function ImportPage() {
       if (res.ok) {
         showToast("导入成功", "success");
         setStage("submit");
-        setTimeout(() => router.push(`/s/${slug}/novels/${novelId}`), 1500);
+        setTimeout(() => router.push(`/s/${slug}/novels/${novelSlug || novelId}`), 1500);
       } else {
         showToast("导入失败", "error");
       }
@@ -190,7 +204,7 @@ export default function ImportPage() {
           <div className="flex items-center justify-between mb-2">
             <div className="flex items-center gap-3">
               <Link
-                href={`/s/${slug}/novels/${novelId}`}
+                href={`/s/${slug}/novels/${novelSlug || novelId}`}
                 className="text-[var(--muted)] hover:text-[var(--foreground)] transition-colors"
               >
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>

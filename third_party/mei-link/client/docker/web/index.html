@@ -24,6 +24,26 @@
     .route a{ color:#4f46e5; }
     .metric{ background:linear-gradient(135deg,#fbfdff,#f5f6fd); }
     .tunnel-head{ background:rgba(23,32,56,0.03); }
+    /* 左侧窄面板（与其他应用统一：Logo + 纵向名称 + 图标入口） */
+    .mei-panel{ position:fixed; left:8px; top:50%; transform:translateY(-50%); z-index:60; display:flex; flex-direction:column; align-items:center; gap:4px; padding:4px; border-radius:22px; background:rgba(255,255,255,0.78); border:1px solid rgba(23,32,56,0.10); box-shadow:0 8px 28px rgba(23,32,56,0.10); backdrop-filter:blur(22px) saturate(1.5); -webkit-backdrop-filter:blur(22px) saturate(1.5); }
+    .mei-panel .p-info{ display:flex; flex-direction:column; align-items:center; gap:6px; padding:6px 2px; border:none; background:transparent; border-radius:16px; cursor:pointer; transition:background .15s; }
+    .mei-panel .p-info:hover{ background:rgba(23,32,56,0.05); }
+    .mei-panel .p-logo{ width:30px; height:30px; border-radius:9px; background:linear-gradient(135deg,#6366f1,#a855f7); display:flex; align-items:center; justify-content:center; color:#fff; box-shadow:0 4px 12px rgba(99,102,241,0.35); }
+    .mei-panel .p-logo .icon{ width:15px; height:15px; }
+    .mei-panel .p-name{ writing-mode:vertical-rl; text-orientation:upright; font-size:10px; font-weight:600; letter-spacing:0.18em; line-height:1; color:#1c2333; max-height:96px; overflow:hidden; user-select:none; }
+    .mei-panel .p-divider{ width:24px; height:1px; background:rgba(23,32,56,0.10); }
+    .mei-panel .p-item{ width:34px; height:34px; border:none; border-radius:12px; background:transparent; display:flex; align-items:center; justify-content:center; color:#5d6778; cursor:pointer; transition:all .15s; }
+    .mei-panel .p-item:hover{ background:rgba(23,32,56,0.05); color:#6366f1; }
+    .mei-panel .p-item.p-danger:hover{ background:rgba(220,38,38,0.08); color:#dc2626; }
+    .mei-panel .p-item .icon{ width:15px; height:15px; }
+    .mei-panel .p-item.on{ background:linear-gradient(135deg,rgba(99,102,241,0.12),rgba(236,72,153,0.10)); color:#6366f1; }
+    .mei-panel .p-collapse{ width:34px; height:22px; border:none; border-radius:8px; background:transparent; display:flex; align-items:center; justify-content:center; color:#98a1b3; cursor:pointer; transition:all .15s; }
+    .mei-panel .p-collapse:hover{ background:rgba(23,32,56,0.05); }
+    .mei-panel .p-collapse .icon{ width:14px; height:14px; }
+    .mei-panel-handle{ position:fixed; left:0; top:50%; transform:translateY(-50%); z-index:60; width:20px; height:56px; border:none; border-radius:0 10px 10px 0; background:linear-gradient(180deg,#6366f1,#a855f7); color:#fff; display:flex; align-items:center; justify-content:center; cursor:pointer; box-shadow:0 8px 28px rgba(23,32,56,0.10); transition:width .15s; }
+    .mei-panel-handle:hover{ width:28px; }
+    .mei-panel-handle .icon{ width:16px; height:16px; }
+    @media(max-width:760px){ .mei-panel{ left:4px; } }
   </style>
 </head>
 <body>
@@ -39,8 +59,20 @@
   <main id="appView" class="app-shell hidden">
     <header class="card topbar">
       <div class="brand"><i class="mark" data-icon="tunnel" aria-hidden="true"></i><div><h1>Meilink</h1><div class="status-line"><i id="statusDot" class="dot"></i><span id="statusText">正在读取状态</span></div></div></div>
-      <div class="actions"><button id="startButton" class="button">连接</button><button id="restartButton" class="button secondary">重启</button><button id="stopButton" class="button secondary">断开</button><button id="logoutButton" class="button ghost">退出</button></div>
     </header>
+    <!-- 左侧窄面板（全应用统一：Logo + 纵向名称 + 图标入口）：添加隧道 / 连接或断开 / 重启 / 退出 -->
+    <nav id="meiPanel" class="mei-panel" aria-label="隧道操作面板">
+      <button class="p-info" title="内网穿透 Meilink" type="button"><span class="p-logo"><i data-icon="tunnel"></i></span><span class="p-name">内网穿透</span></button>
+      <div class="p-divider"></div>
+      <button class="p-item" id="panelAddTunnel" type="button" title="添加隧道"><i data-icon="plus"></i></button>
+      <button class="p-item" id="panelToggle" type="button" title="连接"><i data-icon="power"></i></button>
+      <button class="p-item" id="panelRestart" type="button" title="重启"><i data-icon="refresh"></i></button>
+      <div class="p-divider"></div>
+      <button class="p-item p-danger" id="panelLogout" type="button" title="退出"><i data-icon="logout"></i></button>
+      <div class="p-divider"></div>
+      <button class="p-collapse" id="panelCollapse" type="button" title="收起面板"><i data-icon="collapseLeft"></i></button>
+    </nav>
+    <button id="panelHandle" class="mei-panel-handle hidden" type="button" title="展开面板"><i data-icon="collapseRight"></i></button>
     <div class="workspace">
       <!-- mei-allin 集成：Meilink Console 三入口侧栏已移除，主界面锁死隧道管理页；
            服务器设置/运行日志由门户设置集成页经 ?meiView=settings|logs 深链打开 -->

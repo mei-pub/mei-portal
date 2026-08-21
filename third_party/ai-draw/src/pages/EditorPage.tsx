@@ -69,6 +69,20 @@ export function EditorPage({ mode = 'normal' }: EditorPageProps) {
     localStorage.setItem('ai-draw-nexus.chatPanelCollapsed', String(isChatPanelCollapsed))
   }, [isChatPanelCollapsed])
 
+  // 进入绘图/对话编辑器：自动收起门户顶栏与左侧面板（沉浸编辑，不写记忆）；离开时恢复
+  useEffect(() => {
+    try {
+      window.dispatchEvent(new CustomEvent('mei-topbar-set', { detail: { collapsed: true } }))
+      window.dispatchEvent(new CustomEvent('mei-panel-set', { detail: { collapsed: true } }))
+    } catch { /* ignore */ }
+    return () => {
+      try {
+        window.dispatchEvent(new CustomEvent('mei-topbar-set', { detail: { collapsed: false } }))
+        window.dispatchEvent(new CustomEvent('mei-panel-set', { detail: { collapsed: false } }))
+      } catch { /* ignore */ }
+    }
+  }, [])
+
   // Load system settings
   useEffect(() => {
     const loadSystemSettings = async () => {

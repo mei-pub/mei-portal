@@ -196,7 +196,7 @@ function HomeClient() {
           />
         </div>
 
-        <div className='max-w-[95%] mx-auto'>
+        <div className='max-w-[85%] 2xl:max-w-[1500px] mx-auto'>
           {activeTab === 'favorites' ? (
             // 收藏夹视图
             <section className='mb-8'>

@@ -1,18 +1,20 @@
+// 文件管理页（mei-allin 主应用风格重构版）
+// 前端逻辑与原实现一致：分组管理 / 搜索 / 排序 / 分页 / 重命名 / 移动 / 删除 / 预览 / 导入新建
+// 视觉对齐门户：极光背景下的玻璃拟态卡片 + 靛紫渐变强调
 import {useEffect, useState} from 'react'
 import {useLocation, useNavigate} from 'react-router-dom'
 import {
-  ArrowDownUp,
   ChevronLeft,
   ChevronRight,
-  Edit,
   ExternalLink,
   Folder,
   FolderOpen,
   MoreVertical,
+  Pencil,
   Plus,
   Search,
   Sparkles,
-  Upload
+  Upload,
 } from 'lucide-react'
 import {
   Button,
@@ -41,6 +43,25 @@ import {buildPptSrcDoc} from '@/lib/htmlPpt/srcdocBuilder'
 import {sanitizeHtml} from '@/lib/validators/html'
 import {useSystemStore} from '@/stores/systemStore'
 
+// 主应用风格常量（与门户 tokens 对齐）
+const glass = 'bg-white/70 backdrop-blur-xl border border-black/10 shadow-[0_8px_28px_rgba(23,32,56,0.08)]'
+const gradientText = 'bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500 bg-clip-text text-transparent'
+const gradientBtn = 'rounded-full bg-gradient-to-br from-indigo-500 to-purple-500 text-white shadow-[0_4px_14px_rgba(99,102,241,0.35)] hover:opacity-90 border-0'
+
+function EngineBadge({ type }: { type: Project['engineType'] }) {
+  const cls =
+    type === 'excalidraw'
+      ? 'bg-blue-50 text-blue-600'
+      : type === 'drawio'
+        ? 'bg-green-50 text-green-600'
+        : type === 'html'
+          ? 'bg-orange-50 text-orange-600'
+          : type === 'html-ppt'
+            ? 'bg-pink-50 text-pink-600'
+            : 'bg-purple-50 text-purple-600'
+  return <span className={`flex-shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold ${cls}`}>{type.toUpperCase()}</span>
+}
+
 export function ProjectsPage({ embedded = false }: { embedded?: boolean } = {}) {
   const navigate = useNavigate()
   const location = useLocation()
@@ -48,7 +69,7 @@ export function ProjectsPage({ embedded = false }: { embedded?: boolean } = {}) 
   const i18nTexts = useSystemStore((state) => state.i18nTexts)
   const [projects, setProjects] = useState<Project[]>([])
   const [groups, setGroups] = useState<Group[]>([])
-  const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null) // null = All, 'uncategorized' = Uncategorized
+  const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState('')
   const [page, setPage] = useState(1)
@@ -56,50 +77,33 @@ export function ProjectsPage({ embedded = false }: { embedded?: boolean } = {}) 
   const [total, setTotal] = useState(0)
   const [sortBy, setSortBy] = useState<'createdAt' | 'updatedAt'>('updatedAt')
 
-  // Create dialog state
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false)
-
-  // Import dialog state
   const [isImportDialogOpen, setIsImportDialogOpen] = useState(false)
-
-  // Delete dialog state
   const [deleteTarget, setDeleteTarget] = useState<Project | null>(null)
   const [isDeleting, setIsDeleting] = useState(false)
-
-  // Rename dialog state
   const [renameTarget, setRenameTarget] = useState<Project | null>(null)
   const [newTitle, setNewTitle] = useState('')
   const [isRenaming, setIsRenaming] = useState(false)
-
-  // Group dialogs state
   const [isCreateGroupDialogOpen, setIsCreateGroupDialogOpen] = useState(false)
   const [newGroupName, setNewGroupName] = useState('')
   const [isCreatingGroup, setIsCreatingGroup] = useState(false)
-
   const [editGroupTarget, setEditGroupTarget] = useState<Group | null>(null)
   const [editGroupName, setEditGroupName] = useState('')
   const [isEditingGroup, setIsEditingGroup] = useState(false)
-
   const [deleteGroupTarget, setDeleteGroupTarget] = useState<Group | null>(null)
   const [isDeletingGroup, setIsDeletingGroup] = useState(false)
-
-  // Move project dialog state
   const [moveProjectTarget, setMoveProjectTarget] = useState<Project | null>(null)
   const [targetGroupId, setTargetGroupId] = useState<string>('')
   const [isMovingProject, setIsMovingProject] = useState(false)
-
   const [previewProject, setPreviewProject] = useState<Project | null>(null)
 
-  // Load data
   useEffect(() => {
     loadData()
   }, [page, selectedGroupId, searchQuery, sortBy])
 
-  // Open create dialog if navigated with state
   useEffect(() => {
     if (location.state?.openCreateDialog) {
       setIsCreateDialogOpen(true)
-      // Clear the state to prevent reopening on refresh
       navigate(location.pathname, { replace: true, state: {} })
     }
   }, [location.state])
@@ -119,18 +123,14 @@ export function ProjectsPage({ embedded = false }: { embedded?: boolean } = {}) 
     }
   }
 
-  // Removed filteredProjects useMemo as filtering is now server-side
-
   // --- Project Actions ---
-
   const handleDelete = async () => {
     if (!deleteTarget) return
-
     setIsDeleting(true)
     try {
       await ProjectRepository.delete(deleteTarget.id)
       setDeleteTarget(null)
-      loadData() // Reload all data to be safe
+      loadData()
     } catch (error) {
       console.error('Failed to delete project:', error)
     } finally {
@@ -140,7 +140,6 @@ export function ProjectsPage({ embedded = false }: { embedded?: boolean } = {}) 
 
   const handleRename = async () => {
     if (!renameTarget || !newTitle.trim()) return
-
     setIsRenaming(true)
     try {
       await ProjectRepository.update(renameTarget.id, { title: newTitle.trim() })
@@ -156,13 +155,9 @@ export function ProjectsPage({ embedded = false }: { embedded?: boolean } = {}) 
 
   const handleMoveProject = async () => {
     if (!moveProjectTarget) return
-
     setIsMovingProject(true)
     try {
-      // If targetGroupId is empty string, it means 'Uncategorized' (remove groupId)
-      // Hack: cast to any to allow null if needed, or just rely on the fact that we are updating.
       await ProjectRepository.update(moveProjectTarget.id, { groupId: targetGroupId || null } as any)
-
       setMoveProjectTarget(null)
       setTargetGroupId('')
       loadData()
@@ -198,10 +193,8 @@ export function ProjectsPage({ embedded = false }: { embedded?: boolean } = {}) 
   }
 
   // --- Group Actions ---
-
   const handleCreateGroup = async () => {
     if (!newGroupName.trim()) return
-
     setIsCreatingGroup(true)
     try {
       await GroupRepository.create(newGroupName.trim())
@@ -217,7 +210,6 @@ export function ProjectsPage({ embedded = false }: { embedded?: boolean } = {}) 
 
   const handleEditGroup = async () => {
     if (!editGroupTarget || !editGroupName.trim()) return
-
     setIsEditingGroup(true)
     try {
       await GroupRepository.update(editGroupTarget.id, editGroupName.trim())
@@ -233,14 +225,10 @@ export function ProjectsPage({ embedded = false }: { embedded?: boolean } = {}) 
 
   const handleDeleteGroup = async () => {
     if (!deleteGroupTarget) return
-
     setIsDeletingGroup(true)
     try {
       await GroupRepository.delete(deleteGroupTarget.id)
-      // If we deleted the currently selected group, switch to All
-      if (selectedGroupId === deleteGroupTarget.id) {
-        setSelectedGroupId(null)
-      }
+      if (selectedGroupId === deleteGroupTarget.id) setSelectedGroupId(null)
       setDeleteGroupTarget(null)
       loadData()
     } catch (error) {
@@ -250,33 +238,41 @@ export function ProjectsPage({ embedded = false }: { embedded?: boolean } = {}) 
     }
   }
 
+  const selectedGroupName =
+    selectedGroupId === null
+      ? i18nTexts.projectsAllFiles[language]
+      : selectedGroupId === 'uncategorized'
+        ? i18nTexts.projectsUncategorized[language]
+        : groups.find((g) => g.id === selectedGroupId)?.name || i18nTexts.projectsPageTitle[language]
+
+  const groupBtnCls = (active: boolean) =>
+    `flex w-full items-center gap-2 rounded-xl px-3 py-2 text-[13px] transition-all ${
+      active
+        ? 'bg-gradient-to-br from-indigo-500/10 to-pink-500/10 text-indigo-600 font-semibold border border-indigo-300/40'
+        : 'text-gray-600 hover:bg-black/5 border border-transparent'
+    }`
+
   return (
-    <div className={embedded ? "flex h-full bg-white overflow-hidden" : "flex min-h-screen bg-white overflow-hidden"}>
-      {/* Floating Sidebar Navigation */}
+    <div className={embedded ? 'flex h-full overflow-hidden' : 'flex min-h-screen overflow-hidden'}>
       {!embedded && <AppSidebar onCreateProject={() => setIsCreateDialogOpen(true)} />}
 
-      {/* Main Content */}
-      <main className={embedded ? "flex flex-1 h-full min-h-0" : "flex flex-1 h-screen pt-16"}>
-        {/* Middle Column: Groups & Search */}
-        <div className="flex w-64 flex-col border-r border-border bg-surface/50">
-          {/* Header */}
-          <div className="flex h-14 items-center justify-between border-b border-border px-4">
-            <h2 className="font-semibold text-primary">{i18nTexts.projectsPageTitle[language]}</h2>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-8 w-8"
+      <main className={embedded ? 'flex flex-1 h-full min-h-0 gap-3 p-3' : 'flex flex-1 min-h-0 gap-4 p-4 pt-[84px]'}>
+        {/* 左列：搜索 + 分组（玻璃卡片） */}
+        <div className={`flex w-60 flex-col rounded-2xl ${glass} overflow-hidden`}>
+          <div className="flex items-center justify-between px-4 pt-4 pb-3">
+            <h2 className={`text-[15px] font-extrabold tracking-tight ${gradientText}`}>{i18nTexts.projectsPageTitle[language]}</h2>
+            <button
+              className="flex h-7 w-7 items-center justify-center rounded-lg text-gray-400 transition-colors hover:bg-black/5 hover:text-indigo-500"
               onClick={() => setIsCreateGroupDialogOpen(true)}
               title={i18nTexts.projectsNew[language]}
             >
               <Plus className="h-4 w-4" />
-            </Button>
+            </button>
           </div>
 
-          {/* Search */}
-          <div className="p-4 border-b border-border">
+          <div className="px-3 pb-3">
             <div className="relative">
-              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
+              <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-gray-400" />
               <Input
                 placeholder={i18nTexts.projectsSearchPlaceholder[language]}
                 value={searchQuery}
@@ -284,88 +280,38 @@ export function ProjectsPage({ embedded = false }: { embedded?: boolean } = {}) 
                   setSearchQuery(e.target.value)
                   setPage(1)
                 }}
-                className="h-9 rounded-lg border-border bg-background pl-9 pr-4 text-sm focus:border-primary"
+                className="h-9 rounded-full border-black/10 bg-white/80 pl-8 pr-3 text-[13px] focus:border-indigo-400"
               />
             </div>
           </div>
 
-          {/* Groups List */}
-          <div className="flex-1 overflow-y-auto p-2 space-y-1">
-            <button
-              onClick={() => {
-                setSelectedGroupId(null)
-                setPage(1)
-              }}
-              className={`flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm transition-colors ${
-                selectedGroupId === null
-                  ? 'bg-primary/10 text-primary font-medium'
-                  : 'text-muted-foreground hover:bg-muted hover:text-primary'
-              }`}
-            >
+          <div className="flex-1 overflow-y-auto px-2 pb-3 space-y-0.5">
+            <button onClick={() => { setSelectedGroupId(null); setPage(1) }} className={groupBtnCls(selectedGroupId === null)}>
               <Folder className="h-4 w-4" />
               {i18nTexts.projectsAllFiles[language]}
-              <span className="ml-auto text-xs opacity-60">{total}</span>
+              <span className="ml-auto text-[11px] opacity-60">{total}</span>
             </button>
-
-            <button
-              onClick={() => {
-                setSelectedGroupId('uncategorized')
-                setPage(1)
-              }}
-              className={`flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm transition-colors ${
-                selectedGroupId === 'uncategorized'
-                  ? 'bg-primary/10 text-primary font-medium'
-                  : 'text-muted-foreground hover:bg-muted hover:text-primary'
-              }`}
-            >
+            <button onClick={() => { setSelectedGroupId('uncategorized'); setPage(1) }} className={groupBtnCls(selectedGroupId === 'uncategorized')}>
               <FolderOpen className="h-4 w-4" />
               {i18nTexts.projectsUncategorized[language]}
-              <span className="ml-auto text-xs opacity-60">
-                {/* Count is not available for uncategorized without fetching */}
-              </span>
             </button>
-
-            {groups.map(group => (
+            {groups.map((group) => (
               <div key={group.id} className="group/item relative">
-                <button
-                  onClick={() => {
-                    setSelectedGroupId(group.id)
-                    setPage(1)
-                  }}
-                  className={`flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm transition-colors ${
-                    selectedGroupId === group.id
-                      ? 'bg-primary/10 text-primary font-medium'
-                      : 'text-muted-foreground hover:bg-muted hover:text-primary'
-                  }`}
-                >
+                <button onClick={() => { setSelectedGroupId(group.id); setPage(1) }} className={groupBtnCls(selectedGroupId === group.id)}>
                   <Folder className="h-4 w-4" />
                   <span className="truncate">{group.name}</span>
-                  <span className="ml-auto text-xs opacity-60">
-                    {group.projectCount || 0}
-                  </span>
+                  <span className="ml-auto text-[11px] opacity-60">{group.projectCount || 0}</span>
                 </button>
-
-                {/* Group Actions Dropdown */}
                 <div className="absolute right-1 top-1/2 -translate-y-1/2 opacity-0 transition-opacity group-hover/item:opacity-100">
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
-                      <Button variant="ghost" size="icon" className="h-6 w-6">
+                      <button className="flex h-6 w-6 items-center justify-center rounded-md text-gray-400 hover:bg-black/5">
                         <MoreVertical className="h-3 w-3" />
-                      </Button>
+                      </button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
-                      <DropdownMenuItem onClick={() => {
-                        setEditGroupTarget(group)
-                        setEditGroupName(group.name)
-                      }}>
-                        重命名
-                      </DropdownMenuItem>
-                      <DropdownMenuItem
-                        className="text-red-600 focus:text-red-600"
-                        onClick={() => setDeleteGroupTarget(group)}
-                      >
-                        删除
-                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => { setEditGroupTarget(group); setEditGroupName(group.name) }}>重命名</DropdownMenuItem>
+                      <DropdownMenuItem className="text-red-600 focus:text-red-600" onClick={() => setDeleteGroupTarget(group)}>删除</DropdownMenuItem>
                     </DropdownMenuContent>
                   </DropdownMenu>
                 </div>
@@ -374,196 +320,105 @@ export function ProjectsPage({ embedded = false }: { embedded?: boolean } = {}) 
           </div>
         </div>
 
-        {/* Right Column: Projects Grid */}
-        <div className="flex flex-1 flex-col overflow-hidden bg-white">
-          {/* Header */}
-          <div className="flex h-14 items-center justify-between border-b border-border px-6">
-            <div className="flex items-center gap-3">
-              <h1 className="text-lg font-semibold text-primary">
-                {selectedGroupId === null ? i18nTexts.projectsAllFiles[language] :
-                 selectedGroupId === 'uncategorized' ? i18nTexts.projectsUncategorized[language] :
-                 groups.find(g => g.id === selectedGroupId)?.name || i18nTexts.projectsPageTitle[language]}
-              </h1>
+        {/* 右列：文件网格（玻璃卡片） */}
+        <div className={`flex flex-1 flex-col overflow-hidden rounded-2xl ${glass}`}>
+          <div className="flex items-center justify-between gap-3 px-5 py-3.5 border-b border-black/5">
+            <div className="flex items-center gap-3 min-w-0">
+              <h1 className="truncate text-[15px] font-bold text-gray-800">{selectedGroupName}</h1>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="outline" size="sm" className="rounded-full h-8 gap-1.5">
-                    <ArrowDownUp className="h-3.5 w-3.5" />
-                    <span className="text-xs">
-                      {sortBy === 'updatedAt' ? i18nTexts.projectsSortUpdated[language] : i18nTexts.projectsSortCreated[language]}
-                    </span>
-                  </Button>
+                  <button className="flex h-7 items-center gap-1 rounded-full border border-black/10 bg-white/70 px-3 text-[11px] text-gray-500 transition-colors hover:border-indigo-300 hover:text-indigo-500">
+                    {sortBy === 'updatedAt' ? i18nTexts.projectsSortUpdated[language] : i18nTexts.projectsSortCreated[language]}
+                  </button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="start">
-                  <DropdownMenuItem
-                    onClick={() => {
-                      setSortBy('updatedAt')
-                      setPage(1)
-                    }}
-                    className={sortBy === 'updatedAt' ? 'bg-primary/10 text-primary' : ''}
-                  >
+                  <DropdownMenuItem onClick={() => { setSortBy('updatedAt'); setPage(1) }} className={sortBy === 'updatedAt' ? 'bg-primary/10 text-primary' : ''}>
                     {i18nTexts.projectsSortByUpdated[language]}
                   </DropdownMenuItem>
-                  <DropdownMenuItem
-                    onClick={() => {
-                      setSortBy('createdAt')
-                      setPage(1)
-                    }}
-                    className={sortBy === 'createdAt' ? 'bg-primary/10 text-primary' : ''}
-                  >
+                  <DropdownMenuItem onClick={() => { setSortBy('createdAt'); setPage(1) }} className={sortBy === 'createdAt' ? 'bg-primary/10 text-primary' : ''}>
                     {i18nTexts.projectsSortByCreated[language]}
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
             </div>
             <div className="flex gap-2">
-              <Button
-                variant="outline"
-                size="sm"
+              <button
                 onClick={() => setIsImportDialogOpen(true)}
-                className="rounded-full"
+                className="flex h-8 items-center gap-1.5 rounded-full border border-black/10 bg-white/80 px-4 text-xs font-semibold text-gray-600 transition-colors hover:border-indigo-300 hover:text-indigo-500"
               >
-                <Upload className="mr-2 h-3.5 w-3.5" />
+                <Upload className="h-3.5 w-3.5" />
                 {i18nTexts.projectsImport[language]}
-              </Button>
-              <Button
-                size="sm"
-                onClick={() => setIsCreateDialogOpen(true)}
-                className="rounded-full bg-primary text-surface hover:bg-primary/90"
-              >
-                <Plus className="mr-2 h-3.5 w-3.5" />
+              </button>
+              <button onClick={() => setIsCreateDialogOpen(true)} className={`flex h-8 items-center gap-1.5 px-4 text-xs font-semibold ${gradientBtn}`}>
+                <Plus className="h-3.5 w-3.5" />
                 {i18nTexts.projectsNew[language]}
-              </Button>
+              </button>
             </div>
           </div>
 
-          {/* Content */}
-          <div className="flex-1 overflow-y-auto p-6">
+          <div className="flex-1 overflow-y-auto p-5">
             {isLoading ? (
-              <div className="flex h-full items-center justify-center">
-                <Loading size="lg" />
-              </div>
+              <div className="flex h-full items-center justify-center"><Loading size="lg" /></div>
             ) : projects.length === 0 ? (
               <div className="flex h-full flex-col items-center justify-center">
-                <div className="flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-border bg-surface p-12">
-                  <Sparkles className="mb-4 h-12 w-12 text-muted" />
-                  <p className="mb-4 text-muted">
-                    {searchQuery ? '未找到匹配的文件' : '暂无文件'}
-                  </p>
+                <div className="flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-black/10 bg-white/50 p-12">
+                  <Sparkles className="mb-4 h-10 w-10 text-indigo-300" />
+                  <p className="mb-4 text-sm text-gray-500">{searchQuery ? '未找到匹配的文件' : '暂无文件'}</p>
                   {!searchQuery && (
-                    <Button
-                      onClick={() => setIsCreateDialogOpen(true)}
-                      className="rounded-full bg-primary px-6 text-surface hover:bg-primary/90"
-                    >
+                    <button onClick={() => setIsCreateDialogOpen(true)} className={`px-6 py-2 text-sm ${gradientBtn}`}>
                       创建你的第一个文件
-                    </Button>
+                    </button>
                   )}
                 </div>
               </div>
             ) : (
-              <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6">
-                {/* Project Cards */}
+              <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
                 {projects.map((project) => (
                   <div
                     key={project.id}
-                    className="group relative cursor-pointer overflow-hidden rounded-2xl bg-background/80 transition-all duration-300 hover:-translate-y-1 hover:bg-surface hover:shadow-[0_8px_30px_rgb(0,0,0,0.06)] border border-transparent hover:border-border/50"
+                    className="group relative cursor-pointer overflow-hidden rounded-2xl border border-black/5 bg-white/60 backdrop-blur-sm transition-all duration-300 hover:-translate-y-1 hover:border-indigo-300/50 hover:shadow-[0_10px_30px_rgba(99,102,241,0.15)]"
                     onClick={() => setPreviewProject(project)}
                     onDoubleClick={() => navigate(`/editor/${project.id}`)}
                   >
-                    {/* Edit Button - 左上角 */}
                     <div className="absolute left-2 top-2 z-10 opacity-0 transition-opacity group-hover:opacity-100">
-                      <Button
-                        size="icon"
-                        variant="secondary"
-                        className="h-8 w-8 rounded-full bg-surface/90 shadow-sm backdrop-blur-sm hover:bg-surface"
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          navigate(`/editor/${project.id}`)
-                        }}
+                      <button
+                        className="flex h-8 w-8 items-center justify-center rounded-full bg-white/90 text-indigo-500 shadow-sm backdrop-blur-sm hover:bg-white"
+                        onClick={(e) => { e.stopPropagation(); navigate(`/editor/${project.id}`) }}
                       >
-                        <Edit className="h-4 w-4 text-primary" />
-                      </Button>
+                        <Pencil className="h-3.5 w-3.5" />
+                      </button>
                     </div>
-
-                    {/* Action Buttons - 右上角 */}
-                    <div className="absolute right-2 top-2 z-10 flex gap-1 opacity-0 transition-opacity group-hover:opacity-100">
-                      <div className="flex items-center rounded-md bg-surface/90 px-2 py-1 text-[10px] font-medium text-muted-foreground shadow-sm backdrop-blur-sm">
-                        {i18nTexts.projectsUpdatedAt[language]} {formatDate(project.updatedAt)}
-                      </div>
+                    <div className="absolute right-2 top-2 z-10 opacity-0 transition-opacity group-hover:opacity-100">
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-7 w-7 bg-surface/80 backdrop-blur-sm hover:bg-surface"
+                          <button
+                            className="flex h-8 w-8 items-center justify-center rounded-full bg-white/90 text-gray-500 shadow-sm backdrop-blur-sm hover:bg-white"
                             onClick={(e) => e.stopPropagation()}
                           >
                             <MoreVertical className="h-3.5 w-3.5" />
-                          </Button>
+                          </button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
-                          <DropdownMenuItem onClick={(e) => {
-                            e.stopPropagation()
-                            openRenameDialog(project)
-                          }}>
-                            重命名
-                          </DropdownMenuItem>
-                          <DropdownMenuItem onClick={(e) => {
-                            e.stopPropagation()
-                            setMoveProjectTarget(project)
-                            setTargetGroupId(project.groupId || '')
-                          }}>
-                            移动到...
-                          </DropdownMenuItem>
-                          <DropdownMenuItem
-                            className="text-red-600 focus:text-red-600"
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              setDeleteTarget(project)
-                            }}
-                          >
-                            删除
-                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={(e) => { e.stopPropagation(); openRenameDialog(project) }}>重命名</DropdownMenuItem>
+                          <DropdownMenuItem onClick={(e) => { e.stopPropagation(); setMoveProjectTarget(project); setTargetGroupId(project.groupId || '') }}>移动到...</DropdownMenuItem>
+                          <DropdownMenuItem className="text-red-600 focus:text-red-600" onClick={(e) => { e.stopPropagation(); setDeleteTarget(project) }}>删除</DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>
                     </div>
 
-                    {/* Thumbnail */}
-                    <div className="flex h-32 items-center justify-center bg-background/50 p-6 border-b border-dashed border-border/60">
+                    <div className="flex h-32 items-center justify-center bg-gradient-to-br from-indigo-50/60 to-purple-50/40 p-5 border-b border-black/5">
                       {project.thumbnail ? (
-                        <img
-                          src={project.thumbnail}
-                          alt={project.title}
-                          className="h-full w-full object-contain"
-                        />
+                        <img src={project.thumbnail} alt={project.title} className="h-full w-full object-contain" />
                       ) : (
-                        <Logo className="h-8 w-8 text-muted/50 group-hover:text-primary/50 transition-colors" />
+                        <Logo className="h-8 w-8 text-indigo-200" />
                       )}
                     </div>
 
-                    {/* Info */}
-                    <div className="p-4 text-left w-full bg-white">
-                      <div className="mb-2 flex items-center gap-2">
-                        <h3 className="truncate text-sm font-medium text-primary/90 group-hover:text-primary pl-1">
-                          {project.title}
-                        </h3>
-                      </div>
+                    <div className="p-3.5 text-left w-full">
+                      <h3 className="mb-2 truncate pl-0.5 text-[13px] font-semibold text-gray-800 group-hover:text-indigo-600">{project.title}</h3>
                       <div className="flex items-center justify-between gap-2">
-                        <span className={`flex-shrink-0 rounded-md px-1.5 py-0.5 text-[10px] font-medium ${
-                          project.engineType === 'excalidraw'
-                            ? 'bg-blue-50 text-blue-600 dark:bg-blue-900/20 dark:text-blue-400'
-                            : project.engineType === 'drawio'
-                              ? 'bg-green-50 text-green-600 dark:bg-green-900/20 dark:text-green-400'
-                              : project.engineType === 'html'
-                                ? 'bg-orange-50 text-orange-600 dark:bg-orange-900/20 dark:text-orange-400'
-                                : project.engineType === 'html-ppt'
-                                  ? 'bg-pink-50 text-pink-600 dark:bg-pink-900/20 dark:text-pink-400'
-                                  : 'bg-purple-50 text-purple-600 dark:bg-purple-900/20 dark:text-purple-400'
-                        }`}>
-                          {project.engineType.toUpperCase()}
-                        </span>
-                        <p className="text-[10px] text-muted-foreground/60">
-                          {i18nTexts.projectsCreatedAt[language]} {formatDate(project.createdAt)}
-                        </p>
+                        <EngineBadge type={project.engineType} />
+                        <p className="text-[10px] text-gray-400">{formatDate(project.updatedAt)}</p>
                       </div>
                     </div>
                   </div>
@@ -571,81 +426,40 @@ export function ProjectsPage({ embedded = false }: { embedded?: boolean } = {}) 
               </div>
             )}
 
-            {/* Pagination */}
             {total > pageSize && (
-              <div className="flex items-center justify-center gap-2 py-4 border-t border-border mt-4">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setPage(p => Math.max(1, p - 1))}
+              <div className="mt-4 flex items-center justify-center gap-3 border-t border-black/5 py-4">
+                <button
+                  onClick={() => setPage((p) => Math.max(1, p - 1))}
                   disabled={page === 1}
-                  className="h-8 w-8 p-0"
+                  className="flex h-8 w-8 items-center justify-center rounded-full border border-black/10 bg-white/80 text-gray-500 transition-colors hover:border-indigo-300 hover:text-indigo-500 disabled:opacity-40"
                 >
                   <ChevronLeft className="h-4 w-4" />
-                </Button>
-                <span className="text-sm text-muted-foreground">
-                  {language === 'zh'
-                    ? `${i18nTexts.paginationPage[language]} ${page} ${i18nTexts.paginationOf[language]} ${Math.ceil(total / pageSize)} ${i18nTexts.paginationTotal[language]}`
-                    : `${i18nTexts.paginationPage[language]} ${page} ${i18nTexts.paginationOf[language]} ${Math.ceil(total / pageSize)} ${i18nTexts.paginationTotal[language]}`
-                  }
-                </span>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setPage(p => Math.min(Math.ceil(total / pageSize), p + 1))}
+                </button>
+                <span className="text-xs text-gray-500">{page} / {Math.ceil(total / pageSize)}</span>
+                <button
+                  onClick={() => setPage((p) => Math.min(Math.ceil(total / pageSize), p + 1))}
                   disabled={page >= Math.ceil(total / pageSize)}
-                  className="h-8 w-8 p-0"
+                  className="flex h-8 w-8 items-center justify-center rounded-full border border-black/10 bg-white/80 text-gray-500 transition-colors hover:border-indigo-300 hover:text-indigo-500 disabled:opacity-40"
                 >
                   <ChevronRight className="h-4 w-4" />
-                </Button>
+                </button>
               </div>
             )}
           </div>
         </div>
       </main>
 
-      {/* Create Dialog */}
-      <CreateProjectDialog
-        open={isCreateDialogOpen}
-        onOpenChange={setIsCreateDialogOpen}
-      />
-
-      {/* Import Dialog */}
-      <ImportProjectDialog
-        open={isImportDialogOpen}
-        onOpenChange={setIsImportDialogOpen}
-      />
+      <CreateProjectDialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen} />
+      <ImportProjectDialog open={isImportDialogOpen} onOpenChange={setIsImportDialogOpen} />
 
       {/* Rename Dialog */}
       <Dialog open={!!renameTarget} onOpenChange={() => setRenameTarget(null)}>
         <DialogContent className="rounded-2xl">
-          <DialogHeader>
-            <DialogTitle>重命名文件</DialogTitle>
-          </DialogHeader>
-          <Input
-            className='my-4'
-            value={newTitle}
-            onChange={(e) => setNewTitle(e.target.value)}
-            placeholder="文件名称"
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') handleRename()
-            }}
-          />
+          <DialogHeader><DialogTitle>重命名文件</DialogTitle></DialogHeader>
+          <Input className="my-4" value={newTitle} onChange={(e) => setNewTitle(e.target.value)} placeholder="文件名称" onKeyDown={(e) => { if (e.key === 'Enter') handleRename() }} />
           <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => setRenameTarget(null)}
-              className="rounded-full"
-            >
-              取消
-            </Button>
-            <Button
-              onClick={handleRename}
-              disabled={isRenaming || !newTitle.trim()}
-              className="rounded-full bg-primary text-surface hover:bg-primary/90"
-            >
-              {isRenaming ? '保存中...' : '保存'}
-            </Button>
+            <Button variant="outline" onClick={() => setRenameTarget(null)} className="rounded-full">取消</Button>
+            <Button onClick={handleRename} disabled={isRenaming || !newTitle.trim()} className={gradientBtn}>{isRenaming ? '保存中...' : '保存'}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -655,25 +469,11 @@ export function ProjectsPage({ embedded = false }: { embedded?: boolean } = {}) 
         <DialogContent className="rounded-2xl">
           <DialogHeader>
             <DialogTitle>删除文件</DialogTitle>
-            <DialogDescription className='my-4'>
-              确定要删除 &quot;{deleteTarget?.title}&quot; 吗？此操作无法撤销。
-            </DialogDescription>
+            <DialogDescription className="my-4">确定要删除 &quot;{deleteTarget?.title}&quot; 吗？此操作无法撤销。</DialogDescription>
           </DialogHeader>
           <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => setDeleteTarget(null)}
-              className="rounded-full"
-            >
-              取消
-            </Button>
-            <Button
-              onClick={handleDelete}
-              disabled={isDeleting}
-              className="rounded-full bg-red-600 text-surface hover:bg-red-700"
-            >
-              {isDeleting ? '删除中...' : '删除'}
-            </Button>
+            <Button variant="outline" onClick={() => setDeleteTarget(null)} className="rounded-full">取消</Button>
+            <Button onClick={handleDelete} disabled={isDeleting} className="rounded-full bg-red-600 text-white hover:bg-red-700 border-0">{isDeleting ? '删除中...' : '删除'}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -681,33 +481,11 @@ export function ProjectsPage({ embedded = false }: { embedded?: boolean } = {}) 
       {/* Create Group Dialog */}
       <Dialog open={isCreateGroupDialogOpen} onOpenChange={setIsCreateGroupDialogOpen}>
         <DialogContent className="rounded-2xl">
-          <DialogHeader>
-            <DialogTitle>新建分组</DialogTitle>
-          </DialogHeader>
-          <Input
-            className='my-4'
-            value={newGroupName}
-            onChange={(e) => setNewGroupName(e.target.value)}
-            placeholder="分组名称"
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') handleCreateGroup()
-            }}
-          />
+          <DialogHeader><DialogTitle>新建分组</DialogTitle></DialogHeader>
+          <Input className="my-4" value={newGroupName} onChange={(e) => setNewGroupName(e.target.value)} placeholder="分组名称" onKeyDown={(e) => { if (e.key === 'Enter') handleCreateGroup() }} />
           <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => setIsCreateGroupDialogOpen(false)}
-              className="rounded-full"
-            >
-              取消
-            </Button>
-            <Button
-              onClick={handleCreateGroup}
-              disabled={isCreatingGroup || !newGroupName.trim()}
-              className="rounded-full bg-primary text-surface hover:bg-primary/90"
-            >
-              {isCreatingGroup ? '创建中...' : '创建'}
-            </Button>
+            <Button variant="outline" onClick={() => setIsCreateGroupDialogOpen(false)} className="rounded-full">取消</Button>
+            <Button onClick={handleCreateGroup} disabled={isCreatingGroup || !newGroupName.trim()} className={gradientBtn}>{isCreatingGroup ? '创建中...' : '创建'}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -715,33 +493,11 @@ export function ProjectsPage({ embedded = false }: { embedded?: boolean } = {}) 
       {/* Edit Group Dialog */}
       <Dialog open={!!editGroupTarget} onOpenChange={() => setEditGroupTarget(null)}>
         <DialogContent className="rounded-2xl">
-          <DialogHeader>
-            <DialogTitle>重命名分组</DialogTitle>
-          </DialogHeader>
-          <Input
-            className='my-4'
-            value={editGroupName}
-            onChange={(e) => setEditGroupName(e.target.value)}
-            placeholder="分组名称"
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') handleEditGroup()
-            }}
-          />
+          <DialogHeader><DialogTitle>重命名分组</DialogTitle></DialogHeader>
+          <Input className="my-4" value={editGroupName} onChange={(e) => setEditGroupName(e.target.value)} placeholder="分组名称" onKeyDown={(e) => { if (e.key === 'Enter') handleEditGroup() }} />
           <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => setEditGroupTarget(null)}
-              className="rounded-full"
-            >
-              取消
-            </Button>
-            <Button
-              onClick={handleEditGroup}
-              disabled={isEditingGroup || !editGroupName.trim()}
-              className="rounded-full bg-primary text-surface hover:bg-primary/90"
-            >
-              {isEditingGroup ? '保存中...' : '保存'}
-            </Button>
+            <Button variant="outline" onClick={() => setEditGroupTarget(null)} className="rounded-full">取消</Button>
+            <Button onClick={handleEditGroup} disabled={isEditingGroup || !editGroupName.trim()} className={gradientBtn}>{isEditingGroup ? '保存中...' : '保存'}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -751,25 +507,11 @@ export function ProjectsPage({ embedded = false }: { embedded?: boolean } = {}) 
         <DialogContent className="rounded-2xl">
           <DialogHeader>
             <DialogTitle>删除分组</DialogTitle>
-            <DialogDescription className='my-4'>
-              确定要删除分组 &quot;{deleteGroupTarget?.name}&quot; 吗？组内的文件将变为未分组状态。
-            </DialogDescription>
+            <DialogDescription className="my-4">确定要删除分组 &quot;{deleteGroupTarget?.name}&quot; 吗？组内的文件将变为未分组状态。</DialogDescription>
           </DialogHeader>
           <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => setDeleteGroupTarget(null)}
-              className="rounded-full"
-            >
-              取消
-            </Button>
-            <Button
-              onClick={handleDeleteGroup}
-              disabled={isDeletingGroup}
-              className="rounded-full bg-red-600 text-surface hover:bg-red-700"
-            >
-              {isDeletingGroup ? '删除中...' : '删除'}
-            </Button>
+            <Button variant="outline" onClick={() => setDeleteGroupTarget(null)} className="rounded-full">取消</Button>
+            <Button onClick={handleDeleteGroup} disabled={isDeletingGroup} className="rounded-full bg-red-600 text-white hover:bg-red-700 border-0">{isDeletingGroup ? '删除中...' : '删除'}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -777,51 +519,22 @@ export function ProjectsPage({ embedded = false }: { embedded?: boolean } = {}) 
       {/* Move Project Dialog */}
       <Dialog open={!!moveProjectTarget} onOpenChange={() => setMoveProjectTarget(null)}>
         <DialogContent className="rounded-2xl">
-          <DialogHeader>
-            <DialogTitle>移动文件到分组</DialogTitle>
-          </DialogHeader>
+          <DialogHeader><DialogTitle>移动文件到分组</DialogTitle></DialogHeader>
           <div className="my-4 space-y-2">
-            <button
-              onClick={() => setTargetGroupId('')}
-              className={`flex w-full items-center gap-2 rounded-lg border p-3 text-sm transition-colors ${
-                targetGroupId === ''
-                  ? 'border-primary bg-primary/5 text-primary'
-                  : 'border-border hover:bg-muted'
-              }`}
-            >
+            <button onClick={() => setTargetGroupId('')} className={`flex w-full items-center gap-2 rounded-xl border p-3 text-sm transition-colors ${targetGroupId === '' ? 'border-indigo-400 bg-indigo-50 text-indigo-600' : 'border-black/10 hover:bg-black/5'}`}>
               <FolderOpen className="h-4 w-4" />
               未分组
             </button>
-            {groups.map(group => (
-              <button
-                key={group.id}
-                onClick={() => setTargetGroupId(group.id)}
-                className={`flex w-full items-center gap-2 rounded-lg border p-3 text-sm transition-colors ${
-                  targetGroupId === group.id
-                    ? 'border-primary bg-primary/5 text-primary'
-                    : 'border-border hover:bg-muted'
-                }`}
-              >
+            {groups.map((group) => (
+              <button key={group.id} onClick={() => setTargetGroupId(group.id)} className={`flex w-full items-center gap-2 rounded-xl border p-3 text-sm transition-colors ${targetGroupId === group.id ? 'border-indigo-400 bg-indigo-50 text-indigo-600' : 'border-black/10 hover:bg-black/5'}`}>
                 <Folder className="h-4 w-4" />
                 {group.name}
               </button>
             ))}
           </div>
           <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => setMoveProjectTarget(null)}
-              className="rounded-full"
-            >
-              取消
-            </Button>
-            <Button
-              onClick={handleMoveProject}
-              disabled={isMovingProject}
-              className="rounded-full bg-primary text-surface hover:bg-primary/90"
-            >
-              {isMovingProject ? '移动中...' : '移动'}
-            </Button>
+            <Button variant="outline" onClick={() => setMoveProjectTarget(null)} className="rounded-full">取消</Button>
+            <Button onClick={handleMoveProject} disabled={isMovingProject} className={gradientBtn}>{isMovingProject ? '移动中...' : '移动'}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -830,7 +543,7 @@ export function ProjectsPage({ embedded = false }: { embedded?: boolean } = {}) 
       <Dialog open={!!previewProject} onOpenChange={() => setPreviewProject(null)}>
         <DialogContent className="max-w-3xl p-0 overflow-hidden bg-transparent border-none shadow-none">
           <div className="relative flex flex-col items-center justify-center">
-            <div className="relative w-full bg-white rounded-lg overflow-hidden shadow-2xl">
+            <div className="relative w-full overflow-hidden rounded-2xl bg-white shadow-2xl">
               {previewProject && (previewProject.engineType === 'html' || previewProject.engineType === 'html-ppt') && (
                 <Button
                   variant="outline"
@@ -843,37 +556,26 @@ export function ProjectsPage({ embedded = false }: { embedded?: boolean } = {}) 
                   <span className="hidden sm:inline">{i18nTexts.projectsOpenInNewWindow[language]}</span>
                 </Button>
               )}
-              <div className="flex items-center justify-center bg-white p-8 min-h-[400px]">
+              <div className="flex min-h-[400px] items-center justify-center bg-gradient-to-br from-indigo-50/50 to-purple-50/30 p-8">
                 {previewProject?.thumbnail ? (
-                  <img
-                    src={previewProject.thumbnail}
-                    alt={previewProject.title}
-                    className="max-w-full max-h-[60vh] object-contain shadow-lg rounded-md"
-                  />
+                  <img src={previewProject.thumbnail} alt={previewProject.title} className="max-h-[60vh] max-w-full rounded-md object-contain shadow-lg" />
                 ) : (
-                  <div className="flex flex-col items-center justify-center text-muted-foreground">
-                    <Logo className="h-24 w-24 opacity-20 mb-4" />
+                  <div className="flex flex-col items-center justify-center text-gray-400">
+                    <Logo className="mb-4 h-24 w-24 opacity-20" />
                     <p>{i18nTexts.projectsNoPreview[language]}</p>
                   </div>
                 )}
               </div>
-              <div className="bg-white p-6 flex items-center justify-between border-t border-border">
-                <div className="flex flex-col gap-2 flex-1 mr-4">
-                  <h2 className="text-xl font-semibold text-primary truncate" title={previewProject?.title}>{previewProject?.title}</h2>
-                  <div className="flex items-center gap-4 text-sm text-muted-foreground">
+              <div className="flex items-center justify-between border-t border-black/5 bg-white p-6">
+                <div className="mr-4 flex flex-1 flex-col gap-2">
+                  <h2 className={`truncate text-xl font-extrabold ${gradientText}`} title={previewProject?.title}>{previewProject?.title}</h2>
+                  <div className="flex items-center gap-4 text-xs text-gray-400">
                     <span>{i18nTexts.projectsCreateTime[language]}：{previewProject && formatDate(previewProject.createdAt, true)}</span>
-                    <span className="w-px h-3 bg-border"></span>
+                    <span className="h-3 w-px bg-black/10"></span>
                     <span>{i18nTexts.projectsUpdateTime[language]}：{previewProject && formatDate(previewProject.updatedAt, true)}</span>
                   </div>
                 </div>
-                <Button
-                  onClick={() => {
-                    if (previewProject) {
-                      navigate(`/editor/${previewProject.id}`)
-                    }
-                  }}
-                  className="rounded-full px-8 h-12 text-base shrink-0"
-                >
+                <Button onClick={() => { if (previewProject) navigate(`/editor/${previewProject.id}`) }} className={`h-12 shrink-0 px-8 text-base ${gradientBtn}`}>
                   {i18nTexts.projectsEnterEdit[language]}
                 </Button>
               </div>

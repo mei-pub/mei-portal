@@ -73,10 +73,28 @@ const HomePage: FC<Props> = ({ filter = DownloadFilter.list }) => {
     <PageContainer
       className="bg-white/85 dark:bg-[#1F2024] flex flex-col flex-1 min-h-0 h-full rounded-xl border border-black/5 shadow-sm p-3 gap-3 overflow-hidden"
     >
-      <DownloadList filter={filter} />
+      {/* 应用信息横幅（对齐工具箱首页 Hero；占用高度从下方列表扣除，页面整体不滚动） */}
+      <div className="flex shrink-0 items-center gap-3 px-1 pt-1">
+        <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500 text-white shadow-[0_6px_20px_rgba(99,102,241,0.4)]">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5"/><path d="M12 15V3"/></svg>
+        </span>
+        <div className="min-w-0">
+          <div className="bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500 bg-clip-text text-[22px] font-extrabold leading-tight tracking-tight text-transparent">
+            媒体下载
+          </div>
+          <div className="truncate text-xs text-gray-500 dark:text-gray-400">
+            m3u8 / B站 / 流媒体视频批量下载
+          </div>
+        </div>
+      </div>
+
+      {/* 列表区：占满剩余高度并在内部滚动（DownloadList 自带 overflow-auto） */}
+      <div className="flex min-h-0 flex-1 flex-col">
+        <DownloadList filter={filter} />
+      </div>
 
       <Pagination
-        className="flex justify-end"
+        className="flex shrink-0 justify-end"
         current={pagination.page}
         pageSize={pagination.pageSize}
         onChange={handleChangePage}

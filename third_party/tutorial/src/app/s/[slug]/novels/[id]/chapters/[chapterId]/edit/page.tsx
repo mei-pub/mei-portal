@@ -15,6 +15,20 @@ export default function EditChapterPage() {
   const [form, setForm] = useState({ title: "", content: "", chapter_order: 0 });
   const [submitting, setSubmitting] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [novelSlug, setNovelSlug] = useState("");
+
+  // 获取小说 slug 用于路径规范化（防 id 遍历）
+  useEffect(() => {
+    fetch(`/novels/api/novels/${novelId}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (d?.slug) {
+          setNovelSlug(d.slug);
+          if (novelId !== d.slug) router.replace(`/s/${slug}/novels/${d.slug}/chapters/${chapterId}/edit`);
+        }
+      })
+      .catch(() => {});
+  }, [novelId, slug, chapterId, router]);
 
   useEffect(() => {
     fetchChapter();
@@ -49,7 +63,7 @@ export default function EditChapterPage() {
         body: JSON.stringify(form),
       });
       if (res.ok) {
-        router.push(`/s/${slug}/novels/${novelId}`);
+        router.push(`/s/${slug}/novels/${novelSlug || novelId}`);
       }
     } catch (err) {
       console.error("Failed to update chapter:", err);
@@ -74,7 +88,7 @@ export default function EditChapterPage() {
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-3">
             <Link
-              href={`/s/${slug}/novels/${novelId}`}
+              href={`/s/${slug}/novels/${novelSlug || novelId}`}
               className="text-[var(--muted)] hover:text-[var(--foreground)] transition-colors"
             >
               <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>

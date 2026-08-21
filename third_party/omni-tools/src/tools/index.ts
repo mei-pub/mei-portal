@@ -47,7 +47,7 @@ export const tools: DefinedTool[] = [
   ...xmlTools,
   ...convertersTools
 ];
-const categoriesConfig: {
+export const categoriesConfig: {
   type: ToolCategory;
   title: FullI18nKey;
   value: FullI18nKey;

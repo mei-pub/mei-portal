@@ -3,7 +3,7 @@
 import { useEffect, useState, useMemo, useRef } from "react";
 import Link from "next/link";
 import { useSite } from "@/components/SiteContext";
-import SitePanel from "@/components/SitePanel";
+import SitePanel, { SiteGlyph } from "@/components/SitePanel";
 
 // 书籍图标渲染：封面样式 > Logo 样式 > 默认首字母卡片（多样式同屏兼容）
 function NovelThumb({ novel, size = "md" }: { novel: { title: string; cover_url?: string; icon?: string; icon_color?: string }; size?: "md" }) {
@@ -295,7 +295,17 @@ export default function HomePage() {
       {/* 左侧站点面板：站点信息 + 站点/切换站点/添加（与书籍/章节页共享） */}
       <SitePanel />
       <main className="flex-1 max-w-6xl mx-auto w-full px-4 sm:px-6 pt-4 sm:pt-6 pb-6">
-        {/* 站点信息集中在左侧面板展示，页面内不再重复渲染 */}
+        {/* 站点信息横幅：对齐工具箱首页品牌渲染（Logo + 渐变名称居中，描述为副标题） */}
+        <div className="mb-5 mt-2 flex flex-col items-center text-center">
+          <div className="flex items-center gap-3">
+            <SiteGlyph icon={site.icon} color={site.iconColor} size={44} />
+            <h1 className="text-[28px] sm:text-[34px] font-extrabold tracking-tight bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500 bg-clip-text text-transparent flex items-center gap-2">
+              {site.name}
+              {site.type === "secret" && <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-purple-100 text-purple-600 align-middle" style={{ WebkitTextFillColor: "initial" }}>隐秘</span>}
+            </h1>
+          </div>
+          {site.description && <p className="text-[13px] text-[var(--muted)] mt-1.5 max-w-xl line-clamp-2">{site.description}</p>}
+        </div>
         <div className="mb-6">
           <FilterBar categories={categories} allTags={allTags} selectedCategory={selectedCategory} selectedTag={selectedTag} sortBy={sortBy} search={search} onSearch={setSearch}
             onCategoryChange={setSelectedCategory} onTagChange={setSelectedTag} onSortChange={setSortBy}

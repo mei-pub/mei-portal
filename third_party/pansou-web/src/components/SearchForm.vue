@@ -159,14 +159,14 @@ const handleSearch = () => {
               placeholder="搜索资源、电影、音乐、软件..."
               :disabled="loading"
               @keydown.enter="handleSearch"
-              class="flex h-10 outline-none focus:outline-none rounded-md border bg-background px-3 py-2 text-sm file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50 w-full text-center pl-12 pr-12 transition-all duration-300 border-primary/20 hover:border-primary/40 shadow-sm hover:shadow-md focus-visible:shadow-lg focus-visible:ring-primary/30 focus-visible:ring-offset-0 focus-visible:border-primary/60"
+              class="flex h-12 outline-none focus:outline-none rounded-full border bg-background px-3 py-2 text-[15px] file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50 w-full text-center pl-12 pr-12 transition-all duration-300 border-primary/20 hover:border-primary/40 shadow-md hover:shadow-lg focus-visible:shadow-xl focus-visible:ring-primary/30 focus-visible:ring-offset-0 focus-visible:border-primary/60"
             />
             <!-- 搜索按钮 -->
             <button
               type="button"
               @click="handleSearch"
               :disabled="loading || !keyword.trim()"
-              class="inline-flex items-center justify-center whitespace-nowrap rounded-md text-sm font-medium focus-visible:outline-none disabled:pointer-events-none disabled:opacity-50 w-10 absolute right-0 top-0 h-full rounded-l-none transition-all duration-300 border-0 hover:border hover:border-l-0 hover:border-primary/40 hover:bg-primary hover:text-primary-foreground hover:scale-[1.03]"
+              class="inline-flex items-center justify-center whitespace-nowrap rounded-full text-sm font-medium focus-visible:outline-none disabled:pointer-events-none disabled:opacity-50 w-10 absolute right-1 top-1/2 -translate-y-1/2 h-10 transition-all duration-300 border-0 bg-primary/5 text-primary hover:bg-primary hover:text-primary-foreground hover:scale-[1.03]"
             >
               <component 
                 :is="loading ? Icons.Loading() : Icons.Send()" 

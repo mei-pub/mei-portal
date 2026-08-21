@@ -640,10 +640,26 @@ function SearchPageClient() {
 
   return (
     <PageLayout activePath='/search'>
-      <div className='px-4 sm:px-10 py-4 sm:py-8 overflow-visible mb-10'>
+      <div className={`px-4 sm:px-10 overflow-visible mb-10 ${showResults ? 'py-4 sm:py-8' : 'flex min-h-[calc(100vh-9rem)] flex-col py-4'}`}>
         {/* 搜索框 */}
-        <div className='mb-8'>
-          <form onSubmit={handleSearch} className='max-w-2xl mx-auto'>
+        <div className={showResults ? 'mb-8' : 'flex flex-1 flex-col items-center justify-center'}>
+          {/* 入口态：品牌区 + 垂直居中搜索框（对齐主应用风格） */}
+          {!showResults && (
+            <div className='mb-8 flex flex-col items-center text-center'>
+              <div className='mb-4 flex items-center gap-3'>
+                <span className='flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500 text-white shadow-lg shadow-indigo-500/30'>
+                  <svg width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='currentColor' strokeWidth='2' strokeLinecap='round' strokeLinejoin='round'><rect width='20' height='15' x='2' y='7' rx='2' ry='2'/><polyline points='17 2 12 7 7 2'/></svg>
+                </span>
+                <h1 className='bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500 bg-clip-text text-4xl font-extrabold tracking-tight text-transparent'>
+                  影视门户
+                </h1>
+              </div>
+              <p className='text-sm text-gray-500 dark:text-gray-400'>
+                聚合搜索电影、剧集、动漫、综艺，一键匹配可播放源
+              </p>
+            </div>
+          )}
+          <form onSubmit={handleSearch} className={showResults ? 'max-w-2xl mx-auto' : 'w-full max-w-xl'}>
             <div className='relative'>
               <Search className='absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-gray-400 dark:text-gray-500' />
               <input
@@ -654,7 +670,7 @@ function SearchPageClient() {
                 onFocus={handleInputFocus}
                 placeholder='搜索电影、电视剧...'
                 autoComplete="off"
-                className='w-full h-12 rounded-lg bg-gray-50/80 py-3 pl-10 pr-12 text-sm text-gray-700 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-green-400 focus:bg-white border border-gray-200/50 shadow-sm dark:bg-gray-800 dark:text-gray-300 dark:placeholder-gray-500 dark:focus:bg-gray-700 dark:border-gray-700'
+                className={`w-full ${showResults ? 'h-12 rounded-lg' : 'h-14 rounded-2xl text-[15px]'} bg-gray-50/80 py-3 pl-10 pr-12 text-sm text-gray-700 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:bg-white border border-gray-200/50 shadow-sm backdrop-blur-xl dark:bg-gray-800 dark:text-gray-300 dark:placeholder-gray-500 dark:focus:bg-gray-700 dark:border-gray-700`}
               />
 
               {/* 清除按钮 */}
@@ -695,11 +711,56 @@ function SearchPageClient() {
               />
             </div>
           </form>
+          {/* 入口态：搜索历史（跟随居中搜索区） */}
+          {!showResults && searchHistory.length > 0 && (
+            <div className='mt-8 w-full max-w-xl'>
+              <div className='mb-3 flex items-center justify-between'>
+                <span className='text-[11px] font-semibold uppercase tracking-[0.2em] text-gray-400 dark:text-gray-500'>搜索历史</span>
+                <button
+                  onClick={() => {
+                    clearSearchHistory(); // 事件监听会自动更新界面
+                  }}
+                  className='text-xs text-gray-400 transition-colors hover:text-red-500 dark:text-gray-500'
+                >
+                  清空
+                </button>
+              </div>
+              <div className='flex flex-wrap justify-center gap-2'>
+                {searchHistory.map((item) => (
+                  <div key={item} className='relative group'>
+                    <button
+                      onClick={() => {
+                        setSearchQuery(item);
+                        router.push(
+                          `/search?q=${encodeURIComponent(item.trim())}`
+                        );
+                      }}
+                      className='px-4 py-2 rounded-full border border-gray-200/60 bg-white/60 text-sm text-gray-600 backdrop-blur-xl transition-all duration-200 hover:border-indigo-300 hover:text-indigo-600 hover:shadow-md dark:border-gray-700 dark:bg-gray-800/60 dark:text-gray-300 dark:hover:border-indigo-500 dark:hover:text-indigo-400'
+                    >
+                      {item}
+                    </button>
+                    {/* 删除按钮 */}
+                    <button
+                      aria-label='删除搜索历史'
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        e.preventDefault();
+                        deleteSearchHistory(item); // 事件监听会自动更新界面
+                      }}
+                      className='absolute -top-1 -right-1 w-4 h-4 opacity-0 group-hover:opacity-100 bg-gray-400 hover:bg-red-500 text-white rounded-full flex items-center justify-center text-[10px] transition-colors'
+                    >
+                      <X className='w-3 h-3' />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
 
-        {/* 搜索结果或搜索历史 */}
-        <div className='max-w-[95%] mx-auto mt-12 overflow-visible'>
-          {showResults ? (
+        {/* 搜索结果 */}
+        {showResults && (
+        <div className='max-w-[85%] 2xl:max-w-[1500px] mx-auto mt-12 overflow-visible w-full'>
             <section className='mb-12'>
               {/* 标题 */}
               <div className='mb-4'>
@@ -836,54 +897,8 @@ function SearchPageClient() {
                 </div>
               )}
             </section>
-          ) : searchHistory.length > 0 ? (
-            // 搜索历史
-            <section className='mb-12'>
-              <h2 className='mb-4 text-xl font-bold text-gray-800 text-left dark:text-gray-200'>
-                搜索历史
-                {searchHistory.length > 0 && (
-                  <button
-                    onClick={() => {
-                      clearSearchHistory(); // 事件监听会自动更新界面
-                    }}
-                    className='ml-3 text-sm text-gray-500 hover:text-red-500 transition-colors dark:text-gray-400 dark:hover:text-red-500'
-                  >
-                    清空
-                  </button>
-                )}
-              </h2>
-              <div className='flex flex-wrap gap-2'>
-                {searchHistory.map((item) => (
-                  <div key={item} className='relative group'>
-                    <button
-                      onClick={() => {
-                        setSearchQuery(item);
-                        router.push(
-                          `/search?q=${encodeURIComponent(item.trim())}`
-                        );
-                      }}
-                      className='px-4 py-2 bg-gray-500/10 hover:bg-gray-300 rounded-full text-sm text-gray-700 transition-colors duration-200 dark:bg-gray-700/50 dark:hover:bg-gray-600 dark:text-gray-300'
-                    >
-                      {item}
-                    </button>
-                    {/* 删除按钮 */}
-                    <button
-                      aria-label='删除搜索历史'
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        e.preventDefault();
-                        deleteSearchHistory(item); // 事件监听会自动更新界面
-                      }}
-                      className='absolute -top-1 -right-1 w-4 h-4 opacity-0 group-hover:opacity-100 bg-gray-400 hover:bg-red-500 text-white rounded-full flex items-center justify-center text-[10px] transition-colors'
-                    >
-                      <X className='w-3 h-3' />
-                    </button>
-                  </div>
-                ))}
-              </div>
-            </section>
-          ) : null}
         </div>
+        )}
       </div>
 
       {/* 返回顶部悬浮按钮 */}

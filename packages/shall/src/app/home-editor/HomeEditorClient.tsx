@@ -58,8 +58,8 @@ export default function HomeEditorClient() {
   ];
 
   return (
-    <div style={{ minHeight: '100vh', background: 'var(--mei-bg)', color: 'var(--mei-text)' }}>
-      <div style={{ maxWidth: 1080, margin: '0 auto', padding: '28px 24px 120px' }}>
+    <div style={{ color: 'var(--mei-text)' }}>
+      <div style={{ maxWidth: 1080, margin: '0 auto', padding: '4px 4px 120px' }}>
         {/* 页头 */}
         <div style={{ marginBottom: 22 }}>
           <h1 style={{ fontSize: 22, fontWeight: 800, margin: '0 0 6px', letterSpacing: 0.3 }}>主页设置</h1>

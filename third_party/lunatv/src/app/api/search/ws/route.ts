@@ -163,11 +163,26 @@ export async function GET(request: NextRequest) {
         }
       });
 
-      // 等待所有搜索完成
-      await Promise.allSettled(searchPromises);
-    },
+     // 等待所有搜索完成
+     await Promise.allSettled(searchPromises);
 
-    cancel() {
+      // 兜底：0 源时 Promise.allSettled 立即完成但无回调触发 complete，
+      // 需在此补发完成事件并关闭流，否则客户端 EventSource 永远挂起
+      if (!streamClosed && (apiSites.length === 0 || completedSources >= apiSites.length)) {
+        streamClosed = true;
+        const completeEvent = `data: ${JSON.stringify({
+          type: 'complete',
+          totalResults: allResults.length,
+          completedSources,
+          timestamp: Date.now()
+        })}\n\n`;
+        if (safeEnqueue(encoder.encode(completeEvent))) {
+          try { controller.close(); } catch (e) { console.warn('Failed to close controller:', e); }
+        }
+      }
+   },
+
+   cancel() {
       // 客户端断开连接时，标记流已关闭
       streamClosed = true;
       console.log('Client disconnected, cancelling search stream');
@@ -175,14 +190,15 @@ export async function GET(request: NextRequest) {
   });
 
   // 返回流式响应
-  return new Response(stream, {
-    headers: {
-      'Content-Type': 'text/event-stream',
-      'Cache-Control': 'no-cache',
-      'Connection': 'keep-alive',
-      'Access-Control-Allow-Origin': '*',
-      'Access-Control-Allow-Methods': 'GET',
-      'Access-Control-Allow-Headers': 'Content-Type',
-    },
-  });
+ return new Response(stream, {
+   headers: {
+     'Content-Type': 'text/event-stream',
+     'Cache-Control': 'no-cache',
+     'Connection': 'keep-alive',
+     'X-Accel-Buffering': 'no',
+     'Access-Control-Allow-Origin': '*',
+     'Access-Control-Allow-Methods': 'GET',
+     'Access-Control-Allow-Headers': 'Content-Type',
+   },
+ });
 }

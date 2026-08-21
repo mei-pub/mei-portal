@@ -46,3 +46,8 @@ certs/
 # Submodule build contexts (git submodules)
 # 不忽略 packages/tutorial 与 packages/mei-link —— 需追踪其 .gitlink
 # submodule 内部文件由各自仓库管理
+.myflicker/
+
+# lunatv PWA 构建产物（next build 时生成，不入库）
+third_party/lunatv/public/sw.js
+third_party/lunatv/public/workbox-*.js

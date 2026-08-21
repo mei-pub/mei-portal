@@ -4,7 +4,6 @@
 // 需主密码解锁（与站点管理一致）
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
-import Navbar from "@/components/Navbar";
 import { showToast } from "@/components/Toast";
 
 const card = "bg-white rounded-2xl border border-[var(--border)] p-5 space-y-4";
@@ -118,7 +117,6 @@ export default function BackupPage() {
 
   return (
     <>
-      <Navbar />
       <main className="flex-1 max-w-3xl mx-auto w-full px-4 sm:px-6 py-6 space-y-5">
         <div className="flex items-center gap-3 mb-2">
           <Link href="/manage" className="text-[var(--muted)] hover:text-[var(--foreground)] transition-colors">

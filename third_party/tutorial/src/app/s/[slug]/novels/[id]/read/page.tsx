@@ -91,6 +91,7 @@ export default function ReaderPage() {
   const fulltextParam = searchParams.get("fulltext");
 
   const [novelTitle, setNovelTitle] = useState("");
+  const [novelSlug, setNovelSlug] = useState("");
   const [chapters, setChapters] = useState<Chapter[]>([]);
   const [currentChapter, setCurrentChapter] = useState<ChapterContent | null>(null);
   const [currentChapterIndex, setCurrentChapterIndex] = useState(0);
@@ -278,6 +279,12 @@ export default function ReaderPage() {
         if (novelRes.ok) {
           const novelData = await novelRes.json();
           setNovelTitle(novelData.title);
+          setNovelSlug(novelData.slug || "");
+          // 规范化路径：数字 id → slug（保留 query 参数，防遍历）
+          if (novelData.slug && novelId !== novelData.slug) {
+            const qs = searchParams.toString();
+            router.replace(`/s/${slug}/novels/${novelData.slug}/read${qs ? "?" + qs : ""}`);
+          }
           if (novelData.chapters) {
             setChapters(novelData.chapters);
           }
@@ -550,7 +557,7 @@ export default function ReaderPage() {
       // ESC → back to novel detail page (chapter list)
       if (e.key === "Escape") {
         e.preventDefault();
-        router.push(`/s/${slug}/novels/${novelId}`);
+        router.push(`/s/${slug}/novels/${novelSlug || novelId}`);
         return;
       }
 
@@ -609,12 +616,12 @@ export default function ReaderPage() {
 
   function goNextChapter() {
     if (currentChapterIndex < chapters.length - 1) {
-      router.push(`/s/${slug}/novels/${novelId}/read?chapter=${chapters[currentChapterIndex + 1].id}`);
+      router.push(`/s/${slug}/novels/${novelSlug || novelId}/read?chapter=${chapters[currentChapterIndex + 1].id}`);
     }
   }
   function goPrevChapter() {
     if (currentChapterIndex > 0) {
-      router.push(`/s/${slug}/novels/${novelId}/read?chapter=${chapters[currentChapterIndex - 1].id}`);
+      router.push(`/s/${slug}/novels/${novelSlug || novelId}/read?chapter=${chapters[currentChapterIndex - 1].id}`);
     }
   }
   function jumpToChapter(chapterId: number) {
@@ -623,7 +630,7 @@ export default function ReaderPage() {
       const el = document.getElementById(`chapter-${chapters.findIndex(c => c.id === chapterId)}`);
       if (el) el.scrollIntoView({ behavior: "smooth" });
     } else {
-      router.push(`/s/${slug}/novels/${novelId}/read?chapter=${chapterId}`);
+      router.push(`/s/${slug}/novels/${novelSlug || novelId}/read?chapter=${chapterId}`);
     }
   }
 
@@ -646,7 +653,7 @@ export default function ReaderPage() {
       {/* Top Bar */}
       <div className={`shrink-0 border-b px-4 py-2 flex items-center justify-between text-sm transition-all duration-300 ${showBars ? "translate-y-0 opacity-100" : "-translate-y-full opacity-0 h-0 py-0 overflow-hidden"}`}
         style={{ background: theme.bg, borderColor: theme.text + "20" }}>
-        <Link href={`/s/${slug}/novels/${novelId}`} className="flex items-center gap-1 hover:opacity-70 transition-opacity" style={{ color: theme.text }}>
+        <Link href={`/s/${slug}/novels/${novelSlug || novelId}`} className="flex items-center gap-1 hover:opacity-70 transition-opacity" style={{ color: theme.text }}>
           <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
           </svg>

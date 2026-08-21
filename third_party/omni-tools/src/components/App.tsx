@@ -1,6 +1,7 @@
 import { BrowserRouter, useRoutes } from 'react-router-dom';
 import routesConfig from '../config/routesConfig';
 import Navbar from './Navbar';
+import MeiPanel from './MeiPanel';
 import { Suspense, useState, useEffect } from 'react';
 import Loading from './Loading';
 import { CssBaseline, Theme, ThemeProvider } from '@mui/material';
@@ -67,6 +68,7 @@ function App() {
                     localStorage.setItem('theme', nextMode(mode));
                   }}
                 />
+                <MeiPanel />
                 <Suspense fallback={<Loading />}>
                   <AppRoutes />
                 </Suspense>
