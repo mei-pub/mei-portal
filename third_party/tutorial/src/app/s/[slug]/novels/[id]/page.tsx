@@ -233,19 +233,27 @@ export default function NovelDetailPage() {
         <div className="bg-white rounded-xl border border-[var(--border)] p-6 mb-6">
           <div className="flex items-start justify-between">
             <div className="flex items-start gap-4 min-w-0">
-              {(novel.cover_url || novel.icon) && (
-                novel.cover_url ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={novel.cover_url} alt={novel.title} className="w-20 h-28 rounded-lg object-cover shadow flex-shrink-0" />
-                ) : /^(https?:)?\//.test(novel.icon) ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={novel.icon} alt={novel.title} className="w-20 h-28 rounded-lg object-contain shadow flex-shrink-0" style={{ background: novel.icon_color || "var(--accent)" }} />
-                ) : (
-                  <span className="w-20 h-28 rounded-lg flex items-center justify-center shadow flex-shrink-0 text-3xl" style={{ background: novel.icon_color || "linear-gradient(135deg,#6366f1,#a855f7)" }}>
-                    {novel.icon.includes(":") ? novel.title.slice(0, 1) : novel.icon}
+              {(() => {
+                // 封面 > Logo > 书名首字母渐变卡片，保证目录页始终有封面位
+                if (novel.cover_url) {
+                  return (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={novel.cover_url} alt={novel.title} className="w-20 h-28 rounded-lg object-cover shadow flex-shrink-0" />
+                  );
+                }
+                if (/^(https?:)?\//.test(novel.icon || "")) {
+                  return (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={novel.icon} alt={novel.title} className="w-20 h-28 rounded-lg object-contain shadow flex-shrink-0" style={{ background: novel.icon_color || "var(--accent)" }} />
+                  );
+                }
+                const glyph = novel.icon && !novel.icon.includes(":") ? novel.icon : novel.title.slice(0, 1);
+                return (
+                  <span className="w-20 h-28 rounded-lg flex items-center justify-center shadow flex-shrink-0 text-3xl font-bold text-white" style={{ background: novel.icon_color || "linear-gradient(135deg,#6366f1,#a855f7)" }}>
+                    {glyph}
                   </span>
-                )
-              )}
+                );
+              })()}
             <div className="min-w-0">
               <h1 className="text-2xl font-bold flex items-center gap-2">
                 {novel.title}

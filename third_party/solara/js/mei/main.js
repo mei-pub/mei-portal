@@ -27,6 +27,13 @@ function mountPanel() {
   const render = () => {
     document.querySelectorAll(".mei-panel, .mei-panel-handle").forEach((el) => el.remove());
     const route = currentRoute().path;
+    // 播放页：左侧面板选中态跟随当前播放队列（列表/收藏/随机）
+    let activeRoute = route;
+    if (route === "/player") {
+      if (player.queueType === "fav") activeRoute = "/favorites";
+      else if (player.queueType === "playlist") activeRoute = "/playlists";
+      else if (player.mode === "shuffle") activeRoute = "/random";
+    }
     if (!open) {
       const handle = document.createElement("button");
       handle.className = "mei-panel-handle";
@@ -45,7 +52,7 @@ function mountPanel() {
       </button>
       <div class="p-divider"></div>
       ${NAV_ITEMS.map((item) => `
-        <button class="p-item ${route === item.hash.slice(1) ? "active" : ""}" data-hash="${item.hash}" title="${item.title}">${item.icon}</button>
+        <button class="p-item ${activeRoute === item.hash.slice(1) ? "active" : ""}" data-hash="${item.hash}" title="${item.title}">${item.icon}</button>
       `).join("")}
       <div class="p-divider"></div>
       <button class="p-collapse" title="收起面板">
@@ -63,6 +70,8 @@ function mountPanel() {
     try { localStorage.setItem(PANEL_KEY, open ? "0" : "1"); } catch { /* ignore */ }
   };
   window.addEventListener("hashchange", render);
+  // 播放页切换队列（tab 切换列表）时联动刷新左侧面板选中态
+  on("queue", render);
   render();
 }
 
@@ -70,6 +79,8 @@ function route() {
   const { path, params } = currentRoute();
   const root = document.getElementById("view");
   if (!root) return;
+  // 播放列表管理页与播放页加宽（左右布局需要更多横向空间）
+  root.classList.toggle("wide", path === "/playlists" || path === "/player");
   switch (path) {
     case "/search":
       renderSearch(root, params.get("list") || "");

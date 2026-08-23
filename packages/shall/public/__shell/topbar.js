@@ -90,7 +90,7 @@
       '[class*="notification"][class*="fixed"],[class*="Notification"][class*="fixed"],',
       '.sonner-toast-wrapper,[data-sonner-toaster],[role="region"][class*="fixed"]{top:74px!important;}',
       '[class*="toast"],[class*="Toast"],[class*="notification"],[class*="Notification"]{z-index:10000!important;}',
-      '#mei-topbar .mei-brand{display:flex;align-items:center;gap:8px;font-weight:700;font-size:13.5px;margin-right:6px;flex-shrink:0;color:#1c2333;}',
+      '#mei-topbar .mei-brand{display:flex;align-items:center;gap:8px;font-weight:700;font-size:13.5px;margin-right:6px;flex-shrink:0;color:#1c2333;white-space:nowrap;}',
       '#mei-topbar .mei-logo{width:22px;height:22px;border-radius:7px;flex-shrink:0;',
       'background:linear-gradient(135deg,#6366f1 0%,#a855f7 55%,#ec4899 100%);',
       'box-shadow:0 0 14px rgba(129,140,248,0.55),inset 0 1px 0 rgba(255,255,255,0.35);}',
@@ -145,7 +145,7 @@
       '#mei-lib-menu .mei-menu-link{display:flex;align-items:center;gap:8px;width:100%;padding:7px 10px;border:none;',
       'background:transparent;cursor:pointer;border-radius:10px;color:#1c2333;font-size:13px;text-align:left;text-decoration:none;}',
       '#mei-lib-menu .mei-menu-link:hover{background:rgba(23,32,56,0.05);}',
-      '@media(max-width:640px){#mei-topbar .mei-brand-text{display:none;}}',
+      '@media(max-width:900px){#mei-topbar .mei-brand-text{display:none;}}',
     ].join('');
     document.head.appendChild(style);
 

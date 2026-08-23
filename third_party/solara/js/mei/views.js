@@ -281,7 +281,7 @@ export function renderPlaylists(root) {
         <aside class="mei-card mei-pl-side">
           <div class="pl-new">
             <input class="mei-input" id="plNewName" placeholder="新列表名称">
-            <button class="mei-btn mei-btn-sm" id="plNewBtn">创建</button>
+            <button class="mei-btn mei-btn-sm" id="plNewBtn" title="创建列表">${I.plus}</button>
           </div>
           <div id="plItems"></div>
         </aside>
@@ -348,8 +348,8 @@ export function renderPlaylists(root) {
       <div class="mei-pl-head">
         <div class="t">${escapeHtml(selected.name)} <span style="font-size:11px;color:var(--faint);font-weight:400">${selected.songs.length} 首</span></div>
         <div class="ops">
-          <button class="mei-btn-ghost mei-btn-sm" id="plAddSongs">${I.plus} 添加歌曲</button>
-          <button class="mei-btn mei-btn-sm" id="plPlayAll" ${selected.songs.length === 0 ? "disabled" : ""}>${I.play} 播放全部</button>
+          <button class="mei-btn-ghost mei-btn-sm" id="plAddSongs" title="添加歌曲">${I.plus}</button>
+          <button class="mei-btn mei-btn-sm" id="plPlayAll" title="播放全部" ${selected.songs.length === 0 ? "disabled" : ""}>${I.play}</button>
         </div>
       </div>
       <div id="plSongs"></div>
@@ -437,7 +437,12 @@ export function renderPlayer(root) {
   root.innerHTML = `
     <div class="mei-player-page">
       <div class="mei-stage">
-        <img class="big-cover" src="${picUrl(song, 500)}" alt="" onerror="this.style.opacity='0.3'">
+        <div class="vinyl ${player.audio.paused ? "" : "spin"}" id="meiVinyl" aria-hidden="true">
+          <div class="disc">
+            <img class="big-cover" src="${picUrl(song, 500)}" alt="" onerror="this.style.opacity='0.3'">
+            <div class="hole"></div>
+          </div>
+        </div>
         <div class="p-title">${escapeHtml(song.name)}</div>
         <div class="p-sub">${escapeHtml(song.artist)}${song.album ? " · " + escapeHtml(song.album) : ""} · ${sourceLabel(song.source)}</div>
         <div class="mei-lyric-box" id="meiLyric"><div class="l-line">♪</div></div>
@@ -513,6 +518,15 @@ export function renderPlayer(root) {
     lyricBox.innerHTML = slice.map((l, k) => `<div class="l-line ${from + k === idx ? "on" : ""}">${escapeHtml(l.text)}</div>`).join("");
   };
   drawLyric();
+
+  // 唱片转动状态随播放/暂停切换
+  const vinyl = root.querySelector("#meiVinyl");
+  const syncVinyl = () => {
+    const el = document.getElementById("meiVinyl");
+    if (el) el.classList.toggle("spin", !player.audio.paused);
+  };
+  syncVinyl();
+  on("player", syncVinyl);
 
   if (!playerPageMounted) {
     playerPageMounted = true;

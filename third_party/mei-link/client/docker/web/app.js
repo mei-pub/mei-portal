@@ -32,6 +32,19 @@ const api = async (path, options = {}) => {
   if (!response.ok) throw new Error(payload.error || "请求失败");
   return payload;
 };
+// 登录态失效时自动走门户穿透重登（门户已登录前提下无感恢复会话）
+const repenetrate = async () => {
+  try {
+    const response = await fetch("/api/auth/repenetrate", {
+      method: "POST",
+      credentials: "include",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ app: "mei-link" }),
+    });
+    const payload = await response.json().catch(() => ({}));
+    return Boolean(payload && payload.ok);
+  } catch (error) { return false; }
+};
 const field = (form, name) => form.elements.namedItem(name);
 const formValue = (form, name) => new FormData(form).get(name)?.toString().trim() || "";
 const escapeHtml = value => String(value ?? "").replace(/[&<>'"]/g, char => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;" })[char]);
@@ -261,12 +274,20 @@ $("#exportLogsButton").addEventListener("click", () => { const blob = new Blob([
 $("#clearLogsButton").addEventListener("click", async () => { if (!events.length || !confirm("确定清空当前运行日志吗？")) return; try { await api("/api/events", { method: "DELETE" }); notify("运行日志已清空"); await load(); } catch (error) { notify(error.message, true); } });
 
 (async function restoreSession() {
+  let status = null;
   try {
-    const status = await api("/api/status");
-    if (status && !status.unauthorized) {
-      $("#loginView").classList.add("hidden");
-      $("#appView").classList.remove("hidden");
-      await load(); beginPolling();
-    }
-  } catch (error) { /* 未登录或会话过期，保持登录页 */ }
+    status = await api("/api/status");
+  } catch (error) {
+    // 会话失效：尝试门户穿透重登后重试一次
+    if (!(await repenetrate())) return;
+    try { status = await api("/api/status"); } catch (e) { return; }
+  }
+  if (status && status.unauthorized && await repenetrate()) {
+    try { status = await api("/api/status"); } catch (e) { return; }
+  }
+  if (status && !status.unauthorized) {
+    $("#loginView").classList.add("hidden");
+    $("#appView").classList.remove("hidden");
+    await load(); beginPolling();
+  }
 })();

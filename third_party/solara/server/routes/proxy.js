@@ -13,15 +13,26 @@ const cache = require('../cache');
 const { getProvider } = require('../providers');
 
 const API_BASE_URL = process.env.API_BASE_URL || 'https://music-api.gdstudio.xyz/api.php';
-const KUWO_HOST_PATTERN = /(^|\.)kuwo\.cn$/i;
+// 允许代理的音频 CDN 域名（各音乐源直链）
+const AUDIO_HOST_PATTERN = /(^|\.)(kuwo\.cn|kugou\.cn|migu\.cn|qq\.com|90svip\.cn)$/i;
 
 const SAFE_RESPONSE_HEADERS = [
   'content-type', 'cache-control', 'accept-ranges',
   'content-length', 'content-range', 'etag', 'last-modified', 'expires',
 ];
 
-function isAllowedKuwoHost(hostname) {
-  return hostname && KUWO_HOST_PATTERN.test(hostname);
+function isAllowedAudioHost(hostname) {
+  return hostname && AUDIO_HOST_PATTERN.test(hostname);
+}
+
+function audioUpstreamHeaders(hostname, req) {
+  const headers = {
+    'User-Agent': req.headers['user-agent'] || 'Mozilla/5.0',
+  };
+  // 按源设置 Referer（部分 CDN 校验）
+  if (/(^|\.)kuwo\.cn$/i.test(hostname)) headers['Referer'] = 'https://www.kuwo.cn/';
+  else if (/(^|\.)qq\.com$/i.test(hostname)) headers['Referer'] = 'https://y.qq.com/';
+  return headers;
 }
 
 function buildCacheKey(url) {
@@ -32,8 +43,8 @@ function buildCacheKey(url) {
   return u.toString();
 }
 
-/** 代理酷我音频流（带 Range 支持） */
-async function proxyKuwoAudio(targetUrl, req, res) {
+/** 代理音乐源音频流（带 Range 支持；解决直链 IP 绑定/防盗链/混合内容） */
+async function proxyAudioStream(targetUrl, req, res) {
   let parsed;
   try {
     parsed = new URL(targetUrl);
@@ -41,18 +52,15 @@ async function proxyKuwoAudio(targetUrl, req, res) {
     return res.status(400).send('Invalid target');
   }
 
-  if (!isAllowedKuwoHost(parsed.hostname)) {
+  if (!isAllowedAudioHost(parsed.hostname)) {
     return res.status(400).send('Invalid target');
   }
   if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
     return res.status(400).send('Invalid target');
   }
-  parsed.protocol = 'http:';
-
   const headers = {
-    'User-Agent': req.headers['user-agent'] || 'Mozilla/5.0',
-    'Referer': 'https://www.kuwo.cn/',
-  };
+    ...audioUpstreamHeaders(parsed.hostname, req),
+  }
   if (req.headers['range']) headers['Range'] = req.headers['range'];
 
   const controller = new AbortController();
@@ -82,7 +90,7 @@ async function proxyKuwoAudio(targetUrl, req, res) {
       console.log('[Proxy Kuwo] Request aborted by client');
       return;
     }
-    console.error('[Proxy Kuwo]', err);
+    console.error('[Proxy Audio]', err);
     return res.status(502).send('Upstream error');
   }
 }
@@ -201,7 +209,7 @@ module.exports = function createProxyRouter() {
     const target = req.query.target;
 
     if (target) {
-      return proxyKuwoAudio(target, req, res);
+      return proxyAudioStream(target, req, res);
     }
 
     // ── 本地音乐源（gdstudio 已下线的源在这里直连实现）──────────────────────
@@ -217,6 +225,12 @@ module.exports = function createProxyRouter() {
       return res.redirect(String(req.query.id));
     }
 
+    // 封面统一 302：gdstudio 的 types=pic 返回 JSON {url} 而非图片二进制，
+    // 前端 <img> 无法直接使用——这里解析出真实图片地址后重定向
+    if (types === 'pic') {
+      return proxyPicRedirect(req, res);
+    }
+
     // 重建完整 URL（含查询参数）给缓存 key 使用
     const fullUrl = `http://localhost${req.originalUrl}`;
     return proxyApiRequest(fullUrl, req, res);
@@ -224,6 +238,45 @@ module.exports = function createProxyRouter() {
 
   return router;
 };
+
+/** gdstudio 封面解析重定向：JSON {url} → 302 真实图片地址 */
+async function proxyPicRedirect(req, res) {
+  const fullUrl = `http://localhost${req.originalUrl}`;
+  const cacheKey = buildCacheKey(fullUrl);
+
+  const cached = cache.get(cacheKey);
+  if (cached) {
+    try {
+      const data = JSON.parse(cached.body);
+      if (data && data.url) return res.redirect(data.url);
+    } catch { /* 缓存损坏走回源 */ }
+  }
+
+  try {
+    const upstreamUrl = new URL(API_BASE_URL);
+    new URL(fullUrl).searchParams.forEach((value, key) => {
+      if (['target', 'callback', 's', 'nocache'].includes(key)) return;
+      upstreamUrl.searchParams.set(key, value);
+    });
+    const upstream = await fetch(upstreamUrl.toString(), {
+      headers: {
+        'User-Agent': req.headers['user-agent'] || 'Mozilla/5.0',
+        Accept: 'application/json',
+      },
+      signal: AbortSignal.timeout(15000),
+    });
+    const text = await upstream.text();
+    const data = JSON.parse(text);
+    if (!upstream.ok || !data || !data.url) {
+      return res.status(502).send('Cover resolve error');
+    }
+    cache.set(cacheKey, { body: text, contentType: 'application/json; charset=utf-8' }, 3600);
+    return res.redirect(data.url);
+  } catch (err) {
+    console.error('[Proxy Pic]', err.message || err);
+    return res.status(502).send('Cover resolve error');
+  }
+}
 
 /** 本地源请求处理：与上游一致的响应结构 + 同样的 5 分钟缓存策略 */
 async function proxyLocalProvider(provider, types, req, res) {

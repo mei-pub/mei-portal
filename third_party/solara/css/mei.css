@@ -97,6 +97,7 @@ img { display: block; }
   padding: 84px 24px calc(var(--playerbar-h) + 48px);
   min-height: 100vh;
 }
+.mei-main.wide { max-width: 1280px; }
 
 .mei-brand { display: flex; flex-direction: column; align-items: center; text-align: center; margin-bottom: 26px; }
 .mei-brand .row { display: flex; align-items: center; gap: 14px; }
@@ -169,7 +170,7 @@ img { display: block; }
 .mei-sources-hint { margin-top: 12px; font-size: 11.5px; color: var(--faint); display: flex; gap: 6px; flex-wrap: wrap; justify-content: center; }
 .mei-sources-hint .chip { padding: 2px 10px; border-radius: 999px; background: rgba(255,255,255,0.7); border: 1px solid var(--border); }
 
-.mei-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 14px; margin-top: 18px; }
+.mei-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 14px; margin-top: 18px; }
 .mei-song-card {
   position: relative; display: flex; flex-direction: column; gap: 10px; padding: 12px;
   background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
@@ -241,12 +242,27 @@ img { display: block; }
 .mei-song-row .r-ops .mei-icon-btn { width: 27px; height: 27px; border-radius: 8px; }
 .mei-song-row .r-ops .mei-icon-btn svg { width: 14px; height: 14px; }
 
-.mei-player-page { display: flex; flex-direction: column; align-items: center; }
-.mei-stage { display: flex; flex-direction: column; align-items: center; margin-top: 1vh; }
-.mei-stage .big-cover {
-  width: min(260px, 56vw); height: min(260px, 56vw); border-radius: 24px; object-fit: cover;
-  box-shadow: 0 24px 60px rgba(23,32,56,0.28); background: var(--gradient-soft);
+.mei-player-page { display: flex; gap: 26px; align-items: stretch; }
+.mei-stage { flex: 0 0 42%; max-width: 460px; display: flex; flex-direction: column; align-items: center; margin-top: 1vh; }
+.vinyl {
+  width: min(320px, 100%); aspect-ratio: 1/1; position: relative;
+  filter: drop-shadow(0 18px 40px rgba(23, 32, 56, 0.35));
 }
+.vinyl .disc {
+  width: 100%; height: 100%; border-radius: 50%; position: relative;
+  background: repeating-radial-gradient(circle at 50% 50%, #23262e 0 1.5px, #101319 1.5px 3.5px);
+  box-shadow: inset 0 0 0 2px rgba(255,255,255,0.05), inset 0 0 32px rgba(0,0,0,0.65);
+  display: flex; align-items: center; justify-content: center;
+  animation: vinylSpin 16s linear infinite; animation-play-state: paused;
+}
+.vinyl.spin .disc { animation-play-state: running; }
+@keyframes vinylSpin { to { transform: rotate(360deg); } }
+.mei-stage .big-cover {
+  width: 62%; height: 62%; border-radius: 50%; object-fit: cover;
+  border: 6px solid rgba(8, 10, 16, 0.75); background: var(--gradient-soft);
+  box-shadow: 0 0 0 1px rgba(255,255,255,0.08), var(--shadow);
+}
+.vinyl .hole { position: absolute; left: 50%; top: 50%; width: 15px; height: 15px; transform: translate(-50%, -50%); border-radius: 50%; background: var(--bg); box-shadow: inset 0 0 0 3px rgba(23,32,56,0.25); }
 .mei-stage .p-title { margin-top: 20px; font-size: 20px; font-weight: 800; letter-spacing: 0.2px; text-align: center; }
 .mei-stage .p-sub { margin-top: 5px; font-size: 13px; color: var(--muted); text-align: center; }
 .mei-lyric-box {
@@ -257,14 +273,14 @@ img { display: block; }
 }
 .mei-lyric-box .l-line { font-size: 13px; color: var(--faint); line-height: 27px; transition: all .25s; }
 .mei-lyric-box .l-line.on { color: var(--primary); font-weight: 700; font-size: 14px; }
-.mei-queue { margin-top: 22px; width: 100%; max-width: 720px; padding: 14px; }
+.mei-queue { flex: 1; min-width: 0; margin-top: 22px; padding: 16px; display: flex; flex-direction: column; }
 .mei-queue .q-tabs { display: flex; gap: 6px; margin-bottom: 10px; flex-wrap: wrap; }
 .mei-queue .q-tab {
   padding: 6px 14px; border-radius: 999px; border: 1px solid var(--border); background: rgba(255,255,255,0.6);
   font-size: 12px; color: var(--muted); transition: all .15s;
 }
 .mei-queue .q-tab.active { background: var(--gradient); color: #fff; border-color: transparent; box-shadow: 0 3px 10px rgba(99,102,241,0.3); }
-.mei-queue .q-list { max-height: 300px; overflow-y: auto; }
+.mei-queue .q-list { flex: 1; max-height: 62vh; overflow-y: auto; }
 
 .mei-playerbar {
   position: fixed; left: 50%; bottom: 14px; transform: translateX(-50%); z-index: 70;
@@ -338,6 +354,7 @@ img { display: block; }
 }
 .mei-toast.show { opacity: 1; }
 .mei-empty { padding: 60px 20px; text-align: center; color: var(--muted); font-size: 13px; }
+.mei-empty .mei-btn, .mei-empty .mei-btn-ghost { min-width: 170px; justify-content: center; white-space: nowrap; }
 .mei-empty .e-icon { width: 54px; height: 54px; margin: 0 auto 14px; border-radius: 16px; background: var(--gradient-soft); color: var(--primary); display: flex; align-items: center; justify-content: center; }
 .mei-empty .e-icon svg { width: 26px; height: 26px; }
 .mei-loading { display: flex; align-items: center; justify-content: center; gap: 10px; padding: 40px; color: var(--muted); font-size: 13px; }
@@ -350,6 +367,9 @@ img { display: block; }
   .mei-pl-layout { flex-direction: column; }
   .mei-pl-side { width: 100%; position: static; }
   .mei-grid { grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 10px; }
+  .mei-player-page { flex-direction: column; align-items: center; }
+  .mei-stage { flex: none; max-width: 100%; }
+  .mei-queue { width: 100%; }
   .mei-playerbar { gap: 8px; padding: 0 12px; }
   .mei-playerbar .b-meta { width: 110px; }
   .mei-playerbar .b-time, .mei-playerbar .b-list-tag { display: none; }
