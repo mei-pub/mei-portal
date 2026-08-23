@@ -310,6 +310,16 @@ export default function PortalClient({ items, panel: initialPanel }: { items: It
     return () => clearInterval(t);
   }, []);
 
+  // favicon 联动：主页使用设置里配置的 Logo 作为网站图标（与子应用注入顶栏行为一致）
+  useEffect(() => {
+    const icon = panel.style?.logoImage || '/logo.svg';
+    document.querySelectorAll('link[rel="icon"],link[rel="shortcut icon"],link[rel="apple-touch-icon"]').forEach((el) => el.remove());
+    const link = document.createElement('link');
+    link.rel = 'icon';
+    link.href = icon;
+    document.head.appendChild(link);
+  }, [panel.style?.logoImage]);
+
   // 子应用登录态刷新：门户首页加载时补发各子应用 cookie（每个浏览器会话一次）
   // 与注入顶栏 topbar.js 共用 sessionStorage 标记，避免重复调用
   useEffect(() => {

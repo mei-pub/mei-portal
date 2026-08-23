@@ -92,9 +92,15 @@ export const player = {
     emit("queue");
     emit("player");
     try {
-      const url = await resolvePlayUrlWithFallback(song, "320");
+      const { url, song: played } = await resolvePlayUrlWithFallback(song, "320");
       // 竞态防护：解析期间用户已切歌
       if (this.current() !== song) return;
+      // 跨源兜底命中其他源的同名歌曲：替换队列条目，保证所见即所播
+      if (played !== song) {
+        const q = this.queue();
+        q[this.index] = played;
+        emit("queue");
+      }
       this.audio.src = url;
       this._failStreak = 0;
       if (autoplay) await this.audio.play().catch(() => {});
@@ -198,9 +204,11 @@ export const player = {
   mountBar(el, { onOpenPlayer } = {}) {
     this._barEl = el;
     this._onOpenPlayer = onOpenPlayer;
-    const render = () => this._renderBar();
-    ["player", "queue", "time", "favorites", "playlists", "temp"].forEach((ev) => on(ev, render));
-    render();
+    // 结构级重渲染仅发生在切歌/切队列/播放暂停；时间进度走轻量更新，
+    // 避免每秒多次重建 <img> 封面导致闪烁
+    ["player", "queue", "favorites", "playlists", "temp"].forEach((ev) => on(ev, () => this._renderBar()));
+    on("time", () => this._updateBar());
+    this._renderBar();
   },
 
   _renderBar() {
@@ -251,6 +259,29 @@ export const player = {
     el.querySelector('[data-act="queue"]').onclick = (e) => this._openQueueMenu(e.currentTarget);
     const slider = el.querySelector(".b-slider");
     slider.oninput = () => this.seekTo(slider.value / 1000);
+  },
+
+  /** 轻量更新：仅刷新进度/时间/播放按钮，不重建封面与文字 */
+  _updateBar() {
+    const el = this._barEl;
+    if (!el) return;
+    const dur = this.audio.duration;
+    const cur = this.audio.currentTime;
+    const slider = el.querySelector(".b-slider");
+    if (slider && document.activeElement !== slider) {
+      slider.value = String(Number.isFinite(dur) && dur > 0 ? Math.round((cur / dur) * 1000) : 0);
+    }
+    const times = el.querySelectorAll(".b-time");
+    if (times.length === 2) {
+      times[0].textContent = fmt(cur);
+      times[1].textContent = fmt(dur);
+    }
+    const playing = !this.audio.paused;
+    const toggle = el.querySelector('[data-act="toggle"]');
+    if (toggle && toggle.title !== (playing ? "暂停" : "播放")) {
+      toggle.title = playing ? "暂停" : "播放";
+      toggle.innerHTML = playing ? ICONS.pause : ICONS.play;
+    }
   },
 
   // 队列切换弹层：临时列表 / 各播放列表 / 我的收藏（req 10）

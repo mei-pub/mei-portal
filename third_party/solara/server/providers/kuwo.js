@@ -8,6 +8,8 @@
 
 const TIMEOUT = 15000;
 const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36';
+// 版权受限时酷我返回约 180KB 的“请到手机端播放”提醒语音，按体积阈值识别
+const MIN_AUDIO_BYTES = 400 * 1024;
 
 function isHttpUrl(v) {
   return typeof v === 'string' && /^https?:\/\//.test(v);
@@ -22,7 +24,9 @@ async function url(id) {
     );
     if (res.ok) {
       const text = (await res.text()).trim();
-      if (isHttpUrl(text)) return { url: text, br: '320', size: 0 };
+      if (isHttpUrl(text) && (await isRealAudio(text))) {
+        return { url: text, br: '320', size: 0 };
+      }
     }
   } catch {
     // 走兜底
@@ -35,9 +39,26 @@ async function url(id) {
   if (res.ok) {
     const data = await res.json().catch(() => null);
     const playUrl = data && data.data && data.data.url;
-    if (isHttpUrl(playUrl)) return { url: playUrl, br: data.data.bitrate || 'flac', size: 0 };
+    if (isHttpUrl(playUrl) && (await isRealAudio(playUrl))) {
+      return { url: playUrl, br: data.data.bitrate || 'flac', size: 0 };
+    }
   }
-  throw new Error('酷我播放地址获取失败');
+  throw new Error('酷我该歌曲无可用播放地址（版权受限）');
+}
+
+/** 校验直链是真实歌曲（体积过滤提醒语音/试听残片） */
+async function isRealAudio(url) {
+  try {
+    const head = await fetch(url, {
+      method: 'HEAD',
+      headers: { 'User-Agent': UA, Referer: 'https://www.kuwo.cn/' },
+      signal: AbortSignal.timeout(TIMEOUT),
+    });
+    const len = parseInt(head.headers.get('content-length') || '0', 10);
+    return head.ok && len >= MIN_AUDIO_BYTES;
+  } catch {
+    return false;
+  }
 }
 
 module.exports = { url };

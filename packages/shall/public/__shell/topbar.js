@@ -80,9 +80,14 @@
       'transition:width .18s ease,box-shadow .18s ease;}',
       '#mei-topbar-toggle:hover{width:84px;box-shadow:0 6px 20px rgba(99,102,241,0.6);}',
       /* 胶囊收起按钮 */
-      '#mei-topbar .mei-collapse{display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;',
+      // 作用域复位：顶栏为全应用共享组件，抵抗宿主应用的全局样式（button/img/* 规则）
+      '#mei-topbar,#mei-topbar *{box-sizing:border-box;margin:0;padding:0;letter-spacing:normal;text-transform:none;box-shadow:none;}',
+      '#mei-topbar,#mei-topbar *{font-family:"Inter","Noto Sans SC","PingFang SC",sans-serif !important;}',
+      '#mei-topbar{font-size:13px !important;line-height:1.4;}',
+      '#mei-topbar img{display:inline-block;max-width:none;}',
+      '#mei-topbar .mtb-collapse{display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;',
       'border-radius:999px;border:none;background:transparent;color:#9aa3b8;cursor:pointer;flex-shrink:0;transition:all .18s;}',
-      '#mei-topbar .mei-collapse:hover{background:rgba(23,32,56,0.08);color:#1c2333;}',
+      '#mei-topbar .mtb-collapse:hover{background:rgba(23,32,56,0.08);color:#1c2333;}',
       '#mei-topbar *{box-sizing:border-box;}',
       '#mei-topbar a{color:inherit;text-decoration:none;}',
       /* Toast/notification 容器下移 */
@@ -90,89 +95,99 @@
       '[class*="notification"][class*="fixed"],[class*="Notification"][class*="fixed"],',
       '.sonner-toast-wrapper,[data-sonner-toaster],[role="region"][class*="fixed"]{top:74px!important;}',
       '[class*="toast"],[class*="Toast"],[class*="notification"],[class*="Notification"]{z-index:10000!important;}',
-      '#mei-topbar .mei-brand{display:flex;align-items:center;gap:8px;font-weight:700;font-size:13.5px;margin-right:6px;flex-shrink:0;color:#1c2333;white-space:nowrap;}',
-      '#mei-topbar .mei-logo{width:22px;height:22px;border-radius:7px;flex-shrink:0;',
+      '#mei-topbar .mtb-brand{display:flex;align-items:center;gap:8px;font-weight:700;font-size:13.5px !important;margin-right:6px;flex-shrink:0;color:#1c2333;white-space:nowrap;}',
+      '#mei-topbar .mtb-logo{width:22px;height:22px;border-radius:7px;flex-shrink:0;',
       'background:linear-gradient(135deg,#6366f1 0%,#a855f7 55%,#ec4899 100%);',
       'box-shadow:0 0 14px rgba(129,140,248,0.55),inset 0 1px 0 rgba(255,255,255,0.35);}',
-      '#mei-topbar .mei-apps{display:flex;align-items:center;gap:2px;overflow-x:auto;scrollbar-width:none;flex:1;min-width:0;}',
-      '#mei-topbar .mei-apps::-webkit-scrollbar{display:none;}',
-      '#mei-topbar .mei-btn{display:inline-flex;align-items:center;gap:6px;padding:6px 11px;border-radius:999px;',
-      'cursor:pointer;border:1px solid transparent;background:transparent;color:#5d6778;',
-      'font-size:12.5px;white-space:nowrap;transition:all .18s ease;text-decoration:none;}',
-      '#mei-topbar .mei-btn:hover{background:rgba(23,32,56,0.06);color:#1c2333;}',
-      '#mei-topbar .mei-btn.active{background:linear-gradient(135deg,#6366f1,#a855f7);color:#fff;',
+      '#mei-topbar .mtb-apps{display:flex;align-items:center;gap:2px;overflow-x:auto;scrollbar-width:none;flex:1;min-width:0;}',
+      '#mei-topbar .mtb-apps::-webkit-scrollbar{display:none;}',
+      '#mei-topbar .mtb-btn{display:inline-flex;align-items:center;gap:6px;padding:6px 11px !important;border-radius:999px;border:none;background:transparent;',
+      'cursor:pointer;color:#5d6778;',
+      'font-size:12.5px !important;white-space:nowrap;transition:all .18s ease;text-decoration:none;}',
+      '#mei-topbar .mtb-btn:hover{background:rgba(23,32,56,0.06);color:#1c2333;}',
+      '#mei-topbar .mtb-btn.active{background:linear-gradient(135deg,#6366f1,#a855f7);color:#fff;',
       'box-shadow:0 0 18px rgba(129,140,248,0.45),inset 0 1px 0 rgba(255,255,255,0.25);}',
-      '#mei-topbar .mei-btn.off{opacity:.4;}',
+      '#mei-topbar .mtb-btn.off{opacity:.4;}',
       /* spacer 不再 flex:1：否则与 .mei-apps 平分空间 */
-      '#mei-topbar .mei-spacer{flex:0 0 6px;}',
-      '#mei-topbar .mei-user{display:flex;align-items:center;gap:6px;padding:6px 12px;border-radius:999px;',
+      '#mei-topbar .mtb-spacer{flex:0 0 6px;}',
+      '#mei-topbar .mtb-user{display:flex;align-items:center;gap:6px;padding:6px 12px;border-radius:999px;',
       'background:rgba(23,32,56,0.05);border:1px solid rgba(23,32,56,0.1);color:#3d465a;',
       'flex-shrink:0;cursor:pointer;text-decoration:none;transition:all .18s;}',
-      '#mei-topbar .mei-user:hover{background:rgba(23,32,56,0.1);color:#1c2333;}',
-      '#mei-topbar .mei-login{padding:6px 15px;border-radius:999px;background:linear-gradient(135deg,#6366f1,#a855f7);',
+      '#mei-topbar .mtb-user:hover{background:rgba(23,32,56,0.1);color:#1c2333;}',
+      '#mei-topbar .mtb-login{padding:6px 15px;border-radius:999px;background:linear-gradient(135deg,#6366f1,#a855f7);',
       'color:#fff;font-size:12.5px;flex-shrink:0;cursor:pointer;text-decoration:none;',
       'box-shadow:0 0 16px rgba(129,140,248,0.4);}',
       /* 设置齿轮下拉 */
-      '#mei-topbar .mei-gear-wrap{position:relative;flex-shrink:0;}',
-      '#mei-topbar .mei-gear{display:inline-flex;align-items:center;justify-content:center;width:32px;height:32px;',
+      '#mei-topbar .mtb-gear-wrap{position:relative;flex-shrink:0;}',
+      '#mei-topbar .mtb-gear{display:inline-flex;align-items:center;justify-content:center;width:32px;height:32px;',
       'border-radius:999px;border:1px solid rgba(23,32,56,0.1);background:transparent;cursor:pointer;font-size:14px;',
       'color:#5d6778;transition:all .18s;}',
-      '#mei-topbar .mei-gear:hover,#mei-topbar .mei-gear.open{background:rgba(23,32,56,0.07);color:#1c2333;}',
-      '#mei-topbar .mei-menu{position:absolute;right:-8px;top:44px;width:260px;padding:8px;z-index:10001;',
+      '#mei-topbar .mtb-gear:hover,#mei-topbar .mtb-gear.open{background:rgba(23,32,56,0.07);color:#1c2333;}',
+      '#mei-topbar .mtb-menu{position:absolute;right:-8px;top:44px;width:260px;padding:8px;z-index:10001;',
       'background:rgba(255,255,255,0.94);-webkit-backdrop-filter:blur(28px) saturate(1.6);backdrop-filter:blur(28px) saturate(1.6);',
       'border:1px solid rgba(23,32,56,0.1);border-radius:18px;',
       'box-shadow:0 20px 48px rgba(23,32,56,0.18),0 0 0 1px rgba(99,102,241,0.08),inset 0 1px 0 rgba(255,255,255,0.95);}',
-      '#mei-topbar .mei-menu-title{padding:7px 10px 5px;font-size:10.5px;color:#9aa3b8;font-weight:700;letter-spacing:1.5px;}',
-      '#mei-topbar .mei-switch{display:flex;align-items:center;gap:8px;width:100%;padding:7px 10px;border:none;',
+      '#mei-topbar .mtb-menu-title{padding:7px 10px 5px;font-size:10.5px !important;color:#9aa3b8;font-weight:700;letter-spacing:1.5px;}',
+      '#mei-topbar .mtb-switch{display:flex;align-items:center;gap:8px;width:100%;padding:7px 10px;border:none;',
       'background:transparent;cursor:pointer;border-radius:10px;color:#1c2333;font-size:13px;text-align:left;}',
-      '#mei-topbar .mei-switch:hover{background:rgba(23,32,56,0.05);}',
-      '#mei-topbar .mei-switch .mei-switch-label{flex:1;opacity:.92;}',
-      '#mei-topbar .mei-switch.off .mei-switch-label{opacity:.4;}',
-      '#mei-topbar .mei-track{width:34px;height:19px;border-radius:999px;background:rgba(23,32,56,0.14);position:relative;flex-shrink:0;transition:all .18s;}',
-      '#mei-topbar .mei-track.on{background:linear-gradient(135deg,#6366f1,#a855f7);box-shadow:0 0 12px rgba(129,140,248,0.5);}',
-      '#mei-topbar .mei-knob{position:absolute;top:2.5px;left:2.5px;width:14px;height:14px;border-radius:50%;background:#fff;transition:left .18s;box-shadow:0 1px 3px rgba(0,0,0,0.4);}',
-      '#mei-topbar .mei-track.on .mei-knob{left:17px;}',
-      '#mei-topbar .mei-menu-sep{height:1px;background:rgba(23,32,56,0.08);margin:5px 4px;}',
-      '#mei-topbar .mei-menu-link{display:flex;align-items:center;gap:8px;width:100%;padding:7px 10px;border:none;',
+      '#mei-topbar .mtb-switch:hover{background:rgba(23,32,56,0.05);}',
+      '#mei-topbar .mtb-switch .mtb-switch-label{flex:1;opacity:.92;}',
+      '#mei-topbar .mtb-switch.off .mtb-switch-label{opacity:.4;}',
+      '#mei-topbar .mtb-track{width:34px;height:19px;border-radius:999px;background:rgba(23,32,56,0.14);position:relative;flex-shrink:0;transition:all .18s;}',
+      '#mei-topbar .mtb-track.on{background:linear-gradient(135deg,#6366f1,#a855f7);box-shadow:0 0 12px rgba(129,140,248,0.5) !important;}',
+      '#mei-topbar .mtb-knob{position:absolute;top:2.5px;left:2.5px;width:14px;height:14px;border-radius:50%;background:#fff;transition:left .18s;box-shadow:0 1px 3px rgba(0,0,0,0.4) !important;}',
+      '#mei-topbar .mtb-track.on .mtb-knob{left:17px;}',
+      '#mei-topbar .mtb-menu-sep{height:1px;background:rgba(23,32,56,0.08);margin:5px 4px;}',
+      '#mei-topbar .mtb-menu-link{display:flex;align-items:center;gap:8px;width:100%;padding:7px 10px;border:none;',
       'background:transparent;cursor:pointer;border-radius:10px;color:#1c2333;font-size:13px;text-align:left;text-decoration:none;}',
-      '#mei-topbar .mei-menu-link:hover{background:rgba(23,32,56,0.05);}',
+      '#mei-topbar .mtb-menu-link:hover{background:rgba(23,32,56,0.05);}',
       /* 书架选择面板（挂 body 下，fixed 定位，避免被 .mei-apps 的 overflow 裁剪） */
-      '#mei-lib-menu{background:rgba(255,255,255,0.94);-webkit-backdrop-filter:blur(28px) saturate(1.6);backdrop-filter:blur(28px) saturate(1.6);',
+      '#mtb-lib-menu{background:rgba(255,255,255,0.94);-webkit-backdrop-filter:blur(28px) saturate(1.6);backdrop-filter:blur(28px) saturate(1.6);',
       'border:1px solid rgba(23,32,56,0.1);border-radius:18px;',
       'box-shadow:0 20px 48px rgba(23,32,56,0.18),0 0 0 1px rgba(99,102,241,0.08),inset 0 1px 0 rgba(255,255,255,0.95);',
       'font-family:"Inter","Noto Sans SC","PingFang SC",sans-serif;}',
-      '#mei-lib-menu *{box-sizing:border-box;}',
-      '#mei-lib-menu .mei-menu-link{display:flex;align-items:center;gap:8px;width:100%;padding:7px 10px;border:none;',
+      '#mtb-lib-menu *{box-sizing:border-box;}',
+      '#mtb-lib-menu .mtb-menu-link{display:flex;align-items:center;gap:8px;width:100%;padding:7px 10px;border:none;',
       'background:transparent;cursor:pointer;border-radius:10px;color:#1c2333;font-size:13px;text-align:left;text-decoration:none;}',
-      '#mei-lib-menu .mei-menu-link:hover{background:rgba(23,32,56,0.05);}',
-      '@media(max-width:900px){#mei-topbar .mei-brand-text{display:none;}}',
+      '#mtb-lib-menu .mtb-menu-link:hover{background:rgba(23,32,56,0.05);}',
+      '@media(max-width:900px){#mei-topbar .mtb-brand-text{display:none;}}',
     ].join('');
     document.head.appendChild(style);
 
     // 顶栏用 position:sticky 自然占位，无需 padding-top
     function buildTopbar(plugins) {
       // 重建前清理旧的书架面板（SPA heal 重建顶栏时避免残留多个）
-      var staleLibMenu = document.getElementById('mei-lib-menu');
+    var staleLibMenu = document.getElementById('mtb-lib-menu');
       if (staleLibMenu) staleLibMenu.remove();
       var bar = document.createElement('div');
       bar.id = 'mei-topbar';
 
       // 品牌（默认 Logo，可被面板配置的图片/文字覆盖）
       var brand = document.createElement('a');
-      brand.className = 'mei-brand';
+      brand.className = 'mtb-brand';
       brand.href = '/';
-      brand.innerHTML = '<img src="/logo.svg" alt="logo" style="width:22px;height:22px;border-radius:7px;flex-shrink:0;" /><span class="mei-brand-text" id="mei-brand-text">mei-allin</span>';
+      brand.innerHTML = '<img src="/logo.svg" alt="logo" style="width:22px;height:22px;border-radius:7px;flex-shrink:0;" /><span class="mtb-brand-text" id="mtb-brand-text">mei-allin</span>';
       // 从面板配置加载品牌名
       fetch('/api/panel', { credentials: 'include' })
         .then(function(r) { return r.json(); })
         .then(function(cfg) {
           if (cfg && cfg.style) {
-            var txt = document.getElementById('mei-brand-text');
+            var txt = document.getElementById('mtb-brand-text');
             if (cfg.style.logoImage) {
-              brand.innerHTML = '<img src="' + cfg.style.logoImage + '" alt="logo" style="height:22px;max-width:120px;object-fit:contain;border-radius:6px;flex-shrink:0;" /><span class="mei-brand-text" id="mei-brand-text"></span>';
+              brand.innerHTML = '<img src="' + cfg.style.logoImage + '" alt="logo" style="height:22px;max-width:120px;object-fit:contain;border-radius:6px;flex-shrink:0;" /><span class="mtb-brand-text" id="mtb-brand-text"></span>';
             } else if (cfg.style.logoText) {
               if (txt) txt.textContent = cfg.style.logoText;
             }
+            // favicon 联动：所有子应用页面统一使用主应用可配置 Logo 作为网站图标
+            try {
+              var iconUrl = cfg.style.logoImage || '/logo.svg';
+              var oldIcon = document.querySelectorAll('link[rel="icon"],link[rel="shortcut icon"],link[rel="apple-touch-icon"]');
+              for (var i = 0; i < oldIcon.length; i++) oldIcon[i].remove();
+              var link = document.createElement('link');
+              link.rel = 'icon';
+              link.href = iconUrl;
+              document.head.appendChild(link);
+            } catch (e) {}
           }
         })
         .catch(function() {});
@@ -180,13 +195,13 @@
 
       // 应用切换（小说阅读：固定入口 + 下拉站点面板，站点列表实时拉取）
       var apps = document.createElement('div');
-      apps.className = 'mei-apps';
+      apps.className = 'mtb-apps';
       var tutorialPlugin = null;
       plugins.forEach(function (p) {
         if (p.id === 'tutorial') { tutorialPlugin = p; return; }
         var isActive = p.id === APP_ID;
         var b = document.createElement('a');
-        b.className = 'mei-btn' + (isActive ? ' active' : '');
+        b.className = 'mtb-btn' + (isActive ? ' active' : '');
         b.href = p.url;
         b.textContent = p.name;
         b.title = p.name;
@@ -198,14 +213,14 @@
         wrap.style.position = 'relative';
         wrap.style.flexShrink = '0';
         var libBtn = document.createElement('button');
-        libBtn.className = 'mei-btn' + (libGroupActive ? ' active' : '');
+        libBtn.className = 'mtb-btn' + (libGroupActive ? ' active' : '');
         libBtn.style.display = 'inline-flex';
         libBtn.innerHTML = '<span>' + tutorialPlugin.name + '</span>' +
           '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="margin-left:3px;opacity:.6"><path d="m6 9 6 6 6-6"/></svg>';
         libBtn.title = '小说阅读 · 站点面板';
         // 站点面板：挂 body + fixed 定位（.mei-apps 有 overflow-x:auto，绝对定位会被裁剪）
         var libMenu = document.createElement('div');
-        libMenu.id = 'mei-lib-menu';
+        libMenu.id = 'mtb-lib-menu';
         libMenu.style.cssText = 'position:fixed;display:none;width:200px;padding:8px;z-index:10003;';
         function closeLibMenu() { libMenu.style.display = 'none'; }
         function renderSites(list) {
@@ -218,7 +233,7 @@
           } else {
             list.forEach(function (s) {
               var item = document.createElement('a');
-              item.className = 'mei-menu-link';
+              item.className = 'mtb-menu-link';
               item.href = '/novels/s/' + encodeURIComponent(s.slug);
               item.textContent = s.name;
               if (s.type === 'secret') {
@@ -261,14 +276,14 @@
       bar.appendChild(apps);
 
       var spacer = document.createElement('div');
-      spacer.className = 'mei-spacer';
+      spacer.className = 'mtb-spacer';
       bar.appendChild(spacer);
 
       // 设置齿轮下拉（内联 SVG，不依赖 emoji/CDN）
       // 设置入口：直达设置中心（不再展开面板；内网模式开关只在首页设置面板里）
       var GEAR_SVG = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>';
       var gear = document.createElement('a');
-      gear.className = 'mei-gear';
+      gear.className = 'mtb-gear';
       gear.href = '/settings';
       gear.title = '设置';
       gear.setAttribute('aria-label', '设置');
@@ -281,7 +296,7 @@
 
       // 收起顶栏按钮
       var collapseBtn = document.createElement('button');
-      collapseBtn.className = 'mei-collapse';
+      collapseBtn.className = 'mtb-collapse';
       collapseBtn.title = '收起导航面板';
       collapseBtn.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m18 15-6-6-6 6"/></svg>';
       collapseBtn.onclick = function (e) { e.stopPropagation(); setCollapsed(true); };

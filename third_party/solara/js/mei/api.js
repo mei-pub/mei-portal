@@ -148,7 +148,7 @@ export async function resolvePlayUrl(song, quality = "320") {
 // 依次尝试前若干个候选，返回第一个可播放地址（解决单源无版权/接口失效问题）
 export async function resolvePlayUrlWithFallback(song, quality = "320") {
   try {
-    return await resolvePlayUrl(song, quality);
+    return { url: await resolvePlayUrl(song, quality), song };
   } catch (firstError) {
     const key = `${song.source || "netease"}:${song.id}`;
     const candidates = await searchAggregate(`${song.name} ${song.artist}`, 3).catch(() => []);
@@ -157,7 +157,7 @@ export async function resolvePlayUrlWithFallback(song, quality = "320") {
       .slice(0, 6);
     for (const candidate of others) {
       try {
-        return await resolvePlayUrl(candidate, quality);
+        return { url: await resolvePlayUrl(candidate, quality), song: candidate };
       } catch { /* 尝试下一个候选 */ }
     }
     throw firstError;
@@ -177,7 +177,7 @@ export async function fetchLyric(song) {
 
 // 下载：先解析真实地址再触发浏览器下载
 export async function downloadSong(song, quality = "320") {
-  const url = await resolvePlayUrlWithFallback(song, quality);
+  const { url } = await resolvePlayUrlWithFallback(song, quality);
   const a = document.createElement("a");
   a.href = url;
   a.download = `${song.name} - ${song.artist}`;

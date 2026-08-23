@@ -111,7 +111,11 @@ async function boot() {
 
   // 播放器核心事件：切歌时同步加载歌词（播放页歌词渲染）
   on("queue", () => {
-    if (currentRoute().path === "/player") loadLyric();
+    // 切歌/切队列：播放页整体重渲染（歌名、封面、队列 tab 选中态同步切换）
+    if (currentRoute().path === "/player") {
+      route();
+      loadLyric();
+    }
   });
 
   // 播放失败：单首提示（自动跳下一首由 player 内部处理）；连续失败时提示检查音乐源
