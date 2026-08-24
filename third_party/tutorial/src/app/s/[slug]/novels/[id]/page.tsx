@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter, useParams } from "next/navigation";
-import Link from "next/link";
+import Link from "@/components/Link";
 import SitePanel from "@/components/SitePanel";
 import { showToast } from "@/components/Toast";
 
@@ -222,7 +222,7 @@ export default function NovelDetailPage() {
       <SitePanel />
       <main className="flex-1 max-w-4xl mx-auto w-full px-4 sm:px-6 py-6">
         {/* Back button */}
-        <Link href={`/s/${slug}`} className="inline-flex items-center gap-1 text-sm text-[var(--muted)] hover:text-[var(--foreground)] mb-4 transition-colors">
+        <Link href={`/s/${slug}`} prefetch={false} className="inline-flex items-center gap-1 text-sm text-[var(--muted)] hover:text-[var(--foreground)] mb-4 transition-colors">
           <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
           </svg>
@@ -297,6 +297,7 @@ export default function NovelDetailPage() {
             <div className="flex items-center gap-2 ml-4">
               <Link
                 href={`/s/${slug}/novels/${nid}/edit`}
+                prefetch={false}
                 className="p-2 text-[var(--muted)] hover:text-[var(--primary)] hover:bg-[var(--accent)] rounded-lg transition-colors"
                 title="编辑"
               >
@@ -321,6 +322,7 @@ export default function NovelDetailPage() {
                 <>
                   <Link
                     href={`/s/${slug}/novels/${nid}/read`}
+                    prefetch={false}
                     className="mei-btn-primary"
                   >
                     <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -330,6 +332,7 @@ export default function NovelDetailPage() {
                   </Link>
                   <Link
                     href={`/s/${slug}/novels/${nid}/read?fulltext=parallel`}
+                    prefetch={false}
                     className="inline-flex items-center gap-1.5 px-3 sm:px-5 py-2 text-sm border border-[var(--primary)] text-[var(--primary)] rounded-lg hover:bg-[var(--accent)] transition-colors"
                   >
                     <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -358,6 +361,7 @@ export default function NovelDetailPage() {
             <div className="flex gap-3">
               <Link
                 href={`/s/${slug}/novels/${nid}/chapters/new`}
+                prefetch={false}
                 className="inline-flex items-center gap-1.5 px-3 sm:px-5 py-2 text-sm border border-[var(--primary)] text-[var(--primary)] rounded-lg hover:bg-[var(--accent)] transition-colors"
               >
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -367,6 +371,7 @@ export default function NovelDetailPage() {
               </Link>
               <Link
                 href={`/s/${slug}/novels/${nid}/import`}
+                prefetch={false}
                 className="inline-flex items-center gap-1.5 px-3 sm:px-5 py-2 text-sm border border-[var(--border)] text-[var(--muted)] rounded-lg hover:bg-[var(--accent)] transition-colors"
               >
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -404,6 +409,7 @@ export default function NovelDetailPage() {
               <p className="mb-3">暂无章节</p>
               <Link
                 href={`/s/${slug}/novels/${nid}/chapters/new`}
+                prefetch={false}
                 className="text-sm text-[var(--primary)] hover:underline"
               >
                 添加第一个章节
@@ -464,6 +470,7 @@ export default function NovelDetailPage() {
                       </span>
                       <Link
                         href={`/s/${slug}/novels/${nid}/read?chapter=${ch.id}`}
+                        prefetch={false}
                         className="text-sm hover:text-[var(--primary)] transition-colors truncate"
                       >
                         {ch.title}
@@ -475,6 +482,7 @@ export default function NovelDetailPage() {
                     <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity ml-2">
                       <Link
                         href={`/s/${slug}/novels/${nid}/chapters/${ch.id}/edit`}
+                        prefetch={false}
                         className="p-1.5 text-[var(--muted)] hover:text-[var(--primary)] rounded-md transition-colors"
                         title="编辑章节"
                       >

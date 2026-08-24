@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback, useRef } from "react";
 import { useParams, useSearchParams, useRouter } from "next/navigation";
-import Link from "next/link";
+import Link from "@/components/Link";
 import MarkdownRenderer from "@/components/MarkdownRenderer";
 
 // Prevent default touch behaviors for better mobile reading experience
@@ -653,7 +653,7 @@ export default function ReaderPage() {
       {/* Top Bar */}
       <div className={`shrink-0 border-b px-4 py-2 flex items-center justify-between text-sm transition-all duration-300 ${showBars ? "translate-y-0 opacity-100" : "-translate-y-full opacity-0 h-0 py-0 overflow-hidden"}`}
         style={{ background: theme.bg, borderColor: theme.text + "20" }}>
-        <Link href={`/s/${slug}/novels/${novelSlug || novelId}`} className="flex items-center gap-1 hover:opacity-70 transition-opacity" style={{ color: theme.text }}>
+        <Link href={`/s/${slug}/novels/${novelSlug || novelId}`} prefetch={false} className="flex items-center gap-1 hover:opacity-70 transition-opacity" style={{ color: theme.text }}>
           <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
           </svg>

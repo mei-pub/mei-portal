@@ -3,7 +3,7 @@
 // 小说阅读 · 站点选择页
 // 展示普通站点 + 已开启的隐秘站点；隐秘站点通过门户首页搜索框
 // open:{标识}:{密码} 开启后在此可见（或直接从站点路径输入密码进入）
-import Link from "next/link";
+import Link from "@/components/Link";
 import { useEffect, useState } from "react";
 import Navbar from "@/components/Navbar";
 
@@ -36,6 +36,7 @@ export default function SitesPage() {
           </div>
           <Link
             href="/manage"
+            prefetch={false}
             className="px-4 py-2 text-sm rounded-lg border border-[var(--border)] text-[var(--muted)] hover:bg-[var(--accent)] hover:text-[var(--foreground)] transition-colors"
           >
             站点管理
@@ -57,6 +58,7 @@ export default function SitesPage() {
               <Link
                 key={site.slug}
                 href={`/s/${site.slug}`}
+                prefetch={false}
                 className="flex items-center gap-4 bg-white rounded-2xl border border-[var(--border)] p-5 hover:shadow-md hover:border-[var(--primary)] transition-all"
               >
                 <div className="w-11 h-11 rounded-xl bg-[var(--primary)]/10 text-[var(--primary)] flex items-center justify-center flex-shrink-0">

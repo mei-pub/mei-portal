@@ -2,7 +2,7 @@
 
 // 站点浮动面板（小说站点各页共享）：站点信息 + 站点 / 切换站点 / 添加
 // 风格对齐主站门户：毛玻璃、圆角、渐变强调
-import Link from "next/link";
+import Link from "@/components/Link";
 import { useEffect, useState } from "react";
 import { useSite } from "@/components/SiteContext";
 
@@ -76,7 +76,7 @@ export default function SitePanel() {
   return (
     <div className="fixed left-2 top-1/2 -translate-y-1/2 z-40 flex flex-col items-center gap-1 rounded-2xl border border-black/10 bg-white/75 p-1 shadow-lg backdrop-blur-xl">
       {/* 站点信息区：Logo + 纵向名称 */}
-      <Link href={`/s/${site.slug}`} title={`${site.name}（${site.type === "secret" ? "隐秘站点" : "普通站点"}）${site.description ? "\n" + site.description : ""}`}
+      <Link href={`/s/${site.slug}`} prefetch={false} title={`${site.name}（${site.type === "secret" ? "隐秘站点" : "普通站点"}）${site.description ? "\n" + site.description : ""}`}
         className="flex flex-col items-center gap-1.5 px-0.5 py-1.5 rounded-xl hover:bg-black/5 transition-colors">
         <SiteGlyph icon={site.icon} color={site.iconColor} size={30} />
         <span className="text-[10px] leading-none font-medium text-[var(--foreground)] [writing-mode:vertical-rl] tracking-[0.18em] max-h-[96px] overflow-hidden select-none">{site.name}</span>
@@ -84,7 +84,7 @@ export default function SitePanel() {
       <div className="h-px w-6 bg-black/10" />
 
       {/* 入口：站点 */}
-      <Link href={`/s/${site.slug}`} title="站点首页"
+      <Link href={`/s/${site.slug}`} prefetch={false} title="站点首页"
         className="flex h-[34px] w-[34px] items-center justify-center rounded-xl text-gray-600 hover:bg-black/5 hover:text-indigo-600 transition-colors">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2zM22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z" /></svg>
       </Link>
@@ -103,7 +103,7 @@ export default function SitePanel() {
               <p className="px-3 py-2.5 text-[11px] text-[var(--muted)]">没有其他站点可以切换</p>
             ) : (
               others.map((s) => (
-                <Link key={s.slug} href={`/s/${s.slug}`} title={s.name}
+                <Link key={s.slug} href={`/s/${s.slug}`} prefetch={false} title={s.name}
                   className="flex items-center gap-2 px-2.5 py-2 rounded-xl text-[12px] text-[var(--foreground)] hover:bg-[var(--accent)] transition-colors">
                   <SiteGlyph icon={s.icon} color={s.iconColor} size={16} />
                   <span className="truncate">{s.name}</span>
@@ -116,7 +116,7 @@ export default function SitePanel() {
       </div>
 
       {/* 入口：添加（新小说） */}
-      <Link href={`/s/${site.slug}/novels/new`} title="添加小说"
+      <Link href={`/s/${site.slug}/novels/new`} prefetch={false} title="添加小说"
         className="flex h-[34px] w-[34px] items-center justify-center rounded-xl text-gray-600 hover:bg-black/5 hover:text-indigo-600 transition-colors">
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><path d="M12 5v14M5 12h14"/></svg>
       </Link>

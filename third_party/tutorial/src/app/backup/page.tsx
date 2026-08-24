@@ -2,7 +2,7 @@
 
 // 小说数据备份管理：导出 zip / SQLite / WebDAV / S3，导入 zip / SQLite / WebDAV / S3
 // 需主密码解锁（与站点管理一致）
-import Link from "next/link";
+import Link from "@/components/Link";
 import { useEffect, useRef, useState } from "react";
 import { showToast } from "@/components/Toast";
 
@@ -109,7 +109,7 @@ export default function BackupPage() {
             <input type="password" value={masterPw} onChange={(e) => setMasterPw(e.target.value)} placeholder="主密码" autoFocus className={input} />
             <button type="submit" className={btnPrimary}>解锁</button>
           </form>
-          <Link href="/" className="block mt-4 text-xs text-[var(--muted)] hover:text-[var(--foreground)] text-center transition-colors">返回站点列表</Link>
+          <Link href="/" prefetch={false} className="block mt-4 text-xs text-[var(--muted)] hover:text-[var(--foreground)] text-center transition-colors">返回站点列表</Link>
         </div>
       </div>
     );
@@ -119,7 +119,7 @@ export default function BackupPage() {
     <>
       <main className="flex-1 max-w-3xl mx-auto w-full px-4 sm:px-6 py-6 space-y-5">
         <div className="flex items-center gap-3 mb-2">
-          <Link href="/manage" className="text-[var(--muted)] hover:text-[var(--foreground)] transition-colors">
+          <Link href="/manage" prefetch={false} className="text-[var(--muted)] hover:text-[var(--foreground)] transition-colors">
             <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" /></svg>
           </Link>
           <h1 className="text-xl font-bold">小说数据备份</h1>

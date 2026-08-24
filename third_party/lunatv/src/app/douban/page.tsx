@@ -730,22 +730,22 @@ function DoubanPageClient() {
 
   return (
     <PageLayout activePath={getActivePath()}>
-      <div className='px-4 sm:px-10 py-4 sm:py-8 overflow-visible'>
+      <div className='px-4 sm:px-10 py-3 sm:py-5 overflow-visible'>
         {/* 页面标题和选择器 */}
-        <div className='mb-6 sm:mb-8 space-y-4 sm:space-y-6'>
+        <div className='mx-auto mb-4 sm:mb-5 max-w-[76%] 2xl:max-w-[1320px] space-y-2.5 sm:space-y-3'>
           {/* 页面标题 */}
-          <div>
-            <h1 className='text-2xl sm:text-3xl font-bold text-gray-800 mb-1 sm:mb-2 dark:text-gray-200'>
+          <div className='flex flex-wrap items-baseline gap-x-2.5 gap-y-1'>
+            <h1 className='text-lg sm:text-xl font-bold text-gray-800 dark:text-gray-200'>
               {getPageTitle()}
             </h1>
-            <p className='text-sm sm:text-base text-gray-600 dark:text-gray-400'>
+            <p className='text-[11px] sm:text-xs text-gray-600 dark:text-gray-400'>
               {getPageDescription()}
             </p>
           </div>
 
           {/* 选择器组件 */}
           {type !== 'custom' ? (
-            <div className='bg-white/60 dark:bg-gray-800/40 rounded-2xl p-4 sm:p-6 border border-gray-200/30 dark:border-gray-700/30 backdrop-blur-sm'>
+            <div className='bg-white/60 dark:bg-gray-800/40 rounded-xl p-2 sm:p-3 border border-gray-200/30 dark:border-gray-700/30 backdrop-blur-sm'>
               <DoubanSelector
                 type={type as 'movie' | 'tv' | 'show' | 'anime'}
                 primarySelection={primarySelection}
@@ -757,7 +757,7 @@ function DoubanPageClient() {
               />
             </div>
           ) : (
-            <div className='bg-white/60 dark:bg-gray-800/40 rounded-2xl p-4 sm:p-6 border border-gray-200/30 dark:border-gray-700/30 backdrop-blur-sm'>
+            <div className='bg-white/60 dark:bg-gray-800/40 rounded-xl p-2 sm:p-3 border border-gray-200/30 dark:border-gray-700/30 backdrop-blur-sm'>
               <DoubanCustomSelector
                 customCategories={customCategories}
                 primarySelection={primarySelection}

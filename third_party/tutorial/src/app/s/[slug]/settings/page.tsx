@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useState, useRef } from "react";
-import Link from "next/link";
+import Link from "@/components/Link";
 import SitePanel from "@/components/SitePanel";
 import { useSite } from "@/components/SiteContext";
 import { showToast } from "@/components/Toast";
@@ -128,6 +128,7 @@ export default function SettingsPage() {
         <div className="flex items-center gap-3 mb-6">
           <Link
             href={`/s/${site.slug}`}
+            prefetch={false}
             className="text-[var(--muted)] hover:text-[var(--foreground)] transition-colors"
           >
             <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>

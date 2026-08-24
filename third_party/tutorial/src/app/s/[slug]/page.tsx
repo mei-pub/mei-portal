@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useMemo, useRef } from "react";
-import Link from "next/link";
+import Link from "@/components/Link";
 import { useSite } from "@/components/SiteContext";
 import SitePanel, { SiteGlyph } from "@/components/SitePanel";
 
@@ -324,7 +324,7 @@ export default function HomePage() {
           <div className="text-center py-20">
             <svg xmlns="http://www.w3.org/2000/svg" className="h-16 w-16 mx-auto text-[var(--border)] mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1}><path strokeLinecap="round" strokeLinejoin="round" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" /></svg>
             <p className="text-[var(--muted)] mb-4">{search || selectedCategory || selectedTag ? "没有找到匹配的小说" : "书架空空如也，添加第一本小说吧"}</p>
-            {!search && <Link href={`/s/${site.slug}/novels/new`} className="mei-btn-primary">
+            {!search && <Link href={`/s/${site.slug}/novels/new`} prefetch={false} className="mei-btn-primary">
               <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" /></svg>添加小说</Link>}
           </div>
         ) : (
@@ -332,7 +332,7 @@ export default function HomePage() {
             {filtered.map(novel => {
               const badgeType = getBadgeType(novel.rating || 0);
               return (
-              <Link key={novel.id} href={`/s/${site.slug}/novels/${novel.slug || novel.id}`}
+              <Link key={novel.id} href={`/s/${site.slug}/novels/${novel.slug || novel.id}`} prefetch={false}
                 className="flex gap-3 bg-white rounded-2xl border border-[var(--border)] p-3 hover:shadow-md hover:border-[var(--primary)] transition-all cursor-pointer relative overflow-hidden">
                 <NovelThumb novel={novel} />
                 {badgeType && (

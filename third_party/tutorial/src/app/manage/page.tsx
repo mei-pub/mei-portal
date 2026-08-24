@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
-import Link from "next/link";
+import Link from "@/components/Link";
 import { showToast } from "@/components/Toast";
 
 interface SiteRow {
@@ -161,7 +161,7 @@ export default function ManagePage() {
             </button>
           </form>
           {unlockErr && <p className="mt-3 text-xs text-red-500 text-center">{unlockErr}</p>}
-          <Link href="/" className="block mt-4 text-xs text-[var(--muted)] hover:text-[var(--foreground)] text-center transition-colors">
+          <Link href="/" prefetch={false} className="block mt-4 text-xs text-[var(--muted)] hover:text-[var(--foreground)] text-center transition-colors">
             返回站点列表
           </Link>
         </div>
@@ -174,7 +174,7 @@ export default function ManagePage() {
       <main className="flex-1 max-w-3xl mx-auto w-full px-4 sm:px-6 py-6">
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-3">
-            <Link href="/" className="text-[var(--muted)] hover:text-[var(--foreground)] transition-colors">
+            <Link href="/" prefetch={false} className="text-[var(--muted)] hover:text-[var(--foreground)] transition-colors">
               <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
               </svg>
@@ -184,6 +184,7 @@ export default function ManagePage() {
           <div className="flex items-center gap-2">
             <Link
               href="/backup"
+              prefetch={false}
               className="px-4 py-2 text-sm border border-[var(--border)] text-[var(--muted)] rounded-lg hover:bg-[var(--accent)] transition-colors"
             >
               数据备份
@@ -412,6 +413,7 @@ export default function ManagePage() {
                 </div>
                 <Link
                   href={`/s/${site.slug}`}
+                  prefetch={false}
                   className="px-3 py-1.5 text-xs rounded-lg border border-[var(--border)] text-[var(--muted)] hover:bg-[var(--accent)] transition-colors"
                 >
                   进入

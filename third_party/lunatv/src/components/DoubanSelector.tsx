@@ -315,7 +315,7 @@ const DoubanSelector: React.FC<DoubanSelectorProps> = ({
     return (
       <div
         ref={containerRef}
-        className='relative inline-flex bg-gray-200/60 rounded-full p-0.5 sm:p-1 dark:bg-gray-700/60 backdrop-blur-sm'
+        className='relative inline-flex bg-gray-200/60 rounded-full p-0.5 dark:bg-gray-700/60 backdrop-blur-sm'
       >
         {/* 滑动的白色背景指示器 */}
         {indicatorStyle.width > 0 && (
@@ -337,7 +337,7 @@ const DoubanSelector: React.FC<DoubanSelectorProps> = ({
                 buttonRefs.current[index] = el;
               }}
               onClick={() => onChange(option.value)}
-              className={`relative z-10 px-2 py-1 sm:px-4 sm:py-2 text-xs sm:text-sm font-medium rounded-full transition-all duration-200 whitespace-nowrap ${
+              className={`relative z-10 px-2 py-1 text-[11px] sm:text-xs font-medium rounded-full transition-all duration-200 whitespace-nowrap ${
                 isActive
                   ? 'text-gray-900 dark:text-gray-100 cursor-default'
                   : 'text-gray-700 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-100 cursor-pointer'
@@ -352,13 +352,13 @@ const DoubanSelector: React.FC<DoubanSelectorProps> = ({
   };
 
   return (
-    <div className='space-y-4 sm:space-y-6'>
+    <div className='space-y-2 sm:space-y-2.5'>
       {/* 电影类型 - 显示两级选择器 */}
       {type === 'movie' && (
-        <div className='space-y-3 sm:space-y-4'>
+        <div className='space-y-2 sm:space-y-2.5'>
           {/* 一级选择器 */}
-          <div className='flex flex-col sm:flex-row sm:items-center gap-2'>
-            <span className='text-xs sm:text-sm font-medium text-gray-600 dark:text-gray-400 min-w-[48px]'>
+          <div className='flex flex-col sm:flex-row sm:items-center gap-1.5'>
+            <span className='text-[11px] font-medium text-gray-600 dark:text-gray-400 min-w-[34px]'>
               分类
             </span>
             <div className='overflow-x-auto'>
@@ -373,8 +373,8 @@ const DoubanSelector: React.FC<DoubanSelectorProps> = ({
 
           {/* 二级选择器 - 只在非"全部"时显示 */}
           {primarySelection !== '全部' ? (
-            <div className='flex flex-col sm:flex-row sm:items-center gap-2'>
-              <span className='text-xs sm:text-sm font-medium text-gray-600 dark:text-gray-400 min-w-[48px]'>
+            <div className='flex flex-col sm:flex-row sm:items-center gap-1.5'>
+              <span className='text-[11px] font-medium text-gray-600 dark:text-gray-400 min-w-[34px]'>
                 地区
               </span>
               <div className='overflow-x-auto'>
@@ -388,8 +388,8 @@ const DoubanSelector: React.FC<DoubanSelectorProps> = ({
             </div>
           ) : (
             /* 多级选择器 - 只在选中"全部"时显示 */
-            <div className='flex flex-col sm:flex-row sm:items-center gap-2'>
-              <span className='text-xs sm:text-sm font-medium text-gray-600 dark:text-gray-400 min-w-[48px]'>
+            <div className='flex flex-col sm:flex-row sm:items-center gap-1.5'>
+              <span className='text-[11px] font-medium text-gray-600 dark:text-gray-400 min-w-[34px]'>
                 筛选
               </span>
               <div className='overflow-x-auto'>
@@ -406,10 +406,10 @@ const DoubanSelector: React.FC<DoubanSelectorProps> = ({
 
       {/* 电视剧类型 - 显示两级选择器 */}
       {type === 'tv' && (
-        <div className='space-y-3 sm:space-y-4'>
+        <div className='space-y-2 sm:space-y-2.5'>
           {/* 一级选择器 */}
-          <div className='flex flex-col sm:flex-row sm:items-center gap-2'>
-            <span className='text-xs sm:text-sm font-medium text-gray-600 dark:text-gray-400 min-w-[48px]'>
+          <div className='flex flex-col sm:flex-row sm:items-center gap-1.5'>
+            <span className='text-[11px] font-medium text-gray-600 dark:text-gray-400 min-w-[34px]'>
               分类
             </span>
             <div className='overflow-x-auto'>
@@ -424,8 +424,8 @@ const DoubanSelector: React.FC<DoubanSelectorProps> = ({
 
           {/* 二级选择器 - 只在选中"最近热门"时显示，选中"全部"时显示多级选择器 */}
           {(primarySelection || tvPrimaryOptions[1].value) === '最近热门' ? (
-            <div className='flex flex-col sm:flex-row sm:items-center gap-2'>
-              <span className='text-xs sm:text-sm font-medium text-gray-600 dark:text-gray-400 min-w-[48px]'>
+            <div className='flex flex-col sm:flex-row sm:items-center gap-1.5'>
+              <span className='text-[11px] font-medium text-gray-600 dark:text-gray-400 min-w-[34px]'>
                 类型
               </span>
               <div className='overflow-x-auto'>
@@ -439,8 +439,8 @@ const DoubanSelector: React.FC<DoubanSelectorProps> = ({
             </div>
           ) : (primarySelection || tvPrimaryOptions[1].value) === '全部' ? (
             /* 多级选择器 - 只在选中"全部"时显示 */
-            <div className='flex flex-col sm:flex-row sm:items-center gap-2'>
-              <span className='text-xs sm:text-sm font-medium text-gray-600 dark:text-gray-400 min-w-[48px]'>
+            <div className='flex flex-col sm:flex-row sm:items-center gap-1.5'>
+              <span className='text-[11px] font-medium text-gray-600 dark:text-gray-400 min-w-[34px]'>
                 筛选
               </span>
               <div className='overflow-x-auto'>
@@ -457,9 +457,9 @@ const DoubanSelector: React.FC<DoubanSelectorProps> = ({
 
       {/* 动漫类型 - 显示一级选择器和多级选择器 */}
       {type === 'anime' && (
-        <div className='space-y-3 sm:space-y-4'>
-          <div className='flex flex-col sm:flex-row sm:items-center gap-2'>
-            <span className='text-xs sm:text-sm font-medium text-gray-600 dark:text-gray-400 min-w-[48px]'>
+        <div className='space-y-2 sm:space-y-2.5'>
+          <div className='flex flex-col sm:flex-row sm:items-center gap-1.5'>
+            <span className='text-[11px] font-medium text-gray-600 dark:text-gray-400 min-w-[34px]'>
               分类
             </span>
             <div className='overflow-x-auto'>
@@ -475,8 +475,8 @@ const DoubanSelector: React.FC<DoubanSelectorProps> = ({
           {/* 筛选部分 - 根据一级选择器显示不同内容 */}
           {(primarySelection || animePrimaryOptions[0].value) === '每日放送' ? (
             // 每日放送分类下显示星期选择器
-            <div className='flex flex-col sm:flex-row sm:items-center gap-2'>
-              <span className='text-xs sm:text-sm font-medium text-gray-600 dark:text-gray-400 min-w-[48px]'>
+            <div className='flex flex-col sm:flex-row sm:items-center gap-1.5'>
+              <span className='text-[11px] font-medium text-gray-600 dark:text-gray-400 min-w-[34px]'>
                 星期
               </span>
               <div className='overflow-x-auto'>
@@ -485,8 +485,8 @@ const DoubanSelector: React.FC<DoubanSelectorProps> = ({
             </div>
           ) : (
             // 其他分类下显示原有的筛选功能
-            <div className='flex flex-col sm:flex-row sm:items-center gap-2'>
-              <span className='text-xs sm:text-sm font-medium text-gray-600 dark:text-gray-400 min-w-[48px]'>
+            <div className='flex flex-col sm:flex-row sm:items-center gap-1.5'>
+              <span className='text-[11px] font-medium text-gray-600 dark:text-gray-400 min-w-[34px]'>
                 筛选
               </span>
               <div className='overflow-x-auto'>
@@ -512,10 +512,10 @@ const DoubanSelector: React.FC<DoubanSelectorProps> = ({
 
       {/* 综艺类型 - 显示两级选择器 */}
       {type === 'show' && (
-        <div className='space-y-3 sm:space-y-4'>
+        <div className='space-y-2 sm:space-y-2.5'>
           {/* 一级选择器 */}
-          <div className='flex flex-col sm:flex-row sm:items-center gap-2'>
-            <span className='text-xs sm:text-sm font-medium text-gray-600 dark:text-gray-400 min-w-[48px]'>
+          <div className='flex flex-col sm:flex-row sm:items-center gap-1.5'>
+            <span className='text-[11px] font-medium text-gray-600 dark:text-gray-400 min-w-[34px]'>
               分类
             </span>
             <div className='overflow-x-auto'>
@@ -530,8 +530,8 @@ const DoubanSelector: React.FC<DoubanSelectorProps> = ({
 
           {/* 二级选择器 - 只在选中"最近热门"时显示，选中"全部"时显示多级选择器 */}
           {(primarySelection || showPrimaryOptions[1].value) === '最近热门' ? (
-            <div className='flex flex-col sm:flex-row sm:items-center gap-2'>
-              <span className='text-xs sm:text-sm font-medium text-gray-600 dark:text-gray-400 min-w-[48px]'>
+            <div className='flex flex-col sm:flex-row sm:items-center gap-1.5'>
+              <span className='text-[11px] font-medium text-gray-600 dark:text-gray-400 min-w-[34px]'>
                 类型
               </span>
               <div className='overflow-x-auto'>
@@ -545,8 +545,8 @@ const DoubanSelector: React.FC<DoubanSelectorProps> = ({
             </div>
           ) : (primarySelection || showPrimaryOptions[1].value) === '全部' ? (
             /* 多级选择器 - 只在选中"全部"时显示 */
-            <div className='flex flex-col sm:flex-row sm:items-center gap-2'>
-              <span className='text-xs sm:text-sm font-medium text-gray-600 dark:text-gray-400 min-w-[48px]'>
+            <div className='flex flex-col sm:flex-row sm:items-center gap-1.5'>
+              <span className='text-[11px] font-medium text-gray-600 dark:text-gray-400 min-w-[34px]'>
                 筛选
               </span>
               <div className='overflow-x-auto'>
