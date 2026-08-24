@@ -284,7 +284,7 @@ export const UserMenu: React.FC<UserMenuProps> = ({
     } catch (error) {
       console.error('注销请求失败:', error);
     }
-    window.location.href = '/';
+    window.location.href = '/tv';
   };
 
   const handleAdminPanel = () => {

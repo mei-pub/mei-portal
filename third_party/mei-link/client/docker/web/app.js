@@ -24,6 +24,9 @@ let polling = 0;
 let toastTimer = 0;
 let activeView = "tunnels";
 const labels = { new: "新建", "wait start": "连接中", "start error": "启动失败", running: "运行中", "check failed": "检查失败", closed: "已关闭" };
+// 不能写成完整字面量 "/api/auth/repenetrate"：
+// nginx 会把 mei-link JS 中的 fetch("/api/ 统一改写为 /link/api/。
+const PORTAL_REPENETRATE_URL = "/api" + "/auth/repenetrate";
 
 for (const target of document.querySelectorAll("[data-icon]")) target.innerHTML = icons[target.dataset.icon] || "";
 const api = async (path, options = {}) => {
@@ -35,7 +38,7 @@ const api = async (path, options = {}) => {
 // 登录态失效时自动走门户穿透重登（门户已登录前提下无感恢复会话）
 const repenetrate = async () => {
   try {
-    const response = await fetch("/api/auth/repenetrate", {
+    const response = await fetch(PORTAL_REPENETRATE_URL, {
       method: "POST",
       credentials: "include",
       headers: { "content-type": "application/json" },
@@ -256,7 +259,7 @@ $("#panelRestart").addEventListener("click", async event => { await controlActio
 $("#panelRelogin").addEventListener("click", async event => {
   setBusy(event.currentTarget, true);
   try {
-    const response = await fetch("/api/auth/repenetrate", {
+    const response = await fetch(PORTAL_REPENETRATE_URL, {
       method: "POST",
       credentials: "include",
       headers: { "content-type": "application/json" },
@@ -264,7 +267,7 @@ $("#panelRelogin").addEventListener("click", async event => {
     });
     const payload = await response.json().catch(() => ({}));
     if (payload && payload.ok) { notify("登录态已刷新"); await load(); }
-    else notify("刷新失败，请先登录门户", true);
+    else notify((payload && payload.error) || "刷新失败，请先登录门户", true);
   } catch (error) { notify(error.message, true); }
   finally { setBusy(event.currentTarget, false); }
 });

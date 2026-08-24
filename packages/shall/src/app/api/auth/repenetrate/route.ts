@@ -39,6 +39,9 @@ export async function POST(req: NextRequest) {
   const username = process.env.MEI_ADMIN_USER || 'admin';
   const password = process.env.MEI_ADMIN_PASSWORD || 'mei-allin';
   const results = await proxyLoginAll(username, password, app);
+  if (app && results.length === 0) {
+    return NextResponse.json({ ok: false, error: '未知应用' }, { status: 400 });
+  }
   const tokens: Record<string, string> = {};
   for (const r of results) {
     if (r.token) tokens[r.appId] = r.token;
@@ -48,7 +51,7 @@ export async function POST(req: NextRequest) {
     setSessionTokens(tokens);
   }
   const res = NextResponse.json({
-    ok: true,
+    ok: results.length > 0 && results.every((r) => r.success),
     apps: results.map((r) => ({ id: r.appId, success: r.success })),
   });
   for (const r of results) {

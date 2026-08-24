@@ -474,7 +474,7 @@ async function fetchWithAuth(
         console.error('注销请求失败:', error);
       }
       const currentUrl = window.location.pathname + window.location.search;
-      const loginUrl = new URL('/login', window.location.origin);
+      const loginUrl = new URL('/tv/login', window.location.origin);
       loginUrl.searchParams.set('redirect', currentUrl);
       window.location.href = loginUrl.toString();
       throw new Error('用户未授权，已跳转到登录页面');

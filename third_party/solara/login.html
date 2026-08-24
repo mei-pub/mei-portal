@@ -544,7 +544,7 @@
           body: JSON.stringify({ password }),
         });
         if (response.ok) {
-          window.location.href = "/";
+          window.location.href = "/music/";
           return;
         }
         showNotification("密码错误，请重试", "error");

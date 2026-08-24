@@ -9,7 +9,7 @@ export default function GamesPage() {
   const [pokerNickname, setPokerNickname] = useState("");
   function startPokerGame() {
     if (!pokerNickname.trim()) return;
-    window.location.href = `/games/poker?ai=${pokerAICount}&chips=${pokerChips}&nickname=${encodeURIComponent(pokerNickname)}`;
+    window.location.href = `/novels/games/poker?ai=${pokerAICount}&chips=${pokerChips}&nickname=${encodeURIComponent(pokerNickname)}`;
   }
   return (
     <>

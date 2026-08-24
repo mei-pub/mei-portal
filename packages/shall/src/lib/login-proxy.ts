@@ -160,7 +160,7 @@ export async function proxyLoginAll(
 ): Promise<AppLoginResult[]> {
   const adapters = appId ? ADAPTERS.filter((a) => a.appId === appId) : ADAPTERS;
   return Promise.all(
-    ADAPTERS.map(async (a) => {
+    adapters.map(async (a) => {
       try {
         const r = await a.login(username, password);
         return { appId: a.appId, ...r };

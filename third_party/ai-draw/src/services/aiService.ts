@@ -230,7 +230,7 @@ export const aiService = {
         const mode = useStorageModeStore.getState().mode
         if (mode !== 'local') {
           authService.logout()
-          window.location.href = '/login'
+          window.location.href = '/draw/login'
           throw new Error('登录已过期，请重新登录')
         }
       }
@@ -345,7 +345,7 @@ export const aiService = {
         const mode = useStorageModeStore.getState().mode
         if (mode !== 'local') {
           authService.logout()
-          window.location.href = '/login'
+          window.location.href = '/draw/login'
           throw new Error('登录已过期，请重新登录')
         }
       }
@@ -464,7 +464,7 @@ export const aiService = {
       const mode = useStorageModeStore.getState().mode
       if (mode !== 'local') {
         authService.logout()
-        window.location.href = '/login'
+        window.location.href = '/draw/login'
         throw new Error('登录已过期，请重新登录')
       }
     }

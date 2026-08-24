@@ -42,12 +42,21 @@ func NewUtilHandler(env EnvPaths) *UtilHandler {
 // @Router /env [get]
 func (h *UtilHandler) GetEnvPaths(c *gin.Context) {
 	env := h.env
-	// Compute playerUrl dynamically from the request host
-	scheme := "http"
-	if c.Request.TLS != nil {
-		scheme = "https"
+	// Preserve the public host and port when nginx runs behind a domain mapping.
+	forwardedHost := strings.TrimSpace(strings.Split(c.GetHeader("X-Forwarded-Host"), ",")[0])
+	forwardedProto := strings.TrimSpace(strings.Split(c.GetHeader("X-Forwarded-Proto"), ",")[0])
+	host := forwardedHost
+	if host == "" {
+		host = c.Request.Host
 	}
-	env.PlayerUrl = fmt.Sprintf("%s://%s/player/", scheme, c.Request.Host)
+	scheme := forwardedProto
+	if scheme == "" {
+		scheme = "http"
+		if c.Request.TLS != nil {
+			scheme = "https"
+		}
+	}
+	env.PlayerUrl = fmt.Sprintf("%s://%s/player/", scheme, host)
 
 	c.JSON(http.StatusOK, dto.SuccessResponse{
 		Success: true,
