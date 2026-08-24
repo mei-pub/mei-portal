@@ -1,6 +1,6 @@
-// mei-allin：左侧浮动操作面板 —— 与 AI 绘图等应用的 AppSidebar 同一组件结构，仅内容不同
-// 三个入口：新建（弹层）、下载中（切换主体）、已完成（切换主体）
-// 固定悬浮于左缘中段；收起态为左缘渐变把手；展开/收起 localStorage 记忆
+// mei-allin 标准左侧面板（数据驱动）：应用信息（Logo + 纵向名称）+ 行动入口
+// 组件契约见仓库根 AGENTS.md「顶栏与左侧面板组件化强约束」
+// 媒体下载入口：新建（弹层）/ 下载中（列表）/ 已完成
 import { type FC, useEffect, useRef, useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useShallow } from "zustand/react/shallow";
@@ -12,10 +12,18 @@ import { downloadFormSelector, useConfigStore } from "@/store/config";
 
 const STORE_KEY = "mei-float-mediago";
 
+interface PanelAction {
+  label: string;
+  title: string;
+  active: boolean;
+  icon: React.ReactNode;
+  onClick: () => void;
+}
+
 const MediagoSidebar: FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const [open, setOpen] = useState<boolean | null>(null);
+  const [open, setOpen] = useState(true);
   // DownloadForm 自带 Modal，通过 ref.openModal 驱动（外包一层 Modal 会导致弹层空白）
   const newFormRef = useRef<DownloadFormRef>(null);
   const { lastIsBatch, lastDownloadTypes } = useConfigStore(
@@ -30,12 +38,10 @@ const MediagoSidebar: FC = () => {
     newFormRef.current?.openModal(item);
   };
 
-  // 初始：记忆优先，默认展开
+  // 初始：localStorage 记忆优先，默认展开
   useEffect(() => {
     try {
-      const saved = localStorage.getItem(STORE_KEY);
-      if (saved === "1") setOpen(false);
-      else setOpen(true);
+      setOpen(localStorage.getItem(STORE_KEY) !== "1");
     } catch {
       setOpen(true);
     }
@@ -55,13 +61,14 @@ const MediagoSidebar: FC = () => {
 
   const stroke = { fill: "none", stroke: "currentColor", strokeWidth: 2, strokeLinecap: "round" as const, strokeLinejoin: "round" as const };
 
-  const actions = [
+  // 面板数据：行动入口（图标 + 激活态 + 响应事件）
+  const actions: PanelAction[] = [
     {
       label: "新建",
       title: "新建下载",
       active: false,
       icon: (
-        <svg className="h-[18px] w-[18px]" viewBox="0 0 24 24" {...stroke}>
+        <svg className="h-[15px] w-[15px]" viewBox="0 0 24 24" {...stroke}>
           <path d="M12 5v14M5 12h14"/>
         </svg>
       ),
@@ -72,7 +79,7 @@ const MediagoSidebar: FC = () => {
       title: "下载列表",
       active: isActive("/"),
       icon: (
-        <svg className="h-[18px] w-[18px]" viewBox="0 0 24 24" {...stroke}>
+        <svg className="h-[15px] w-[15px]" viewBox="0 0 24 24" {...stroke}>
           <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
           <polyline points="7 10 12 15 17 10"/>
           <line x1="12" y1="15" x2="12" y2="3"/>
@@ -85,7 +92,7 @@ const MediagoSidebar: FC = () => {
       title: "下载完成",
       active: isActive("/done"),
       icon: (
-        <svg className="h-[18px] w-[18px]" viewBox="0 0 24 24" {...stroke}>
+        <svg className="h-[15px] w-[15px]" viewBox="0 0 24 24" {...stroke}>
           <polyline points="20 6 9 17 4 12"/>
         </svg>
       ),
@@ -93,66 +100,71 @@ const MediagoSidebar: FC = () => {
     },
   ];
 
-  // 初始 null（首帧）按收起把手渲染，避免闪烁
-  const expanded = open === true;
-
-  return (
-    <>
-      {!expanded ? (
-        // 收起态：紧贴左缘的渐变小把手（与 AI 绘图一致）
+  if (!open) {
+    return (
+      <>
         <button
           onClick={() => toggle(true)}
-          title="展开菜单"
-          className="fixed left-0 top-1/2 z-40 h-16 w-6 -translate-y-1/2 flex items-center justify-center rounded-r-xl bg-gradient-to-b from-indigo-500 to-purple-500 text-white shadow-lg transition-all hover:w-8"
+          title="展开面板"
+          className="fixed left-0 top-1/2 z-40 h-14 w-5 -translate-y-1/2 flex items-center justify-center rounded-r-lg bg-gradient-to-b from-indigo-500 to-purple-500 text-white shadow-lg transition-all hover:w-7"
         >
           <svg className="h-4 w-4" viewBox="0 0 24 24" {...stroke}>
             <path d="m9 18 6-6-6-6"/>
           </svg>
         </button>
-      ) : (
-        // 展开态：左缘中段浮动玻璃面板（统一应用面板：应用信息区 + 图标入口，只展示图标）
-        <div className="fixed left-3 top-1/2 -translate-y-1/2 z-40 flex flex-col items-center gap-1 p-1.5 rounded-2xl bg-white/75 dark:bg-gray-900/70 backdrop-blur-xl border border-black/10 dark:border-white/10 shadow-lg">
-          {/* 应用信息区：Logo + 名称（垂直布局） */}
-          <button
-            onClick={() => navigate("/")}
-            title="媒体下载"
-            className="flex w-[64px] flex-col items-center gap-1 rounded-xl px-1 py-1.5 transition-colors hover:bg-gray-900/5 dark:hover:bg-white/10"
-          >
-            <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-500 to-purple-500 text-white shadow-md">
-              <svg className="h-[18px] w-[18px]" viewBox="0 0 24 24" {...stroke}>
-                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-                <polyline points="7 10 12 15 17 10"/>
-                <line x1="12" y1="15" x2="12" y2="3"/>
-              </svg>
-            </span>
-            <span className="w-full truncate text-center text-[10px] font-medium leading-tight text-gray-700 dark:text-gray-300">媒体下载</span>
-          </button>
-          <div className="my-0.5 h-px w-8 bg-black/10 dark:bg-white/10" />
-          {actions.map(a => (
-            <button
-              key={a.label}
-              onClick={a.onClick}
-              title={a.title}
-              className={`w-10 h-10 rounded-xl flex items-center justify-center transition-colors ${
-                a.active
-                  ? "bg-indigo-600/10 text-indigo-600"
-                  : "text-gray-500 hover:bg-gray-900/5 hover:text-indigo-600 dark:text-gray-400 dark:hover:bg-white/10"
-              }`}
-            >
-              {a.icon}
-            </button>
-          ))}
-          <button
-            onClick={() => toggle(false)}
-            title="收起菜单"
-            className="w-10 h-8 rounded-xl flex items-center justify-center text-gray-400 hover:bg-gray-900/5 dark:hover:bg-white/10 transition-colors"
-          >
+        <DownloadForm
+          id="mediago-sidebar-new"
+          ref={newFormRef}
+          destroyOnClose
+          onConfirm={() => navigate("/")}
+        />
+      </>
+    );
+  }
+
+  return (
+    <>
+      <div className="fixed left-2 top-1/2 -translate-y-1/2 z-40 flex flex-col items-center gap-1 rounded-2xl border border-black/10 bg-white/75 p-1 shadow-lg backdrop-blur-xl dark:border-white/10 dark:bg-gray-900/70">
+        {/* 应用信息区：Logo + 纵向名称（标准窄面板） */}
+        <button
+          onClick={() => navigate("/")}
+          title="媒体下载"
+          className="flex flex-col items-center gap-1.5 rounded-xl px-0.5 py-1.5 transition-colors hover:bg-gray-900/5 dark:hover:bg-white/10"
+        >
+          <span className="flex h-[30px] w-[30px] items-center justify-center rounded-lg bg-gradient-to-br from-indigo-500 to-purple-500 text-white shadow-md">
             <svg className="h-4 w-4" viewBox="0 0 24 24" {...stroke}>
-              <path d="m15 18-6-6 6-6"/>
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+              <polyline points="7 10 12 15 17 10"/>
+              <line x1="12" y1="15" x2="12" y2="3"/>
             </svg>
+          </span>
+          <span className="select-none text-[10px] font-medium leading-none tracking-[0.18em] text-gray-700 [writing-mode:vertical-rl] dark:text-gray-300">媒体下载</span>
+        </button>
+        <div className="h-px w-6 bg-black/10 dark:bg-white/10" />
+        {actions.map(a => (
+          <button
+            key={a.label}
+            onClick={a.onClick}
+            title={a.title}
+            className={`h-[34px] w-[34px] rounded-xl flex items-center justify-center transition-colors ${
+              a.active
+                ? "bg-indigo-600/10 text-indigo-600"
+                : "text-gray-500 hover:bg-gray-900/5 hover:text-indigo-600 dark:text-gray-400 dark:hover:bg-white/10"
+            }`}
+          >
+            {a.icon}
           </button>
-        </div>
-      )}
+        ))}
+        <button
+          onClick={() => toggle(false)}
+          title="收起面板"
+          className="h-6 w-[34px] rounded-lg flex items-center justify-center text-gray-400 hover:bg-gray-900/5 dark:text-gray-400 dark:hover:bg-white/10 transition-colors"
+        >
+          <svg className="h-4 w-4" viewBox="0 0 24 24" {...stroke}>
+            <path d="m15 18-6-6 6-6"/>
+          </svg>
+        </button>
+      </div>
 
       {/* 新建弹层（DownloadForm 内部自渲染 Modal，ref 驱动；新建成功后回到下载列表） */}
       <DownloadForm
