@@ -252,7 +252,22 @@ $("#panelToggle").addEventListener("click", async event => {
   await controlAction(connected ? "stop" : "start", event);
 });
 $("#panelRestart").addEventListener("click", async event => { await controlAction("start", event, "隧道管理器已重启"); });
-$("#panelLogout").addEventListener("click", async () => { clearInterval(polling); await api("/api/logout", { method: "POST" }); location.reload(); });
+// 刷新登录态：登录态失效时手动触发门户穿透重登（替代原退出按钮）
+$("#panelRelogin").addEventListener("click", async event => {
+  setBusy(event.currentTarget, true);
+  try {
+    const response = await fetch("/api/auth/repenetrate", {
+      method: "POST",
+      credentials: "include",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ app: "mei-link" }),
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (payload && payload.ok) { notify("登录态已刷新"); await load(); }
+    else notify("刷新失败，请先登录门户", true);
+  } catch (error) { notify(error.message, true); }
+  finally { setBusy(event.currentTarget, false); }
+});
 // 面板收展（localStorage 记忆）
 (function initPanelToggle() {
   const KEY = "mei-float-meilink";

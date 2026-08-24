@@ -80,7 +80,7 @@ function route() {
   const root = document.getElementById("view");
   if (!root) return;
   // 播放列表管理页与播放页加宽（左右布局需要更多横向空间）
-  root.classList.toggle("wide", path === "/playlists" || path === "/player");
+  root.classList.toggle("wide", path === "/search" || path === "/playlists" || path === "/player");
   switch (path) {
     case "/search":
       renderSearch(root, params.get("list") || "");

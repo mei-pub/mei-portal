@@ -770,7 +770,7 @@ function DoubanPageClient() {
         </div>
 
         {/* 内容展示区域 */}
-        <div className='max-w-[80%] 2xl:max-w-[1400px] mx-auto mt-8 overflow-visible'>
+        <div className='max-w-[76%] 2xl:max-w-[1320px] mx-auto mt-8 overflow-visible'>
           {/* 内容网格 */}
           {loading || !selectorsReady
             ? // 显示骨架屏

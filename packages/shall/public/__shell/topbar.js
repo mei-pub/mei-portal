@@ -188,6 +188,21 @@
               link.href = iconUrl;
               document.head.appendChild(link);
             } catch (e) {}
+            // 应用域名适配：主页设置为应用配置的 URL（可能是独立域名）优先于默认子路径
+            try {
+              var urlByBuiltin = {};
+              (cfg.items || []).forEach(function (it) {
+                if (it && it.builtin && it.url) urlByBuiltin[it.builtin] = it.url;
+              });
+              Object.keys(appLinks).forEach(function (id) {
+                var u = urlByBuiltin[id];
+                if (u && /^https?:\/\//i.test(u)) appLinks[id].href = u;
+              });
+              var tutorialUrl = urlByBuiltin['tutorial'];
+              if (tutorialUrl && /^https?:\/\//i.test(tutorialUrl)) {
+                novelBase = tutorialUrl.replace(/\/+$/, '');
+              }
+            } catch (e) {}
           }
         })
         .catch(function() {});
@@ -197,6 +212,10 @@
       var apps = document.createElement('div');
       apps.className = 'mtb-apps';
       var tutorialPlugin = null;
+      // 应用链接按插件 id 索引：面板配置（自定义域名）到达后统一改写
+      var appLinks = {};
+      // 小说站点链接基址：默认 /novels 子路径，配置自定义域名时替换
+      var novelBase = '/novels';
       plugins.forEach(function (p) {
         if (p.id === 'tutorial') { tutorialPlugin = p; return; }
         var isActive = p.id === APP_ID;
@@ -205,6 +224,7 @@
         b.href = p.url;
         b.textContent = p.name;
         b.title = p.name;
+        appLinks[p.id] = b;
         apps.appendChild(b);
       });
       if (tutorialPlugin) {
@@ -234,7 +254,7 @@
             list.forEach(function (s) {
               var item = document.createElement('a');
               item.className = 'mtb-menu-link';
-              item.href = '/novels/s/' + encodeURIComponent(s.slug);
+              item.href = novelBase + '/s/' + encodeURIComponent(s.slug);
               item.textContent = s.name;
               if (s.type === 'secret') {
                 var tag = document.createElement('span');

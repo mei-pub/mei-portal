@@ -281,7 +281,7 @@ export function renderPlaylists(root) {
         <aside class="mei-card mei-pl-side">
           <div class="pl-new">
             <input class="mei-input" id="plNewName" placeholder="新列表名称">
-            <button class="mei-btn mei-btn-sm" id="plNewBtn" title="创建列表">${I.plus}</button>
+            <button class="mei-btn mei-btn-sm icon-only" id="plNewBtn" title="创建列表">${I.plus}</button>
           </div>
           <div id="plItems"></div>
         </aside>
@@ -348,8 +348,8 @@ export function renderPlaylists(root) {
       <div class="mei-pl-head">
         <div class="t">${escapeHtml(selected.name)} <span style="font-size:11px;color:var(--faint);font-weight:400">${selected.songs.length} 首</span></div>
         <div class="ops">
-          <button class="mei-btn-ghost mei-btn-sm" id="plAddSongs" title="添加歌曲">${I.plus}</button>
-          <button class="mei-btn mei-btn-sm" id="plPlayAll" title="播放全部" ${selected.songs.length === 0 ? "disabled" : ""}>${I.play}</button>
+          <button class="mei-btn-ghost mei-btn-sm icon-only" id="plAddSongs" title="添加歌曲">${I.plus}</button>
+          <button class="mei-btn mei-btn-sm icon-only" id="plPlayAll" title="播放全部" ${selected.songs.length === 0 ? "disabled" : ""}>${I.play}</button>
         </div>
       </div>
       <div id="plSongs"></div>
@@ -415,6 +415,7 @@ function songRowHtml(song, i, { playing = false, showSort = true, showFav = fals
 
 // ============ 播放页（req 10：三逻辑队列切换） ============
 let playerPageMounted = false;
+let playerViewMode = "disc"; // disc：封面唱片 / lyric：歌词播放
 
 export function renderPlayer(root) {
   const song = player.current();
@@ -434,18 +435,31 @@ export function renderPlayer(root) {
   }
 
   const queue = player.queue();
+  const isLyricMode = playerViewMode === "lyric";
   root.innerHTML = `
     <div class="mei-player-page">
       <div class="mei-stage">
-        <div class="vinyl ${player.audio.paused ? "" : "spin"}" id="meiVinyl" aria-hidden="true">
-          <div class="disc">
-            <img class="big-cover" src="${picUrl(song, 500)}" alt="" onerror="this.style.opacity='0.3'">
-            <div class="hole"></div>
+        ${isLyricMode ? `
+          <div class="lyric-full">
+            <button class="view-toggle" id="meiViewToggle" title="切换封面唱片">${I.disc}</button>
+            <div class="p-title">${escapeHtml(song.name)}</div>
+            <div class="p-sub">${escapeHtml(song.artist)}${song.album ? " · " + escapeHtml(song.album) : ""} · ${sourceLabel(song.source)}</div>
+            <div class="mei-lyric-box big" id="meiLyric"><div class="l-line">♪</div></div>
           </div>
-        </div>
-        <div class="p-title">${escapeHtml(song.name)}</div>
-        <div class="p-sub">${escapeHtml(song.artist)}${song.album ? " · " + escapeHtml(song.album) : ""} · ${sourceLabel(song.source)}</div>
-        <div class="mei-lyric-box" id="meiLyric"><div class="l-line">♪</div></div>
+        ` : `
+          <div class="vinyl-wrap">
+            <div class="vinyl ${player.audio.paused ? "" : "spin"}" id="meiVinyl" aria-hidden="true">
+              <div class="disc">
+                <img class="big-cover" src="${picUrl(song, 500)}" alt="" onerror="this.style.opacity='0.3'">
+                <div class="hole"></div>
+              </div>
+            </div>
+            <button class="view-toggle" id="meiViewToggle" title="切换歌词播放">${I.list}</button>
+          </div>
+          <div class="p-title">${escapeHtml(song.name)}</div>
+          <div class="p-sub">${escapeHtml(song.artist)}${song.album ? " · " + escapeHtml(song.album) : ""} · ${sourceLabel(song.source)}</div>
+          <div class="mei-lyric-box" id="meiLyric"><div class="l-line">♪</div></div>
+        `}
       </div>
       <div class="mei-card mei-queue">
         <div class="q-tabs" id="qTabs"></div>
@@ -453,6 +467,12 @@ export function renderPlayer(root) {
       </div>
     </div>
   `;
+
+  // 封面唱片 / 歌词播放切换
+  root.querySelector("#meiViewToggle").onclick = () => {
+    playerViewMode = isLyricMode ? "disc" : "lyric";
+    renderPlayer(root);
+  };
 
   // 队列 tabs：临时列表 / 当前播放列表 / 我的收藏
   const tabs = root.querySelector("#qTabs");
