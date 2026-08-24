@@ -59,13 +59,13 @@
     style.id = 'mei-topbar-style';
     style.textContent = [
       '#mei-topbar{position:fixed;top:14px;left:50%;transform:translateX(-50%);z-index:9999;height:46px;',
-      'display:flex;align-items:center;gap:6px;padding:0 10px 0 14px;box-sizing:border-box;',
+      'display:flex;align-items:center;gap:6px;padding:0 10px 0 14px !important;box-sizing:border-box;',
       'max-width:calc(100vw - 28px);width:max-content;',
       'background:linear-gradient(165deg,rgba(255,255,255,0.82),rgba(255,255,255,0.62));',
       '-webkit-backdrop-filter:blur(24px) saturate(1.6);backdrop-filter:blur(24px) saturate(1.6);',
-      'border:1px solid rgba(255,255,255,0.9);border-radius:999px;',
+      'border:1px solid rgba(23,32,56,0.10);border-radius:999px;',
       'font-family:"Inter","Noto Sans SC","PingFang SC",sans-serif;font-size:13px;color:#1c2333;',
-      'box-shadow:0 12px 36px rgba(23,32,56,0.14),0 0 0 1px rgba(99,102,241,0.08),inset 0 1px 0 rgba(255,255,255,0.95);}',
+      'box-shadow:0 12px 36px rgba(23,32,56,0.16),0 2px 8px rgba(23,32,56,0.08),0 0 0 1px rgba(99,102,241,0.10),inset 0 1px 0 rgba(255,255,255,0.95) !important;}',
       /* 应用 fixed 导航元素下移到胶囊下方 */
       'header[class*="fixed"],nav[class*="fixed"],aside[class*="fixed"],',
       '[class*="Navbar"][class*="fixed"],[class*="navbar"][class*="fixed"],',
@@ -81,7 +81,7 @@
       '#mei-topbar-toggle:hover{width:84px;box-shadow:0 6px 20px rgba(99,102,241,0.6);}',
       /* 胶囊收起按钮 */
       // 作用域复位：顶栏为全应用共享组件，抵抗宿主应用的全局样式（button/img/* 规则）
-      '#mei-topbar,#mei-topbar *{box-sizing:border-box;margin:0;padding:0;letter-spacing:normal;text-transform:none;box-shadow:none;}',
+      '#mei-topbar *{box-sizing:border-box;margin:0;padding:0;letter-spacing:normal;text-transform:none;}',
       '#mei-topbar,#mei-topbar *{font-family:"Inter","Noto Sans SC","PingFang SC",sans-serif !important;}',
       '#mei-topbar{font-size:13px !important;line-height:1.4;}',
       '#mei-topbar img{display:inline-block;max-width:none;}',
