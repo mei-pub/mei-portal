@@ -7,6 +7,7 @@
     "dev": "next dev -p 3000",
     "prebuild": "node ../../scripts/build-theme.mjs || echo '[prebuild] 跳过主题生成（缺少根依赖，使用源码树中已有资产）'",
     "build": "next build",
+    "test:url": "node --experimental-strip-types --test 'src/lib/*.test.ts'",
     "start": "next start -p 3000",
     "lint": "next lint",
     "build:theme": "node ../../scripts/build-theme.mjs"

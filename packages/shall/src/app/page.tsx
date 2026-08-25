@@ -3,7 +3,14 @@ import type { ClientPlugin } from '@/lib/categories';
 import { isLoggedIn, initUserIfNeeded } from '@/lib/auth';
 import { getPanelConfig, savePanelConfig, syncBuiltinItems } from '@/lib/panel-store';
 import { redirect } from 'next/navigation';
+import { headers } from 'next/headers';
 import PortalClient from '@/components/PortalClient';
+import {
+  getKnownPublicOrigins,
+  getPublicOrigin,
+  normalizeBuiltinItemUrls,
+  normalizeBuiltinUrl,
+} from '@/lib/navigation-url';
 
 // 强制动态渲染：面板配置 / 内置应用同步需在每次请求时运行
 export const dynamic = 'force-dynamic';
@@ -16,6 +23,12 @@ export default async function HomePage() {
   }
 
   const rootDomain = process.env.ROOT_DOMAIN || 'allin.local';
+  const requestHeaders = headers();
+  const publicOrigin = getPublicOrigin(
+    requestHeaders.get('x-forwarded-host') || requestHeaders.get('host'),
+    requestHeaders.get('x-forwarded-proto')
+  );
+  const knownPublicOrigins = getKnownPublicOrigins(process.env.PUBLIC_ORIGINS);
 
   // 先用 getPluginUrl 计算每个插件的同源子路径 url
   const pluginsWithUrl = getPlugins().map((p) => ({
@@ -28,7 +41,7 @@ export default async function HomePage() {
 
   // 转为客户端安全的数据（去 endpoint 等服务端字段）
   const items: { plugin: ClientPlugin; url: string }[] = expanded.map((p) => ({
-    url: p.url,
+    url: normalizeBuiltinUrl(p.url, publicOrigin, knownPublicOrigins),
     plugin: {
       id: p.id,
       name: p.name,
@@ -53,6 +66,7 @@ export default async function HomePage() {
     panel = synced.config;
     try { savePanelConfig(panel); } catch {}
   }
+  panel = normalizeBuiltinItemUrls(panel, publicOrigin, knownPublicOrigins);
 
   return <PortalClient items={items} panel={panel} />;
 }

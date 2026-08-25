@@ -45,6 +45,22 @@
     try { localStorage.setItem('mei-enabled', JSON.stringify(m)); } catch (e) {}
   }
 
+  // 兼容旧 panel 数据中内置应用绑定 loopback:7777 / same-host:7777 的地址。
+  // 显式自定义域名和同 host 的其他端口必须保留。
+  function normalizeBuiltinUrl(url) {
+    if (!url || !/^https?:\/\//i.test(url)) return url;
+    try {
+      var parsed = new URL(url, window.location.href);
+      var localHost = ['localhost', '127.0.0.1', '0.0.0.0', '::1', '[::1]'].indexOf(parsed.hostname) >= 0;
+      var sameHost = parsed.hostname === window.location.hostname;
+      var legacyPort = parsed.port === '' || parsed.port === '7777';
+      if ((localHost && parsed.port === '7777') || (sameHost && legacyPort)) {
+        return parsed.pathname + parsed.search + parsed.hash;
+      }
+    } catch (e) {}
+    return url;
+  }
+
   // 非嵌入模式才注入顶栏
   if (!EMBED) {
     // ---- 注入主题令牌（仅 --mei-* 前缀，不污染应用）----
@@ -196,11 +212,12 @@
               });
               Object.keys(appLinks).forEach(function (id) {
                 var u = urlByBuiltin[id];
-                if (u && /^https?:\/\//i.test(u)) appLinks[id].href = u;
+                if (u && /^https?:\/\//i.test(u)) appLinks[id].href = normalizeBuiltinUrl(u);
               });
               var tutorialUrl = urlByBuiltin['tutorial'];
               if (tutorialUrl && /^https?:\/\//i.test(tutorialUrl)) {
-                novelBase = tutorialUrl.replace(/\/+$/, '');
+                var normalizedTutorialUrl = normalizeBuiltinUrl(tutorialUrl);
+                novelBase = normalizedTutorialUrl.replace(/\/+$/, '');
               }
             } catch (e) {}
           }
@@ -221,7 +238,7 @@
         var isActive = p.id === APP_ID;
         var b = document.createElement('a');
         b.className = 'mtb-btn' + (isActive ? ' active' : '');
-        b.href = p.url;
+        b.href = normalizeBuiltinUrl(p.url);
         b.textContent = p.name;
         b.title = p.name;
         appLinks[p.id] = b;

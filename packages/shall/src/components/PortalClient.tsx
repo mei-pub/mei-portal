@@ -39,6 +39,10 @@ function hashGradient(id: string): string {
   return GRADIENTS[h % GRADIENTS.length];
 }
 
+function itemHref(item: PanelItem, lanMode: boolean): string {
+  return lanMode && item.lanUrl ? item.lanUrl : item.url;
+}
+
 type HealthMap = Record<string, { ok: boolean; ms: number; loading: boolean }>;
 
 /* ============ 统一图标卡片 ============ */
@@ -61,7 +65,7 @@ function UnifiedCard({
   isDragging: boolean;
   shouldBlockClick: () => boolean;
 }) {
-  const href = lanMode && item.lanUrl ? item.lanUrl : item.url;
+  const href = itemHref(item, lanMode);
   const external = /^https?:\/\//.test(href);
   const status = !health
     ? null
@@ -83,7 +87,12 @@ function UnifiedCard({
   ) : (
     <MeiIcon icon={item.icon || 'lucide:link'} size={22} style={{ color: tileFg }} />
   );
-  const pathText = item.builtin ? (item.builtin.startsWith('tutorial-') ? '/novels' : `/${item.builtin.split('-')[0]}`) : href.replace(/^https?:\/\//, '').split('/')[0];
+  let pathText = href;
+  try {
+    const baseUrl = typeof window === 'undefined' ? 'http://localhost' : window.location.href;
+    const displayUrl = new URL(href, baseUrl);
+    pathText = `${displayUrl.hostname}${displayUrl.pathname}`;
+  } catch {}
   return (
     <div
       style={{ textDecoration: 'none', display: 'flex', opacity: isDragging ? 0.35 : 1 }}
@@ -827,7 +836,7 @@ export default function PortalClient({ items, panel: initialPanel }: { items: It
           onClick={(e) => e.stopPropagation()}
         >
           {[
-            { label: '打开', fn: () => { const h = lanMode && contextMenu.item.lanUrl ? contextMenu.item.lanUrl : contextMenu.item.url; window.open(h, /^https?:\/\//.test(h) ? '_blank' : '_self'); } },
+            { label: '打开', fn: () => { const h = itemHref(contextMenu.item, lanMode); window.open(h, /^https?:\/\//.test(h) ? '_blank' : '_self'); } },
             { label: '编辑', fn: () => setEditing(contextMenu.item) },
             { label: '删除', fn: () => deleteItem(contextMenu.item), danger: true },
           ].map((a) => (

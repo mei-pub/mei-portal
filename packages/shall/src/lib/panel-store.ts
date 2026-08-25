@@ -2,8 +2,8 @@
 // 风格（Logo/时钟/搜索/图标样式/背景/边距/页脚）+ 分组 + 图标项（双地址/图标图片）+ 系统监控开关
 import fs from 'node:fs';
 import path from 'node:path';
-import { PRESET_GROUPS, BUILTIN_GROUP_ID } from './panel-presets';
-export { PRESET_GROUPS, PRESET_GROUP_IDS, BUILTIN_GROUP_ID, DEFAULT_GROUP_ID } from './panel-presets';
+import { PRESET_GROUPS, BUILTIN_GROUP_ID } from './panel-presets.ts';
+export { PRESET_GROUPS, PRESET_GROUP_IDS, BUILTIN_GROUP_ID, DEFAULT_GROUP_ID } from './panel-presets.ts';
 
 const DATA_DIR = process.env.DATA_DIR || '/data';
 const PANEL_FILE = path.join(DATA_DIR, 'shell', 'panel.json');
@@ -192,6 +192,7 @@ export function syncBuiltinItems(
   plugins: Array<{ id: string; name: string; description?: string; icon: string; url: string }>
 ): { config: PanelConfig; changed: boolean } {
   const removed = new Set(config.removedBuiltin);
+  const pluginById = new Map(plugins.map((p) => [p.id, p]));
   // 小说阅读（tutorial）不作为单个内置图标项——其站点在首页作为独立图标项动态渲染
   const pluginIds = new Set(plugins.filter((p) => p.id !== 'tutorial').map((p) => p.id));
   const existingBuiltin = new Set(config.items.filter((i) => i.builtin).map((i) => i.builtin as string));
@@ -199,6 +200,25 @@ export function syncBuiltinItems(
   let items = config.items.filter((i) => {
     if (i.builtin && !pluginIds.has(i.builtin)) { changed = true; return false; }
     return true;
+  });
+  // 旧版本曾把插件 id 当作相对路径（例如 /lunatv）。内置应用的相对路径必须跟随插件清单，
+  // 自定义外部域名则继续保留给用户。
+  items = items.map((i) => {
+    const plugin = i.builtin ? pluginById.get(i.builtin) : undefined;
+    if (!plugin || i.url === plugin.url) return i;
+    if (!/^https?:\/\//i.test(i.url)) {
+      changed = true;
+      return { ...i, url: plugin.url };
+    }
+    try {
+      const parsed = new URL(i.url);
+      const localHost = ['localhost', '127.0.0.1', '0.0.0.0', '::1', '[::1]'].includes(parsed.hostname);
+      if (localHost && parsed.port === '7777') {
+        changed = true;
+        return { ...i, url: plugin.url };
+      }
+    } catch {}
+    return i;
   });
   // 内置应用归组：从未分组（未定制过）的内置项默认进「内置应用」预设组
   items = items.map((i) => {

@@ -4,6 +4,7 @@ import { NextResponse } from "next/server";
 
 import { getConfig } from "@/lib/config";
 import { getBaseUrl, resolveUrl } from "@/lib/live";
+import { getPublicProxyBase } from "@/lib/public-url";
 
 export const runtime = 'nodejs';
 
@@ -95,20 +96,7 @@ export async function GET(request: Request) {
 }
 
 function rewriteM3U8Content(content: string, baseUrl: string, req: Request, allowCORS: boolean) {
-  // 从 referer 头提取协议信息
-  const referer = req.headers.get('referer');
-  let protocol = 'http';
-  if (referer) {
-    try {
-      const refererUrl = new URL(referer);
-      protocol = refererUrl.protocol.replace(':', '');
-    } catch (error) {
-      // ignore
-    }
-  }
-
-  const host = req.headers.get('host');
-  const proxyBase = `${protocol}://${host}/api/proxy`;
+  const proxyBase = getPublicProxyBase(req.headers, req.url);
 
   const lines = content.split('\n');
   const rewrittenLines: string[] = [];
