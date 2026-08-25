@@ -102,6 +102,14 @@ function route() {
   }
 }
 
+function rerenderPreservingQueueScroll() {
+  const oldList = document.querySelector("#view .q-list");
+  const scrollTop = oldList ? oldList.scrollTop : 0;
+  route();
+  const newList = document.querySelector("#view .q-list");
+  if (newList && scrollTop > 0) newList.scrollTop = scrollTop;
+}
+
 async function boot() {
   await store.init();
   player.init();
@@ -113,7 +121,7 @@ async function boot() {
   on("queue", () => {
     // 切歌/切队列：播放页整体重渲染（歌名、封面、队列 tab 选中态同步切换）
     if (currentRoute().path === "/player") {
-      route();
+      rerenderPreservingQueueScroll();
       loadLyric();
     }
   });
@@ -126,7 +134,7 @@ async function boot() {
   ["playlists", "favorites", "temp"].forEach((ev) =>
     on(ev, () => {
       const p = currentRoute().path;
-      if (p === "/playlists" || p === "/player") route();
+      if (p === "/playlists" || p === "/player") rerenderPreservingQueueScroll();
     })
   );
 

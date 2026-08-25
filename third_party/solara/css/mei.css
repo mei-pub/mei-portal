@@ -163,6 +163,18 @@ img { display: block; }
 .mei-searchbox .s-icon { position: absolute; left: 18px; top: 50%; transform: translateY(-50%); color: var(--faint); display: flex; }
 .mei-searchbox .s-icon svg { width: 18px; height: 18px; }
 .mei-searchbox input { padding-left: 46px; height: 50px; font-size: 15px; box-shadow: var(--shadow-sm); }
+.mei-search-controls {
+  display: flex; align-items: center; justify-content: center; gap: 10px;
+  width: 100%; max-width: 560px; margin-top: 12px;
+}
+.mei-search-controls label {
+  display: grid; grid-template-columns: auto 1fr; align-items: center; gap: 8px; flex: 1;
+}
+.mei-search-controls span { font-size: 11.5px; font-weight: 600; color: var(--muted); white-space: nowrap; }
+.mei-search-controls select {
+  height: 38px; padding: 0 10px; border-radius: 999px; font-size: 12.5px;
+  box-shadow: var(--shadow-sm); cursor: pointer;
+}
 .mei-target-banner {
   display: flex; align-items: center; gap: 10px; margin-top: 14px;
   padding: 9px 16px; border-radius: 999px; font-size: 12.5px;
@@ -179,10 +191,10 @@ img { display: block; }
 .mei-main.wide .mei-grid { grid-template-columns: repeat(5, 1fr); }
 .mei-song-card {
   position: relative; display: flex; flex-direction: column; gap: 10px; padding: 12px;
-  background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
-  box-shadow: var(--shadow-sm); backdrop-filter: blur(18px); transition: all .18s; overflow: hidden;
+  background: var(--surface-solid); border: 1px solid var(--border); border-radius: var(--radius);
+  box-shadow: var(--shadow-sm); transition: box-shadow .18s, border-color .18s, background-color .18s; overflow: hidden;
 }
-.mei-song-card:hover { transform: translateY(-2px); box-shadow: var(--shadow); border-color: rgba(99,102,241,0.35); }
+.mei-song-card:hover { box-shadow: var(--shadow); border-color: rgba(99,102,241,0.35); }
 .mei-song-card .cover { position: relative; width: 100%; aspect-ratio: 1; border-radius: 12px; overflow: hidden; background: var(--gradient-soft); }
 .mei-song-card .cover img { width: 100%; height: 100%; object-fit: cover; }
 .mei-song-card .cover .play-veil {
@@ -325,6 +337,7 @@ img { display: block; }
 .mei-playerbar .c-btn.main:hover { transform: scale(1.05); }
 .mei-playerbar .c-btn svg { width: 18px; height: 18px; }
 .mei-playerbar .c-btn.main svg { width: 20px; height: 20px; }
+.mei-playerbar .c-btn.faved { color: #ec4899; background: rgba(236,72,153,0.08); }
 .mei-playerbar .b-progress { flex: 1; min-width: 0; display: flex; align-items: center; gap: 10px; }
 .mei-playerbar .b-time { font-size: 11px; color: var(--faint); font-variant-numeric: tabular-nums; flex-shrink: 0; }
 .mei-playerbar .b-slider { flex: 1; -webkit-appearance: none; appearance: none; height: 5px; border-radius: 99px; background: rgba(23,32,56,0.12); outline: none; cursor: pointer; }
@@ -386,6 +399,7 @@ img { display: block; }
 @media (max-width: 760px) {
   .mei-main { padding: 76px 14px calc(var(--playerbar-h) + 40px); }
   .mei-panel { left: 4px; }
+  .mei-search-controls { flex-direction: column; align-items: stretch; }
   .mei-pl-layout { flex-direction: column; }
   .mei-pl-side { width: 100%; position: static; }
   .mei-grid { grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 10px; }

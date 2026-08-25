@@ -20,12 +20,14 @@ const qq = require('./qq');
 const kugou = require('./kugou');
 const kuwo = require('./kuwo');
 const migu = require('./migu');
+const youtube = require('./youtube');
 
 const providers = {
   qq,
   kugou,
   kuwo,
   migu,
+  youtube,
 };
 
 /** 获取本地源提供方（未实现返回 null，由路由层回退到 gdstudio 上游） */

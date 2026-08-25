@@ -79,6 +79,18 @@ WORKDIR /build/server
 RUN npm install --no-audit --no-fund --legacy-peer-deps
 WORKDIR /build
 
+# ---- YouTube PO Token Provider（实验性音乐源）----
+FROM node:22-bookworm-slim AS bgutil-builder
+WORKDIR /build
+ADD https://github.com/Brainicism/bgutil-ytdlp-pot-provider/archive/refs/tags/1.3.2.tar.gz /tmp/bgutil.tar.gz
+RUN echo "3545ac7ffc0869498755cb3b4760a72fa2f176689d0890a6f5b898d163012ba2  /tmp/bgutil.tar.gz" \
+      | sha256sum -c - \
+    && tar -xzf /tmp/bgutil.tar.gz --strip-components=2 \
+      -C /build bgutil-ytdlp-pot-provider-1.3.2/server \
+    && npm ci --no-audit --no-fund \
+    && npx tsc \
+    && npm prune --omit=dev
+
 # ---- pansou 网盘搜索（Go 后端 + Vue 前端，vendored 本地编译）----
 FROM golang:1.25-bookworm AS pansou-builder
 WORKDIR /build
@@ -132,7 +144,11 @@ FROM node:22-bookworm-slim AS runtime
 RUN apt-get update && apt-get install -y \
         nginx gettext-base ca-certificates curl python3 python3-pip python3-venv \
     && rm -rf /var/lib/apt/lists/* /etc/nginx/sites-enabled/default \
-    && python3 -m pip install --no-cache-dir --break-system-packages supervisor \
+    && python3 -m pip install --no-cache-dir --break-system-packages \
+        supervisor \
+        yt-dlp==2026.8.19 \
+        yt-dlp-ejs==0.8.0 \
+        bgutil-ytdlp-pot-provider==1.3.2 \
     && which supervisord
 
 WORKDIR /app
@@ -169,6 +185,9 @@ COPY --from=ai-draw-builder /build/node_modules ./apps/ai-draw/node_modules
 
 # ---- solara ----
 COPY --from=solara-builder /build ./apps/solara
+COPY --from=bgutil-builder /build/build ./apps/bgutil/build
+COPY --from=bgutil-builder /build/node_modules ./apps/bgutil/node_modules
+COPY --from=bgutil-builder /build/package.json ./apps/bgutil/package.json
 
 # ---- pansou（本地编译 Go 二进制 + Vue 前端 dist）----
 COPY --from=pansou-builder /out/pansou ./apps/pansou/pansou
@@ -188,6 +207,7 @@ RUN mkdir -p /app/apps/mediago/deps && \
 # 覆盖 debian nginx 默认配置：nginx.conf + conf.d/
 COPY image/nginx/nginx.conf /etc/nginx/nginx.conf
 COPY image/nginx/conf.d/ /etc/nginx/conf.d/
+COPY image/nginx/snippets/ /etc/nginx/snippets/
 RUN rm -rf /etc/nginx/sites-enabled
 COPY image/plugins.json /etc/mei-plugins.json
 COPY image/supervisord.conf /etc/supervisor/conf.d/mei-allin.conf

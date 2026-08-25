@@ -151,6 +151,9 @@ export const store = {
   isFavorite(song) {
     return this.favorites.some((s) => songKey(s) === songKey(song));
   },
+  isInAnyPlaylist(song) {
+    return this.playlists.some((pl) => pl.songs.some((s) => songKey(s) === songKey(song)));
+  },
   toggleFavorite(song) {
     const key = songKey(song);
     const idx = this.favorites.findIndex((s) => songKey(s) === key);

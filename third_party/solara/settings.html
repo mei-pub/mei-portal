@@ -75,11 +75,13 @@ var SOURCES = [
   { value: "kuwo", label: "酷我音乐", desc: "无损音质支持好" },
   { value: "migu", label: "咪咕音乐", desc: "中国移动音乐平台（本地源直连）" },
   { value: "joox", label: "JOOX音乐", desc: "东南亚曲库" },
-  { value: "bilibili", label: "哔哩哔哩", desc: "B站音频区" }
+  { value: "bilibili", label: "哔哩哔哩", desc: "B站音频区" },
+  { value: "youtube", label: "YouTube（实验性）", desc: "自动令牌解析，可能受网络与平台风控影响" }
 ];
 // qq/kugou/migu/kuwo 由服务端本地源直连实现（server/providers）；
 // 单源解析失败时前端会跨源匹配同名歌曲兜底播放
-var DEFAULT_SOURCES = ["netease", "qq", "kugou", "kuwo", "migu", "joox"];
+var DEFAULT_SOURCES = ["netease", "qq", "kugou", "kuwo", "migu", "joox", "youtube"];
+var YOUTUBE_MIGRATION_KEY = "mei-youtube-source-migrated-v1";
 
 function toast(msg) {
   var t = document.getElementById("toast");
@@ -102,9 +104,17 @@ function loadSources() {
     var raw = localStorage.getItem("mei-music-sources");
     if (raw) {
       var list = JSON.parse(raw);
-      if (Array.isArray(list) && list.length) return list;
+      if (Array.isArray(list) && list.length) {
+        if (!localStorage.getItem(YOUTUBE_MIGRATION_KEY)) {
+          if (list.indexOf("youtube") < 0) list.push("youtube");
+          localStorage.setItem("mei-music-sources", JSON.stringify(list));
+          localStorage.setItem(YOUTUBE_MIGRATION_KEY, "1");
+        }
+        return list;
+      }
     }
   } catch (e) {}
+  localStorage.setItem(YOUTUBE_MIGRATION_KEY, "1");
   return DEFAULT_SOURCES.slice();
 }
 
@@ -162,6 +172,7 @@ function saveAll() {
   try {
     localStorage.setItem("radarSettings", JSON.stringify({ genres: selGenres }));
     localStorage.setItem("mei-music-sources", JSON.stringify(selSources));
+    localStorage.setItem(YOUTUBE_MIGRATION_KEY, "1");
     // 若当前搜索源被停用，切到第一个启用源
     var cur = localStorage.getItem("searchSource");
     if (cur && selSources.indexOf(cur) < 0) localStorage.setItem("searchSource", selSources[0]);

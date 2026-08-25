@@ -9,12 +9,14 @@
  */
 
 const { Router } = require('express');
+const { Readable } = require('node:stream');
+const { pipeline } = require('node:stream/promises');
 const cache = require('../cache');
 const { getProvider } = require('../providers');
 
 const API_BASE_URL = process.env.API_BASE_URL || 'https://music-api.gdstudio.xyz/api.php';
 // 允许代理的音频 CDN 域名（各音乐源直链）
-const AUDIO_HOST_PATTERN = /(^|\.)(kuwo\.cn|kugou\.cn|migu\.cn|qq\.com|90svip\.cn)$/i;
+const AUDIO_HOST_PATTERN = /(^|\.)(kuwo\.cn|kugou\.cn|migu\.cn|qq\.com|90svip\.cn|googlevideo\.com)$/i;
 
 const SAFE_RESPONSE_HEADERS = [
   'content-type', 'cache-control', 'accept-ranges',
@@ -32,6 +34,13 @@ function audioUpstreamHeaders(hostname, req) {
   // 按源设置 Referer（部分 CDN 校验）
   if (/(^|\.)kuwo\.cn$/i.test(hostname)) headers['Referer'] = 'https://www.kuwo.cn/';
   else if (/(^|\.)qq\.com$/i.test(hostname)) headers['Referer'] = 'https://y.qq.com/';
+  else if (/(^|\.)googlevideo\.com$/i.test(hostname)) {
+    headers['User-Agent'] =
+      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 ' +
+      '(KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36';
+    headers['Origin'] = 'https://www.youtube.com';
+    headers['Referer'] = 'https://www.youtube.com/';
+  }
   return headers;
 }
 
@@ -44,7 +53,7 @@ function buildCacheKey(url) {
 }
 
 /** 代理音乐源音频流（带 Range 支持；解决直链 IP 绑定/防盗链/混合内容） */
-async function proxyAudioStream(targetUrl, req, res) {
+async function proxyAudioStream(targetUrl, req, res, options = {}) {
   let parsed;
   try {
     parsed = new URL(targetUrl);
@@ -58,22 +67,38 @@ async function proxyAudioStream(targetUrl, req, res) {
   if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
     return res.status(400).send('Invalid target');
   }
-  const headers = {
-    ...audioUpstreamHeaders(parsed.hostname, req),
-  }
-  if (req.headers['range']) headers['Range'] = req.headers['range'];
-
   const controller = new AbortController();
-  req.on('close', () => {
-    controller.abort();
-  });
+  const handleClose = () => controller.abort();
+  res.once('close', handleClose);
 
   try {
-    const upstream = await fetch(parsed.toString(), {
-      method: req.method,
-      headers,
-      signal: controller.signal
-    });
+    let current = parsed;
+    let upstream;
+    for (let redirects = 0; redirects <= 5; redirects += 1) {
+      const headers = audioUpstreamHeaders(current.hostname, req);
+      if (req.headers['range']) headers.Range = req.headers['range'];
+
+      const connectController = new AbortController();
+      const connectTimer = setTimeout(() => connectController.abort(), 30000);
+      try {
+        upstream = await fetch(current.toString(), {
+          method: req.method,
+          headers,
+          redirect: 'manual',
+          signal: AbortSignal.any([controller.signal, connectController.signal]),
+        });
+      } finally {
+        clearTimeout(connectTimer);
+      }
+      if (upstream.status < 300 || upstream.status >= 400) break;
+      const location = upstream.headers.get('location');
+      if (!location) return res.status(502).send('Invalid upstream redirect');
+      if (redirects === 5) return res.status(502).send('Too many redirects');
+      current = new URL(location, current);
+      if (!isAllowedAudioHost(current.hostname)) {
+        return res.status(400).send('Invalid redirect target');
+      }
+    }
     res.status(upstream.status);
 
     for (const h of SAFE_RESPONSE_HEADERS) {
@@ -82,16 +107,25 @@ async function proxyAudioStream(targetUrl, req, res) {
     }
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Cache-Control', 'public, max-age=3600');
+    if (options.filename) {
+      const safeName = options.filename.replace(/[\r\n"]/g, '').slice(0, 180);
+      res.setHeader(
+        'Content-Disposition',
+        `attachment; filename*=UTF-8''${encodeURIComponent(safeName)}`
+      );
+    }
 
-    const { Readable } = require('node:stream');
-    return Readable.fromWeb(upstream.body).pipe(res);
+    await pipeline(Readable.fromWeb(upstream.body), res);
   } catch (err) {
-    if (err.name === 'AbortError') {
-      console.log('[Proxy Kuwo] Request aborted by client');
+    if (err.name === 'AbortError' || err.code === 'ERR_STREAM_PREMATURE_CLOSE') {
+      console.log('[Proxy Audio] Request aborted');
       return;
     }
     console.error('[Proxy Audio]', err);
-    return res.status(502).send('Upstream error');
+    if (!res.headersSent) return res.status(502).send('Upstream error');
+    res.destroy(err);
+  } finally {
+    res.off('close', handleClose);
   }
 }
 
@@ -216,6 +250,22 @@ module.exports = function createProxyRouter() {
     const source = req.query.source;
     const types = req.query.types;
     const provider = source ? getProvider(source) : null;
+    if (provider && types === 'download' && provider.url) {
+      try {
+        const info = await provider.url(
+          String(req.query.id || ''),
+          String(req.query.br || '')
+        );
+        const extension = /^[a-z0-9]{1,8}$/i.test(String(info.ext || ''))
+          ? String(info.ext).toLowerCase()
+          : 'm4a';
+        const filename = `${String(req.query.filename || 'music')}.${extension}`;
+        return proxyAudioStream(info.url, req, res, { filename });
+      } catch (err) {
+        console.error('[LocalProvider download]', err.message || err);
+        return res.status(400).json({ error: err.message || 'download failed' });
+      }
+    }
     if (provider && types && provider[types]) {
       return proxyLocalProvider(provider, types, req, res);
     }
@@ -305,7 +355,10 @@ async function proxyLocalProvider(provider, types, req, res) {
       );
       body = JSON.stringify(list);
     } else if (types === 'url') {
-      const info = await provider.url(String(req.query.id || ''));
+      const info = await provider.url(
+        String(req.query.id || ''),
+        String(req.query.br || '')
+      );
       body = JSON.stringify(info);
     } else if (types === 'lyric') {
       const info = await provider.lyric(String(req.query.id || ''));

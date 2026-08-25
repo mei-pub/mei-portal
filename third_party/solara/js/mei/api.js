@@ -12,10 +12,12 @@ export const ALL_SOURCES = [
   { value: "migu", label: "咪咕音乐" },
   { value: "joox", label: "JOOX音乐" },
   { value: "bilibili", label: "哔哩哔哩" },
+  { value: "youtube", label: "YouTube（实验性）" },
 ];
 
 // qq/kugou/migu/kuwo 由服务端本地源直连实现（见 server/providers）
-const DEFAULT_ENABLED = ["netease", "qq", "kugou", "kuwo", "migu", "joox"];
+const DEFAULT_ENABLED = ["netease", "qq", "kugou", "kuwo", "migu", "joox", "youtube"];
+const YOUTUBE_MIGRATION_KEY = "mei-youtube-source-migrated-v1";
 
 // 启用源：与设置页（settings.html）共用 localStorage mei-music-sources
 export function enabledSources() {
@@ -24,17 +26,41 @@ export function enabledSources() {
     if (raw) {
       const list = JSON.parse(raw);
       if (Array.isArray(list)) {
+        if (!localStorage.getItem(YOUTUBE_MIGRATION_KEY)) {
+          if (!list.includes("youtube")) list.push("youtube");
+          localStorage.setItem("mei-music-sources", JSON.stringify(list));
+          localStorage.setItem(YOUTUBE_MIGRATION_KEY, "1");
+        }
         const enabled = ALL_SOURCES.filter((o) => list.includes(o.value));
         if (enabled.length > 0) return enabled;
       }
     }
   } catch (e) { /* ignore */ }
+  localStorage.setItem(YOUTUBE_MIGRATION_KEY, "1");
   return ALL_SOURCES.filter((o) => DEFAULT_ENABLED.includes(o.value));
 }
 
 export function sourceLabel(value) {
   const found = ALL_SOURCES.find((o) => o.value === value);
   return found ? found.label : value || "未知源";
+}
+
+function normalizeSearchText(value) {
+  return String(value || "").toLowerCase().replace(/\s+/g, "");
+}
+
+function matchesSearchField(song, keyword, field) {
+  if (field !== "name" && field !== "artist") return true;
+  const target = normalizeSearchText(field === "name" ? song.name : song.artist);
+  return target.includes(normalizeSearchText(keyword));
+}
+
+export function createSearchRequestGuard() {
+  let latest = 0;
+  return {
+    begin() { return ++latest; },
+    isCurrent(token) { return token === latest; },
+  };
 }
 
 // 音频流代理包装：http 直链（混合内容风险）与 QQ vkey 直链（绑定解析方 IP）
@@ -45,7 +71,8 @@ export function wrapStreamUrl(url) {
   try { u = new URL(url); } catch { return url; }
   const isHttp = u.protocol === "http:";
   const isQq = /(^|\.)qq\.com$/i.test(u.hostname);
-  return isHttp || isQq ? `${PROXY}?target=${encodeURIComponent(url)}` : url;
+  const isYoutube = /(^|\.)googlevideo\.com$/i.test(u.hostname);
+  return isHttp || isQq || isYoutube ? `${PROXY}?target=${encodeURIComponent(url)}` : url;
 }
 
 const sig = () => Math.random().toString(36).slice(2, 12);
@@ -82,14 +109,17 @@ export async function searchSource(keyword, source, count = 20, page = 1) {
   return data.map((s) => normalizeSong(s, source));
 }
 
-// 聚合搜索：并行查询所有启用源，源级失败不影响其他源
-export async function searchAggregate(keyword, count = 20, onSourceDone) {
-  const sources = enabledSources();
+// 聚合搜索：并行查询指定启用源，源级失败不影响其他源
+export async function searchAggregate(keyword, count = 20, onSourceDone, options = {}) {
+  const { source = "", field = "all" } = options;
+  const enabled = enabledSources();
+  const sources = source ? enabled.filter((item) => item.value === source) : enabled;
   const tasks = sources.map(async (src) => {
     try {
       const list = await searchSource(keyword, src.value, count, 1);
-      onSourceDone && onSourceDone(src.value, list.length, null);
-      return list;
+      const matched = list.filter((song) => matchesSearchField(song, keyword, field));
+      onSourceDone && onSourceDone(src.value, matched.length, null);
+      return matched;
     } catch (err) {
       onSourceDone && onSourceDone(src.value, 0, err);
       return [];
@@ -177,6 +207,22 @@ export async function fetchLyric(song) {
 
 // 下载：先解析真实地址再触发浏览器下载
 export async function downloadSong(song, quality = "320") {
+  if (song.source === "youtube") {
+    const params = new URLSearchParams({
+      types: "download",
+      source: "youtube",
+      id: song.id,
+      br: quality,
+      filename: `${song.name} - ${song.artist}`,
+    });
+    const a = document.createElement("a");
+    a.href = `${PROXY}?${params.toString()}`;
+    a.download = `${song.name} - ${song.artist}`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    return;
+  }
   const { url } = await resolvePlayUrlWithFallback(song, quality);
   const a = document.createElement("a");
   a.href = url;
@@ -191,6 +237,7 @@ export async function downloadSong(song, quality = "320") {
 // 远端 KV 存储（可用性探测 + 读写；不可用时静默回退 localStorage）
 export const remoteStorage = (() => {
   let availabilityPromise = null;
+  let writeChain = Promise.resolve();
   const check = () => {
     if (!availabilityPromise) {
       availabilityPromise = (async () => {
@@ -218,18 +265,24 @@ export const remoteStorage = (() => {
         return null;
       }
     },
-    async setItems(items) {
-      if (!(await check())) return false;
-      try {
-        await fetch(STORAGE, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ data: items }),
-        });
-        return true;
-      } catch {
-        return false;
-      }
+    setItems(items) {
+      // 收藏/播放列表连续修改时必须按用户操作顺序写入。
+      // 否则慢请求里的旧数据会后返回并覆盖新数据，表现为偶发“收藏被清空”。
+      const write = writeChain.then(async () => {
+        if (!(await check())) return false;
+        try {
+          await fetch(STORAGE, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ data: items }),
+          });
+          return true;
+        } catch {
+          return false;
+        }
+      });
+      writeChain = write.catch(() => false);
+      return write;
     },
   };
 })();

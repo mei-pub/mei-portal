@@ -1,5 +1,15 @@
 // Mei Music 视图渲染：搜索 / 播放列表管理 / 播放页 / 随便听听 / 我的收藏
-import { searchAggregate, sampleRandomSongs, radarPlaylist, picUrl, fetchLyric, downloadSong, sourceLabel, enabledSources } from "./api.js";
+import {
+  createSearchRequestGuard,
+  searchAggregate,
+  sampleRandomSongs,
+  radarPlaylist,
+  picUrl,
+  fetchLyric,
+  downloadSong,
+  sourceLabel,
+  enabledSources,
+} from "./api.js";
 import { store, songKey, on, emit } from "./store.js";
 import { player } from "./player.js";
 import { I, toast, openDialog, confirmDialog, promptDialog } from "./ui.js";
@@ -53,7 +63,24 @@ function brandHtml() {
 }
 
 // ============ 搜索页（req 8 + req 9 指定列表模式） ============
-let searchState = { keyword: "", results: [], loading: false, searched: false, targetListId: "" };
+const SEARCH_FIELDS = [
+  { value: "all", label: "综合" },
+  { value: "name", label: "歌名" },
+  { value: "artist", label: "歌手" },
+];
+
+let searchState = {
+  keyword: "",
+  field: "all",
+  source: "",
+  results: [],
+  loading: false,
+  searched: false,
+  targetListId: "",
+};
+
+let searchControls = { field: "all", source: "" };
+const searchRequests = createSearchRequestGuard();
 
 export async function renderSearch(root, targetListId = "") {
   searchState.targetListId = targetListId;
@@ -67,6 +94,21 @@ export async function renderSearch(root, targetListId = "") {
         <div class="mei-searchbox">
           <span class="s-icon">${I.search}</span>
           <input id="meiSearchInput" class="mei-input" placeholder="搜索歌名、歌手、专辑…" autocomplete="off">
+        </div>
+        <div class="mei-search-controls">
+          <label>
+            <span>类型</span>
+            <select id="meiSearchField" class="mei-input">
+              ${SEARCH_FIELDS.map((field) => `<option value="${field.value}" ${searchControls.field === field.value ? "selected" : ""}>${field.label}</option>`).join("")}
+            </select>
+          </label>
+          <label>
+            <span>音乐源</span>
+            <select id="meiSearchSource" class="mei-input">
+              <option value="" ${searchControls.source ? "" : "selected"}>全部启用源</option>
+              ${enabledSources().map((source) => `<option value="${source.value}" ${searchControls.source === source.value ? "selected" : ""}>${source.label}</option>`).join("")}
+            </select>
+          </label>
         </div>
         ${targetPl ? `
           <div class="mei-target-banner">
@@ -82,35 +124,47 @@ export async function renderSearch(root, targetListId = "") {
           </div>
         `}
       </div>
-      <div id="meiSearchOut"></div>
+      <div id="meiSearchOut" role="status" aria-live="polite"></div>
     `;
     if (targetPl) root.querySelector(".mei-target-banner b").textContent = targetPl.name;
     const input = root.querySelector("#meiSearchInput");
+    const fieldSelect = root.querySelector("#meiSearchField");
+    const sourceSelect = root.querySelector("#meiSearchSource");
     input.value = searchState.keyword;
     if (!hasResults) setTimeout(() => input.focus(), 30);
     input.onkeydown = (e) => {
       if (e.key === "Enter") {
         const kw = input.value.trim();
-        if (kw) doSearch(kw);
+        if (kw) doSearch(kw, fieldSelect.value, sourceSelect.value);
       }
     };
+    fieldSelect.onchange = () => { searchControls.field = fieldSelect.value; };
+    sourceSelect.onchange = () => { searchControls.source = sourceSelect.value; };
     const clearBtn = root.querySelector("#meiTargetClear");
     if (clearBtn) clearBtn.onclick = () => { location.hash = "#/search"; };
     drawResults();
   };
 
-  const doSearch = async (keyword) => {
+  const doSearch = async (keyword, field = "all", source = "") => {
+    const request = searchRequests.begin();
     searchState.keyword = keyword;
+    searchState.field = field;
+    searchState.source = source;
+    searchControls.field = field;
+    searchControls.source = source;
     searchState.loading = true;
     searchState.searched = true;
     searchState.results = [];
     draw();
     try {
-      const results = await searchAggregate(keyword, 20);
+      const results = await searchAggregate(keyword, 20, null, { field, source });
+      if (!searchRequests.isCurrent(request)) return;
       searchState.results = dedupe(results);
     } catch (e) {
+      if (!searchRequests.isCurrent(request)) return;
       console.error(e);
     }
+    if (!searchRequests.isCurrent(request)) return;
     searchState.loading = false;
     drawResults();
   };
@@ -119,11 +173,14 @@ export async function renderSearch(root, targetListId = "") {
     const out = root.querySelector("#meiSearchOut");
     if (!out) return;
     if (!searchState.searched) {
+      out.setAttribute("aria-busy", "false");
       out.innerHTML = "";
       return;
     }
+    out.setAttribute("aria-busy", String(searchState.loading));
     if (searchState.loading) {
-      out.innerHTML = `<div class="mei-loading"><span class="mei-spin"></span>正在聚合 ${enabledSources().length} 个音乐源搜索「${escapeHtml(searchState.keyword)}」…</div>`;
+      const sourceCount = searchState.source ? 1 : enabledSources().length;
+      out.innerHTML = `<div class="mei-loading"><span class="mei-spin"></span>正在${searchState.source ? `搜索 ${sourceLabel(searchState.source)}` : `聚合 ${sourceCount} 个音乐源`}搜索「${escapeHtml(searchState.keyword)}」…</div>`;
       return;
     }
     if (searchState.results.length === 0) {
@@ -131,7 +188,7 @@ export async function renderSearch(root, targetListId = "") {
         <div class="mei-empty">
           <div class="e-icon">${I.search}</div>
           <div>没有找到匹配「${escapeHtml(searchState.keyword)}」的歌曲</div>
-          <div style="margin-top:6px;font-size:12px;color:var(--faint)">换个关键词试试，或检查音乐源配置</div>
+          <div style="margin-top:6px;font-size:12px;color:var(--faint)">换个关键词、${SEARCH_FIELDS.find((field) => field.value === searchState.field)?.label || "综合"}类型或音乐源试试</div>
         </div>
       `;
       return;
@@ -140,7 +197,7 @@ export async function renderSearch(root, targetListId = "") {
       <div class="mei-pagehead" style="margin-top:20px">
         <div>
           <h2>搜索结果</h2>
-          <div class="sub">「${escapeHtml(searchState.keyword)}」共 ${searchState.results.length} 首，来自 ${new Set(searchState.results.map((s) => s.source)).size} 个音乐源</div>
+          <div class="sub">「${escapeHtml(searchState.keyword)}」${SEARCH_FIELDS.find((field) => field.value === searchState.field)?.label || "综合"}搜索，共 ${searchState.results.length} 首，来自 ${new Set(searchState.results.map((s) => s.source)).size} 个音乐源</div>
         </div>
       </div>
       <div class="mei-grid">

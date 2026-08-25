@@ -5,6 +5,7 @@
 # Node 依赖（server 的 standalone 方案，不在新 Docker 中使用）
 server/node_modules
 node_modules
+test
 
 # 运行时数据（通过 volume 挂载，不应打包进镜像）
 data

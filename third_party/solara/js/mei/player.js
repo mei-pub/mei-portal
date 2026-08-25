@@ -3,6 +3,7 @@
 // UI：底部悬浮播放条（mountBar 挂载到任意容器，多页面共享同一实例）
 import { resolvePlayUrlWithFallback, picUrl } from "./api.js";
 import { store, songKey, emit, on } from "./store.js";
+import { toast } from "./ui.js";
 
 const ICONS = {
   play: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5.14v14l11-7-11-7z"/></svg>',
@@ -13,6 +14,9 @@ const ICONS = {
   shuffle: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 3h5v5"/><path d="M4 20 21 3"/><path d="M21 16v5h-5"/><path d="m15 15 6 6"/><path d="M4 4l5 5"/></svg>',
   repeat: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m17 2 4 4-4 4"/><path d="M3 11v-1a4 4 0 0 1 4-4h14"/><path d="m7 22-4-4 4-4"/><path d="M21 13v1a4 4 0 0 1-4 4H3"/></svg>',
   list: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg>',
+  heart: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/></svg>',
+  heartFill: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/></svg>',
+  plus: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>',
   music: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>',
 };
 
@@ -26,6 +30,16 @@ function fmt(sec) {
   return `${m}:${String(s).padStart(2, "0")}`;
 }
 
+function escapeHtml(value) {
+  return String(value ?? "").replace(/[&<>'"]/g, (c) => ({
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    "'": "&#39;",
+    '"': "&quot;",
+  }[c]));
+}
+
 export const player = {
   audio: new Audio(),
   queueType: "temp", // 'temp' | 'playlist' | 'fav'
@@ -36,6 +50,8 @@ export const player = {
   lyricIdx: -1,
   _barEl: null,
   _menuEl: null,
+  _playToken: 0,
+  _failureHandledToken: 0,
 
   init() {
     this.audio.preload = "auto";
@@ -44,7 +60,15 @@ export const player = {
     this.audio.addEventListener("play", () => emit("player"));
     this.audio.addEventListener("pause", () => emit("player"));
     this.audio.addEventListener("error", () => {
+      if (!this.audio.src) return;
+      const song = this.current();
+      if (song) this._handlePlaybackFailure(song, this._playToken);
       emit("player");
+    });
+    this.audio.addEventListener("loadedmetadata", () => {
+      if (this.audio.duration !== 0) return;
+      const song = this.current();
+      if (song) this._handlePlaybackFailure(song, this._playToken);
     });
   },
 
@@ -85,16 +109,23 @@ export const player = {
   async playIndex(i, autoplay = true) {
     const q = this.queue();
     if (i < 0 || i >= q.length) return;
+    const playToken = ++this._playToken;
+    this._failureHandledToken = 0;
     this.index = i;
     const song = q[i];
     this.lyric = [];
     this.lyricIdx = -1;
+    // 播放地址是异步解析的。切歌瞬间必须先停掉旧音频，
+    // 否则 UI 已显示新歌，但旧歌会继续播放到新地址解析完成。
+    this.audio.pause();
+    this.audio.removeAttribute("src");
+    this.audio.load();
     emit("queue");
     emit("player");
     try {
       const { url, song: played } = await resolvePlayUrlWithFallback(song, "320");
       // 竞态防护：解析期间用户已切歌
-      if (this.current() !== song) return;
+      if (playToken !== this._playToken || this.current() !== song) return;
       // 跨源兜底命中其他源的同名歌曲：替换队列条目，保证所见即所播
       if (played !== song) {
         const q = this.queue();
@@ -103,21 +134,35 @@ export const player = {
       }
       this.audio.src = url;
       this._failStreak = 0;
-      if (autoplay) await this.audio.play().catch(() => {});
-    } catch (e) {
-      console.warn("播放失败", e);
-      emit("playerror", song);
-      // 自动跳过不可播放歌曲（连败 8 首后停止，避免整列失效时死循环）
-      if (this.current() === song) {
-        this._failStreak = (this._failStreak || 0) + 1;
-        if (this._failStreak >= 8 || q.length <= 1) {
-          this._failStreak = 0;
-          emit("playgiveup", song);
-        } else {
-          setTimeout(() => { if (this.current() === song) this.next(); }, 300);
+      if (autoplay) {
+        try {
+          await this.audio.play();
+        } catch (e) {
+          this._handlePlaybackFailure(played, playToken);
         }
       }
+    } catch (e) {
+      console.warn("播放失败", e);
+      this._handlePlaybackFailure(song, playToken);
     }
+  },
+
+  _handlePlaybackFailure(song, playToken = this._playToken) {
+    if (!song || playToken !== this._playToken || this.current() !== song) return;
+    if (this._failureHandledToken === playToken) return;
+    this._failureHandledToken = playToken;
+    emit("playerror", song);
+    // 自动跳过不可播放歌曲（连败 8 首后停止，避免整列失效时死循环）
+    const q = this.queue();
+    this._failStreak = (this._failStreak || 0) + 1;
+    if (this._failStreak >= 8 || q.length <= 1) {
+      this._failStreak = 0;
+      emit("playgiveup", song);
+      return;
+    }
+    setTimeout(() => {
+      if (this.current() === song && this._failureHandledToken === playToken) this.next();
+    }, 300);
   },
 
   toggle() {
@@ -224,6 +269,8 @@ export const player = {
     const dur = this.audio.duration;
     const cur = this.audio.currentTime;
     const cover = picUrl(song) || "";
+    const faved = store.isFavorite(song);
+    const showAddList = this.queueType === "temp" && !store.isInAnyPlaylist(song);
     el.innerHTML = `
       <img class="b-cover" src="${cover}" alt="" onerror="this.style.visibility='hidden'">
       <div class="b-meta">
@@ -242,6 +289,8 @@ export const player = {
         <span class="b-time">${fmt(dur)}</span>
       </div>
       <div class="b-right">
+        ${showAddList ? `<button class="c-btn" data-act="add-list" title="添加到播放列表">${ICONS.plus}</button>` : ""}
+        <button class="c-btn ${faved ? "faved" : ""}" data-act="fav" title="${faved ? "取消收藏" : "加入收藏"}">${faved ? ICONS.heartFill : ICONS.heart}</button>
         <button class="b-list-tag" data-act="queue" title="当前播放队列（点击切换）"></button>
         <button class="c-btn" data-act="open" title="打开播放页">${ICONS.music}</button>
       </div>
@@ -257,8 +306,57 @@ export const player = {
     el.querySelector(".b-cover").onclick = () => this._onOpenPlayer && this._onOpenPlayer();
     el.querySelector(".b-meta").onclick = () => this._onOpenPlayer && this._onOpenPlayer();
     el.querySelector('[data-act="queue"]').onclick = (e) => this._openQueueMenu(e.currentTarget);
+    const addListBtn = el.querySelector('[data-act="add-list"]');
+    if (addListBtn) addListBtn.onclick = (e) => this._openAddPlaylistMenu(e.currentTarget, song);
+    el.querySelector('[data-act="fav"]').onclick = () => {
+      const added = store.toggleFavorite(song);
+      toast(added ? "已加入收藏" : "已取消收藏");
+    };
     const slider = el.querySelector(".b-slider");
     slider.oninput = () => this.seekTo(slider.value / 1000);
+  },
+
+  _openAddPlaylistMenu(anchor, song) {
+    this._closeMenu();
+    const rect = anchor.getBoundingClientRect();
+    const menu = document.createElement("div");
+    menu.className = "mei-popmenu";
+    menu.innerHTML = `<div class="m-title">添加到播放列表</div>` + store.playlists.map((pl) => `
+      <button class="m-item" data-id="${pl.id}"><span class="dot"></span><span>${escapeHtml(pl.name)}</span><span class="cnt">${pl.songs.length} 首</span>
+      </button>
+    `).join("") + `
+      <div class="m-new">
+        <input class="mei-input" placeholder="新建列表名称">
+        <button class="mei-btn mei-btn-sm">新建</button>
+      </div>
+    `;
+    menu.querySelectorAll(".m-item").forEach((btn) => {
+      btn.onclick = () => {
+        const result = store.addToPlaylist(btn.dataset.id, song);
+        const name = store.getPlaylist(btn.dataset.id)?.name || "播放列表";
+        toast(result === "exists" ? "该歌曲已在列表中" : `已加入「${name}」`);
+        this._closeMenu();
+      };
+    });
+    const input = menu.querySelector(".m-new input");
+    const create = () => {
+      const pl = store.createPlaylist(input.value);
+      if (!pl) return;
+      store.addToPlaylist(pl.id, song);
+      toast(`已创建「${pl.name}」并加入该歌曲`);
+      this._closeMenu();
+    };
+    menu.querySelector(".m-new .mei-btn").onclick = create;
+    input.onkeydown = (e) => { if (e.key === "Enter") create(); };
+    menu.style.left = Math.min(rect.left - 90, window.innerWidth - 220) + "px";
+    menu.style.bottom = window.innerHeight - rect.top + 8 + "px";
+    document.body.appendChild(menu);
+    this._menuEl = menu;
+    setTimeout(() => {
+      document.addEventListener("click", this._menuCloser = (e) => {
+        if (!menu.contains(e.target)) this._closeMenu();
+      });
+    }, 0);
   },
 
   /** 轻量更新：仅刷新进度/时间/播放按钮，不重建封面与文字 */
