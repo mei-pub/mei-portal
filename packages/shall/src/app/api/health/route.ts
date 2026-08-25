@@ -1,18 +1,25 @@
 import { NextResponse } from 'next/server';
 import { getPlugins } from '@/lib/plugins';
+import { getPublicOrigin } from '@/lib/navigation-url';
+import { buildHealthUrl } from '@/lib/health-url';
 
 export const dynamic = 'force-dynamic';
 
 // 并发探活各应用内部 endpoint，返回状态汇总
-export async function GET() {
+export async function GET(req: Request) {
   const plugins = getPlugins();
+  const publicOrigin = getPublicOrigin(
+    req.headers.get('x-forwarded-host') || req.headers.get('host'),
+    req.headers.get('x-forwarded-proto')
+  );
+  const base = publicOrigin || req.url;
   const results = await Promise.all(
     plugins.map(async (p) => {
       const start = Date.now();
       try {
         const ctrl = new AbortController();
         const t = setTimeout(() => ctrl.abort(), 3000);
-        const res = await fetch(p.endpoint + (p.health?.path || '/'), {
+        const res = await fetch(buildHealthUrl(p.endpoint, p.health?.path || '/', base), {
           signal: ctrl.signal,
           redirect: 'manual',
         });
