@@ -59,7 +59,7 @@ test('search request guard marks only the latest request as current', async () =
   assert.equal(guard.isCurrent(second), true);
 });
 
-test('artist search keeps only songs whose artist matches', async () => {
+test('search aggregate no longer filters by song or artist field', async () => {
   globalThis.fetch = async () => ({
     ok: true,
     text: async () => JSON.stringify([
@@ -71,20 +71,5 @@ test('artist search keeps only songs whose artist matches', async () => {
   const { searchAggregate } = await importApi(['netease']);
   const results = await searchAggregate('jay chou', 20, null, { field: 'artist' });
 
-  assert.deepEqual(results.map((song) => song.id), ['a1']);
-});
-
-test('song-name search keeps only songs whose name matches', async () => {
-  globalThis.fetch = async () => ({
-    ok: true,
-    text: async () => JSON.stringify([
-      { id: 's1', name: 'Sunny Day', artist: ['Artist'] },
-      { id: 's2', name: 'Rainy Day', artist: ['Sunny Artist'] },
-    ]),
-  });
-
-  const { searchAggregate } = await importApi(['netease']);
-  const results = await searchAggregate('sunny', 20, null, { field: 'name' });
-
-  assert.deepEqual(results.map((song) => song.id), ['s1']);
+  assert.deepEqual(results.map((song) => song.id), ['a1', 'a2']);
 });

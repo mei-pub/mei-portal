@@ -45,16 +45,6 @@ export function sourceLabel(value) {
   return found ? found.label : value || "未知源";
 }
 
-function normalizeSearchText(value) {
-  return String(value || "").toLowerCase().replace(/\s+/g, "");
-}
-
-function matchesSearchField(song, keyword, field) {
-  if (field !== "name" && field !== "artist") return true;
-  const target = normalizeSearchText(field === "name" ? song.name : song.artist);
-  return target.includes(normalizeSearchText(keyword));
-}
-
 export function createSearchRequestGuard() {
   let latest = 0;
   return {
@@ -111,15 +101,14 @@ export async function searchSource(keyword, source, count = 20, page = 1) {
 
 // 聚合搜索：并行查询指定启用源，源级失败不影响其他源
 export async function searchAggregate(keyword, count = 20, onSourceDone, options = {}) {
-  const { source = "", field = "all" } = options;
+  const { source = "" } = options;
   const enabled = enabledSources();
   const sources = source ? enabled.filter((item) => item.value === source) : enabled;
   const tasks = sources.map(async (src) => {
     try {
       const list = await searchSource(keyword, src.value, count, 1);
-      const matched = list.filter((song) => matchesSearchField(song, keyword, field));
-      onSourceDone && onSourceDone(src.value, matched.length, null);
-      return matched;
+      onSourceDone && onSourceDone(src.value, list.length, null);
+      return list;
     } catch (err) {
       onSourceDone && onSourceDone(src.value, 0, err);
       return [];
