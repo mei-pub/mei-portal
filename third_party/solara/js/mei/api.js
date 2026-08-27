@@ -55,14 +55,19 @@ export function createSearchRequestGuard() {
 
 // 音频流代理包装：http 直链（混合内容风险）与 QQ vkey 直链（绑定解析方 IP）
 // 必须经服务端转发播放，否则浏览器直连会 403/被拦
-export function wrapStreamUrl(url) {
+export function wrapStreamUrl(url, headers = null) {
   if (!url) return url;
   let u;
   try { u = new URL(url); } catch { return url; }
   const isHttp = u.protocol === "http:";
   const isQq = /(^|\.)qq\.com$/i.test(u.hostname);
   const isYoutube = /(^|\.)googlevideo\.com$/i.test(u.hostname);
-  return isHttp || isQq || isYoutube ? `${PROXY}?target=${encodeURIComponent(url)}` : url;
+  if (!isHttp && !isQq && !isYoutube) return url;
+  const params = new URLSearchParams({ target: url });
+  if (headers && typeof headers === "object" && Object.keys(headers).length > 0) {
+    params.set("headers", JSON.stringify(headers));
+  }
+  return `${PROXY}?${params.toString()}`;
 }
 
 const sig = () => Math.random().toString(36).slice(2, 12);
@@ -157,7 +162,7 @@ export async function resolvePlayUrl(song, quality = "320") {
     const url = `${PROXY}?types=url&id=${encodeURIComponent(song.id)}&source=${song.source || "netease"}&br=${br}&s=${sig()}`;
     try {
       const data = await fetchJson(url);
-      if (data && typeof data === "object" && data.url) return wrapStreamUrl(data.url);
+      if (data && typeof data === "object" && data.url) return wrapStreamUrl(data.url, data.headers);
     } catch { /* 尝试下一档码率 */ }
   }
   throw new Error("未获取到播放地址");

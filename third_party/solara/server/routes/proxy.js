@@ -27,7 +27,29 @@ function isAllowedAudioHost(hostname) {
   return hostname && AUDIO_HOST_PATTERN.test(hostname);
 }
 
-function audioUpstreamHeaders(hostname, req) {
+const SAFE_UPSTREAM_HEADER_KEYS = new Set([
+  'user-agent',
+  'accept',
+  'accept-language',
+  'sec-fetch-mode',
+  'origin',
+  'referer',
+]);
+
+function parseProvidedHeaders(value) {
+  if (!value) return {};
+  try {
+    const parsed = JSON.parse(value);
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {};
+    return Object.fromEntries(
+      Object.entries(parsed).filter(([key]) => SAFE_UPSTREAM_HEADER_KEYS.has(key.toLowerCase()))
+    );
+  } catch {
+    return {};
+  }
+}
+
+function audioUpstreamHeaders(hostname, req, providedHeaders = {}) {
   const headers = {
     'User-Agent': req.headers['user-agent'] || 'Mozilla/5.0',
   };
@@ -40,6 +62,12 @@ function audioUpstreamHeaders(hostname, req) {
       '(KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36';
     headers['Origin'] = 'https://www.youtube.com';
     headers['Referer'] = 'https://www.youtube.com/';
+  }
+  if (/(^|\.)googlevideo\.com$/i.test(hostname)) {
+    for (const [key, value] of Object.entries(providedHeaders)) {
+      if (!SAFE_UPSTREAM_HEADER_KEYS.has(key.toLowerCase())) continue;
+      headers[key] = value;
+    }
   }
   return headers;
 }
@@ -67,6 +95,7 @@ async function proxyAudioStream(targetUrl, req, res, options = {}) {
   if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
     return res.status(400).send('Invalid target');
   }
+  const providedHeaders = parseProvidedHeaders(req.query.headers);
   const controller = new AbortController();
   const handleClose = () => controller.abort();
   res.once('close', handleClose);
@@ -75,7 +104,7 @@ async function proxyAudioStream(targetUrl, req, res, options = {}) {
     let current = parsed;
     let upstream;
     for (let redirects = 0; redirects <= 5; redirects += 1) {
-      const headers = audioUpstreamHeaders(current.hostname, req);
+      const headers = audioUpstreamHeaders(current.hostname, req, providedHeaders);
       if (req.headers['range']) headers.Range = req.headers['range'];
 
       const connectController = new AbortController();

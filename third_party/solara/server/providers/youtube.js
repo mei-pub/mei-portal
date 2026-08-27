@@ -106,6 +106,7 @@ function createYoutubeProvider(options = {}) {
         br: Number(data.abr) || 0,
         size: Number(data.filesize || data.filesize_approx) || 0,
         ext: /^[a-z0-9]{1,8}$/i.test(String(data.ext || '')) ? String(data.ext) : 'm4a',
+        headers: data.http_headers && typeof data.http_headers === 'object' ? data.http_headers : {},
       };
     },
 

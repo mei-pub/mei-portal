@@ -67,6 +67,29 @@ test('youtube url requests a playable audio-only format', async () => {
   assert.equal(result.ext, 'webm');
 });
 
+test('youtube url returns yt-dlp recommended request headers', async () => {
+  const provider = createYoutubeProvider({
+    runYtDlp: async () => ({
+      url: 'https://rr1---sn.example.googlevideo.com/videoplayback?id=video-1',
+      http_headers: {
+        'User-Agent': 'Mozilla/5.0 Example',
+        Accept: 'text/html,application/xhtml+xml',
+        'Accept-Language': 'en-us,en;q=0.5',
+        'Sec-Fetch-Mode': 'navigate',
+      },
+    }),
+  });
+
+  const result = await provider.url('video-1');
+
+  assert.deepEqual(result.headers, {
+    'User-Agent': 'Mozilla/5.0 Example',
+    Accept: 'text/html,application/xhtml+xml',
+    'Accept-Language': 'en-us,en;q=0.5',
+    'Sec-Fetch-Mode': 'navigate',
+  });
+});
+
 test('youtube yt-dlp options include manual token override when configured', async () => {
   let captured;
   const provider = createYoutubeProvider({
