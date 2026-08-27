@@ -76,7 +76,7 @@ test('audio errors automatically advance to the next song', async () => {
   assert.equal(player.audio.src, 'https://example.com/good.mp3');
 });
 
-test('zero-duration audio is treated as a playback failure and skipped', async () => {
+test('zero-duration metadata does not immediately skip audio', async () => {
   globalThis.Audio = FakeAudio;
   const urls = ['https://example.com/empty.mp3', 'https://example.com/next.mp3'];
   globalThis.fetch = async () => ({
@@ -98,6 +98,78 @@ test('zero-duration audio is treated as a playback failure and skipped', async (
   player.audio.dispatchEvent('loadedmetadata');
   await new Promise(resolve => setTimeout(resolve, 350));
 
-  assert.equal(player.index, 1);
-  assert.equal(player.audio.src, 'https://example.com/next.mp3');
+  assert.equal(player.index, 0);
+  assert.equal(player.audio.src, 'https://example.com/empty.mp3');
+});
+
+test('YouTube audio is buffered into a local object URL before playback', async () => {
+  globalThis.Audio = FakeAudio;
+  const fetchCalls = [];
+  globalThis.fetch = async (url, options) => {
+    fetchCalls.push({ url: String(url), options });
+    if (String(url).includes('types=url')) {
+      return {
+        ok: true,
+        text: async () => JSON.stringify({ url: 'https://example.com/youtube.m4a' }),
+      };
+    }
+    return {
+      ok: true,
+      blob: async () => ({ type: 'audio/mp4' }),
+    };
+  };
+  let objectUrlSeq = 0;
+  const objectUrls = [];
+  globalThis.URL.createObjectURL = (blob) => {
+    objectUrlSeq += 1;
+    const url = `blob:mei-audio-${objectUrlSeq}`;
+    objectUrls.push({ url, blob });
+    return url;
+  };
+  globalThis.URL.revokeObjectURL = (url) => {
+    const found = objectUrls.find((item) => item.url === url);
+    if (found) found.revoked = true;
+  };
+
+  const { player } = await import('../js/mei/player.js');
+  const { store } = await import('../js/mei/store.js');
+  store.temp = [
+    { id: 'yt', name: 'YouTube song', artist: 'A', source: 'youtube' },
+  ];
+
+  player.init();
+  player.setQueue('temp', 0);
+  await player.playIndex(0);
+
+  assert.equal(player.audio.src, 'blob:mei-audio-1');
+  assert.equal(fetchCalls.length, 2);
+  assert.ok(fetchCalls[1].url.includes('youtube.m4a'));
+  assert.equal(fetchCalls[1].options.headers.Range, 'bytes=0-');
+  assert.equal(objectUrls[0].blob.type, 'audio/mp4');
+});
+
+test('autoplay rejection keeps the selected song ready instead of skipping it', async () => {
+  globalThis.Audio = FakeAudio;
+  globalThis.fetch = async () => ({
+    ok: true,
+    text: async () => JSON.stringify({ url: 'https://example.com/blocked.m4a' }),
+  });
+
+  const { player } = await import('../js/mei/player.js');
+  const { store } = await import('../js/mei/store.js');
+  store.temp = [
+    { id: 'blocked', name: 'Blocked song', artist: 'A', source: 'netease' },
+    { id: 'next', name: 'Next song', artist: 'B', source: 'netease' },
+  ];
+  player.audio.play = () => Promise.reject(
+    Object.assign(new Error('play() failed'), { name: 'NotAllowedError' })
+  );
+
+  player.init();
+  player.setQueue('temp', 0);
+  await player.playIndex(0);
+  await new Promise(resolve => setTimeout(resolve, 400));
+
+  assert.equal(player.index, 0);
+  assert.equal(player.audio.src, 'https://example.com/blocked.m4a');
 });

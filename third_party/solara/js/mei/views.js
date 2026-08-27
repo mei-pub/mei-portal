@@ -68,6 +68,9 @@ let searchState = {
   keyword: "",
   source: "",
   results: [],
+  page: 1,
+  hasMore: false,
+  loadingMore: false,
   loading: false,
   searched: false,
   targetListId: "",
@@ -75,6 +78,7 @@ let searchState = {
 
 let searchControls = { source: "" };
 const searchRequests = createSearchRequestGuard();
+let searchAutoObserver = null;
 
 export async function renderSearch(root, targetListId = "") {
   searchState.targetListId = targetListId;
@@ -136,13 +140,17 @@ export async function renderSearch(root, targetListId = "") {
     searchState.source = source;
     searchControls.source = source;
     searchState.loading = true;
+    searchState.loadingMore = false;
     searchState.searched = true;
     searchState.results = [];
+    searchState.page = 1;
+    searchState.hasMore = false;
     draw();
     try {
-      const results = await searchAggregate(keyword, 20, null, { source });
+      const results = await searchAggregate(keyword, 20, null, { source, page: 1 });
       if (!searchRequests.isCurrent(request)) return;
       searchState.results = dedupe(results);
+      searchState.hasMore = searchState.results.length > 0;
     } catch (e) {
       if (!searchRequests.isCurrent(request)) return;
       console.error(e);
@@ -152,9 +160,53 @@ export async function renderSearch(root, targetListId = "") {
     drawResults();
   };
 
+  const loadMore = async () => {
+    if (!searchState.searched || searchState.loading || searchState.loadingMore || !searchState.hasMore) return;
+    const request = searchRequests.begin();
+    searchState.loadingMore = true;
+    drawResults();
+    try {
+      const nextPage = searchState.page + 1;
+      const results = await searchAggregate(searchState.keyword, 20, null, {
+        source: searchState.source,
+        page: nextPage,
+      });
+      if (!searchRequests.isCurrent(request)) return;
+      const before = searchState.results.length;
+      const merged = dedupe([...searchState.results, ...results]);
+      searchState.results = merged;
+      searchState.page = nextPage;
+      searchState.hasMore = merged.length > before;
+    } catch (e) {
+      if (!searchRequests.isCurrent(request)) return;
+      console.error(e);
+      searchState.hasMore = false;
+    }
+    if (!searchRequests.isCurrent(request)) return;
+    searchState.loadingMore = false;
+    drawResults();
+  };
+
+  const observeAutoLoad = (out) => {
+    if (searchAutoObserver) {
+      searchAutoObserver.disconnect();
+      searchAutoObserver = null;
+    }
+    const sentinel = out.querySelector("#meiSearchAutoLoader");
+    if (!sentinel || !searchState.hasMore || searchState.loadingMore) return;
+    searchAutoObserver = new IntersectionObserver((entries) => {
+      if (entries.some((entry) => entry.isIntersecting)) loadMore();
+    }, { rootMargin: "160px 0px" });
+    searchAutoObserver.observe(sentinel);
+  };
+
   const drawResults = () => {
     const out = root.querySelector("#meiSearchOut");
     if (!out) return;
+    if (searchAutoObserver) {
+      searchAutoObserver.disconnect();
+      searchAutoObserver = null;
+    }
     if (!searchState.searched) {
       out.setAttribute("aria-busy", "false");
       out.innerHTML = "";
@@ -186,7 +238,16 @@ export async function renderSearch(root, targetListId = "") {
       <div class="mei-grid">
         ${searchState.results.map((song, i) => songCardHtml(song, i)).join("")}
       </div>
+      <div class="mei-load-more">
+        <button id="meiLoadMore" class="mei-btn-ghost mei-btn-sm" ${searchState.hasMore ? "" : "disabled"}>
+          ${searchState.loadingMore ? "正在加载…" : searchState.hasMore ? "加载更多" : "没有更多了"}
+        </button>
+      </div>
+      <div id="meiSearchAutoLoader" aria-hidden="true"></div>
     `;
+    const loadMoreBtn = out.querySelector("#meiLoadMore");
+    if (loadMoreBtn) loadMoreBtn.onclick = loadMore;
+    observeAutoLoad(out);
     out.querySelectorAll(".mei-song-card").forEach((card) => {
       const i = parseInt(card.dataset.idx, 10);
       const song = searchState.results[i];

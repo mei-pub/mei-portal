@@ -52,6 +52,7 @@ export const player = {
   _menuEl: null,
   _playToken: 0,
   _failureHandledToken: 0,
+  _mediaObjectUrl: "",
 
   init() {
     this.audio.preload = "auto";
@@ -65,11 +66,9 @@ export const player = {
       if (song) this._handlePlaybackFailure(song, this._playToken);
       emit("player");
     });
-    this.audio.addEventListener("loadedmetadata", () => {
-      if (this.audio.duration !== 0) return;
-      const song = this.current();
-      if (song) this._handlePlaybackFailure(song, this._playToken);
-    });
+    // Do not treat a transient zero duration as a playback failure.
+    // Some browsers report duration=0 at loadedmetadata before the media
+    // timeline is available, especially for progressive MP4/M4A streams.
   },
 
   // 当前队列（实时引用 store，列表变更自动反映）
@@ -120,6 +119,10 @@ export const player = {
     this.audio.pause();
     this.audio.removeAttribute("src");
     this.audio.load();
+    if (this._mediaObjectUrl) {
+      URL.revokeObjectURL(this._mediaObjectUrl);
+      this._mediaObjectUrl = "";
+    }
     emit("queue");
     emit("player");
     try {
@@ -132,12 +135,26 @@ export const player = {
         q[this.index] = played;
         emit("queue");
       }
-      this.audio.src = url;
-      this._failStreak = 0;
+      let playbackUrl = url;
+      if (played.source === "youtube") {
+        // Buffer the complete M4A file first. This avoids progressive-range
+        // quirks in the media stack and gives the element a stable duration.
+        const blob = await this._fetchAudioBlob(url);
+        if (playToken !== this._playToken || this.current() !== played) return;
+        playbackUrl = URL.createObjectURL(blob);
+        this._mediaObjectUrl = playbackUrl;
+      }
+      this.audio.src = playbackUrl;
       if (autoplay) {
         try {
           await this.audio.play();
+          this._failStreak = 0;
         } catch (e) {
+          if (e && e.name === "NotAllowedError") {
+            // The media is ready; Chrome merely needs another explicit click.
+            emit("player");
+            return;
+          }
           this._handlePlaybackFailure(played, playToken);
         }
       }
@@ -145,6 +162,15 @@ export const player = {
       console.warn("播放失败", e);
       this._handlePlaybackFailure(song, playToken);
     }
+  },
+
+  async _fetchAudioBlob(url) {
+    const response = await fetch(url, {
+      credentials: "include",
+      headers: { Range: "bytes=0-" },
+    });
+    if (!response.ok) throw new Error(`音频缓冲失败：HTTP ${response.status}`);
+    return response.blob();
   },
 
   _handlePlaybackFailure(song, playToken = this._playToken) {

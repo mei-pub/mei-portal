@@ -49,6 +49,21 @@ test('search aggregate ignores a source outside enabled settings', async () => {
   assert.equal(requests.length, 0);
 });
 
+test('search aggregate can request a later page from one source', async () => {
+  const requests = [];
+  globalThis.fetch = async (url) => {
+    requests.push(url);
+    return { ok: true, text: async () => '[]' };
+  };
+
+  const { searchAggregate } = await importApi(['netease', 'qq']);
+  await searchAggregate('keyword', 20, null, { source: 'qq', page: 2 });
+
+  assert.equal(requests.length, 1);
+  assert.ok(requests[0].includes('source=qq'));
+  assert.ok(requests[0].includes('pages=2'));
+});
+
 test('search request guard marks only the latest request as current', async () => {
   const { createSearchRequestGuard } = await importApi(['netease']);
   const guard = createSearchRequestGuard();
