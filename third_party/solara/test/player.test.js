@@ -142,9 +142,12 @@ test('YouTube audio is buffered into a local object URL before playback', async 
   await player.playIndex(0);
 
   assert.equal(player.audio.src, 'blob:mei-audio-1');
-  assert.equal(fetchCalls.length, 2);
-  assert.ok(fetchCalls[1].url.includes('youtube.m4a'));
-  assert.equal(fetchCalls[1].options.headers.Range, 'bytes=0-');
+  assert.equal(fetchCalls.length, 1);
+  assert.ok(fetchCalls[0].url.includes('types=download'));
+  assert.ok(fetchCalls[0].url.includes('nocache='));
+  assert.ok(fetchCalls[0].url.includes('source=youtube'));
+  assert.ok(fetchCalls[0].url.includes('id=yt'));
+  assert.equal(fetchCalls[0].options.headers.Range, 'bytes=0-');
   assert.equal(objectUrls[0].blob.type, 'audio/mp4');
 });
 

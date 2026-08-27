@@ -157,6 +157,17 @@ export async function radarPlaylist(playlistId = "3778678", limit = 200) {
 // 播放地址：返回可播放 URL（types=url 返回 JSON {url, br, size...}）
 // 音质降级链：320 → 192 → 128（部分歌曲高码率无资源时自动降级）
 export async function resolvePlayUrl(song, quality = "320") {
+  if (song.source === "youtube") {
+    const params = new URLSearchParams({
+      types: "download",
+      source: "youtube",
+      id: song.id,
+      br: quality,
+      filename: `${song.name || "music"} - ${song.artist || "youtube"}`,
+    });
+    return `${PROXY}?${params.toString()}`;
+  }
+
   const chain = [quality, "192", "128"].filter((v, i, a) => a.indexOf(v) === i);
   for (const br of chain) {
     const url = `${PROXY}?types=url&id=${encodeURIComponent(song.id)}&source=${song.source || "netease"}&br=${br}&s=${sig()}`;

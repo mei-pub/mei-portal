@@ -25,6 +25,7 @@ test('youtube search maps yt-dlp entries to the shared song model', async () => 
 
   assert.equal(calls.length, 1);
   assert.ok(calls[0].includes('ytsearch20:example'));
+  assert.ok(calls[0].includes('youtube:player_client=mweb'));
   assert.deepEqual(
     calls[0].slice(calls[0].indexOf('--js-runtimes'), calls[0].indexOf('--js-runtimes') + 2),
     ['--js-runtimes', 'node']
@@ -61,6 +62,7 @@ test('youtube url requests a playable audio-only format', async () => {
   assert.ok(captured.includes('-f'));
   assert.ok(captured.some((arg) => arg.includes('bestaudio')));
   assert.ok(captured.includes('https://www.youtube.com/watch?v=video-1'));
+  assert.ok(captured.includes('youtube:player_client=web_embedded'));
   assert.equal(result.url, 'https://rr1---sn.example.googlevideo.com/videoplayback?id=video-1');
   assert.equal(result.br, 128);
   assert.equal(result.size, 1234);
@@ -106,7 +108,7 @@ test('youtube yt-dlp options include manual token override when configured', asy
   await provider.url('video-2');
 
   const extractorArgs = captured[captured.indexOf('--extractor-args') + 1];
-  assert.match(extractorArgs, /po_token=mweb\.gvs\+secret-token/);
+  assert.match(extractorArgs, /po_token=web_embedded\.gvs\+secret-token/);
   assert.match(extractorArgs, /visitor_data=visitor-data/);
 });
 

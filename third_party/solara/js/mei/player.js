@@ -165,7 +165,10 @@ export const player = {
   },
 
   async _fetchAudioBlob(url) {
-    const response = await fetch(url, {
+    const requestUrl = url.includes("?")
+      ? `${url}&nocache=${Date.now()}`
+      : `${url}?nocache=${Date.now()}`;
+    const response = await fetch(requestUrl, {
       credentials: "include",
       headers: { Range: "bytes=0-" },
     });

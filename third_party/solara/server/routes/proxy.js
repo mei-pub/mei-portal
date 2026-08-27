@@ -49,6 +49,13 @@ function parseProvidedHeaders(value) {
   }
 }
 
+function normalizeProvidedHeaders(headers) {
+  if (!headers || typeof headers !== 'object' || Array.isArray(headers)) return {};
+  return Object.fromEntries(
+    Object.entries(headers).filter(([key]) => SAFE_UPSTREAM_HEADER_KEYS.has(key.toLowerCase()))
+  );
+}
+
 function audioUpstreamHeaders(hostname, req, providedHeaders = {}) {
   const headers = {
     'User-Agent': req.headers['user-agent'] || 'Mozilla/5.0',
@@ -95,7 +102,10 @@ async function proxyAudioStream(targetUrl, req, res, options = {}) {
   if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
     return res.status(400).send('Invalid target');
   }
-  const providedHeaders = parseProvidedHeaders(req.query.headers);
+  const providedHeaders = {
+    ...parseProvidedHeaders(req.query.headers),
+    ...normalizeProvidedHeaders(options.headers),
+  };
   const controller = new AbortController();
   const handleClose = () => controller.abort();
   res.once('close', handleClose);
@@ -135,7 +145,7 @@ async function proxyAudioStream(targetUrl, req, res, options = {}) {
       if (v) res.setHeader(h, v);
     }
     res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Cache-Control', 'public, max-age=3600');
+    res.setHeader('Cache-Control', upstream.ok ? 'public, max-age=3600' : 'no-store');
     if (options.filename) {
       const safeName = options.filename.replace(/[\r\n"]/g, '').slice(0, 180);
       res.setHeader(
@@ -289,7 +299,7 @@ module.exports = function createProxyRouter() {
           ? String(info.ext).toLowerCase()
           : 'm4a';
         const filename = `${String(req.query.filename || 'music')}.${extension}`;
-        return proxyAudioStream(info.url, req, res, { filename });
+        return proxyAudioStream(info.url, req, res, { filename, headers: info.headers });
       } catch (err) {
         console.error('[LocalProvider download]', err.message || err);
         return res.status(400).json({ error: err.message || 'download failed' });

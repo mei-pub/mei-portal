@@ -13,10 +13,10 @@ const PLAY_TIMEOUT = 30000;
 const SEARCH_TIMEOUT = 12000;
 const YOUTUBE_URL = 'https://www.youtube.com/watch?v=';
 
-function buildExtractorArgs(env) {
-  const options = ['youtube:player_client=mweb'];
+function buildExtractorArgs(env, client = 'mweb') {
+  const options = [`youtube:player_client=${client}`];
   if (env.YOUTUBE_PO_TOKEN) {
-    options.push(`po_token=mweb.gvs+${env.YOUTUBE_PO_TOKEN}`);
+    options.push(`po_token=${client}.gvs+${env.YOUTUBE_PO_TOKEN}`);
   }
   if (env.YOUTUBE_VISITOR_DATA) {
     options.push(`visitor_data=${env.YOUTUBE_VISITOR_DATA}`);
@@ -62,11 +62,11 @@ function normalizeEntry(entry) {
 function createYoutubeProvider(options = {}) {
   const env = options.env || process.env;
   const runner = options.runYtDlp || defaultRunYtDlp;
-  const execute = (args, timeout) => runner([
+  const execute = (args, timeout, client = 'mweb') => runner([
     '--no-warnings',
     '--socket-timeout', '15',
     '--js-runtimes', 'node',
-    '--extractor-args', buildExtractorArgs(env),
+    '--extractor-args', buildExtractorArgs(env, client),
     ...args,
   ], timeout);
 
@@ -92,12 +92,14 @@ function createYoutubeProvider(options = {}) {
       if (!/^[A-Za-z0-9_-]{6,32}$/.test(String(id))) {
         throw new Error('无效的 YouTube 视频 ID');
       }
+      // Some GVS responses reject the mweb URL even though yt-dlp can extract it.
+      // web_embedded consistently returns playable audio for the same videos.
       const data = await execute([
         '--dump-single-json',
         '--no-playlist',
         '-f', 'bestaudio[ext=m4a]/bestaudio',
         `${YOUTUBE_URL}${id}`,
-      ], PLAY_TIMEOUT);
+      ], PLAY_TIMEOUT, 'web_embedded');
       if (!data || !/^https?:\/\//.test(String(data.url || ''))) {
         throw new Error('YouTube 播放地址获取失败');
       }
