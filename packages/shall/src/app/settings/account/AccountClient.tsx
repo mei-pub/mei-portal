@@ -71,7 +71,7 @@ export default function AccountClient() {
       title="账号与安全"
       description={`当前账户：${username || '…'}。修改账户名或密码后需要重新登录。`}
     >
-      <SettingsSection title="修改账户名" description="账户名用于登录标识。">
+      <SettingsSection title="修改账户名" description="账户名用于登录标识。" wide>
         <form onSubmit={submitUsername}>
           <div className="mei-grid">
             <SettingsField label="新账户名" hint="2-32 位字母、数字、连字符或下划线。">
@@ -90,7 +90,7 @@ export default function AccountClient() {
         </form>
       </SettingsSection>
 
-      <SettingsSection title="修改密码" description="建议定期更换密码以保障安全。">
+      <SettingsSection title="修改密码" description="建议定期更换密码以保障安全。" wide>
         <form onSubmit={submitPassword}>
           <div className="mei-grid">
             <SettingsField label="当前密码">

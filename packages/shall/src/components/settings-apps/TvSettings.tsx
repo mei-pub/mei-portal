@@ -87,14 +87,14 @@ export default function TvSettings() {
 
   return (
     <div>
-      <SettingsSection title="搜索">
+      <SettingsSection title="搜索" wide>
         <div className="toggle-stack">
           <Toggle checked={form.defaultAggregateSearch} onChange={(v) => setForm({ ...form, defaultAggregateSearch: v })} label="默认聚合搜索" description="同时聚合全部启用源。" />
           <Toggle checked={form.fluidSearch} onChange={(v) => setForm({ ...form, fluidSearch: v })} label="流式搜索" description="边返回边展示结果。" />
         </div>
       </SettingsSection>
 
-      <SettingsSection title="播放与直播">
+      <SettingsSection title="播放与直播" wide>
         <div className="toggle-stack">
           <Toggle checked={form.enableOptimization} onChange={(v) => setForm({ ...form, enableOptimization: v })} label="优选最佳播放源" description="自动选择最佳清晰度与线路。" />
           <Toggle checked={form.liveDirectConnect} onChange={(v) => setForm({ ...form, liveDirectConnect: v })} label="直播直连" description="服务器无法访问直播源时开启。" />

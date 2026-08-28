@@ -180,7 +180,7 @@ export default function AiDrawSettings() {
       description="基础设置与模型供应商管理。"
       actions={<Pill tone={loading ? 'warning' : 'success'}>{loading ? '读取中' : globalProvider ? `全局：${globalProvider.name}` : '全局供应商未选择'}</Pill>}
     >
-      <SettingsSection title="基础设置" description="控制注册、默认引擎与绘图服务。">
+      <SettingsSection title="基础设置" description="控制注册、默认引擎与绘图服务。" wide>
         <div className="toggle-stack">
           <Toggle checked={system.allowRegister !== false} onChange={(v) => setSystem({ ...system, allowRegister: v })} label="允许注册" description="关闭后仅已有账号可登录。" />
           <Toggle checked={!!system.useLocalDrawio} onChange={(v) => setSystem({ ...system, useLocalDrawio: v })} label="使用本地 Draw.io" description="启用后优先访问内网部署的 Draw.io。" />

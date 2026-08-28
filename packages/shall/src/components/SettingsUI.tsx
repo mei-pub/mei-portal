@@ -13,19 +13,17 @@ export function SettingsTabs({
   onChange: (id: string) => void;
 }) {
   return (
-    <div className="mei-page-tab-content">
-      <div className="mei-tabs">
-        {items.map((item) => (
-          <button
-            key={item.id}
-            className={active === item.id ? 'active' : ''}
-            onClick={() => onChange(item.id)}
-          >
-            {item.icon ? <MeiIcon icon={item.icon} size={14} /> : null}
-            <span>{item.label}</span>
-          </button>
-        ))}
-      </div>
+    <div className="mei-tabs">
+      {items.map((item) => (
+        <button
+          key={item.id}
+          className={active === item.id ? 'active' : ''}
+          onClick={() => onChange(item.id)}
+        >
+          {item.icon ? <MeiIcon icon={item.icon} size={14} /> : null}
+          <span>{item.label}</span>
+        </button>
+      ))}
     </div>
   );
 }
@@ -177,7 +175,7 @@ export const settingsUiStyles = `
 .mei-page-actions{display:flex;gap:8px;flex-shrink:0;align-items:center;}
 .mei-page-tabs{margin-bottom:16px;}
 .mei-page-body{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;align-items:start;}
-.mei-page-body:has(.mei-page-tab-content){grid-template-columns:1fr;}
+.mei-page-tabs ~ .mei-page-body{grid-template-columns:1fr;}
 .mei-tabs{display:flex;gap:4px;padding:4px;background:rgba(255,255,255,.6);border:1px solid var(--mei-border);border-radius:14px;margin-bottom:18px;box-shadow:var(--mei-shadow-sm);overflow-x:auto;backdrop-filter:blur(12px);}
 .mei-tabs button{display:inline-flex;align-items:center;gap:7px;height:36px;padding:0 16px;border:none;border-radius:11px;background:transparent;font-size:12.5px;font-weight:700;color:var(--mei-text-muted);cursor:pointer;white-space:nowrap;transition:var(--mei-transition);}
 .mei-tabs button:hover{background:rgba(99,102,241,.06);color:var(--mei-primary);}

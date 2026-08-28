@@ -84,13 +84,13 @@ export default function AiDrawStatus() {
         </div>
       </SettingsSection>
 
-      <SettingsSection title="生成概览">
+      <SettingsSection title="生成概览" wide>
         <div className="metric">
           <span>AI 对话</span>
           <strong>{chatTotal}</strong>
         </div>
       </SettingsSection>
-      <SettingsSection title="文件生成">
+      <SettingsSection title="文件生成" wide>
         <div className="metric">
           <span>文件创建</span>
           <strong>{fileTotal}</strong>
