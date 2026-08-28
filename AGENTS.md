@@ -120,3 +120,49 @@ mei-allin 是多应用聚合门户：`packages/shall` 为门户外壳，`third_p
 
 违规判定：播放页缺少某项播控而必须回到播放条操作；切歌若干次后播放页出现重复渲染或
 卡顿（监听器累积）；宿主模式下 solara 本地播放条可见。
+
+## 内网穿透（mei-link）：故障引导与自动重连
+
+### 1. 前端 API 路径必须运行时推导
+
+门户经 nginx `sub_filter` 把 `/api/` 改写成 `/link/api/`，但它**只替换双引号字面量**，
+模板字符串（`` `/api/tunnels/${id}` ``）一律漏改，请求会打到门户自身并静默失败。
+
+- `web/app.js` 的所有请求必须走 `apiPath()`（基于 `document.currentScript.src` 推导
+  `API_BASE`），禁止依赖 sub_filter 改写
+- `apiPath()` 内部不得出现 `"/api/"` 字面量，否则它自己会被 sub_filter 改写成
+  `/link/api/` 而拼出 `/link/link/api/...`。用 `["","api",""].join("/")` 规避
+
+### 2. 设置类故障必须走引导弹层
+
+隧道操作失败的根因多是服务端设置问题，裸 toast 抛英文报错没有指导性。
+
+- 统一错误出口是 `reportError()`：带 `setup` 走 `#setupModal` 弹层 + 「前往设置」精确
+  高亮字段，其余才 toast
+- 故障分类只在 `src/setup-error.ts`，纯字符串归类不含 IO
+- 规则按**证据具体程度**排序：`connection refused` 必须排在 `login to the server
+  failed` 之前。frpc 的登录失败报文里同时带这两者，顺序错了会把用户引去改 Token，
+  而真正要改的是服务器地址/端口
+- 每个故障码必须标 `retryable`：端口不通 / 管理接口未就绪 / 管理页不可达可能只是服务端
+  在重启，标 `true`（弹层提示但后台继续重连）；认证不符 / 未配置 / 域名冲突标 `false`
+
+### 3. 自动重连
+
+- 策略是纯逻辑（`src/reconnect.ts`，不含定时器与 IO），Manager 只负责排程与执行
+- **不可重试**的设置故障一律停止重连（重试修不好配置，只会刷日志）；可重试的继续
+- 有次数上限时走两段式：`reconnect` 打满 `maxAttempts` 后自动升级为 `restart` 再试
+  同样多次，两段都失败才停。`restart` 已是最重手段，打满即停
+- 重连偏好存独立的 `reconnect.json`，**不得并进 `config.json`**：未配置服务器时用户
+  也要能先存偏好
+- `frpc` 掉线后进程仍存活，连接态必须靠 `isFrpcDisconnected()` 识别日志来复位。
+  只看进程存活会永远误报「已连接」，自动重连根本不会触发
+- `launch()` 失败时若 frpc 已退出并留下原因，必须抛 frpc 自己的原因。否则
+  `waitForAdmin` 超时会用「管理接口未就绪」盖掉真正的根因
+- 升级、耗尽、setup 故障日志各自去重（`escalationLogged` / `exhaustedLogged` /
+  `setupLoggedCode`），否则巡检周期会把同一条刷满日志面板
+- 正在进行的尝试未落地前不得宣布「已停止」，否则日志顺序倒置
+- 手动 `start()` / `restart()` 必须 `resetReconnectState()`，否则上一轮打满后用户点
+  连接会立刻被判定为已耗尽
+
+违规判定：隧道操作失败只弹英文 toast；服务端重启后隧道不能自动连回；状态长期显示
+「已连接」但实际不通；日志里同一条重连提示反复刷屏。

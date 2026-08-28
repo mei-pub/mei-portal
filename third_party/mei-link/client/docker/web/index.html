@@ -44,6 +44,24 @@
     .mei-panel-handle:hover{ width:28px; }
     .mei-panel-handle .icon{ width:16px; height:16px; }
     @media(max-width:760px){ .mei-panel{ left:4px; } }
+    /* 服务端设置引导弹层：报错不再是死胡同，直接给出「去设置」出口 */
+    .setup-mask{ position:fixed; inset:0; z-index:80; display:flex; align-items:center; justify-content:center; padding:20px; background:rgba(16,26,44,0.46); backdrop-filter:blur(6px); -webkit-backdrop-filter:blur(6px); }
+    .setup-modal{ width:min(468px,100%); padding:24px; border-radius:18px; background:rgba(255,255,255,0.96); border:1px solid rgba(23,32,56,0.08); box-shadow:0 24px 70px rgba(23,32,56,0.28); }
+    .setup-modal .s-head{ display:flex; align-items:center; gap:11px; margin-bottom:10px; }
+    .setup-modal .s-badge{ width:36px; height:36px; flex:0 0 auto; border-radius:11px; display:flex; align-items:center; justify-content:center; color:#fff; background:linear-gradient(135deg,#f59e0b,#ef4444); box-shadow:0 5px 16px rgba(239,68,68,0.3); }
+    .setup-modal .s-badge .icon{ width:18px; height:18px; }
+    .setup-modal h3{ margin:0; font-size:15.5px; font-weight:750; }
+    .setup-modal .s-msg{ margin:0 0 10px; font-size:13px; color:#5a6779; line-height:1.6; }
+    .setup-modal .s-hint{ margin:0 0 18px; padding:11px 13px; border-radius:11px; font-size:12.5px; line-height:1.6; color:#3f4a5d; background:rgba(99,102,241,0.08); border:1px solid rgba(99,102,241,0.16); }
+    /* 可重试故障的兜底说明：后台仍在自动重连，与上方「去改配置」的指引区分开 */
+    .setup-modal .s-retry{ margin:-8px 0 18px; padding:10px 13px; border-radius:11px; font-size:12.5px; line-height:1.6; color:#166534; background:rgba(22,163,74,0.09); border:1px solid rgba(22,163,74,0.18); }
+    .setup-modal .s-retry.hidden{ display:none; }
+    .setup-modal .s-foot{ display:flex; gap:9px; justify-content:flex-end; }
+    .field.s-focus .input, .field.s-focus select, .switch-line.s-focus{ border-color:#f59e0b; box-shadow:0 0 0 3px rgba(245,158,11,0.18); }
+    /* 自动重连状态条 */
+    .reconnect-state{ margin:-4px 0 14px; padding:9px 12px; border-radius:10px; font-size:12px; line-height:1.55; color:#5a6779; background:rgba(23,32,56,0.04); }
+    .reconnect-state.warn{ color:#8a5a00; background:rgba(245,158,11,0.12); }
+    .reconnect-state.error{ color:#b3323f; background:rgba(239,68,68,0.1); }
   </style>
 </head>
 <body>
@@ -104,6 +122,17 @@
               <div class="field"><label for="adminPort">Admin 端口</label><input id="adminPort" class="input" name="adminPort" form="configForm" type="number" value="7400" required></div>
               <div class="field"><label for="adminUser">Admin 用户</label><input id="adminUser" class="input" name="adminUser" form="configForm" value="admin" required></div>
               <div class="field"><label for="adminPassword">Admin 密码</label><input id="adminPassword" class="input" name="adminPassword" form="configForm" type="password" placeholder="已保存时留空不修改"></div>
+              <h3 style="margin-top:22px">自动重连</h3><div class="muted">与服务端断连后按设定的间隔自动恢复隧道</div>
+              <div id="reconnectState" class="reconnect-state">正在读取自动重连状态</div>
+              <form id="reconnectForm">
+                <div class="switch-line" data-field="enabled"><div><span class="field-label">启用自动重连</span><div class="muted">关闭后断连需手动点连接</div></div><button class="switch-control" type="button" role="switch" aria-checked="true" aria-label="启用自动重连" data-switch="reconnectEnabled"><span></span></button><input name="reconnectEnabled" type="checkbox" checked class="hidden"></div>
+                <div class="form-row" style="margin-top:13px">
+                  <div class="field" data-field="intervalSeconds"><label for="reconnectInterval">重连间隔（秒）</label><input id="reconnectInterval" class="input" name="intervalSeconds" type="number" min="5" max="3600" value="30" required></div>
+                  <div class="field" data-field="mode"><label for="reconnectMode">重连方式</label><select id="reconnectMode" class="input" name="mode"><option value="reconnect">重新连接（保持进程）</option><option value="restart">直接重启（重启 frpc）</option></select></div>
+                </div>
+                <div class="field" data-field="maxAttempts"><label for="reconnectMaxAttempts">最大连续尝试次数</label><input id="reconnectMaxAttempts" class="input" name="maxAttempts" type="number" min="0" max="9999" value="0"><span class="muted">0 表示不限次数，一直重试到恢复。填正数时，「重新连接」打满该次数后会自动升级为「直接重启」再试同样多次，两段都失败才停止。</span></div>
+                <div class="actions" style="margin-top:4px"><button class="button secondary">保存自动重连</button></div>
+              </form>
             </section>
           </div>
         </section>
@@ -131,6 +160,19 @@
     </form>
   </dialog>
   <div id="toast" class="toast hidden" role="status"></div>
+  <!-- 服务端设置引导弹层：由 setup 错误码驱动，点击「前往设置」跳门户设置集成页 -->
+  <div id="setupModal" class="setup-mask hidden" role="dialog" aria-modal="true" aria-labelledby="setupTitle">
+    <div class="setup-modal">
+      <div class="s-head"><span class="s-badge"><i data-icon="alert"></i></span><h3 id="setupTitle">服务端设置需要处理</h3></div>
+      <p id="setupMessage" class="s-msg"></p>
+      <p id="setupHint" class="s-hint"></p>
+      <p id="setupRetryNote" class="s-retry hidden"></p>
+      <div class="s-foot">
+        <button id="setupDismiss" type="button" class="button ghost">稍后处理</button>
+        <button id="setupGoto" type="button" class="button">前往设置</button>
+      </div>
+    </div>
+  </div>
   <script type="module" src="/app.js"></script>
 </body>
 </html>

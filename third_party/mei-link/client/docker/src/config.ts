@@ -1,3 +1,5 @@
+import { DEFAULT_RECONNECT, type ReconnectSettings } from "./reconnect.ts";
+
 export interface ServerConfig {
   serverAddr: string;
   serverPort: number;
@@ -13,7 +15,11 @@ export interface ServerConfig {
   managementURL?: string;
   /** 拉取 /api/domains 用的 Bearer token（对应服务端 MEILINK_DOMAIN_API_TOKEN）。 */
   domainAPIToken?: string;
+  /** 断连后的自动重连策略。缺省视为开启、30s、reconnect。 */
+  reconnect?: ReconnectSettings;
 }
+
+export { DEFAULT_RECONNECT };
 
 export function generateFrpcToml(config: ServerConfig, dataDir: string): string {
   const tomlString = (value: string) => JSON.stringify(value);

@@ -4,6 +4,8 @@ import { join } from "node:path";
 import { AuthService } from "./auth.ts";
 import { DataStore } from "./store.ts";
 import { TunnelManager } from "./manager.ts";
+import { errorPayload } from "./setup-error.ts";
+import { normalizeReconnect } from "./reconnect.ts";
 
 export type MeilinkServerOptions = {
   dataDir?: string;
@@ -45,6 +47,12 @@ async function fetchManagement(managementURL: string | undefined, token: string 
   } catch (e) {
     return { error: `无法连接管理页: ${e instanceof Error ? e.message : String(e)}` };
   }
+}
+
+/** 管理页代理结果统一补上 setup 引导信息，前端据此弹层跳设置页。 */
+function withSetupHint(result: Record<string, unknown>): Record<string, unknown> {
+  if (typeof result.error !== "string") return result;
+  return { ...result, ...errorPayload(result.error) };
 }
 
 export async function createMeilinkServer(options: MeilinkServerOptions = {}): Promise<Server> {
@@ -125,12 +133,21 @@ export async function createMeilinkServer(options: MeilinkServerOptions = {}): P
       if (url.pathname === "/api/domains" && request.method === "GET") {
         const cfg = manager.serverConfig();
         const result = cfg ? await fetchManagement(cfg.managementURL, cfg.domainAPIToken, "/api/domains") : { error: "未配置管理页地址或 token" };
-        return json(response, 200, result);
+        return json(response, 200, withSetupHint(result));
       }
       if (url.pathname === "/api/bootstrap" && request.method === "GET") {
         const cfg = manager.serverConfig();
         const result = cfg ? await fetchManagement(cfg.managementURL, cfg.domainAPIToken, "/api/bootstrap") : { error: "未配置管理页地址或 token" };
-        return json(response, 200, result);
+        return json(response, 200, withSetupHint(result));
+      }
+      // 自动重连设置：独立路由，便于设置面板单独保存开关/间隔/方式而不动服务器凭据
+      if (url.pathname === "/api/reconnect" && request.method === "GET") {
+        return json(response, 200, manager.reconnectSettings());
+      }
+      if (url.pathname === "/api/reconnect" && request.method === "POST") {
+        const input = await body(request);
+        await manager.saveReconnect(normalizeReconnect(input as never));
+        return json(response, 200, manager.reconnectSettings());
       }
       if (url.pathname === "/api/control/start" && request.method === "POST") {
         await manager.start();
@@ -140,9 +157,14 @@ export async function createMeilinkServer(options: MeilinkServerOptions = {}): P
         manager.stop();
         return json(response, 200, { ok: true });
       }
+      // 重启：先停进程再完整拉起，等价于自动重连的 restart 方式
+      if (url.pathname === "/api/control/restart" && request.method === "POST") {
+        await manager.restart();
+        return json(response, 200, { ok: true });
+      }
       return json(response, 404, { error: "not found" });
     } catch (error) {
-      return json(response, 400, { error: error instanceof Error ? error.message : "请求失败" });
+      return json(response, 400, errorPayload(error instanceof Error ? error.message : "请求失败"));
     }
   });
 }

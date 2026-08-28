@@ -17,6 +17,7 @@ const icons = {
   logout: '<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5"/><path d="M21 12H9"/></svg>',
   collapseLeft: '<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg>',
   collapseRight: '<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg>',
+  alert: '<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 2.5 20h19L12 3Z"/><path d="M12 9v5"/><path d="M12 17.4v.2"/></svg>',
 };
 let tunnels = [];
 let events = [];
@@ -26,15 +27,50 @@ let polling = 0;
 let toastTimer = 0;
 let activeView = "tunnels";
 const labels = { new: "新建", "wait start": "连接中", "start error": "启动失败", running: "运行中", "check failed": "检查失败", closed: "已关闭" };
-// 不能写成完整字面量 "/api/auth/repenetrate"：
-// nginx 会把 mei-link JS 中的 fetch("/api/ 统一改写为 /link/api/。
+// ---- API 基址：必须显式解析，不能依赖 nginx 的 sub_filter 改写 ----
+//
+// 门户以子路径反代本应用（当前为 /link/），nginx 用 sub_filter 给 JS 里的 "/api/
+// 前缀补上该子路径。但该规则只命中「双引号字面量」，模板字符串 `/api/x/${id}`
+// 一律漏改，请求会打到门户自身而不是本应用（表现为莫名的「请求失败」/404）。
+//
+// 因此基址改为运行时推导：本脚本由 <script src=".../app.js"> 加载，其所在目录
+// 就是应用根，与部署用的子路径前缀无关（独立部署时自然得到 ""）。
+const API_BASE = (() => {
+  const src = (document.currentScript && document.currentScript.src) || import.meta.url;
+  try {
+    return new URL(".", src).pathname.replace(/\/$/, "");
+  } catch {
+    return location.pathname.replace(/\/[^/]*$/, "").replace(/\/$/, "");
+  }
+})();
+/**
+ * 归一化 API 路径。
+ * 同时接受两种输入：源码里的 /api/x，以及被 sub_filter 改写后带子路径前缀的形式。
+ * 两者都会被折算到当前部署实际的基址，因此模板字符串不再需要依赖字符串改写。
+ *
+ * 注意：本函数内不能出现 "/api/ 这样的双引号字面量，否则它自己会被 sub_filter
+ * 一并改写，拼出 /link/link/api/... 的双前缀。故用数组 join 拼出该标记。
+ */
+const API_MARKER = ["", "api", ""].join("/"); // 等价于 /api/ ，规避 sub_filter 匹配
+const apiPath = path => {
+  const raw = String(path);
+  const at = raw.indexOf(API_MARKER);
+  const suffix = at >= 0 ? raw.slice(at) : raw;
+  return `${API_BASE}${suffix}`;
+};
+// 门户级接口（穿透重登）永远挂在站点根，不带 /link 前缀。
+// 拼接书写同样是为了避开 sub_filter 的 "/api/ 规则。
 const PORTAL_REPENETRATE_URL = "/api" + "/auth/repenetrate";
-
 for (const target of document.querySelectorAll("[data-icon]")) target.innerHTML = icons[target.dataset.icon] || "";
 const api = async (path, options = {}) => {
-  const response = await fetch(path, { credentials: "include", ...options, headers: { "content-type": "application/json", ...(options.headers || {}) } });
+  const response = await fetch(apiPath(path), { credentials: "include", ...options, headers: { "content-type": "application/json", ...(options.headers || {}) } });
   const payload = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(payload.error || "请求失败");
+  if (!response.ok) {
+    const error = new Error(payload.error || "请求失败");
+    // 服务端设置类故障：把结构化引导挂到 error 上，由调用方转成弹层而不是干巴巴的 toast
+    if (payload.setup) error.setup = payload.setup;
+    throw error;
+  }
   return payload;
 };
 // 登录态失效时自动走门户穿透重登（门户已登录前提下无感恢复会话）
@@ -56,6 +92,68 @@ const escapeHtml = value => String(value ?? "").replace(/[&<>'"]/g, char => ({ "
 const icon = name => icons[name] || "";
 const setBusy = (button, busy) => { if (button) button.disabled = busy; };
 function notify(message, error = false) { const toast = $("#toast"); toast.textContent = message; toast.className = `toast${error ? " error" : ""}`; clearTimeout(toastTimer); toastTimer = setTimeout(() => toast.classList.add("hidden"), 3600); }
+
+// ---- 服务端设置引导 ----
+// 设置类故障不能只弹 toast：用户看完就没了，也不知道去哪改。统一走弹层 + 「前往设置」。
+let setupDismissedCode = "";
+let currentSetup = null;
+function highlightSetupFields(fields) {
+  document.querySelectorAll(".s-focus").forEach(node => node.classList.remove("s-focus"));
+  if (!fields || !fields.length) return;
+  const form = $("#configForm");
+  for (const name of fields) {
+    const input = form && field(form, name);
+    const holder = input ? input.closest(".field") || input.closest(".switch-line") : null;
+    if (holder) holder.classList.add("s-focus");
+  }
+  const first = fields[0] && form && field(form, fields[0]);
+  if (first && typeof first.focus === "function" && activeView === "settings") {
+    first.focus({ preventScroll: false });
+  }
+}
+function showSetupDialog(setup) {
+  if (!setup || !setup.code) return false;
+  // 同一个故障码在用户点过「稍后处理」后不再反复弹（轮询每 3s 一次）
+  if (setupDismissedCode === setup.code) return false;
+  currentSetup = setup;
+  $("#setupTitle").textContent = setup.title || "服务端设置需要处理";
+  $("#setupMessage").textContent = setup.message || "";
+  $("#setupHint").textContent = setup.hint || "";
+  // 可重试的故障（端口不通/管理接口未就绪）后台仍在按设置自动重连，得说清楚，
+  // 否则用户会以为必须立刻改配置才能恢复。
+  const retryNote = $("#setupRetryNote");
+  if (retryNote) {
+    retryNote.textContent = setup.retryable ? "后台仍在按自动重连设置继续尝试恢复，如果是服务端临时重启，无需改动即可自动连回。" : "";
+    retryNote.classList.toggle("hidden", !setup.retryable);
+  }
+  $("#setupModal").classList.remove("hidden");
+  return true;
+}
+function hideSetupDialog() { $("#setupModal").classList.add("hidden"); }
+/** 统一错误出口：设置类故障走引导弹层，其余照旧 toast。 */
+function reportError(error) {
+  const setup = error && error.setup;
+  if (setup) {
+    // 用户显式触发的操作报错，无论此前是否 dismiss 过都要弹出来
+    setupDismissedCode = "";
+    if (showSetupDialog(setup)) return;
+  }
+  notify((error && error.message) || "请求失败", true);
+}
+$("#setupDismiss").addEventListener("click", () => {
+  setupDismissedCode = (currentSetup && currentSetup.code) || "";
+  hideSetupDialog();
+});
+$("#setupGoto").addEventListener("click", () => {
+  const fields = (currentSetup && currentSetup.fields) || [];
+  hideSetupDialog();
+  setupDismissedCode = (currentSetup && currentSetup.code) || "";
+  // 设置面板就在本应用内（门户设置中心的「隧道服务器设置」也是深链到这里），
+  // 直接切面板即可：既不重挂 iframe，也不依赖外壳额外的导航协议。
+  setView("settings");
+  window.scrollTo({ top: 0, behavior: "smooth" });
+  highlightSetupFields(fields);
+});
 function statusKey(tunnel) { return tunnel.runtimeStatus || tunnel.status || "new"; }
 function statusLabel(tunnel) { return labels[statusKey(tunnel)] || "新建"; }
 function routeLine(tunnel) { return tunnel.route || "等待服务端分配访问地址"; }
@@ -65,10 +163,12 @@ function bindSwitches(root = document) { root.querySelectorAll("[data-switch]").
 bindSwitches();
 
 async function load() {
-  const [status, savedTunnels, savedEvents, config] = await Promise.all([api("/api/status"), api("/api/tunnels"), api("/api/events"), api("/api/server-config")]);
+  const [status, savedTunnels, savedEvents, config, reconnect] = await Promise.all([api("/api/status"), api("/api/tunnels"), api("/api/events"), api("/api/server-config"), api("/api/reconnect")]);
   tunnels = savedTunnels; events = savedEvents; serverConfig = config || {};
   renderStatus(status); renderTunnels(); renderEvents();
   if (!configuredForm) { fillConfig(serverConfig); configuredForm = true; }
+  // 重连偏好独立存储，回填走它自己的接口（fillReconnect 内部会避让正在编辑的表单）
+  fillReconnect(reconnect);
 }
 function renderStatus(status) {
   lastStatus = status || lastStatus;
@@ -81,6 +181,54 @@ function renderStatus(status) {
     toggle.title = connected ? "断开" : "连接";
     toggle.classList.toggle("on", connected);
   }
+  renderReconnect(status);
+  // 后台自动重连撞上设置类故障时，前端轮询到就主动弹层引导（用户可能根本没在点按钮）
+  if (status.setup) showSetupDialog(status.setup);
+}
+
+/** 自动重连状态条：把「在重试 / 已停止重试 / 需要改配置」讲清楚。 */
+function renderReconnect(status) {
+  const box = $("#reconnectState");
+  if (!box) return;
+  const settings = status.reconnect || {};
+  const state = status.reconnectState || {};
+  if (!status.configured) { box.className = "reconnect-state"; box.textContent = "尚未配置服务器，自动重连暂不生效。"; return; }
+  if (!settings.enabled) { box.className = "reconnect-state"; box.textContent = "自动重连已关闭，断连后需手动点连接。"; return; }
+  const modeText = settings.mode === "restart" ? "直接重启" : "重新连接";
+  // reconnect + 有次数上限时是两段式：先重连 N 次，打满自动升级为重启再试 N 次
+  const twoPhase = settings.mode === "reconnect" && settings.maxAttempts > 0;
+  const base = `自动重连已开启：每 ${settings.intervalSeconds}s 检查一次，方式为${modeText}`
+    + (twoPhase ? `（连续失败 ${settings.maxAttempts} 次后自动升级为直接重启，再试 ${settings.maxAttempts} 次）` : "");
+  if (status.connected) {
+    box.className = "reconnect-state";
+    box.textContent = `${base}。当前连接正常。`;
+    return;
+  }
+  if (state.stoppedReason === "setup-required") {
+    box.className = "reconnect-state error";
+    box.textContent = `已暂停自动重连：失败原因属于服务端设置问题，重试无法修复，请先修正设置。${state.lastError ? `（${state.lastError}）` : ""}`;
+    return;
+  }
+  if (state.stoppedReason === "attempts-exhausted") {
+    box.className = "reconnect-state error";
+    box.textContent = twoPhase
+      ? `重新连接与直接重启各尝试 ${settings.maxAttempts} 次仍未恢复，自动重连已停止。手动点连接可重新开始。${state.lastError ? `（最近失败：${state.lastError}）` : ""}`
+      : `已达到最大尝试次数（${settings.maxAttempts} 次），自动重连停止。手动点连接可重新开始。${state.lastError ? `（最近失败：${state.lastError}）` : ""}`;
+    return;
+  }
+  if (!status.desiredConnected) {
+    box.className = "reconnect-state";
+    box.textContent = `${base}。当前为手动断开状态，不会自动拉起。`;
+    return;
+  }
+  const next = state.nextAttemptAt ? new Date(state.nextAttemptAt).toLocaleTimeString() : "—";
+  const escalated = state.phase === "escalated";
+  const ordinal = escalated ? (state.attempts || 0) - settings.maxAttempts : (state.attempts || 0);
+  const phaseText = escalated
+    ? `已升级为直接重启，本段已尝试 ${ordinal}/${settings.maxAttempts} 次`
+    : `已连续尝试 ${state.attempts || 0}${settings.maxAttempts > 0 ? `/${settings.maxAttempts}` : ""} 次`;
+  box.className = "reconnect-state warn";
+  box.textContent = `${base}。${phaseText}，下次尝试约在 ${next}。${state.lastError ? `最近失败：${state.lastError}` : ""}`;
 }
 function renderTunnels() {
   const target = $("#tunnelList");
@@ -114,6 +262,19 @@ function fillConfig(config) {
   const tls = field(form, "tlsEnabled");
   const control = form.querySelector('[data-switch="tlsEnabled"]');
   if (tls && control) setSwitch(control, tls.checked);
+}
+
+/** 回填自动重连表单。用户正在编辑时不覆盖，避免轮询把输入抢掉。 */
+function fillReconnect(settings) {
+  if (!settings) return;
+  const form = $("#reconnectForm");
+  if (!form || form.contains(document.activeElement)) return;
+  field(form, "intervalSeconds").value = settings.intervalSeconds;
+  field(form, "mode").value = settings.mode || "reconnect";
+  field(form, "maxAttempts").value = settings.maxAttempts ?? 0;
+  const enabled = settings.enabled !== false;
+  field(form, "reconnectEnabled").checked = enabled;
+  setSwitch(form.querySelector('[data-switch="reconnectEnabled"]'), enabled);
 }
 function beginPolling() { clearInterval(polling); polling = setInterval(() => load().catch(() => {}), 3000); }
 function setView(view) {
@@ -219,14 +380,36 @@ $("#loginForm").addEventListener("submit", async event => { event.preventDefault
   const meiView = new URLSearchParams(location.search).get("meiView");
   if (meiView === "settings" || meiView === "logs" || meiView === "tunnels") setView(meiView);
 }
-$("#configForm").addEventListener("submit", async event => { event.preventDefault(); const button = event.submitter; setBusy(button, true); try { await saveConfig(); } catch (error) { notify(error.message, true); } finally { setBusy(button, false); } });
-$("#saveAndConnectButton").addEventListener("click", async event => { setBusy(event.currentTarget, true); try { await saveConfig(true); } catch (error) { notify(error.message, true); } finally { setBusy(event.currentTarget, false); } });
+$("#configForm").addEventListener("submit", async event => { event.preventDefault(); const button = event.submitter; setBusy(button, true); try { await saveConfig(); } catch (error) { reportError(error); } finally { setBusy(button, false); } });
+$("#saveAndConnectButton").addEventListener("click", async event => { setBusy(event.currentTarget, true); try { await saveConfig(true); } catch (error) { reportError(error); } finally { setBusy(event.currentTarget, false); } });
+// 自动重连设置独立保存，不牵动服务器凭据字段
+$("#reconnectForm").addEventListener("submit", async event => {
+  event.preventDefault();
+  const form = event.target;
+  const button = event.submitter;
+  setBusy(button, true);
+  try {
+    await api("/api/reconnect", { method: "POST", body: JSON.stringify({
+      enabled: field(form, "reconnectEnabled").checked,
+      intervalSeconds: Number(formValue(form, "intervalSeconds")),
+      mode: formValue(form, "mode"),
+      maxAttempts: Number(formValue(form, "maxAttempts")) || 0,
+    }) });
+    notify("自动重连设置已保存");
+    await load();
+  } catch (error) { reportError(error); }
+  finally { setBusy(button, false); }
+});
 $("#fetchBootstrapButton").addEventListener("click", async event => {
   const result = $("#bootstrapResult"); setBusy(event.currentTarget, true);
   result.textContent = "正在拉取配置…"; result.className = "test-result";
   try {
     const info = await api("/api/bootstrap");
-    if (!info || info.error) throw new Error((info && info.error) || "拉取失败");
+    if (!info || info.error) {
+      const failure = new Error((info && info.error) || "拉取失败");
+      if (info && info.setup) failure.setup = info.setup;
+      throw failure;
+    }
     const form = $("#configForm");
     if (info.serverAddr) field(form, "serverAddr").value = info.serverAddr;
     if (info.serverPort) field(form, "serverPort").value = info.serverPort;
@@ -234,20 +417,25 @@ $("#fetchBootstrapButton").addEventListener("click", async event => {
     if (info.subDomainHost) field(form, "subDomainHost").value = info.subDomainHost;
     result.textContent = `已拉取：${info.serverAddr || "未设置"}:${info.serverPort}，子域名根域 ${info.subDomainHost || "未设置"}`;
     result.className = "test-result ok";
-  } catch (error) { result.textContent = `拉取失败：${error.message}`; result.className = "test-result error"; }
+  } catch (error) {
+    result.textContent = `拉取失败：${error.message}`;
+    result.className = "test-result error";
+    // 设置类根因（管理页地址/Token 未配或不对）直接引导，而不是只留一行红字
+    if (error.setup) reportError(error);
+  }
   finally { setBusy(event.currentTarget, false); }
 });
-$("#testConnectionButton").addEventListener("click", async event => { const result = $("#connectionTestResult"); setBusy(event.currentTarget, true); result.textContent = "正在测试连接…"; result.className = "test-result"; try { const form = $("#configForm"); const outcome = await api("/api/test-connection", { method: "POST", body: JSON.stringify({ addr: formValue(form, "serverAddr"), port: Number(formValue(form, "serverPort")) }) }); result.textContent = outcome.ok ? "服务器端口可连接" : `连接失败：${outcome.err || "未知错误"}`; result.className = `test-result ${outcome.ok ? "ok" : "error"}`; } catch (error) { result.textContent = `测试失败：${error.message}`; result.className = "test-result error"; } finally { setBusy(event.currentTarget, false); } });
+$("#testConnectionButton").addEventListener("click", async event => { const result = $("#connectionTestResult"); setBusy(event.currentTarget, true); result.textContent = "正在测试连接…"; result.className = "test-result"; try { const form = $("#configForm"); const outcome = await api("/api/test-connection", { method: "POST", body: JSON.stringify({ addr: formValue(form, "serverAddr"), port: Number(formValue(form, "serverPort")) }) }); result.textContent = outcome.ok ? "服务器端口可连接" : `连接失败：${outcome.err || "未知错误"}`; result.className = `test-result ${outcome.ok ? "ok" : "error"}`; } catch (error) { result.textContent = `测试失败：${error.message}`; result.className = "test-result error"; reportError(error); } finally { setBusy(event.currentTarget, false); } });
 $("#newTunnelButton").addEventListener("click", () => openTunnelDialog()); $("#closeTunnelDialog").addEventListener("click", closeTunnelDialog); $("#cancelTunnelButton").addEventListener("click", closeTunnelDialog);
 document.querySelectorAll('input[name="type"]').forEach(input => input.addEventListener("change", typeFields));
-$("#tunnelForm").addEventListener("submit", async event => { event.preventDefault(); const form = event.target; const button = $("#saveTunnelButton"); setBusy(button, true); try { const payload = tunnelPayload(form); const id = field(form, "id").value; await api(id ? `/api/tunnels/${encodeURIComponent(id)}` : "/api/tunnels", { method: id ? "PUT" : "POST", body: JSON.stringify(payload) }); closeTunnelDialog(); notify(id ? "隧道已更新" : "隧道已创建"); await load(); } catch (error) { notify(error.message, true); } finally { setBusy(button, false); } });
-$("#tunnelList").addEventListener("click", async event => { const action = event.target.closest("[data-edit],[data-toggle],[data-delete],[data-copy]"); if (!action) return; const id = action.dataset.edit || action.dataset.toggle || action.dataset.delete || action.dataset.copy; const tunnel = tunnels.find(item => item.id === id); if (!tunnel) return; try { if (action.dataset.edit) return openTunnelDialog(tunnel); if (action.dataset.copy) return copyText(tunnel.route || "", "访问地址已复制"); if (action.dataset.delete) { if (!confirm(`确定删除隧道“${tunnel.name}”吗？`)) return; await api(`/api/tunnels/${encodeURIComponent(tunnel.id)}`, { method: "DELETE" }); notify("隧道已删除"); } else { await api(`/api/tunnels/${encodeURIComponent(tunnel.id)}/toggle`, { method: "POST", body: JSON.stringify({ enabled: !tunnel.enabled }) }); notify(`隧道已${tunnel.enabled ? "停用" : "启用"}`); } await load(); } catch (error) { notify(error.message, true); } });
+$("#tunnelForm").addEventListener("submit", async event => { event.preventDefault(); const form = event.target; const button = $("#saveTunnelButton"); setBusy(button, true); try { const payload = tunnelPayload(form); const id = field(form, "id").value; await api(id ? `/api/tunnels/${encodeURIComponent(id)}` : "/api/tunnels", { method: id ? "PUT" : "POST", body: JSON.stringify(payload) }); closeTunnelDialog(); notify(id ? "隧道已更新" : "隧道已创建"); await load(); } catch (error) { if (error.setup) closeTunnelDialog(); reportError(error); } finally { setBusy(button, false); } });
+$("#tunnelList").addEventListener("click", async event => { const action = event.target.closest("[data-edit],[data-toggle],[data-delete],[data-copy]"); if (!action) return; const id = action.dataset.edit || action.dataset.toggle || action.dataset.delete || action.dataset.copy; const tunnel = tunnels.find(item => item.id === id); if (!tunnel) return; try { if (action.dataset.edit) return openTunnelDialog(tunnel); if (action.dataset.copy) return copyText(tunnel.route || "", "访问地址已复制"); if (action.dataset.delete) { if (!confirm(`确定删除隧道“${tunnel.name}”吗？`)) return; await api(`/api/tunnels/${encodeURIComponent(tunnel.id)}`, { method: "DELETE" }); notify("隧道已删除"); } else { await api(`/api/tunnels/${encodeURIComponent(tunnel.id)}/toggle`, { method: "POST", body: JSON.stringify({ enabled: !tunnel.enabled }) }); notify(`隧道已${tunnel.enabled ? "停用" : "启用"}`); } await load(); } catch (error) { reportError(error); } });
 // 左侧窄面板行动点（req：添加隧道 / 连接或断开 / 重启 / 退出 全部收敛到面板）
 let lastStatus = { connected: false, running: false, configured: false };
 async function controlAction(action, event, okMessage) {
   setBusy(event.currentTarget, true);
   try { await api(`/api/control/${action}`, { method: "POST" }); if (okMessage) notify(okMessage); await load(); }
-  catch (error) { notify(error.message, true); }
+  catch (error) { reportError(error); await load().catch(() => {}); }
   finally { setBusy(event.currentTarget, false); }
 }
 $("#panelAddTunnel").addEventListener("click", () => openTunnelDialog());
@@ -256,7 +444,7 @@ $("#panelToggle").addEventListener("click", async event => {
   const connected = lastStatus.connected || lastStatus.running;
   await controlAction(connected ? "stop" : "start", event);
 });
-$("#panelRestart").addEventListener("click", async event => { await controlAction("start", event, "隧道管理器已重启"); });
+$("#panelRestart").addEventListener("click", async event => { await controlAction("restart", event, "隧道管理器已重启"); });
 // 刷新登录态：登录态失效时手动触发门户穿透重登（替代原退出按钮）
 $("#panelRelogin").addEventListener("click", async event => {
   setBusy(event.currentTarget, true);
