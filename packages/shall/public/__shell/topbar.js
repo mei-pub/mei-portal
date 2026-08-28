@@ -60,6 +60,128 @@
   // 否则自愈循环会把顶栏重建到门户自研主页上，出现两套导航。
   var SUPPRESSED = false;
 
+  // 门户外壳文档（Next/React）由 layout 注入 __MEI_ROOT_DOMAIN__。
+  // 外壳自身不是「应用页面」：它只负责放胶囊和铺满的 iframe，不需要顶部内缩。
+  var IS_SHELL = typeof window.__MEI_ROOT_DOMAIN__ !== 'undefined';
+
+  // ---- 顶部空间契约（全应用唯一实现）------------------------------------
+  // 顶栏是悬浮玻璃胶囊，不参与文档流。顶部避让绝不能由「外壳挖一块留白」实现：
+  // 那块留白属于外壳文档，露出的是外壳底色，与应用自身背景（渐变 / 暖白 / 深色）
+  // 拼接出一条突兀色带，同时胶囊的 backdrop-filter 背后只有纯色，模糊完全失效。
+  //
+  // 统一设计：
+  //   1. 应用背景铺满整个视口（外壳 iframe 全屏，不再挖空、不再切圆角）；
+  //   2. 顶部避让改为「应用文档内部内缩」——body padding-top，背景随之延伸到胶囊下方；
+  //   3. body 强制 border-box，并补偿 100vh 类满高布局，避免内缩造成整页溢出；
+  //   4. 胶囊下方铺一层与底色无关的渐隐模糊 scrim，滚动内容自然融入胶囊而非生硬穿插。
+  var SPACE_EXPANDED = 74;
+  var SPACE_COLLAPSED = 30;
+
+  function spaceCss() {
+    return [
+      // 顶部内缩：变量挂 body，应用内部所有 calc 都可引用
+      'body{--mei-topbar-space:' + SPACE_EXPANDED + 'px;box-sizing:border-box !important;',
+      'padding-top:var(--mei-topbar-space) !important;transition:padding-top .25s ease;}',
+      'body.mei-topbar-collapsed{--mei-topbar-space:' + SPACE_COLLAPSED + 'px;}',
+      'html.mei-topbar-off body{--mei-topbar-space:0px;}',
+      // 满高布局补偿：body 自身靠 border-box 吃掉内缩（100vh 内含 padding，不溢出），
+      // 但**内层** 100vh 容器会在缩小后的内容区里再撑满一屏，多顶出一段空白滚动区。
+      '.min-h-screen{min-height:calc(100vh - var(--mei-topbar-space,0px)) !important;}',
+      '.h-screen{height:calc(100vh - var(--mei-topbar-space,0px)) !important;}',
+      '#root,#app,#__next{min-height:calc(100vh - var(--mei-topbar-space,0px));}',
+      // body 例外：它带 padding，border-box 下 100vh 已是正确总高，减一次会短一截
+      'body.min-h-screen{min-height:100vh !important;}',
+      'body.h-screen{height:100vh !important;}',
+      // 应用自身的 fixed 导航/浮层下移到胶囊下方（fixed 不受 body padding 影响）
+      'header[class*="fixed"],nav[class*="fixed"],aside[class*="fixed"],',
+      '[class*="Navbar"][class*="fixed"],[class*="navbar"][class*="fixed"],',
+      '[class*="Sidebar"][class*="fixed"],[class*="sidebar"][class*="fixed"],',
+      '[class*="header"][class*="fixed"],[class*="Header"][class*="fixed"]{top:var(--mei-topbar-space,0px) !important;}',
+      '[class*="toast"][class*="fixed"],[class*="Toast"][class*="fixed"],[class*="toast"][class*="absolute"],[class*="Toast"][class*="absolute"],',
+      '[class*="notification"][class*="fixed"],[class*="Notification"][class*="fixed"],',
+      '.sonner-toast-wrapper,[data-sonner-toaster],[role="region"][class*="fixed"]{top:var(--mei-topbar-space,0px) !important;}',
+      '[class*="toast"],[class*="Toast"],[class*="notification"],[class*="Notification"]{z-index:10000 !important;}',
+      // 渐隐模糊 scrim：只做 backdrop-filter + mask，不引入任何颜色，
+      // 因此深色/浅色/渐变背景都能自适应，不会像纯色遮罩那样撞色。
+      '#mei-topbar-scrim{position:fixed;top:0;left:0;right:0;z-index:9998;pointer-events:none;',
+      'height:calc(var(--mei-topbar-space,0px) + 18px);',
+      '-webkit-backdrop-filter:blur(14px) saturate(1.15);backdrop-filter:blur(14px) saturate(1.15);',
+      '-webkit-mask-image:linear-gradient(to bottom,#000 0,#000 55%,transparent 100%);',
+      'mask-image:linear-gradient(to bottom,#000 0,#000 55%,transparent 100%);',
+      'transition:height .25s ease;}',
+      'html.mei-topbar-off #mei-topbar-scrim{display:none;}',
+    ].join('');
+  }
+
+  function injectSpaceStyle() {
+    if (IS_SHELL) return; // 外壳文档不做顶部内缩：iframe 已全屏铺满
+    if (document.getElementById('mei-topbar-space-style')) return;
+    var s = document.createElement('style');
+    s.id = 'mei-topbar-space-style';
+    s.textContent = spaceCss();
+    (document.head || document.documentElement).appendChild(s);
+  }
+
+  function ensureScrim() {
+    if (IS_SHELL) return;
+    if (!document.body) return;
+    if (document.getElementById('mei-topbar-scrim')) return;
+    var el = document.createElement('div');
+    el.id = 'mei-topbar-scrim';
+    document.body.appendChild(el);
+  }
+
+  function mountSpace() {
+    injectSpaceStyle();
+    if (document.body) ensureScrim();
+    else document.addEventListener('DOMContentLoaded', ensureScrim, { once: true });
+  }
+
+  // 顶部空间的落地时机：
+  // - 嵌入模式（iframe 内的子应用）：不注入顶栏，但必须做顶部内缩 + scrim，
+  //   因为可见背景是它自己的，胶囊悬浮在它上方；空间大小由外壳广播。
+  // - 非嵌入且非外壳（子应用独立域名直访）：自己注入顶栏，同样需要内缩。
+  // - 外壳文档：iframe 全屏铺满，不内缩。
+  mountSpace();
+
+  // 外壳侧：把当前顶部空间形态广播给 iframe 里的子应用（它自己看不到顶栏）。
+  function broadcastSpace() {
+    var frames = document.querySelectorAll('iframe');
+    if (!frames.length) return;
+    var payload = {
+      source: 'mei-shell',
+      type: 'topbar-space',
+      collapsed: document.body ? document.body.classList.contains('mei-topbar-collapsed') : false,
+      off: document.documentElement.classList.contains('mei-topbar-off'),
+    };
+    for (var i = 0; i < frames.length; i++) {
+      try { frames[i].contentWindow.postMessage(payload, window.location.origin); } catch (e) {}
+    }
+  }
+  window.__meiBroadcastTopbarSpace = broadcastSpace;
+  window.addEventListener('message', function (ev) {
+    var d = (ev && ev.data) || {};
+    if (d.source === 'mei-iframe' && (d.type === 'topbar-space-request' || d.type === 'ready')) broadcastSpace();
+  });
+
+  // 外壳 → iframe 的形态广播：iframe 内没有顶栏，收起态只能靠外壳告知。
+  // 与 body class 语义一致，直接复用 mei-topbar-collapsed / mei-topbar-off。
+  if (EMBED) {
+    window.addEventListener('message', function (ev) {
+      var d = (ev && ev.data) || {};
+      if (d.source !== 'mei-shell' || d.type !== 'topbar-space') return;
+      if (!document.body) return;
+      document.body.classList.toggle('mei-topbar-collapsed', !!d.collapsed);
+      document.documentElement.classList.toggle('mei-topbar-off', !!d.off);
+    });
+    // 首帧主动索要一次，避免错过外壳早于 iframe 的广播
+    try {
+      if (window.parent && window.parent !== window) {
+        window.parent.postMessage({ source: 'mei-iframe', type: 'topbar-space-request' }, window.location.origin);
+      }
+    } catch (e) {}
+  }
+
   // ---- 主页内网模式开关（自研主页版：localStorage mei-lan-mode，自定义链接优先 lanUrl）----
   function isLanMode() {
     try { return localStorage.getItem('mei-lan-mode') === '1'; } catch (e) { return false; }
@@ -123,15 +245,8 @@
       'border:1px solid rgba(23,32,56,0.10);border-radius:999px;',
       'font-family:"Inter","Noto Sans SC","PingFang SC",sans-serif;font-size:13px;color:#1c2333;',
       'box-shadow:0 12px 36px rgba(23,32,56,0.16),0 2px 8px rgba(23,32,56,0.08),0 0 0 1px rgba(99,102,241,0.10),inset 0 1px 0 rgba(255,255,255,0.95) !important;}',
-      /* 应用 fixed 导航元素下移到胶囊下方 */
-      'header[class*="fixed"],nav[class*="fixed"],aside[class*="fixed"],',
-      '[class*="Navbar"][class*="fixed"],[class*="navbar"][class*="fixed"],',
-      '[class*="Sidebar"][class*="fixed"],[class*="sidebar"][class*="fixed"],',
-      '[class*="header"][class*="fixed"],[class*="Header"][class*="fixed"]{top:74px!important;}',
-      'body{padding-top:74px!important;--mei-topbar-space:74px;transition:padding-top .25s ease;}',
-      'body.mei-topbar-collapsed{padding-top:30px!important;--mei-topbar-space:30px;}',
-      /* 抑制态（返回门户自研主页）：注入顶栏隐藏，占位也必须归零 */
-      'html.mei-topbar-off body{padding-top:0!important;--mei-topbar-space:0px;}',
+      /* 顶部空间与 fixed 元素避让统一由 spaceCss() 提供（见「顶部空间契约」），
+         此处不得再写 body padding / --mei-topbar-space，否则外壳会挖出撞色留白 */
       /* 收起把手：贴顶居中的小渐变条 */
       '#mei-topbar-toggle{position:fixed;top:0;left:50%;transform:translateX(-50%);z-index:9999;height:22px;width:64px;',
       'border-radius:0 0 14px 14px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:#fff;',
@@ -149,11 +264,6 @@
       '#mei-topbar .mtb-collapse:hover{background:rgba(23,32,56,0.08);color:#1c2333;}',
       '#mei-topbar *{box-sizing:border-box;}',
       '#mei-topbar a{color:inherit;text-decoration:none;}',
-      /* Toast/notification 容器下移 */
-      '[class*="toast"][class*="fixed"],[class*="Toast"][class*="fixed"],[class*="toast"][class*="absolute"],[class*="Toast"][class*="absolute"],',
-      '[class*="notification"][class*="fixed"],[class*="Notification"][class*="fixed"],',
-      '.sonner-toast-wrapper,[data-sonner-toaster],[role="region"][class*="fixed"]{top:74px!important;}',
-      '[class*="toast"],[class*="Toast"],[class*="notification"],[class*="Notification"]{z-index:10000!important;}',
       '#mei-topbar .mtb-brand{display:flex;align-items:center;gap:8px;font-weight:700;font-size:13.5px !important;margin-right:6px;flex-shrink:0;color:#1c2333;white-space:nowrap;}',
       '#mei-topbar .mtb-logo{width:22px;height:22px;border-radius:7px;flex-shrink:0;',
       'background:linear-gradient(135deg,#6366f1 0%,#a855f7 55%,#ec4899 100%);',
@@ -415,6 +525,7 @@
       if (bar) bar.style.display = collapsed ? 'none' : 'flex';
       var toggle = document.getElementById('mei-topbar-toggle');
       if (toggle) toggle.style.display = !SUPPRESSED && collapsed ? 'flex' : 'none';
+      broadcastSpace();
     }
     function ensureToggle() {
       if (!mountReady()) return;
@@ -487,6 +598,7 @@
       SUPPRESSED = detail.suppressed !== false;
       document.documentElement.classList.toggle('mei-topbar-off', SUPPRESSED);
       ensureBar();
+      broadcastSpace();
     });
 
     // 拉取插件列表

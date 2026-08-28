@@ -104,7 +104,8 @@ img { display: block; }
 .mei-main {
   max-width: 1080px; margin: 0 auto;
   padding: 84px 24px calc(var(--playerbar-h) + 48px);
-  min-height: 100vh;
+  /* 门户承载时 body 已按 --mei-topbar-space 内缩，内层再撑满一屏会多顶出空白 */
+  min-height: calc(100vh - var(--mei-topbar-space, 0px));
 }
 .mei-main.wide { max-width: 1280px; }
 

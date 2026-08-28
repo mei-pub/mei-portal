@@ -138,8 +138,11 @@ export default function IframeHost({ url, name }: { url: string; name: string })
           width: '100%',
           height: '100%',
           border: 'none',
-          background: 'var(--mei-bg)',
-          borderRadius: 'var(--mei-radius)',
+          // 全屏铺满：圆角会在四角露出外壳底色，形成与应用背景不一致的缺口；
+          // 背景也交给应用自己（外壳底色一旦透出就是撞色）。
+          background: 'transparent',
+          borderRadius: 0,
+          display: 'block',
         }}
       />
       {error && (

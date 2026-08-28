@@ -120,8 +120,11 @@ export default function AppFrame() {
     );
   }
 
+  // iframe 全屏铺满，外壳不再为悬浮胶囊挖留白。
+  // 顶部避让改由 topbar.js 在子应用文档内部完成（body padding-top），
+  // 这样露在胶囊后面的是应用自己的背景，不会拼出一条外壳底色的色带。
   return (
-    <div style={{ position: 'fixed', inset: 0, paddingTop: 'var(--mei-topbar-space, 74px)', boxSizing: 'border-box' }}>
+    <div style={{ position: 'fixed', inset: 0 }}>
       {frameSrc ? (
         <IframeHost url={frameSrc} name={plugin?.name || appId} />
       ) : (

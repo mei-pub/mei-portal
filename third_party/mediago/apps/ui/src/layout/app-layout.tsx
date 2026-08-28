@@ -27,7 +27,8 @@ const App: FC = () => {
 
   return (
     <div
-      className="flex w-full flex-col overflow-hidden bg-[#F4F7FA] dark:bg-[#141415]"
+      // 底色已提到 body（见 globals.css）：这里保持透明，让 body 底色铺到门户胶囊下方
+      className="flex w-full flex-col overflow-hidden"
       style={{
         height: 'calc(100dvh - var(--mei-topbar-space, 0px))',
         maxHeight: 'calc(100dvh - var(--mei-topbar-space, 0px))',

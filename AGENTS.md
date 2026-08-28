@@ -20,6 +20,30 @@ mei-allin 是多应用聚合门户：`packages/shall` 为门户外壳，`third_p
 - 修改顶栏时必须保持作用域复位规则（`#mei-topbar *`）只作用于子元素，不得命中
   `#mei-topbar` 自身（否则会清掉顶栏自身的 padding/box-shadow）
 
+### 1.1 顶部空间契约（悬浮胶囊的避让方式）
+
+顶栏是**悬浮玻璃胶囊**（`position:fixed`），不参与文档流。顶部避让**禁止**由「门户外壳
+挖一块留白」实现：那块留白属于外壳文档，露出的是外壳底色，会与应用自身背景（渐变 /
+暖白 / 深色）拼出一条突兀色带，同时胶囊的 `backdrop-filter` 背后只有纯色，模糊失效。
+
+唯一实现在 `topbar.js` 的 `spaceCss()` / `mountSpace()` / `ensureScrim()`，规则：
+
+- 承载页 iframe **全屏铺满**（`AppFrame` 不加 paddingTop，`IframeHost` 不加圆角/底色）
+- 顶部避让在**应用文档内部**完成：`body{box-sizing:border-box;padding-top:var(--mei-topbar-space)}`，
+  应用背景因此自然延伸到胶囊下方
+- 空间大小只有两档：展开 74px、收起 30px；抑制态（门户自研主页）为 0 且不注入
+- 内层 100vh 容器必须减去 `--mei-topbar-space`（`.min-h-screen` / `.h-screen` / `#root`
+  已由 `spaceCss()` 兜底；应用自定义类名需自己引用该变量，如 solara `.mei-main`）
+- 胶囊下方由 `#mei-topbar-scrim` 提供**渐隐模糊**过渡：只有 `backdrop-filter` + `mask`，
+  **不得引入任何颜色**，否则深色/浅色/渐变背景必然撞色
+- iframe 内子应用看不到顶栏，收起态由外壳经 `postMessage`（`{source:'mei-shell',
+  type:'topbar-space'}`）广播，子应用侧回写 `body.mei-topbar-collapsed`
+- 应用**底色必须挂在 `body`（或 `fixed inset:0` 的背景层）**，不能只挂在内层容器上，
+  否则胶囊背后会露出白底（mediago 曾因底色写在内层 div 上出现此问题）
+
+违规判定：应用页面顶部出现与自身背景不一致的横向色带；或顶部内缩后页面底部多出一段
+空白滚动区（内层 100vh 未减去 `--mei-topbar-space`）。
+
 ### 2. 左侧面板（应用内导航）
 
 每个带应用内导航的子应用必须提供"标准左侧面板"，组件结构由两部分数据驱动：
