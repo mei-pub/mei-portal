@@ -38,14 +38,6 @@ interface SystemSettings {
   logoColor?: string;
   useLocalDrawio?: boolean;
   drawioBaseUrl?: string;
-  notifications?: {
-    homepage?: string;
-    homepageEnabled?: boolean;
-    homepageAnnouncement?: string;
-    homepageAnnouncementEnabled?: boolean;
-    editor?: string;
-    editorEnabled?: boolean;
-  };
 }
 interface AdminSettings { ai?: { provider?: string; baseUrl?: string; apiKey?: string; modelId?: string }; system?: SystemSettings }
 
