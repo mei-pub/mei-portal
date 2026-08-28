@@ -35,16 +35,33 @@ function samePath(a: string, b: string): boolean {
   return strip(a) === strip(b);
 }
 
+/** 同时保活的 iframe 上限：超过后淘汰最久未访问的那个（当前应用永不淘汰） */
+const MAX_LIVE_FRAMES = 4;
+
 export default function AppFrame() {
   const searchParams = useSearchParams();
   const appId = searchParams.get('app') || '';
   const rawPath = searchParams.get('path') || '';
   const [plugins, setPlugins] = useState<Plugin[]>([]);
-  const [frameSrc, setFrameSrc] = useState('');
   const scriptRef = useRef<HTMLScriptElement | null>(null);
+  // 已经打开过的应用：保留各自的 iframe，切回时直接显示，不重新加载。
+  // 只记录「首次进入该应用时的 src」，后续同应用内的路径变化由子应用自己的路由处理，
+  // 否则每次回写 URL 都会换 src、把 iframe 打回重新加载。
+  const [mounted, setMounted] = useState<Array<{ appId: string; src: string }>>([]);
+  // 访问顺序（LRU 淘汰用）。不能靠给 mounted 排序来表达顺序：
+  // 数组顺序变化会让 React 搬动 DOM 节点，iframe 一被移动就会重新加载。
+  const orderRef = useRef<string[]>([]);
+  // 上一次「路由级」导航目标，用于区分真实跳转与 URL 回写
+  const navKeyRef = useRef('');
 
   const plugin = plugins.find((p) => p.id === appId) || null;
   const targetPath = rawPath || plugin?.url || '';
+  // src 直接由当前 URL 推导，不经过 state：
+  // 走 state 的话，同一轮渲染里保活列表读到的还是上一个应用的 src，
+  // 新挂的 iframe 会装错应用（表现为切到 B 却加载出 A）。
+  const desiredSrc = targetPath ? embedUrl(targetPath) : '';
+  const pluginsRef = useRef<Plugin[]>([]);
+  pluginsRef.current = plugins;
 
   useEffect(() => {
     fetch('/api/plugins', { credentials: 'include' })
@@ -53,11 +70,69 @@ export default function AppFrame() {
       .catch(() => setPlugins([]));
   }, []);
 
-  // iframe src 只在目标应用/路径真正变化时更新，避免重挂导致子应用状态丢失
+  // 维护保活列表：当前应用没挂过就追加一个 iframe，挂过则复用现有的
   useEffect(() => {
-    if (!targetPath) return;
-    setFrameSrc((prev) => (prev && samePath(prev, embedUrl(targetPath)) ? prev : embedUrl(targetPath)));
-  }, [targetPath]);
+    if (!appId || !desiredSrc) return;
+    orderRef.current = [...orderRef.current.filter((a) => a !== appId), appId];
+    setMounted((prev) => {
+      if (prev.some((m) => m.appId === appId)) return prev;
+      const next = [...prev, { appId, src: desiredSrc }];
+      if (next.length <= MAX_LIVE_FRAMES) return next;
+      // 按访问顺序淘汰最久未用的（当前应用除外），避免无限堆积后台 iframe
+      const victim = orderRef.current.find((a) => a !== appId && next.some((m) => m.appId === a));
+      return victim ? next.filter((m) => m.appId !== victim) : next;
+    });
+  }, [appId, desiredSrc]);
+
+  // 深链跳转：目标应用已在保活列表里时，把它的 iframe 导到请求的路径。
+  // 顶栏切换应用给的是应用根路径，这种情况只切显示、不打断该应用的现场
+  // （否则保活就没意义了：每次切回都把应用打回首页并重启一遍）。
+  useEffect(() => {
+    if (!appId || !desiredSrc) return;
+    const key = `${appId}|${desiredSrc}`;
+    if (navKeyRef.current === key) return;
+    navKeyRef.current = key;
+    if (!rawPath) return;
+    const rootPath = plugin?.url || '';
+    if (rootPath && samePath(rawPath, rootPath)) return;
+    const frame = document.querySelector<HTMLIFrameElement>(`iframe[data-mei-app="${appId}"]`);
+    if (!frame) return; // 首次挂载：src 已经是目标路径
+    try {
+      const loc = frame.contentWindow?.location;
+      if (!loc) return;
+      if (samePath(`${loc.pathname}${loc.hash}`, rawPath)) return;
+      loc.replace(desiredSrc);
+    } catch {
+      /* 跨域应用：忽略 */
+    }
+  }, [appId, desiredSrc, rawPath, plugin?.url]);
+
+  // 预热：顶栏按钮悬停时提前挂目标应用的隐藏 iframe。
+  // 用户真正点击时资源已在下载或已就绪，切换接近瞬时。
+  // 只挂应用根路径（悬停时还不知道用户要去哪个内页），后续深链由上面的 effect 导航。
+  useEffect(() => {
+    function onMsg(ev: MessageEvent) {
+      const d = ev.data || {};
+      if (d.source !== 'mei-topbar' || d.type !== 'prefetch-app') return;
+      const id = String(d.app || '');
+      if (!id || id === appId) return;
+      const target = pluginsRef.current.find((p) => p.id === id);
+      if (!target?.url || /^https?:\/\//i.test(target.url)) return;
+      const src = embedUrl(target.url);
+      setMounted((prev) => {
+        if (prev.some((m) => m.appId === id)) return prev;
+        // 预热不进 orderRef：没被真正访问过的应用应当最先被淘汰
+        const next = [...prev, { appId: id, src }];
+        if (next.length <= MAX_LIVE_FRAMES) return next;
+        const victim =
+          next.find((m) => m.appId !== appId && m.appId !== id && !orderRef.current.includes(m.appId))?.appId ||
+          orderRef.current.find((a) => a !== appId && next.some((m) => m.appId === a));
+        return victim ? next.filter((m) => m.appId !== victim) : next;
+      });
+    }
+    window.addEventListener('message', onMsg);
+    return () => window.removeEventListener('message', onMsg);
+  }, [appId]);
 
   // 顶栏注入（唯一样式来源），data-app 随应用切换刷新高亮。
   // topbar.js 自带单例保护（window.__meiTopbar），二次挂载不会重新执行，
@@ -90,13 +165,15 @@ export default function AppFrame() {
 
   // 子应用内部导航（hash 路由等）回写到外层 URL，保证刷新/分享可复原
   useEffect(() => {
-    if (!frameSrc) return;
+    if (!appId) return;
     const timer = setInterval(() => {
-      const frame = document.querySelector('iframe');
+      // 保活模式下页面里有多个 iframe，必须取当前应用那一个，
+      // 否则会把后台应用的路径回写到地址栏。
+      const frame = document.querySelector<HTMLIFrameElement>(`iframe[data-mei-app="${appId}"]`);
       if (!frame) return;
       let inner = '';
       try {
-        const loc = (frame as HTMLIFrameElement).contentWindow?.location;
+        const loc = frame.contentWindow?.location;
         if (!loc) return;
         inner = `${loc.pathname}${loc.hash}`;
       } catch {
@@ -110,7 +187,7 @@ export default function AppFrame() {
       }
     }, 1200);
     return () => clearInterval(timer);
-  }, [frameSrc, appId]);
+  }, [appId]);
 
   if (!appId) {
     return (
@@ -125,11 +202,35 @@ export default function AppFrame() {
   // 这样露在胶囊后面的是应用自己的背景，不会拼出一条外壳底色的色带。
   return (
     <div style={{ position: 'fixed', inset: 0 }}>
-      {frameSrc ? (
-        <IframeHost url={frameSrc} name={plugin?.name || appId} />
-      ) : (
+      {mounted.length === 0 && (
         <div style={{ padding: 80, textAlign: 'center', color: 'var(--mei-text-muted)' }}>正在准备应用…</div>
       )}
+      {/* 保活：每个访问过的应用各占一个常驻 iframe，只切换显示，不卸载。
+          切回已加载过的应用因此是瞬时的，不再重跑一遍应用启动。 */}
+      {mounted.map((m) => {
+        const active = m.appId === appId;
+        return (
+          <div
+            key={m.appId}
+            style={{
+              position: 'absolute',
+              inset: 0,
+              // 用 visibility 而非 display:none：display 变化会让部分应用重排/丢掉
+              // 滚动位置，visibility + zIndex 能完整保留后台应用的渲染状态
+              visibility: active ? 'visible' : 'hidden',
+              zIndex: active ? 1 : 0,
+              pointerEvents: active ? 'auto' : 'none',
+            }}
+            aria-hidden={!active}
+          >
+            <IframeHost
+              url={m.src}
+              appId={m.appId}
+              name={plugins.find((p) => p.id === m.appId)?.name || m.appId}
+            />
+          </div>
+        );
+      })}
     </div>
   );
 }

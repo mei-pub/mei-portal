@@ -1,9 +1,12 @@
 'use client';
 // iframe 宿主 —— 嵌入上游应用，全屏占满主区
-// 8 秒仍未完成加载（onLoad 未触发）时，解除全屏 loading 改为顶部非阻断提示条
+//
+// 加载态刻意做成「非阻断」：早期版本用全屏遮罩盖住 iframe，应用其实已经在逐步渲染，
+// 却要等 onLoad 才揭开，观感上就是好几秒白屏。现在只在顶部走一条细进度条，
+// 应用内容边加载边显示；只有久久不出内容时才升级为可重试的提示条。
 import { useEffect, useRef, useState } from 'react';
 
-export default function IframeHost({ url, name }: { url: string; name: string }) {
+export default function IframeHost({ url, name, appId }: { url: string; name: string; appId?: string }) {
   const ref = useRef<HTMLIFrameElement>(null);
   // 本次加载是否已完成（onLoad 或 ready postMessage 任一先到即算完成）
   const loadedRef = useRef(false);
@@ -20,7 +23,6 @@ export default function IframeHost({ url, name }: { url: string; name: string })
     const t = setTimeout(() => {
       // 仅在确实未完成加载时提示（已完成则什么都不做）
       if (!loadedRef.current) {
-        setLoading(false);
         setSlow(true);
       }
     }, 8000);
@@ -44,49 +46,40 @@ export default function IframeHost({ url, name }: { url: string; name: string })
   return (
     <div style={{ position: 'relative', width: '100%', height: '100%' }}>
       {loading && (
-        <div
-          style={{
-            position: 'absolute',
-            inset: 0,
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: 12,
-            color: 'var(--mei-text-muted)',
-            zIndex: 1,
-            background: 'var(--mei-bg)',
-          }}
-        >
-          <div
-            style={{
-              width: 36,
-              height: 36,
-              borderRadius: '50%',
-              border: '3px solid var(--mei-border)',
-              borderTopColor: 'var(--mei-primary)',
-              animation: 'mei-spin 0.8s linear infinite',
-            }}
-          />
-          <div>正在加载 {name}…</div>
-          <a
-            href={url}
-            target="_blank"
-            rel="noreferrer"
-            style={{ fontSize: 12, color: 'var(--mei-primary-soft)' }}
-          >
-            在新窗口打开 ↗
-          </a>
-        </div>
-      )}
-      {slow && !loading && (
+        // 顶部细进度条：不遮挡 iframe，应用可以边加载边显示内容。
+        // 宽度用动画持续推进但永远不到 100%，加载完成即整体消失。
         <div
           style={{
             position: 'absolute',
             top: 0,
             left: 0,
             right: 0,
-            zIndex: 1,
+            height: 2,
+            zIndex: 2,
+            overflow: 'hidden',
+            pointerEvents: 'none',
+            background: 'transparent',
+          }}
+          role="progressbar"
+          aria-label={`正在加载 ${name}`}
+        >
+          <div
+            style={{
+              height: '100%',
+              background: 'var(--mei-primary)',
+              animation: 'mei-load-bar 2.4s ease-out forwards',
+            }}
+          />
+        </div>
+      )}
+      {slow && (
+        <div
+          style={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            right: 0,
+            zIndex: 3,
             padding: '6px 12px',
             fontSize: 12,
             color: 'var(--mei-text-muted)',
@@ -127,6 +120,7 @@ export default function IframeHost({ url, name }: { url: string; name: string })
         ref={ref}
         src={url}
         title={name}
+        data-mei-app={appId}
         onLoad={() => {
           loadedRef.current = true;
           setLoading(false);
@@ -159,7 +153,10 @@ export default function IframeHost({ url, name }: { url: string; name: string })
           加载失败，请检查应用是否已启动
         </div>
       )}
-      <style>{`@keyframes mei-spin{to{transform:rotate(360deg)}}`}</style>
+      <style>{`@keyframes mei-spin{to{transform:rotate(360deg)}}
+/* 进度条推进曲线：先快后慢，停在 92% 等真正加载完成后整条消失，
+   避免「跑到 100% 却还没好」的割裂感 */
+@keyframes mei-load-bar{0%{width:0}18%{width:38%}55%{width:72%}100%{width:92%}}`}</style>
     </div>
   );
 }

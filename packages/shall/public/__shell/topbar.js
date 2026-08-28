@@ -182,6 +182,36 @@
     } catch (e) {}
   }
 
+  // ---- 应用预热 ----
+  // 观感上「点了好几秒才打开」的大头是点击之后才开始下载整套应用资源。
+  // 顶栏按钮悬停/按下即通知外壳提前挂一个隐藏 iframe 开始加载，
+  // 真正点击时资源多半已就位，切换接近瞬时。
+  // 顶栏可能运行在 iframe 内（子应用独立注入），因此统一往父窗口发消息；
+  // 外壳自身注入时 parent === window，同一个监听器也能收到。
+  function requestPrefetch(appId) {
+    if (!appId) return;
+    var payload = { source: 'mei-topbar', type: 'prefetch-app', app: appId };
+    try { window.postMessage(payload, window.location.origin); } catch (e) {}
+    try {
+      if (window.parent && window.parent !== window) {
+        window.parent.postMessage(payload, window.location.origin);
+      }
+    } catch (e) {}
+  }
+  var prefetched = {};
+  function attachPrefetch(el, appId) {
+    if (!el || !appId) return;
+    function fire() {
+      if (prefetched[appId]) return;
+      prefetched[appId] = true;
+      requestPrefetch(appId);
+    }
+    // pointerenter 覆盖鼠标；touchstart / focus 覆盖触屏与键盘
+    el.addEventListener('pointerenter', fire);
+    el.addEventListener('touchstart', fire, { passive: true });
+    el.addEventListener('focus', fire);
+  }
+
   // ---- 主页内网模式开关（自研主页版：localStorage mei-lan-mode，自定义链接优先 lanUrl）----
   function isLanMode() {
     try { return localStorage.getItem('mei-lan-mode') === '1'; } catch (e) { return false; }
@@ -400,6 +430,7 @@
         b.href = normalizeBuiltinUrl(p.url);
         b.textContent = p.name;
         b.title = p.name;
+        if (!isActive) attachPrefetch(b, p.id);
         appLinks[p.id] = b;
         apps.appendChild(b);
       });

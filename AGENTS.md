@@ -166,3 +166,67 @@ mei-allin 是多应用聚合门户：`packages/shall` 为门户外壳，`third_p
 
 违规判定：隧道操作失败只弹英文 toast；服务端重启后隧道不能自动连回；状态长期显示
 「已连接」但实际不通；日志里同一条重连提示反复刷屏。
+
+## 应用切换性能：iframe 保活、预热与静态缓存
+
+承载页 `/app?app=<id>&path=<路径>` 走客户端路由（外壳不卸载，音乐才能连续播放）。
+「点了好几秒才打开」的根因有三个，各自的修法都不能退化：
+
+### 1. iframe 保活（`AppFrame.tsx`）
+
+访问过的应用各自保留一个常驻 iframe，切换只改显示，不卸载。
+
+- 保活列表**只记首次进入的 src**。URL 回写会不断改写 `path`，跟着换 src 会把 iframe
+  打回重新加载，保活失效
+- iframe 的 src 必须由**当前 URL 直接推导**，不能经过 `useState`：走 state 的话同一轮
+  渲染里保活列表读到的还是上一个应用的 src，新挂的 iframe 会装错应用（切到 B 却出 A）
+- 显隐用 `visibility` + `zIndex` + `pointerEvents`，**不能用 `display:none`**：display
+  变化会让部分应用重排并丢掉滚动位置
+- 访问顺序存独立的 `orderRef`，**不得靠给 `mounted` 排序来表达 LRU**：数组顺序一变
+  React 就会搬动 DOM 节点，iframe 被移动即重新加载
+- 上限 `MAX_LIVE_FRAMES`，淘汰最久未访问的；当前应用永不淘汰；预热但未真正访问过的
+  应用最先被淘汰
+- 顶栏切应用给的是应用根路径，这种情况**只切显示、不导航**，否则每次切回都把应用打回
+  首页重启一遍。只有深链（`path` 不等于应用根路径）才 `location.replace`
+- URL 回写必须按 `iframe[data-mei-app="<id>"]` 定位，`querySelector('iframe')` 会把
+  后台应用的路径写进地址栏
+
+### 2. 加载态必须非阻断
+
+应用其实在逐步渲染，全屏遮罩盖到 `onLoad` 才揭开，观感就是好几秒白屏。
+
+- `IframeHost` 只允许顶部 2px 细进度条（`pointerEvents:none`），进度停在 92% 等真正
+  `onLoad` 后整条消失，禁止全屏 loading 遮罩
+- 8s 超时只升级为可重试提示条，不得据此判定加载失败
+
+### 3. 预热（`topbar.js` + `AppFrame.tsx`）
+
+顶栏应用按钮 `pointerenter` / `touchstart` / `focus` 即广播
+`{source:'mei-topbar', type:'prefetch-app', app}`，外壳提前挂隐藏 iframe 开始加载。
+顶栏可能运行在 iframe 内，因此同时发给 `window` 与 `window.parent`。预热只挂应用根
+路径（悬停时还不知道目标内页），每个应用只触发一次。
+
+### 4. 静态资源缓存（`nginx.conf` + `snippets/cache-policy.conf`）
+
+上游普遍下发 `Cache-Control: public, max-age=0` 且无 ETag，公网 + 端口映射下单次往返
+约 0.25s，十来个资源串起来就是好几秒。策略由 `map $uri $mei_static_cache` 派生，
+`map $mei_static_cache $mei_cache_control` 在未命中时回填 `$upstream_http_cache_control`
+（HTML 的 no-store、API 的 private、音频代理的 range 语义因此不受影响）。
+
+四条禁忌，都踩过：
+
+- 不能只在 server 级写 `proxy_hide_header` / `add_header`：两者**都不跨层级继承**，
+  只要 location 自己写了同名指令（`/music/`、`/tv` 都有 `proxy_hide_header
+  X-Frame-Options`），server 级整份列表被覆盖，响应里出现两条 Cache-Control，浏览器
+  取更严格的那条，缓存等于没加。必须在每个这样的 location 里 `include
+  snippets/cache-policy.conf`
+- 不能加静态资源的**正则 location**：正则优先级高于前缀，会抢走各应用 location 并丢掉
+  它们的 `proxy_pass` / `sub_filter`（sub_filter 也作用于 JS/CSS 做子路径改写）
+- map 的 `default` 不能设 `no-store`：会打到 `/music/proxy` 音频代理流上，干扰 range
+  请求与播放缓冲
+- 含 `{n,}` 量词的 map 正则必须整体加引号，否则 nginx 把 `{` 当块起始，直接拒绝启动
+- `alias` 静态 location（`/tools/`、`/draw/`、`/search/`）由 nginx 自己发头，没有上游
+  头可隐藏，直接 `add_header Cache-Control $mei_cache_control` 即可
+
+违规判定：切回访问过的应用仍出现完整重载（白屏 + 应用重启）；切换应用时装载出上一个
+应用的内容；静态资源响应里出现两条 Cache-Control；顶栏切应用把应用打回首页。
