@@ -13,17 +13,19 @@ export function SettingsTabs({
   onChange: (id: string) => void;
 }) {
   return (
-    <div className="mei-tabs">
-      {items.map((item) => (
-        <button
-          key={item.id}
-          className={active === item.id ? 'active' : ''}
-          onClick={() => onChange(item.id)}
-        >
-          {item.icon ? <MeiIcon icon={item.icon} size={14} /> : null}
-          <span>{item.label}</span>
-        </button>
-      ))}
+    <div className="mei-page-tab-content">
+      <div className="mei-tabs">
+        {items.map((item) => (
+          <button
+            key={item.id}
+            className={active === item.id ? 'active' : ''}
+            onClick={() => onChange(item.id)}
+          >
+            {item.icon ? <MeiIcon icon={item.icon} size={14} /> : null}
+            <span>{item.label}</span>
+          </button>
+        ))}
+      </div>
     </div>
   );
 }
@@ -33,12 +35,14 @@ export function SettingsPage({
   title,
   description,
   actions,
+  tabs,
   children,
 }: {
   icon: string;
   title: string;
   description?: string;
   actions?: ReactNode;
+  tabs?: ReactNode;
   children: ReactNode;
 }) {
   return (
@@ -55,6 +59,7 @@ export function SettingsPage({
         </div>
         {actions ? <div className="mei-page-actions">{actions}</div> : null}
       </header>
+      {tabs ? <div className="mei-page-tabs">{tabs}</div> : null}
       <div className="mei-page-body">{children}</div>
     </div>
   );
@@ -169,12 +174,14 @@ export const settingsUiStyles = `
 .mei-page-icon{width:44px;height:44px;border-radius:15px;display:inline-flex;align-items:center;justify-content:center;color:#fff;background:linear-gradient(140deg,#6366f1,#8b5cf6 55%,#0ea5e9);box-shadow:0 12px 28px rgba(79,70,229,.22);}
 .mei-page-title h1{margin:0;font-size:24px;letter-spacing:-.5px;font-weight:850;}
 .mei-page-title p{margin:3px 0 0;font-size:12.5px;color:var(--mei-text-muted);}
-.mei-page-actions{display:flex;gap:8px;flex-shrink:0;}
+.mei-page-actions{display:flex;gap:8px;flex-shrink:0;align-items:center;}
+.mei-page-tabs{margin-bottom:16px;}
 .mei-page-body{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;align-items:start;}
+.mei-page-body:has(.mei-page-tab-content){grid-template-columns:1fr;}
 .mei-tabs{display:flex;gap:4px;padding:4px;background:rgba(255,255,255,.6);border:1px solid var(--mei-border);border-radius:14px;margin-bottom:18px;box-shadow:var(--mei-shadow-sm);overflow-x:auto;backdrop-filter:blur(12px);}
 .mei-tabs button{display:inline-flex;align-items:center;gap:7px;height:36px;padding:0 16px;border:none;border-radius:11px;background:transparent;font-size:12.5px;font-weight:700;color:var(--mei-text-muted);cursor:pointer;white-space:nowrap;transition:var(--mei-transition);}
 .mei-tabs button:hover{background:rgba(99,102,241,.06);color:var(--mei-primary);}
-.mei-tabs button.active{background:var(--mei-gradient-soft);color:var(--mei-primary);font-weight:800;}
+.mei-tabs button.active{background:linear-gradient(135deg,rgba(99,102,241,.14),rgba(139,92,246,.1));color:var(--mei-primary);font-weight:800;box-shadow:0 2px 8px rgba(99,102,241,.1);}
 .mei-section{background:rgba(255,255,255,.74);border:1px solid rgba(255,255,255,.82);border-radius:20px;padding:18px;box-shadow:var(--mei-shadow-sm);backdrop-filter:blur(18px);min-width:0;}
 .mei-section.wide{grid-column:1/-1;}
 .mei-section-head{display:flex;justify-content:space-between;gap:14px;margin-bottom:15px;}

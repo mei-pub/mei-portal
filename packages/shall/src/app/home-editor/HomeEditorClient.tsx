@@ -98,10 +98,10 @@ export default function HomeEditorClient() {
           </SettingsButton>
         </>
       }
+      tabs={<SettingsTabs items={tabs} active={tab} onChange={(id) => setTab(id as Tab)} />}
     >
       {error ? <EmptyState title={error} /> : null}
       {message ? <EmptyState title={message} /> : null}
-      <SettingsTabs items={tabs} active={tab} onChange={(id) => setTab(id as Tab)} />
       <div className="home-editor-content">
         {tab === 'style' && <StyleTab config={config} update={update} />}
         {tab === 'groups' && <GroupsTab config={config} update={update} />}

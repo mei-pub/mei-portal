@@ -12,15 +12,17 @@ export default function TvCombined() {
       icon="lucide:tv"
       title="影视设置"
       description="搜索偏好、播放优化与影视源管理。"
+      tabs={
+        <SettingsTabs
+          items={[
+            { id: 'settings', label: '基础设置', icon: 'lucide:settings' },
+            { id: 'sources', label: '影视源', icon: 'lucide:database' },
+          ]}
+          active={tab}
+          onChange={setTab}
+        />
+      }
     >
-      <SettingsTabs
-        items={[
-          { id: 'settings', label: '基础设置', icon: 'lucide:settings' },
-          { id: 'sources', label: '影视源', icon: 'lucide:database' },
-        ]}
-        active={tab}
-        onChange={setTab}
-      />
       {tab === 'settings' ? <TvSettings /> : <TvSources />}
     </SettingsPage>
   );
