@@ -51,20 +51,20 @@ export default function MediagoSettings() {
     void load();
   }, []);
 
-  async function save(key: keyof MediagoConfig) {
+  async function save(key: keyof MediagoConfig, silent = false) {
     setSavingKey(key);
-    setMessage('');
+    if (!silent) setMessage('');
     setError('');
     try {
       const d = await authorizedJsonFetch<Wrapped<{ message?: string }>>(`/media/api/config/${key}`, 'mediago', {
         method: 'PUT',
         body: JSON.stringify({ value: config[key] }),
       });
-      setMessage(d.data?.message || `${key} 已保存`);
+      if (!silent) setMessage(d.data?.message || `${key} 已保存`);
       return true;
     } catch (err) {
       setError((err as Error).message || '保存失败');
-      await load();
+      // 失败时不回拉整份配置，避免覆盖用户正在编辑的其他字段
       return false;
     } finally {
       setSavingKey('');
@@ -76,9 +76,10 @@ export default function MediagoSettings() {
     setError('');
     const keys: Array<keyof MediagoConfig> = ['local', 'proxy', 'maxRunner', 'downloadProxySwitch', 'deleteSegments'];
     for (const key of keys) {
-      const ok = await save(key);
-      if (!ok) break;
+      const ok = await save(key, true);
+      if (!ok) return;
     }
+    setMessage('全部设置已保存');
   }
 
   const fields: Array<{ key: keyof MediagoConfig; label: string; hint?: string; type?: 'text' | 'number' }> = [
@@ -135,9 +136,7 @@ export default function MediagoSettings() {
       </StickyBar>
 
       <style>{`
-        .field-save{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;}
         .toggle-stack{display:flex;flex-direction:column;gap:10px;}
-        .footer-actions{display:flex;justify-content:flex-end;gap:9px;margin-top:12px;flex-wrap:wrap;}
       `}</style>
     </SettingsPage>
   );

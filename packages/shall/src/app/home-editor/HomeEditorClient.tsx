@@ -13,7 +13,7 @@ import {
   TextInput,
   Toggle,
 } from '@/components/SettingsUI';
-import { Alert, FileInput, StickyBar } from '@/components/SettingsUI';
+import { Alert, FileInput } from '@/components/SettingsUI';
 import type { PanelConfig, PanelGroup } from '@/lib/panel-store';
 import { PRESET_GROUP_IDS } from '@/lib/panel-presets';
 
@@ -78,7 +78,7 @@ export default function HomeEditorClient() {
   }
 
   if (loading || !config) {
-    return <EmptyState title="正在读取主页配置…" description="首次加载可能需要几秒钟。" />;
+    return <EmptyState title="正在读取主页配置…" />;
   }
 
   const tabs: Array<{ id: Tab; label: string; icon: string }> = [
@@ -275,7 +275,7 @@ function GroupsTab({ config, update }: { config: PanelConfig; update: (c: PanelC
       title="分组管理"
       description="拖动行排序；内置分组由系统维护，不可删除。"
     >
-      <div className="channel-add" style={{ marginBottom: 12 }}>
+      <div className="mei-channel-add" style={{ marginBottom: 12 }}>
         <TextInput value={name} onChange={(e) => setName(e.target.value)} placeholder="新分组名称" onKeyDown={(e) => e.key === 'Enter' && addGroup()} />
         <SettingsButton variant="primary" onClick={addGroup}>添加分组</SettingsButton>
       </div>
@@ -330,7 +330,7 @@ function GroupsTab({ config, update }: { config: PanelConfig; update: (c: PanelC
           })}
         </div>
       )}
-      <style>{`.source-stack{display:flex;flex-direction:column;gap:8px;}`}</style>
+      <style>{``}</style>
     </SettingsSection>
   );
 }
@@ -399,11 +399,11 @@ function BackupTab({ config, reload }: { config: PanelConfig; reload: () => void
     <>
       <SettingsSection title="本地备份" description="导出或导入完整 JSON 配置。">
         <div className="cloud-grid">
-          <div className="cloud-info">
+          <div className="mei-cloud-info">
             <strong>JSON 文件</strong>
             <p>适合手动迁移与临时存档。</p>
           </div>
-          <div className="footer-actions">
+          <div className="mei-footer-actions">
             <SettingsButton onClick={exportJson}>导出 JSON</SettingsButton>
             <SettingsButton variant="primary" onClick={() => fileRef.current?.click()}>导入 JSON</SettingsButton>
             <input ref={fileRef} type="file" accept="application/json,.json" hidden onChange={(e) => { const file = e.target.files?.[0]; if (file) void importJson(file); }} />
@@ -455,24 +455,20 @@ function BackupTab({ config, reload }: { config: PanelConfig; reload: () => void
             </div>
           )}
         </div>
-        <div className="footer-actions">
+        <div className="mei-footer-actions">
           <SettingsButton onClick={() => void remote('export')} disabled={busy !== ''}>{busy === 'webdav-export' || busy === 's3-export' ? '备份中…' : '备份到云端'}</SettingsButton>
           <SettingsButton variant="primary" onClick={() => { if (window.confirm('从云端恢复将覆盖当前主页配置，确定继续吗？')) void remote('import'); }} disabled={busy !== ''}>{busy === 'webdav-import' || busy === 's3-import' ? '恢复中…' : '从云端恢复'}</SettingsButton>
         </div>
       </SettingsSection>
 
       <SettingsSection title="操作结果" wide>
-        {error ? <Alert tone="error" title={error} /> : message ? <Alert tone="success" title={message} /> : <div className="cloud-info"><strong>云端凭据不落盘</strong><p>仅在本次操作中提交，不会保存到服务器。</p></div>}
+        {error ? <Alert tone="error" title={error} /> : message ? <Alert tone="success" title={message} /> : <div className="mei-cloud-info"><strong>云端凭据不落盘</strong><p>仅在本次操作中提交，不会保存到服务器。</p></div>}
       </SettingsSection>
 
       <style>{`
         .cloud-target{display:flex;flex-direction:column;gap:7px;padding:10px;background:rgba(255,255,255,.58);border:1px solid var(--mei-border);border-radius:16px;}
         .cloud-target button{height:36px;border:1px solid var(--mei-border);border-radius:12px;background:transparent;font-size:12.5px;font-weight:750;color:var(--mei-text-muted);cursor:pointer;transition:var(--mei-transition);}
         .cloud-target button.active{border-color:rgba(99,102,241,.4);background:rgba(99,102,241,.1);color:var(--mei-primary);}
-        .cloud-info{padding:14px;border-radius:14px;background:rgba(255,255,255,.5);border:1px solid var(--mei-border);}
-        .cloud-info strong{font-size:13px;font-weight:800;display:block;}
-        .cloud-info p{margin:5px 0 0;font-size:11.5px;color:var(--mei-text-muted);line-height:1.5;}
-        .footer-actions{display:flex;justify-content:flex-end;gap:9px;margin-top:12px;flex-wrap:wrap;}
       `}</style>
     </>
   );

@@ -20,7 +20,7 @@ export default function SettingsClient() {
       <div className="settings-home">
         <div className="settings-hero">
           <div>
-            <span>SETTINGS CENTER</span>
+            <span>设置中心</span>
             <h1>聚合设置</h1>
           </div>
           <p>在这里集中管理应用偏好、运行状态与账号安全；所有应用保持同一套交互与视觉规范。</p>
@@ -35,7 +35,7 @@ export default function SettingsClient() {
                 </span>
                 <div>
                   <h2>{g.label}</h2>
-                  <small>{g.entries.length} 个入口</small>
+                  <small>{g.entries.filter((e) => !e.action).length} 个入口</small>
                 </div>
               </header>
               <div>

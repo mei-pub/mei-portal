@@ -3,10 +3,12 @@
 import { useCallback, useEffect, useState } from 'react';
 import {
   EmptyState,
+  Alert,
   Pill,
   SettingsButton,
   SettingsField,
   SettingsSection,
+  Toggle,
   TextInput,
 } from '@/components/SettingsUI';
 import { jsonFetch } from '@/lib/app-settings-client';
@@ -101,7 +103,7 @@ export default function TvSources() {
 
   return (
     <div>
-      <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
+      <div className="mei-source-stats" style={{ marginBottom: 16 }}>
         <Pill tone="neutral">{sources.length} 个源</Pill>
         <Pill tone="success">{enabled} 个启用</Pill>
       </div>
@@ -127,14 +129,12 @@ export default function TvSources() {
                       <strong>{s.name}</strong>
                       <small>{s.from === 'custom' ? '自定义' : '内置'}</small>
                     </div>
-                    <label className="switch">
-                      <input
-                        type="checkbox"
-                        checked={!s.disabled}
-                        onChange={() => void post({ action: s.disabled ? 'enable' : 'disable', key: s.key }, `${s.name} 已${s.disabled ? '启用' : '停用'}`)}
-                      />
-                      <span />
-                    </label>
+                    <Toggle
+                      checked={!s.disabled}
+                      onChange={() => void post({ action: s.disabled ? 'enable' : 'disable', key: s.key }, `${s.name} 已${s.disabled ? '启用' : '停用'}`)}
+                      label={`启用 ${s.name}`}
+                      hideLabel
+                    />
                   </header>
                   <p>{s.api}</p>
                   <footer>
@@ -164,7 +164,7 @@ export default function TvSources() {
             <TextInput value={form.api} onChange={(e) => setForm({ ...form, api: e.target.value })} placeholder="https://example.com/api.php/provide/vod" />
           </SettingsField>
           <SettingsField label="说明" span>
-            <TextInput value={form.detail} onChange={(e) => setForm({ ...form, detail: e.target.value })} placeholder="可选" />
+            <TextInput value={form.detail} onChange={(e) => setForm({ ...form, detail: e.target.value })} placeholder="备注说明，例如源站特点" />
           </SettingsField>
         </div>
         <div className="footer-actions">
@@ -173,7 +173,7 @@ export default function TvSources() {
       </SettingsSection>
 
       <SettingsSection title="操作结果" wide>
-        {error ? <EmptyState title={error} /> : message ? <EmptyState title={message} /> : <EmptyState title="源状态" description="停用源不参与搜索与播放优选。" />}
+        {error ? <Alert tone="error" title={error} /> : message ? <Alert tone="success" title={message} /> : null}
       </SettingsSection>
 
       <style>{`
@@ -190,12 +190,6 @@ export default function TvSources() {
         .source-grid footer>span.ok{color:#059669;}
         .source-grid footer>span.bad{color:#dc2626;}
         .source-grid footer>div{display:flex;gap:6px;flex-shrink:0;}
-        .switch{position:relative;width:42px;height:24px;flex-shrink:0;cursor:pointer;}
-        .switch input{position:absolute;opacity:0;width:100%;height:100%;margin:0;cursor:pointer;}
-        .switch span{position:absolute;inset:0;border-radius:99px;background:#d8dde9;transition:var(--mei-transition);}
-        .switch span::after{content:'';position:absolute;top:3px;left:3px;width:18px;height:18px;border-radius:50%;background:#fff;transition:var(--mei-transition);box-shadow:0 2px 6px rgba(23,32,56,.2);}
-        .switch input:checked+span{background:var(--mei-primary);}
-        .switch input:checked+span::after{transform:translateX(18px);}
         .footer-actions{display:flex;justify-content:flex-end;margin-top:12px;}
       `}</style>
     </div>

@@ -266,7 +266,7 @@ export default function LinkServerSettings() {
       <SettingsSection title="操作结果" wide>
         {message ? <Alert tone="success" title={message} /> : null}
         {error ? <Alert tone="error" title={error} description="请根据错误提示调整上方配置后重试。" /> : null}
-        {!message && !error ? <div className="cloud-info"><strong>连接令牌与管理密码留空时会沿用已有值</strong></div> : null}
+        {!message && !error ? <div className="mei-cloud-info"><strong>连接令牌与管理密码留空时会沿用已有值</strong></div> : null}
         <StickyBar>
           <SettingsButton variant="secondary" onClick={() => void load()} disabled={busy !== ''}>
             重新读取

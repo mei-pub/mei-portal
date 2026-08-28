@@ -123,18 +123,22 @@ export function Toggle({
   onChange,
   label,
   description,
+  hideLabel,
 }: {
   checked: boolean;
   onChange: (v: boolean) => void;
   label: string;
   description?: string;
+  hideLabel?: boolean;
 }) {
   return (
-    <button type="button" className={`mei-toggle-row${checked ? ' on' : ''}`} onClick={() => onChange(!checked)}>
-      <span className="mei-toggle-text">
-        <strong>{label}</strong>
-        {description ? <small>{description}</small> : null}
-      </span>
+    <button type="button" className={`mei-toggle-row${checked ? ' on' : ''}${hideLabel ? ' compact' : ''}`} onClick={() => onChange(!checked)} aria-label={hideLabel ? label : undefined}>
+      {hideLabel ? null : (
+        <span className="mei-toggle-text">
+          <strong>{label}</strong>
+          {description ? <small>{description}</small> : null}
+        </span>
+      )}
       <span className="mei-toggle"><span /></span>
     </button>
   );
@@ -220,6 +224,8 @@ textarea.mei-input{height:auto;min-height:86px;padding:10px 12px;line-height:1.5
 .mei-toggle span{position:absolute;top:3px;left:3px;width:18px;height:18px;border-radius:50%;background:#fff;box-shadow:0 2px 6px rgba(23,32,56,.22);transition:var(--mei-transition);}
 .mei-toggle-row.on .mei-toggle{background:var(--mei-primary);}
 .mei-toggle-row.on .mei-toggle span{transform:translateX(18px);}
+.mei-toggle-row.compact{width:auto;padding:0;border:none;background:transparent;justify-content:center;}
+.mei-toggle-row.compact:hover{background:transparent;}
 .mei-action{height:36px;padding:0 15px;border-radius:12px;border:1px solid transparent;font-size:12.5px;font-weight:720;cursor:pointer;transition:var(--mei-transition);display:inline-flex;align-items:center;gap:7px;white-space:nowrap;}
 .mei-action.primary{background:var(--mei-primary);color:#fff;box-shadow:0 10px 22px rgba(79,70,229,.22);}
 .mei-action.primary:hover{filter:brightness(.96);transform:translateY(-1px);}
@@ -249,6 +255,14 @@ textarea.mei-input{height:auto;min-height:86px;padding:10px 12px;line-height:1.5
 .mei-file-input::file-selector-button{height:32px;padding:0 14px;border:1px solid var(--mei-border-strong);border-radius:10px;background:rgba(255,255,255,.8);color:var(--mei-text);font-size:12.5px;font-weight:700;cursor:pointer;margin-right:10px;transition:var(--mei-transition);}
 .mei-file-input::file-selector-button:hover{border-color:rgba(99,102,241,.35);color:var(--mei-primary);}
 .mei-sticky-bar{position:sticky;bottom:0;display:flex;justify-content:flex-end;gap:10px;padding:14px 0;margin-top:8px;background:linear-gradient(to top,rgba(255,255,255,.92),rgba(255,255,255,0));backdrop-filter:blur(8px);z-index:10;}
+.mei-footer-actions{display:flex;justify-content:flex-end;gap:9px;margin-top:12px;flex-wrap:wrap;}
+.mei-toggle-stack{display:flex;flex-direction:column;gap:9px;}
+.mei-source-stack{display:flex;flex-direction:column;gap:9px;}
+.mei-cloud-info{padding:14px;border-radius:14px;background:rgba(255,255,255,.5);border:1px solid var(--mei-border);}
+.mei-cloud-info strong{font-size:13px;font-weight:800;display:block;}
+.mei-cloud-info p{margin:5px 0 0;font-size:11.5px;color:var(--mei-text-muted);line-height:1.5;}
+.mei-channel-add{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;margin-top:13px;}
+.mei-source-stats{display:flex;gap:8px;flex-wrap:wrap;}
 .mei-table{width:100%;border-collapse:separate;border-spacing:0 6px;font-size:12.5px;}
 .mei-table th{text-align:left;padding:0 12px 4px;font-size:10.5px;color:var(--mei-text-faint);letter-spacing:.7px;text-transform:uppercase;}
 .mei-table td{padding:11px 12px;background:rgba(255,255,255,.66);border-top:1px solid var(--mei-border);border-bottom:1px solid var(--mei-border);}

@@ -74,16 +74,16 @@ export default function SettingsShell({ children }: { children: React.ReactNode 
       {logoutOpen && (
         <div className="mei-modal-mask" onClick={() => setLogoutOpen(false)}>
           <div className="mei-modal" onClick={(e) => e.stopPropagation()}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+            <div className="mei-modal-head">
               <span className="mei-modal-icon">
                 <MeiIcon icon="lucide:log-out" size={18} />
               </span>
-              <span style={{ fontSize: 15, fontWeight: 700 }}>退出登录</span>
+              <span className="mei-modal-title">退出登录</span>
             </div>
-            <p style={{ fontSize: 13, color: 'var(--mei-text-muted)', margin: '0 0 16px' }}>
+            <p className="mei-modal-text">
               确定要退出当前账号吗？退出后需要重新登录才能访问门户。
             </p>
-            <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+            <div className="mei-modal-foot">
               <button onClick={() => setLogoutOpen(false)} className="mei-btn-ghost">取消</button>
               <button onClick={doLogout} className="mei-btn-danger">退出登录</button>
             </div>
@@ -113,6 +113,10 @@ export default function SettingsShell({ children }: { children: React.ReactNode 
         .mei-shell-main{flex:1;min-width:0;overflow-y:auto;padding:24px 28px;}
         .mei-modal-mask{position:fixed;inset:0;z-index:100;background:rgba(10,14,26,0.45);display:flex;align-items:center;justify-content:center;backdrop-filter:blur(4px);}
         .mei-modal{width:380px;max-width:calc(100vw - 40px);background:rgba(255,255,255,0.97);border:1px solid var(--mei-border);border-radius:var(--mei-radius-lg);padding:20px;box-shadow:var(--mei-shadow-lg);}
+.mei-modal-head{display:flex;align-items:center;gap:10px;margin-bottom:8px;}
+.mei-modal-title{font-size:15px;font-weight:700;}
+.mei-modal-text{font-size:13px;color:var(--mei-text-muted);margin:0 0 16px;}
+.mei-modal-foot{display:flex;gap:10px;justify-content:flex-end;}
         .mei-modal-icon{width:36px;height:36px;border-radius:10px;background:rgba(220,38,38,0.1);color:#dc2626;display:inline-flex;align-items:center;justify-content:center;}
         .mei-btn-ghost{padding:8px 18px;border-radius:var(--mei-radius-full);border:1px solid var(--mei-border-strong);background:transparent;font-size:13px;cursor:pointer;color:var(--mei-text);}
         .mei-btn-danger{padding:8px 18px;border-radius:var(--mei-radius-full);border:none;background:#dc2626;color:#fff;font-size:13px;font-weight:600;cursor:pointer;}
@@ -123,6 +127,7 @@ export default function SettingsShell({ children }: { children: React.ReactNode 
           .mei-shell-home span{display:none;}
           .mei-shell-group{margin-bottom:0;display:flex;align-items:center;gap:4px;flex-shrink:0;}
           .mei-shell-group-title{padding:0 6px 0 0;white-space:nowrap;}
+          .mei-shell-group-title{border-bottom:none;margin-bottom:0;}
           .mei-shell-item{width:auto;white-space:nowrap;padding:6px 10px;}
           .mei-shell-main{padding:var(--mei-space-3);}
         }

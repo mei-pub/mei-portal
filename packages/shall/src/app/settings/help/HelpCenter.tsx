@@ -92,7 +92,7 @@ export default function HelpCenter() {
   return (
     <SettingsShell>
       <SettingsPage icon="lucide:life-buoy" title="帮助中心" description="选择应用查看使用说明、常见问题与入口说明。">
-        <div className="help-layout" style={{ gridColumn: '1 / -1' }}>
+        <div className="help-layout">
           <aside className="help-nav">
             {Object.entries(DOCS).map(([id, item]) => (
               <button key={id} className={id === active ? 'active' : ''} onClick={() => setActive(id)}>
@@ -102,7 +102,7 @@ export default function HelpCenter() {
             ))}
           </aside>
           <div>
-            <SettingsSection title={doc.name} description={doc.intro} wide>
+            <SettingsSection title={doc.name} description={doc.intro}>
               {doc.sections.map((section) => (
                 <div key={section.title} className="help-section">
                   <h3>{section.title}</h3>
