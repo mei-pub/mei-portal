@@ -23,6 +23,14 @@ const ICONS = {
 const MODE_CYCLE = ["order", "shuffle", "repeat"];
 const MODE_LABEL = { order: "顺序播放", shuffle: "随机播放", repeat: "单曲循环" };
 
+// 播放页（完整播放器）复用同一套播控图标与时间格式，避免两处实现漂移
+export const PLAYER_ICONS = ICONS;
+export const MODE_LABELS = MODE_LABEL;
+
+export function fmtTime(sec) {
+  return fmt(sec);
+}
+
 function fmt(sec) {
   if (!Number.isFinite(sec) || sec < 0) return "0:00";
   const m = Math.floor(sec / 60);
@@ -300,6 +308,19 @@ export const player = {
     if (Number.isFinite(this.audio.duration)) {
       this.audio.currentTime = ratio * this.audio.duration;
     }
+  },
+
+  /** 音量：0~1。宿主模式下由外壳 Audio 持有，本地模式直接写 audio.volume */
+  setVolume(v) {
+    const vol = Math.min(1, Math.max(0, Number(v) || 0));
+    if (this._host) {
+      this.audio.volume = vol; // 本地镜像先行，避免滑块回跳
+      this._host.setVolume(vol);
+      emit("player");
+      return;
+    }
+    this.audio.volume = vol;
+    emit("player");
   },
 
   setLyric(lrcText) {

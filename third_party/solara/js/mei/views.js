@@ -11,7 +11,7 @@ import {
   enabledSources,
 } from "./api.js";
 import { store, songKey, on, emit } from "./store.js";
-import { player } from "./player.js";
+import { player, PLAYER_ICONS as PI, MODE_LABELS, fmtTime } from "./player.js";
 import { I, toast, openDialog, confirmDialog, promptDialog } from "./ui.js";
 
 const EXPLORE_GENRES = ["流行", "摇滚", "古典音乐", "民谣", "电子", "爵士", "说唱", "乡村", "蓝调", "R&B", "金属", "嘻哈", "轻音乐"];
@@ -514,7 +514,13 @@ function songRowHtml(song, i, { playing = false, showSort = true, showFav = fals
   `;
 }
 
-// ============ 播放页（req 10：三逻辑队列切换） ============
+// ============ 播放页 ============
+// 定位区分（强约束）：
+// - 播放「组件」= 门户常驻底部播放条（MusicDock / mei-playerbar）：跨应用后台播放
+//   与最小控制，只渲染少量信息。
+// - 播放「页」= 本视图：一个整体垂直居中的完整播放器，自带唱片滚动、歌词、进度、
+//   全套播控（播放模式 / 上一首 / 播放暂停 / 下一首 / 音量 / 收藏 / 加入列表 /
+//   下载）与队列，不依赖底部播放条即可完成全部操作。
 let playerPageMounted = false;
 let playerViewMode = "disc"; // disc：封面唱片 / lyric：歌词播放
 
@@ -537,40 +543,112 @@ export function renderPlayer(root) {
 
   const queue = player.queue();
   const isLyricMode = playerViewMode === "lyric";
+  const playing = !player.audio.paused;
+  const dur = player.audio.duration;
+  const cur = player.audio.currentTime;
+  const ratio = Number.isFinite(dur) && dur > 0 ? Math.round((cur / dur) * 1000) : 0;
+  const faved = store.isFavorite(song);
+  const vol = Number.isFinite(player.audio.volume) ? player.audio.volume : 1;
+  const showAddList = player.queueType === "temp" && !store.isInAnyPlaylist(song);
+
+  // 整体一个垂直居中的大组件：舞台（唱片/歌词）+ 曲目信息 + 进度 + 全套播控 + 队列
   root.innerHTML = `
     <div class="mei-player-page">
-      <div class="mei-stage">
-        ${isLyricMode ? `
-          <div class="lyric-full">
-            <button class="view-toggle" id="meiViewToggle" title="切换封面唱片">${I.disc}</button>
-            <div class="p-title">${escapeHtml(song.name)}</div>
-            <div class="p-sub">${escapeHtml(song.artist)}${song.album ? " · " + escapeHtml(song.album) : ""} · ${sourceLabel(song.source)}</div>
-            <div class="mei-lyric-box big" id="meiLyric"><div class="l-line">♪</div></div>
+      <section class="mei-player-shell mei-card">
+        <div class="pp-body">
+          <div class="pp-stage">
+            ${isLyricMode ? `
+              <div class="lyric-full">
+                <div class="mei-lyric-box big" id="meiLyric"><div class="l-line">♪</div></div>
+              </div>
+            ` : `
+              <div class="vinyl-wrap">
+                <div class="vinyl ${playing ? "spin" : ""}" id="meiVinyl" aria-hidden="true">
+                  <div class="disc">
+                    <img class="big-cover" src="${picUrl(song, 500)}" alt="" onerror="this.style.opacity='0.3'">
+                    <div class="hole"></div>
+                  </div>
+                </div>
+              </div>
+            `}
           </div>
-        ` : `
-          <div class="vinyl-wrap">
-            <div class="vinyl ${player.audio.paused ? "" : "spin"}" id="meiVinyl" aria-hidden="true">
-              <div class="disc">
-                <img class="big-cover" src="${picUrl(song, 500)}" alt="" onerror="this.style.opacity='0.3'">
-                <div class="hole"></div>
+
+          <div class="pp-side">
+            <div class="pp-head">
+              <div class="pp-titles">
+                <h2 class="p-title" title="${escapeHtml(song.name)}">${escapeHtml(song.name)}</h2>
+                <div class="p-sub">${escapeHtml(song.artist)}${song.album ? " · " + escapeHtml(song.album) : ""}</div>
+              </div>
+              <span class="pp-src">${sourceLabel(song.source)}</span>
+            </div>
+
+            ${isLyricMode ? "" : `<div class="mei-lyric-box" id="meiLyricSide"><div class="l-line">♪</div></div>`}
+
+            <div class="pp-progress">
+              <span class="pp-time" id="ppCur">${fmtTime(cur)}</span>
+              <input class="pp-slider" id="ppSeek" type="range" min="0" max="1000" value="${ratio}" aria-label="播放进度">
+              <span class="pp-time" id="ppDur">${fmtTime(dur)}</span>
+            </div>
+
+            <div class="pp-controls">
+              <button class="pp-btn" data-act="mode" title="${MODE_LABELS[player.mode] || "播放模式"}">${PI[player.mode]}</button>
+              <button class="pp-btn" data-act="prev" title="上一首">${PI.prev}</button>
+              <button class="pp-btn main" data-act="toggle" title="${playing ? "暂停" : "播放"}">${playing ? PI.pause : PI.play}</button>
+              <button class="pp-btn" data-act="next" title="下一首">${PI.next}</button>
+              <button class="pp-btn" id="ppViewToggle" title="${isLyricMode ? "切换封面唱片" : "切换歌词播放"}">${isLyricMode ? I.disc : I.list}</button>
+            </div>
+
+            <div class="pp-extra">
+              <button class="pp-btn sm ${faved ? "faved" : ""}" data-act="fav" title="${faved ? "取消收藏" : "加入收藏"}">${faved ? PI.heartFill : PI.heart}</button>
+              ${showAddList ? `<button class="pp-btn sm" data-act="add-list" title="添加到播放列表">${PI.plus}</button>` : ""}
+              <button class="pp-btn sm" data-act="download" title="下载">${I.download}</button>
+              <div class="pp-volume">
+                <span class="pp-vol-icon" aria-hidden="true">${I.zap}</span>
+                <input class="pp-slider vol" id="ppVol" type="range" min="0" max="100" value="${Math.round(vol * 100)}" aria-label="音量">
               </div>
             </div>
-            <button class="view-toggle" id="meiViewToggle" title="切换歌词播放">${I.list}</button>
           </div>
-          <div class="p-title">${escapeHtml(song.name)}</div>
-          <div class="p-sub">${escapeHtml(song.artist)}${song.album ? " · " + escapeHtml(song.album) : ""} · ${sourceLabel(song.source)}</div>
-          <div class="mei-lyric-box" id="meiLyric"><div class="l-line">♪</div></div>
-        `}
-      </div>
-      <div class="mei-card mei-queue">
-        <div class="q-tabs" id="qTabs"></div>
-        <div class="q-list" id="qList"></div>
-      </div>
+        </div>
+
+        <div class="pp-queue">
+          <div class="q-tabs" id="qTabs"></div>
+          <div class="q-list" id="qList"></div>
+        </div>
+      </section>
     </div>
   `;
 
+  // ---- 播控绑定（宿主模式下 player 会把指令转发给外壳引擎）----
+  const act = (name, fn) => {
+    const el = root.querySelector(`[data-act="${name}"]`);
+    if (el) el.onclick = fn;
+  };
+  act("toggle", () => player.toggle());
+  act("prev", () => player.prev());
+  act("next", () => player.next());
+  act("mode", () => {
+    const label = player.cycleMode();
+    if (label) toast(label);
+  });
+  act("fav", () => {
+    const added = store.toggleFavorite(song);
+    toast(added ? "已加入收藏" : "已取消收藏");
+  });
+  act("download", () => downloadSong(song).catch(() => toast("下载失败")));
+  const addListBtn = root.querySelector('[data-act="add-list"]');
+  if (addListBtn) addListBtn.onclick = () => openAddToListMenu(addListBtn, song);
+
+  const seek = root.querySelector("#ppSeek");
+  seek.oninput = () => player.seekTo(seek.value / 1000);
+  const volEl = root.querySelector("#ppVol");
+  volEl.oninput = () => player.setVolume(volEl.value / 100);
+
+  // 首帧对齐一次（后续由全局同步器驱动，见 playerPageMounted 分支）
+  syncPlayerTime();
+  syncPlayerControls();
+
   // 封面唱片 / 歌词播放切换
-  root.querySelector("#meiViewToggle").onclick = () => {
+  root.querySelector("#ppViewToggle").onclick = () => {
     playerViewMode = isLyricMode ? "disc" : "lyric";
     renderPlayer(root);
   };
@@ -625,47 +703,67 @@ export function renderPlayer(root) {
     });
   }
 
-  // 歌词
-  const lyricBox = root.querySelector("#meiLyric");
-  const drawLyric = () => {
-    if (!lyricBox.isConnected) return;
-    if (player.lyric.length === 0) {
-      lyricBox.innerHTML = `<div class="l-line">纯音乐，请欣赏</div>`;
-      return;
-    }
-    const idx = player.lyricIdx;
-    const from = Math.max(0, idx - 1);
-    const slice = player.lyric.slice(from, from + 4);
-    lyricBox.innerHTML = slice.map((l, k) => `<div class="l-line ${from + k === idx ? "on" : ""}">${escapeHtml(l.text)}</div>`).join("");
-  };
-  drawLyric();
-
-  // 唱片转动状态随播放/暂停切换
-  const vinyl = root.querySelector("#meiVinyl");
-  const syncVinyl = () => {
-    const el = document.getElementById("meiVinyl");
-    if (el) el.classList.toggle("spin", !player.audio.paused);
-  };
-  syncVinyl();
-  on("player", syncVinyl);
-
+  // 歌词：唱片模式渲染到侧栏小窗（#meiLyricSide），歌词模式渲染到舞台大窗（#meiLyric）
+  drawLyricAll();
+  // 全局同步器只注册一次：store.on 每次调用都会新增闭包，
+  // 播放页会因切歌/列表变更反复重渲染，就地注册会导致监听器无上限累积。
   if (!playerPageMounted) {
     playerPageMounted = true;
-    on("lyric", () => {
-      const box = document.getElementById("meiLyric");
-      if (box) drawLyricOf(box);
-    });
+    on("lyric", drawLyricAll);
+    on("time", () => { syncPlayerTime(); });
+    on("player", () => { syncPlayerControls(); });
   }
-  function drawLyricOf(box) {
-    if (player.lyric.length === 0) {
-      box.innerHTML = `<div class="l-line">纯音乐，请欣赏</div>`;
-      return;
-    }
+}
+
+/** 进度与时间轻量刷新：不重建 DOM，避免封面闪烁与拖动被打断 */
+function syncPlayerTime() {
+  const s = document.getElementById("ppSeek");
+  if (!s || !s.isConnected) return;
+  const d = player.audio.duration;
+  const c = player.audio.currentTime;
+  if (document.activeElement !== s) {
+    s.value = String(Number.isFinite(d) && d > 0 ? Math.round((c / d) * 1000) : 0);
+  }
+  const curEl = document.getElementById("ppCur");
+  const durEl = document.getElementById("ppDur");
+  if (curEl) curEl.textContent = fmtTime(c);
+  if (durEl) durEl.textContent = fmtTime(d);
+}
+
+/** 播放态/模式/音量同步：只改按钮与唱片转动，不整页重渲染 */
+function syncPlayerControls() {
+  const btn = document.querySelector('.pp-controls [data-act="toggle"]');
+  if (!btn || !btn.isConnected) return;
+  const isPlaying = !player.audio.paused;
+  btn.innerHTML = isPlaying ? PI.pause : PI.play;
+  btn.title = isPlaying ? "暂停" : "播放";
+  const vinylEl = document.getElementById("meiVinyl");
+  if (vinylEl) vinylEl.classList.toggle("spin", isPlaying);
+  const modeBtn = document.querySelector('.pp-controls [data-act="mode"]');
+  if (modeBtn) {
+    modeBtn.innerHTML = PI[player.mode];
+    modeBtn.title = MODE_LABELS[player.mode] || "播放模式";
+  }
+  const v = document.getElementById("ppVol");
+  if (v && document.activeElement !== v && Number.isFinite(player.audio.volume)) {
+    v.value = String(Math.round(player.audio.volume * 100));
+  }
+}
+
+/** 歌词绘制：两种形态共用，容器不存在时静默跳过（页面已切走） */
+function drawLyricAll() {
+  const boxes = [document.getElementById("meiLyric"), document.getElementById("meiLyricSide")].filter(Boolean);
+  if (boxes.length === 0) return;
+  let html;
+  if (player.lyric.length === 0) {
+    html = `<div class="l-line">纯音乐，请欣赏</div>`;
+  } else {
     const idx = player.lyricIdx;
     const from = Math.max(0, idx - 1);
-    const slice = player.lyric.slice(from, from + 4);
-    box.innerHTML = slice.map((l, k) => `<div class="l-line ${from + k === idx ? "on" : ""}">${escapeHtml(l.text)}</div>`).join("");
+    const slice = player.lyric.slice(from, from + 5);
+    html = slice.map((l, k) => `<div class="l-line ${from + k === idx ? "on" : ""}">${escapeHtml(l.text)}</div>`).join("");
   }
+  boxes.forEach((b) => { b.innerHTML = html; });
 }
 
 // 歌词加载（播放页进入与切歌时调用）

@@ -89,3 +89,34 @@ mei-allin 是多应用聚合门户：`packages/shall` 为门户外壳，`third_p
 - 面板宽度大于窄面板规格（Logo 30px / 按钮 34px）
 - 行动入口带文字标签（必须纯图标 + title 提示）
 - 顶栏被子应用 CSS 覆盖导致字号/间距/阴影与其他应用不一致
+- 同一面板内两个不同语义的行动入口使用同一个图标（如「重启」与「刷新登录态」
+  都用 `refresh`），必须换成语义可区分的图标
+
+## 音乐播放：播放组件与播放页的职责分离
+
+音乐能力由两处 UI 承载，**职责不得混淆、不得互相依赖**：
+
+| | 播放组件（Dock） | 播放页 |
+|---|---|---|
+| 实现 | `packages/shall/src/components/MusicDock.tsx` | `third_party/solara/js/mei/views.js` 的 `renderPlayer` |
+| 归属 | 门户外壳，跨应用常驻 | 音乐应用内页 `#/player` |
+| 定位 | 后台播放 + 最小控制，只渲染少量信息 | 整体垂直居中的大组件，局部完整能力 |
+| 形态 | 完整 / 缩小 / 隐藏 三态（`ui.dockMode`） | 唱片 / 歌词 双形态（`#ppViewToggle`） |
+
+约束：
+
+- 音频与队列的**唯一真源**是外壳引擎 `packages/shall/src/lib/music-engine.ts`；
+  solara 侧 `player.js` 在宿主模式下只做指令转发与状态镜像，本地播放条必须隐藏
+  （`body.mei-hosted-player` + `display:none`），不得出现两份 `audio` 同时播放
+- 播放页必须自带全套播控（模式 / 上一首 / 播放暂停 / 下一首 / 进度 / 音量 / 收藏 /
+  下载 / 加入列表 / 队列切换），**不依赖播放条即可完成全部操作**
+- 播放页的 `store.on` 同步器只允许注册一次（用模块级 `playerPageMounted` 守卫）。
+  `store.on` 每次调用都新增闭包，切歌/列表变更会反复重渲染，就地注册会导致监听器
+  无上限累积
+- 进度与播放态刷新走轻量同步函数（`syncPlayerTime` / `syncPlayerControls`），
+  只改文本与按钮，不重建 DOM，否则封面闪烁且拖动被打断
+- 播放页高度必须减去顶部空间与播放条高度：
+  `min-height: calc(100vh - var(--mei-topbar-space,0px) - var(--playerbar-h) - 92px)`
+
+违规判定：播放页缺少某项播控而必须回到播放条操作；切歌若干次后播放页出现重复渲染或
+卡顿（监听器累积）；宿主模式下 solara 本地播放条可见。

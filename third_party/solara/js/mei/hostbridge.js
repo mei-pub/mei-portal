@@ -71,6 +71,11 @@ export const hostBridge = {
   setDockMode(mode) {
     this.send({ type: "set-dock-mode", mode });
   },
+
+  /** 播放页音量控制（宿主模式下音量由外壳 Audio 持有） */
+  setVolume(v) {
+    this.send({ type: "set-volume", volume: v });
+  },
 };
 
 const DOCK_MODES = ["full", "mini", "hidden"];
@@ -133,6 +138,9 @@ function applyState(state) {
   player.audio.paused = !playback.playing;
   player.audio.currentTime = Number(playback.currentTime) || 0;
   player.audio.duration = Number(playback.duration) || 0;
+  // 音量/缓冲态镜像：播放页是完整播放器，需要展示并控制这些
+  if (Number.isFinite(Number(playback.volume))) player.audio.volume = Number(playback.volume);
+  player.loading = !!playback.loading;
   player.audio.src = playback.playing || player.index >= 0 ? "host" : "";
 
   if (queueChanged || dataChanged) emit("queue");
