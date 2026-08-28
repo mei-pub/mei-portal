@@ -31,6 +31,9 @@
     var next = (e && e.detail && e.detail.app) || '';
     if (!next || next === APP_ID) return;
     APP_ID = next;
+    // 跨应用跳转：上一个应用的「瞬时收起」（mei-topbar-set，不写记忆）不得泄漏到
+    // 下一个应用，否则用户看到的全局形态会随跳转莫名改变。记忆态（localStorage）保留。
+    window.dispatchEvent(new Event('mei-topbar-reset-transient'));
     var bar = document.getElementById('mei-topbar');
     if (bar) bar.remove();
     window.dispatchEvent(new Event('mei-topbar-rebuild'));
@@ -401,6 +404,18 @@
     function effectiveCollapsed() {
       return transientCollapsed || isCollapsed();
     }
+    // 折叠态的唯一落地入口：body class / 顶栏显隐 / 展开把手 三者必须同时成立，
+    // 否则会出现「class 残留但顶栏已隐藏」这类形态错乱（返回门户主页时按收起态留白）。
+    function applyCollapseState() {
+      if (!mountReady()) return;
+      var collapsed = effectiveCollapsed();
+      // 抑制态（门户自研主页）下注入顶栏整体不存在，折叠占位必须一并归零
+      document.body.classList.toggle('mei-topbar-collapsed', !SUPPRESSED && collapsed);
+      var bar = document.getElementById('mei-topbar');
+      if (bar) bar.style.display = collapsed ? 'none' : 'flex';
+      var toggle = document.getElementById('mei-topbar-toggle');
+      if (toggle) toggle.style.display = !SUPPRESSED && collapsed ? 'flex' : 'none';
+    }
     function ensureToggle() {
       if (!mountReady()) return;
       var t = document.getElementById('mei-topbar-toggle');
@@ -412,22 +427,25 @@
         t.onclick = function () { transientCollapsed = false; setCollapsed(false); };
         mountRoot().appendChild(t);
       }
-      t.style.display = effectiveCollapsed() ? 'flex' : 'none';
+      t.style.display = !SUPPRESSED && effectiveCollapsed() ? 'flex' : 'none';
     }
     function setCollapsed(collapsed) {
       try { localStorage.setItem(COLLAPSE_KEY, collapsed ? '1' : '0'); } catch (e) {}
-      document.body.classList.toggle('mei-topbar-collapsed', collapsed);
-      var bar = document.getElementById('mei-topbar');
-      if (bar) bar.style.display = collapsed ? 'none' : 'flex';
       ensureToggle();
+      applyCollapseState();
     }
     window.addEventListener('mei-topbar-set', function (e) {
       var detail = (e && e.detail) || {};
       transientCollapsed = !!detail.collapsed;
-      document.body.classList.toggle('mei-topbar-collapsed', effectiveCollapsed());
-      var bar = document.getElementById('mei-topbar');
-      if (bar) bar.style.display = effectiveCollapsed() ? 'none' : 'flex';
       ensureToggle();
+      applyCollapseState();
+    });
+    // 应用切换：清掉瞬时收起，回到记忆态（记忆态本身跨应用保持）
+    window.addEventListener('mei-topbar-reset-transient', function () {
+      if (!transientCollapsed) return;
+      transientCollapsed = false;
+      ensureToggle();
+      applyCollapseState();
     });
 
     function render(plugins) {
@@ -441,21 +459,18 @@
       if (SUPPRESSED) {
         var existing = document.getElementById('mei-topbar');
         if (existing) existing.remove();
-        var toggle = document.getElementById('mei-topbar-toggle');
-        if (toggle) toggle.style.display = 'none';
         document.body.style.paddingTop = '';
+        // 顶栏不存在时折叠占位/把手都必须收掉，否则门户主页按收起态留白
+        applyCollapseState();
         return;
       }
       ensureToggle();
       if (!document.getElementById('mei-topbar') && cachedPlugins) {
         var built = buildTopbar(cachedPlugins);
         mountRoot().appendChild(built.bar);
-        // 应用折叠态（记忆或应用编程触发）
-        if (effectiveCollapsed()) {
-          document.getElementById('mei-topbar').style.display = 'none';
-          document.body.classList.add('mei-topbar-collapsed');
-        }
       }
+      // 重建后（或解除抑制后）按当前形态重新落地，保证跨应用跳转形态不变
+      applyCollapseState();
     }
     var healCount = 0;
     function healLoop() {
