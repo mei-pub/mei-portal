@@ -12,6 +12,7 @@ export interface PanelBackground {
   url: string; // 空 = 默认极光；支持 http(s):// 与 data:image/*
   mask: number; // 遮罩不透明度 0~0.9
   blur: number; // 模糊 px
+  hasCustomBg?: boolean; // lite 响应专用：标记有自定义背景但 data URI 已裁剪
 }
 
 export interface PanelStyle {

@@ -33,7 +33,8 @@ export default function HomeEditorClient() {
 
   const reload = useCallback(async () => {
     try {
-      const res = await fetch('/api/panel', { credentials: 'include' });
+      // 用 lite=1 获取不含 base64 背景图的轻量配置（2MB → 3KB）
+      const res = await fetch('/api/panel?lite=1', { credentials: 'include' });
       if (res.ok) setConfig(await res.json());
       else setError('读取主页配置失败');
     } catch {
@@ -143,7 +144,11 @@ function StyleTab({ config, update }: { config: PanelConfig; update: (c: PanelCo
       <SettingsSection title="背景" description="背景图、遮罩与模糊会实时影响首页氛围。">
         <div className="mei-grid">
           <SettingsField label="背景图地址" span>
-            <TextInput value={config.background.url} onChange={(e) => setBg({ url: e.target.value })} placeholder="https://example.com/wallpaper.jpg" />
+            <TextInput
+              value={config.background.url}
+              onChange={(e) => setBg({ url: e.target.value })}
+              placeholder={(config.background as { hasCustomBg?: boolean }).hasCustomBg ? '已上传自定义背景图，清空则恢复默认' : 'https://example.com/wallpaper.jpg'}
+            />
           </SettingsField>
           <SettingsField label="上传背景图" span>
             <input

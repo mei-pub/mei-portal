@@ -33,9 +33,23 @@ function canonicalizeBuiltinItems(config: ReturnType<typeof getPanelConfig>) {
 export async function GET(req: Request) {
   const config = getPanelConfig();
   const canonicalConfig = canonicalizeBuiltinItems(config);
-  return NextResponse.json(
-    normalizeBuiltinItemUrls(canonicalConfig, publicOrigin(req), getKnownPublicOrigins(process.env.PUBLIC_ORIGINS))
-  );
+  let result = normalizeBuiltinItemUrls(canonicalConfig, publicOrigin(req), getKnownPublicOrigins(process.env.PUBLIC_ORIGINS));
+  // 设置页只需要知道是否有自定义背景，不需要 2MB 的 base64 data URI。
+  // 首页渲染需要完整 data URI，所以只对 ?lite=1 请求裁剪。
+  const url = new URL(req.url);
+  if (url.searchParams.get('lite') === '1') {
+    const bgUrl = result.background?.url || '';
+    result = {
+      ...result,
+      background: {
+        ...result.background,
+        url: bgUrl.startsWith('data:') ? '' : bgUrl,
+        // 保留标记让设置页知道有自定义背景
+        hasCustomBg: bgUrl.startsWith('data:') || bgUrl.startsWith('http'),
+      },
+    };
+  }
+  return NextResponse.json(result);
 }
 
 // PUT /api/panel — 保存主页配置（需登录；白名单化校验在 normalizeConfig）
@@ -56,13 +70,22 @@ export async function PUT(req: Request) {
     };
     const config = normalizeConfig(merged);
     savePanelConfig(config);
+    let savedConfig = normalizeBuiltinItemUrls(
+      canonicalizeBuiltinItems(config),
+      publicOrigin(req),
+      getKnownPublicOrigins(process.env.PUBLIC_ORIGINS)
+    );
+    // PUT 响应也裁剪 data URI，避免设置页 state 存 2MB base64
+    const bgUrl = savedConfig.background?.url || '';
+    if (bgUrl.startsWith('data:')) {
+      savedConfig = {
+        ...savedConfig,
+        background: { ...savedConfig.background, url: '', hasCustomBg: true },
+      };
+    }
     return NextResponse.json({
       ok: true,
-      config: normalizeBuiltinItemUrls(
-        canonicalizeBuiltinItems(config),
-        publicOrigin(req),
-        getKnownPublicOrigins(process.env.PUBLIC_ORIGINS)
-      ),
+      config: savedConfig,
     });
   } catch (error) {
     console.error('Failed to save panel config:', error);
