@@ -8,8 +8,7 @@ import LinkServerSettings from '@/components/settings-apps/LinkServerSettings';
 import MediagoSettings from '@/components/settings-apps/MediagoSettings';
 import PansouSettings from '@/components/settings-apps/PansouSettings';
 import SolaraSettings from '@/components/settings-apps/SolaraSettings';
-import TvSettings from '@/components/settings-apps/TvSettings';
-import TvSources from '@/components/settings-apps/TvSources';
+import TvCombined from '@/components/settings-apps/TvCombined';
 
 export const dynamic = 'force-dynamic';
 
@@ -21,8 +20,7 @@ const PAGES = {
   mediago: MediagoSettings,
   pansou: PansouSettings,
   solara: SolaraSettings,
-  tv: TvSettings,
-  'tv-sources': TvSources,
+  tv: TvCombined,
 } as const;
 
 export default async function SettingsAppPage({ params }: { params: { slug: string } }) {

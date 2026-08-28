@@ -185,7 +185,7 @@ export default function AiDrawSettings() {
     <SettingsPage
       icon="lucide:pen-tool"
       title="AI 绘图设置"
-      description="基础设置、模型供应商管理与通知设置。"
+      description="基础设置与模型供应商管理。"
       actions={<Pill tone={loading ? 'warning' : 'success'}>{loading ? '读取中' : globalProvider ? `全局：${globalProvider.name}` : '全局供应商未选择'}</Pill>}
     >
       <SettingsSection title="基础设置" description="控制注册、默认引擎与绘图服务。">
@@ -301,44 +301,6 @@ export default function AiDrawSettings() {
             </div>
           </div>
         ) : null}
-      </SettingsSection>
-
-      <SettingsSection title="通知设置" description="首页与编辑器顶部提示。" wide>
-        <div className="mei-grid">
-          <SettingsField label="首页滚动通知" span>
-            <textarea className="mei-input" value={system.notifications?.homepage || ''} onChange={(e) => setSystem({ ...system, notifications: { ...system.notifications, homepage: e.target.value } })} placeholder="支持简单 HTML" />
-          </SettingsField>
-          <SettingsField label="首页公告" span>
-            <textarea className="mei-input" value={system.notifications?.homepageAnnouncement || ''} onChange={(e) => setSystem({ ...system, notifications: { ...system.notifications, homepageAnnouncement: e.target.value } })} />
-          </SettingsField>
-          <SettingsField label="编辑器通知" span>
-            <textarea className="mei-input" value={system.notifications?.editor || ''} onChange={(e) => setSystem({ ...system, notifications: { ...system.notifications, editor: e.target.value } })} />
-          </SettingsField>
-          <div className="mei-field span">
-            <Toggle
-              checked={system.notifications?.homepageEnabled !== false}
-              onChange={(v) => setSystem({ ...system, notifications: { ...system.notifications, homepageEnabled: v } })}
-              label="显示首页滚动通知"
-            />
-          </div>
-          <div className="mei-field span">
-            <Toggle
-              checked={system.notifications?.homepageAnnouncementEnabled !== false}
-              onChange={(v) => setSystem({ ...system, notifications: { ...system.notifications, homepageAnnouncementEnabled: v } })}
-              label="显示首页公告"
-            />
-          </div>
-          <div className="mei-field span">
-            <Toggle
-              checked={system.notifications?.editorEnabled !== false}
-              onChange={(v) => setSystem({ ...system, notifications: { ...system.notifications, editorEnabled: v } })}
-              label="显示编辑器通知"
-            />
-          </div>
-        </div>
-        <div className="footer-actions">
-          <SettingsButton variant="primary" onClick={() => void saveNotifications(system)} disabled={busy !== ''}>保存通知设置</SettingsButton>
-        </div>
       </SettingsSection>
 
       <SettingsSection title="操作结果" wide>

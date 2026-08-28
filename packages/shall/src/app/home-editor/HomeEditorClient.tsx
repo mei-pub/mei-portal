@@ -1,7 +1,6 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import MeiIcon from '@/components/MeiIcon';
 import {
   EmptyState,
   Pill,
@@ -10,6 +9,7 @@ import {
   SettingsPage,
   SettingsSection,
   Select,
+  SettingsTabs,
   TextInput,
   Toggle,
 } from '@/components/SettingsUI';
@@ -99,30 +99,16 @@ export default function HomeEditorClient() {
         </>
       }
     >
-      <div className="home-editor-layout">
-        <nav className="home-editor-tabs">
-          {tabs.map((item) => (
-            <button key={item.id} className={tab === item.id ? 'active' : ''} onClick={() => setTab(item.id)}>
-              <MeiIcon icon={item.icon} size={16} />
-              <span>{item.label}</span>
-            </button>
-          ))}
-        </nav>
-        <div className="home-editor-content">
-          {error ? <EmptyState title={error} /> : null}
-          {message ? <EmptyState title={message} /> : null}
-          {tab === 'style' && <StyleTab config={config} update={update} />}
-          {tab === 'groups' && <GroupsTab config={config} update={update} />}
-          {tab === 'backup' && <BackupTab config={config} reload={reload} />}
-        </div>
+      {error ? <EmptyState title={error} /> : null}
+      {message ? <EmptyState title={message} /> : null}
+      <SettingsTabs items={tabs} active={tab} onChange={(id) => setTab(id as Tab)} />
+      <div className="home-editor-content">
+        {tab === 'style' && <StyleTab config={config} update={update} />}
+        {tab === 'groups' && <GroupsTab config={config} update={update} />}
+        {tab === 'backup' && <BackupTab config={config} reload={reload} />}
       </div>
 
       <style>{`
-        .home-editor-layout{display:grid;grid-template-columns:210px minmax(0,1fr);gap:16px;align-items:start;}
-        .home-editor-tabs{position:sticky;top:0;display:flex;flex-direction:column;gap:6px;padding:8px;background:rgba(255,255,255,.74);border:1px solid rgba(255,255,255,.82);border-radius:20px;box-shadow:var(--mei-shadow-sm);backdrop-filter:blur(18px);}
-        .home-editor-tabs button{display:flex;align-items:center;gap:9px;padding:10px;border:none;border-radius:13px;background:transparent;color:var(--mei-text);font-size:12.5px;font-weight:700;text-align:left;cursor:pointer;transition:var(--mei-transition);}
-        .home-editor-tabs button:hover{background:rgba(99,102,241,.07);color:var(--mei-primary);}
-        .home-editor-tabs button.active{background:var(--mei-gradient-soft);color:var(--mei-primary);}
         .home-editor-content{min-width:0;}
         .range-row{display:grid;grid-template-columns:1fr auto;gap:10px;align-items:center;min-height:38px;}
         .range-row output{font-size:11.5px;color:var(--mei-text-muted);font-weight:750;min-width:52px;text-align:right;}
@@ -130,7 +116,7 @@ export default function HomeEditorClient() {
         .group-row.drag{border-color:rgba(99,102,241,.45);background:rgba(99,102,241,.06);}
         .group-handle{cursor:grab;color:var(--mei-text-faint);text-align:center;}
         .cloud-grid{display:grid;grid-template-columns:180px minmax(0,1fr);gap:16px;align-items:start;}
-        @media(max-width:900px){.home-editor-layout{grid-template-columns:1fr;}.home-editor-tabs{position:static;flex-direction:row;overflow-x:auto;}.home-editor-tabs button{white-space:nowrap;}.cloud-grid{grid-template-columns:1fr;}}
+        @media(max-width:900px){.cloud-grid{grid-template-columns:1fr;}}
       `}</style>
     </SettingsPage>
   );

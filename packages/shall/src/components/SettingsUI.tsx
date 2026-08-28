@@ -3,6 +3,31 @@
 import type { ReactNode } from 'react';
 import MeiIcon from '@/components/MeiIcon';
 
+export function SettingsTabs({
+  items,
+  active,
+  onChange,
+}: {
+  items: Array<{ id: string; label: string; icon?: string }>;
+  active: string;
+  onChange: (id: string) => void;
+}) {
+  return (
+    <div className="mei-tabs">
+      {items.map((item) => (
+        <button
+          key={item.id}
+          className={active === item.id ? 'active' : ''}
+          onClick={() => onChange(item.id)}
+        >
+          {item.icon ? <MeiIcon icon={item.icon} size={14} /> : null}
+          <span>{item.label}</span>
+        </button>
+      ))}
+    </div>
+  );
+}
+
 export function SettingsPage({
   icon,
   title,
@@ -146,6 +171,10 @@ export const settingsUiStyles = `
 .mei-page-title p{margin:3px 0 0;font-size:12.5px;color:var(--mei-text-muted);}
 .mei-page-actions{display:flex;gap:8px;flex-shrink:0;}
 .mei-page-body{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;align-items:start;}
+.mei-tabs{display:flex;gap:4px;padding:4px;background:rgba(255,255,255,.6);border:1px solid var(--mei-border);border-radius:14px;margin-bottom:18px;box-shadow:var(--mei-shadow-sm);overflow-x:auto;backdrop-filter:blur(12px);}
+.mei-tabs button{display:inline-flex;align-items:center;gap:7px;height:36px;padding:0 16px;border:none;border-radius:11px;background:transparent;font-size:12.5px;font-weight:700;color:var(--mei-text-muted);cursor:pointer;white-space:nowrap;transition:var(--mei-transition);}
+.mei-tabs button:hover{background:rgba(99,102,241,.06);color:var(--mei-primary);}
+.mei-tabs button.active{background:var(--mei-gradient-soft);color:var(--mei-primary);font-weight:800;}
 .mei-section{background:rgba(255,255,255,.74);border:1px solid rgba(255,255,255,.82);border-radius:20px;padding:18px;box-shadow:var(--mei-shadow-sm);backdrop-filter:blur(18px);min-width:0;}
 .mei-section.wide{grid-column:1/-1;}
 .mei-section-head{display:flex;justify-content:space-between;gap:14px;margin-bottom:15px;}

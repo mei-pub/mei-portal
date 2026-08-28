@@ -5,7 +5,6 @@ import {
   EmptyState,
   Pill,
   SettingsButton,
-  SettingsField,
   SettingsPage,
   SettingsSection,
   TextInput,
@@ -20,13 +19,39 @@ interface Health {
   plugin_count?: number;
 }
 
-const DISK_TYPES = [
-  ['baidu', '百度'], ['aliyun', '阿里'], ['quark', '夸克'], ['guangya', '光鸭'],
-  ['tianyi', '天翼'], ['115', '115'], ['xunlei', '迅雷'], ['uc', 'UC'],
-  ['mobile', '移动'], ['pikpak', 'PikPak'], ['123', '123'], ['magnet', '磁力'], ['ed2k', '电驴'],
-] as const;
+const DISK_TYPES: Array<[string, string]> = [
+  ['baidu', '百度网盘'], ['aliyun', '阿里云盘'], ['quark', '夸克网盘'], ['guangya', '光鸭网盘'],
+  ['tianyi', '天翼云盘'], ['115', '115 网盘'], ['xunlei', '迅雷云盘'], ['uc', 'UC 网盘'],
+  ['mobile', '移动云盘'], ['pikpak', 'PikPak'], ['123', '123 网盘'], ['magnet', '磁力链接'], ['ed2k', '电驴链接'],
+];
 
-const MAGNET_PLUGINS = new Set(['muou', 'zhizhen', 'fox4k', 'lou1', 'wanou', 'ouge', 'huban', 'cyg', 'pianku', 'qqpd', 'nyaa', 'erxiao', 'duoduo', 'qiwei', 'xiaoji', 'gying', 'lingjisp', 'xuexizhinan', 'meitizy', 'xys', 'dyyj', 'dyyjpro', 'yulinshufa', 'mizixing', 'jsnoteclub', 'yiove', 'panlian', 'xiaozhang', 'qupansou', 'shandian', 'clmao', 'cldi', 'clxiong', 'daishudj', 'djgou', 'haisou', 'hdr4k']);
+// 插件 ID → 中文可读名称
+const PLUGIN_LABELS: Record<string, string> = {
+  muou: '木偶搜索', zhizhen: '指针搜索', fox4k: 'Fox 4K', lou1: '楼层搜索', wanou: '玩偶搜索',
+  ouge: '欧歌搜索', huban: '虎斑搜索', cyg: 'CYG 搜索', pianku: '片库搜索', qqpd: 'QQ 频道',
+  nyaa: 'Nyaa 番剧', erxiao: '二小搜索', duoduo: '多多搜索', qiwei: '趣味搜索', xiaoji: '小鸡搜索',
+  gying: '广影搜索', lingjisp: '灵迹搜索', xuexizhinan: '学习指南', meitizy: '美蹄资源', xys: '校园搜索',
+  dyyj: '电影一级', dyyjpro: '电影一级 Pro', yulinshufa: '玉林书法', mizixing: '觅字星',
+  jsnoteclub: 'JS 笔记', yiove: '一搜', panlian: '盘链搜索', xiaozhang: '小张搜索',
+  qupansou: '去盘搜', shandian: '闪电搜索', clmao: 'CL 猫', cldi: 'CL 滴',
+  clxiong: 'CL 熊', daishudj: '代数 DJ', djgou: 'DJ 狗', haisou: '海搜', hdr4k: 'HDR 4K',
+};
+
+const MAGNET_PLUGINS = new Set([
+  'muou', 'zhizhen', 'fox4k', 'lou1', 'wanou', 'ouge', 'huban', 'cyg', 'pianku', 'qqpd', 'nyaa',
+  'erxiao', 'duoduo', 'qiwei', 'xiaoji', 'gying', 'lingjisp', 'xuexizhinan', 'meitizy', 'xys',
+  'dyyj', 'dyyjpro', 'yulinshufa', 'mizixing', 'jsnoteclub', 'yiove', 'panlian', 'xiaozhang',
+  'qupansou', 'shandian', 'clmao', 'cldi', 'clxiong', 'daishudj', 'djgou', 'haisou', 'hdr4k',
+]);
+
+function pluginLabel(id: string): string {
+  return PLUGIN_LABELS[id] || id;
+}
+
+function channelLabel(id: string): string {
+  // TG 频道通常是 @xxx 或纯英文标识，直接展示即可
+  return id;
+}
 
 export default function PansouSettings() {
   const [health, setHealth] = useState<Health | null>(null);
@@ -97,7 +122,7 @@ export default function PansouSettings() {
     setNewChannel('');
   }
 
-  function renderChips(list: string[], selected: string[], setter: (v: string[]) => void, removable = false) {
+  function renderChips(list: string[], selected: string[], setter: (v: string[]) => void, labelFn: (v: string) => string, removable = false) {
     return (
       <div className="chip-cloud">
         {list.map((item) => (
@@ -106,17 +131,13 @@ export default function PansouSettings() {
             className={selected.includes(item) ? 'active' : ''}
             onClick={() => toggle(selected, item, setter)}
           >
-            {item}
+            {labelFn(item)}
             {removable && customChannels.includes(item) ? (
-              <i
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setCustomChannels(customChannels.filter((v) => v !== item));
-                  setChannels(channels.filter((v) => v !== item));
-                }}
-              >
-                ×
-              </i>
+              <i onClick={(e) => {
+                e.stopPropagation();
+                setCustomChannels(customChannels.filter((v) => v !== item));
+                setChannels(channels.filter((v) => v !== item));
+              }}>×</i>
             ) : null}
           </button>
         ))}
@@ -128,61 +149,56 @@ export default function PansouSettings() {
     <SettingsPage
       icon="lucide:search"
       title="网盘搜索设置"
-      description="管理 TG 频道、搜索插件、网盘类型与链接检测。"
+      description="管理搜索频道、插件、网盘类型与链接检测。"
       actions={<Pill tone={loading ? 'warning' : 'success'}>{loading ? '读取中' : `${health?.plugin_count ?? plugins.length} 个插件`}</Pill>}
     >
-      <SettingsSection title="搜索频道" description="频道决定 TG 搜索的数据来源。">
+      <SettingsSection title="搜索频道" description="TG 频道决定搜索的数据来源，可添加自定义频道。" wide>
         <div className="section-tools">
           <SettingsButton onClick={() => setChannels(channels.length === allChannels.length ? [] : allChannels)}>
             {channels.length === allChannels.length ? '取消全选' : '全选'}
           </SettingsButton>
         </div>
-        {renderChips(allChannels, channels, setChannels, true)}
+        {renderChips(allChannels, channels, setChannels, channelLabel, true)}
         <div className="channel-add">
-          <TextInput value={newChannel} onChange={(e) => setNewChannel(e.target.value)} placeholder="新增自定义频道" onKeyDown={(e) => e.key === 'Enter' && addChannel()} />
-          <SettingsButton variant="primary" onClick={addChannel}>添加</SettingsButton>
+          <TextInput value={newChannel} onChange={(e) => setNewChannel(e.target.value)} placeholder="输入自定义频道名" onKeyDown={(e) => e.key === 'Enter' && addChannel()} />
+          <SettingsButton variant="primary" onClick={addChannel}>添加频道</SettingsButton>
         </div>
       </SettingsSection>
 
-      <div>
-        <SettingsSection title="网盘与网页插件">
-          <div className="section-tools">
-            <SettingsButton onClick={() => {
-              const all = webPlugins.every((p) => plugins.includes(p));
-              setPlugins(all ? plugins.filter((p) => !webPlugins.includes(p)) : [...new Set([...plugins, ...webPlugins])]);
-            }}>
-              切换全选
-            </SettingsButton>
-          </div>
-          {renderChips(webPlugins, plugins, setPlugins)}
-        </SettingsSection>
-        <SettingsSection title="磁力 / 电驴插件">
-          <div className="section-tools">
-            <SettingsButton onClick={() => {
-              const all = magnetPlugins.every((p) => plugins.includes(p));
-              setPlugins(all ? plugins.filter((p) => !magnetPlugins.includes(p)) : [...new Set([...plugins, ...magnetPlugins])]);
-            }}>
-              切换全选
-            </SettingsButton>
-          </div>
-          {renderChips(magnetPlugins, plugins, setPlugins)}
-        </SettingsSection>
-      </div>
+      <SettingsSection title="网盘与网页插件" description="常规搜索插件，覆盖大部分网盘资源。" wide>
+        <div className="section-tools">
+          <SettingsButton onClick={() => {
+            const all = webPlugins.every((p) => plugins.includes(p));
+            setPlugins(all ? plugins.filter((p) => !webPlugins.includes(p)) : [...new Set([...plugins, ...webPlugins])]);
+          }}>{webPlugins.every((p) => plugins.includes(p)) ? '取消全选' : '全选'}</SettingsButton>
+        </div>
+        {webPlugins.length === 0 ? <EmptyState title="暂无网盘插件" description="后端未返回可用插件。" /> : renderChips(webPlugins, plugins, setPlugins, pluginLabel)}
+      </SettingsSection>
 
-      <SettingsSection title="网盘类型" description="控制聚合结果中保留的网盘类型。">
+      <SettingsSection title="磁力与电驴插件" description="支持 magnet/ed2k 链接的专用搜索源。" wide>
+        <div className="section-tools">
+          <SettingsButton onClick={() => {
+            const all = magnetPlugins.every((p) => plugins.includes(p));
+            setPlugins(all ? plugins.filter((p) => !magnetPlugins.includes(p)) : [...new Set([...plugins, ...magnetPlugins])]);
+          }}>{magnetPlugins.every((p) => plugins.includes(p)) ? '取消全选' : '全选'}</SettingsButton>
+        </div>
+        {magnetPlugins.length === 0 ? <EmptyState title="暂无磁力插件" /> : renderChips(magnetPlugins, plugins, setPlugins, pluginLabel)}
+      </SettingsSection>
+
+      <SettingsSection title="网盘类型筛选" description="控制聚合结果中保留哪些网盘类型。" wide>
         <div className="section-tools">
           <SettingsButton onClick={() => setDiskTypes(diskTypes.length === DISK_TYPES.length ? [] : DISK_TYPES.map(([id]) => id))}>
             {diskTypes.length === DISK_TYPES.length ? '取消全选' : '全选'}
           </SettingsButton>
         </div>
-        {renderChips(DISK_TYPES.map(([id]) => id), diskTypes, setDiskTypes)}
+        {renderChips(DISK_TYPES.map(([id]) => id), diskTypes, setDiskTypes, (id) => DISK_TYPES.find(([d]) => d === id)?.[1] || id)}
       </SettingsSection>
 
-      <SettingsSection title="链接检测" description="搜索后检测链接有效性，会消耗更多请求。">
+      <SettingsSection title="链接有效性检测" description="搜索后检测链接是否可用，会额外消耗请求。" wide>
         <Toggle checked={detection} onChange={setDetection} label="启用链接有效性检测" description="检测结果会按链接缓存，减少重复检测。" />
       </SettingsSection>
 
-      <SettingsSection title="操作" wide>
+      <SettingsSection title="保存与重置" wide>
         {error ? <EmptyState title={error} /> : message ? <EmptyState title={message} /> : <EmptyState title="配置保存在本浏览器" description="切换设备后需要重新配置。" />}
         <div className="footer-actions">
           <SettingsButton onClick={reset}>恢复默认</SettingsButton>

@@ -176,6 +176,7 @@ export default function LinkServerSettings() {
       <SettingsSection
         title="服务器连接"
         description="这些参数用于生成 frpc.toml 并建立隧道连接。"
+        wide
         actions={
           <>
             <SettingsButton onClick={testConnection} disabled={busy !== '' || !config.serverAddr}>
@@ -212,7 +213,7 @@ export default function LinkServerSettings() {
         </div>
       </SettingsSection>
 
-      <SettingsSection title="域名管理接口" description="用于从服务端拉取可用域名。">
+      <SettingsSection title="域名管理接口" description="用于从服务端拉取可用域名。" wide>
         <div className="mei-grid">
           <SettingsField label="管理页地址" span>
             <TextInput value={config.managementURL || ''} onChange={(e) => setConfig({ ...config, managementURL: e.target.value })} />
@@ -223,7 +224,7 @@ export default function LinkServerSettings() {
         </div>
       </SettingsSection>
 
-      <SettingsSection title="本地管理接口" description="frpc Admin API，用于状态读取与进程管理。">
+      <SettingsSection title="本地管理接口" description="frpc Admin API，用于状态读取与进程管理。" wide>
         <div className="mei-grid">
           <SettingsField label="端口">
             <TextInput type="number" value={config.adminPort || ''} onChange={(e) => setConfig({ ...config, adminPort: e.target.value })} />

@@ -73,7 +73,7 @@ export default function SolaraSettings() {
       description="管理探索雷达风格与音乐源启停。"
       actions={<Pill tone="neutral">{sources.length} 个源启用</Pill>}
     >
-      <SettingsSection title="探索雷达风格" description="控制发现页随机推荐的曲风池。">
+      <SettingsSection title="探索雷达风格" description="控制发现页随机推荐的曲风池。" wide>
         <div className="genre-cloud">
           {GENRES.map((name) => (
             <button key={name} className={genres.includes(name) ? 'active' : ''} onClick={() => toggleGenre(name)}>
@@ -83,7 +83,7 @@ export default function SolaraSettings() {
         </div>
       </SettingsSection>
 
-      <SettingsSection title="音乐源" description="解析失败时播放器会自动尝试其他启用源。">
+      <SettingsSection title="音乐源" description="解析失败时播放器会自动尝试其他启用源。" wide>
         <div className="source-stack">
           {SOURCES.map((s) => (
             <Toggle

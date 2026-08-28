@@ -6,7 +6,6 @@ import {
   Pill,
   SettingsButton,
   SettingsField,
-  SettingsPage,
   SettingsSection,
   TextInput,
 } from '@/components/SettingsUI';
@@ -101,17 +100,11 @@ export default function TvSources() {
   const enabled = sources.filter((s) => !s.disabled).length;
 
   return (
-    <SettingsPage
-      icon="lucide:database"
-      title="影视源管理"
-      description="启停、检测和添加影视资源站。"
-      actions={
-        <div style={{ display: 'flex', gap: 8 }}>
-          <Pill tone="neutral">{sources.length} 个源</Pill>
-          <Pill tone="success">{enabled} 个启用</Pill>
-        </div>
-      }
-    >
+    <div>
+      <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
+        <Pill tone="neutral">{sources.length} 个源</Pill>
+        <Pill tone="success">{enabled} 个启用</Pill>
+      </div>
       <SettingsSection
         title="源列表"
         description="检测会向源站发起一次搜索请求，全部检测按顺序执行。"
@@ -205,6 +198,6 @@ export default function TvSources() {
         .switch input:checked+span::after{transform:translateX(18px);}
         .footer-actions{display:flex;justify-content:flex-end;margin-top:12px;}
       `}</style>
-    </SettingsPage>
+    </div>
   );
 }

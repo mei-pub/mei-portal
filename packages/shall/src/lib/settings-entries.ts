@@ -23,7 +23,6 @@ export const SETTING_GROUPS: SettingGroup[] = [
     entries: [
       { id: 'panel-settings', name: '主页设置', url: '/home-editor', icon: 'lucide:layout-dashboard' },
       { id: 'tv-settings', name: '影视设置', url: '/settings/tv', icon: 'lucide:tv' },
-      { id: 'tv-sources', name: '影视源管理', url: '/settings/tv-sources', icon: 'lucide:database' },
       { id: 'solara-settings', name: '音乐播放设置', url: '/settings/solara', icon: 'lucide:music' },
       { id: 'mediago-settings', name: '媒体下载设置', url: '/settings/mediago', icon: 'lucide:download' },
       { id: 'pansou-config', name: '网盘搜索设置', url: '/settings/pansou', icon: 'lucide:search' },

@@ -5,7 +5,6 @@ import {
   EmptyState,
   SettingsButton,
   SettingsField,
-  SettingsPage,
   SettingsSection,
   Select,
   TextInput,
@@ -87,7 +86,7 @@ export default function TvSettings() {
   }
 
   return (
-    <SettingsPage icon="lucide:tv" title="影视设置" description="搜索、播放与豆瓣数据源偏好。">
+    <div>
       <SettingsSection title="搜索">
         <div className="toggle-stack">
           <Toggle checked={form.defaultAggregateSearch} onChange={(v) => setForm({ ...form, defaultAggregateSearch: v })} label="默认聚合搜索" description="同时聚合全部启用源。" />
@@ -139,6 +138,6 @@ export default function TvSettings() {
       </SettingsSection>
 
       <style>{`.toggle-stack{display:flex;flex-direction:column;gap:9px;}.footer-actions{display:flex;justify-content:flex-end;gap:9px;margin-top:12px;}`}</style>
-    </SettingsPage>
+    </div>
   );
 }
