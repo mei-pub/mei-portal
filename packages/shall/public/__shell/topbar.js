@@ -10,14 +10,52 @@
 
   var APP_ID = (document.currentScript && document.currentScript.getAttribute('data-app')) || '';
 
-  // ---- 嵌入模式（?meiEmbed=1）：不注入顶栏与 body padding，仅保留登录态副作用 ----
+  // 顶栏挂载容器。门户外壳（Next/React）提供 #mei-shell-slot：React 只渲染这个空 div，
+  // 不管理它的子节点，因此往里塞顶栏不会破坏 React 的 DOM 对账。
+  // 直接 body.insertBefore(bar, body.firstChild) 会让 React 卸载时抛
+  // 「removeChild of null」并清空整页（曾导致切换应用后 iframe/播放条一起消失）。
+  function mountRoot() {
+    return document.getElementById('mei-shell-slot') || document.body || document.documentElement;
+  }
+
+  // 外壳页面（Next/React）由 layout 注入 window.__MEI_ROOT_DOMAIN__，
+  // 此时必须等 #mei-shell-slot 渲染出来再挂载，不能退化到直接改 body。
+  function mountReady() {
+    if (document.getElementById('mei-shell-slot')) return true;
+    if (typeof window.__MEI_ROOT_DOMAIN__ !== 'undefined') return false;
+    return !!document.body;
+  }
+
+  // 承载页（/app）在客户端切换子应用时不重载页面，通过该事件更新顶栏高亮
+  window.addEventListener('mei-topbar-app', function (e) {
+    var next = (e && e.detail && e.detail.app) || '';
+    if (!next || next === APP_ID) return;
+    APP_ID = next;
+    var bar = document.getElementById('mei-topbar');
+    if (bar) bar.remove();
+    window.dispatchEvent(new Event('mei-topbar-rebuild'));
+  });
+
+  // ---- 嵌入模式：不注入顶栏与 body padding，仅保留登录态副作用 ----
+  // 判定优先用「是否在 iframe 内」：门户承载页（/app）用 iframe 装子应用，
+  // 顶栏由承载页自身注入。仅靠 ?meiEmbed=1 不可靠——子应用内部跳转会丢查询串。
   function isEmbedMode() {
+    try {
+      if (window.parent && window.parent !== window) return true;
+    } catch (e) {
+      // 跨域父窗口：同样视为被嵌入
+      return true;
+    }
     try {
       return new URLSearchParams(window.location.search).get('meiEmbed') === '1' ||
         localStorage.getItem('mei-embed') === '1';
     } catch (e) { return false; }
   }
   var EMBED = isEmbedMode();
+
+  // 承载页（/app）注入顶栏后是单页应用：离开承载页时必须能整体隐藏，
+  // 否则自愈循环会把顶栏重建到门户自研主页上，出现两套导航。
+  var SUPPRESSED = false;
 
   // ---- 主页内网模式开关（自研主页版：localStorage mei-lan-mode，自定义链接优先 lanUrl）----
   function isLanMode() {
@@ -89,6 +127,8 @@
       '[class*="header"][class*="fixed"],[class*="Header"][class*="fixed"]{top:74px!important;}',
       'body{padding-top:74px!important;--mei-topbar-space:74px;transition:padding-top .25s ease;}',
       'body.mei-topbar-collapsed{padding-top:30px!important;--mei-topbar-space:30px;}',
+      /* 抑制态（返回门户自研主页）：注入顶栏隐藏，占位也必须归零 */
+      'html.mei-topbar-off body{padding-top:0!important;--mei-topbar-space:0px;}',
       /* 收起把手：贴顶居中的小渐变条 */
       '#mei-topbar-toggle{position:fixed;top:0;left:50%;transform:translateX(-50%);z-index:9999;height:22px;width:64px;',
       'border-radius:0 0 14px 14px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:#fff;',
@@ -197,12 +237,18 @@
             // favicon 联动：所有子应用页面统一使用主应用可配置 Logo 作为网站图标
             try {
               var iconUrl = cfg.style.logoImage || '/logo.svg';
+              // 只改写 href、绝不 remove()：React 把 <link rel=icon> 当 hoistable resource
+              // 托管，外部删除它会让卸载时 parentNode 为 null，抛
+              // 「Cannot read properties of null (reading 'removeChild')」并清空整页。
               var oldIcon = document.querySelectorAll('link[rel="icon"],link[rel="shortcut icon"],link[rel="apple-touch-icon"]');
-              for (var i = 0; i < oldIcon.length; i++) oldIcon[i].remove();
-              var link = document.createElement('link');
-              link.rel = 'icon';
-              link.href = iconUrl;
-              document.head.appendChild(link);
+              if (oldIcon.length) {
+                for (var i = 0; i < oldIcon.length; i++) oldIcon[i].href = iconUrl;
+              } else {
+                var link = document.createElement('link');
+                link.rel = 'icon';
+                link.href = iconUrl;
+                document.head.appendChild(link);
+              }
             } catch (e) {}
             // 应用域名适配：主页设置为应用配置的 URL（可能是独立域名）优先于默认子路径
             try {
@@ -306,7 +352,7 @@
         document.addEventListener('keydown', function (e) { if (e.key === 'Escape') closeLibMenu(); });
         window.addEventListener('resize', closeLibMenu);
         window.addEventListener('scroll', closeLibMenu, true);
-        document.body.appendChild(libMenu);
+        mountRoot().appendChild(libMenu);
         wrap.appendChild(libBtn);
         apps.appendChild(wrap);
       }
@@ -356,6 +402,7 @@
       return transientCollapsed || isCollapsed();
     }
     function ensureToggle() {
+      if (!mountReady()) return;
       var t = document.getElementById('mei-topbar-toggle');
       if (!t) {
         t = document.createElement('div');
@@ -363,7 +410,7 @@
         t.title = '展开导航面板';
         t.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>';
         t.onclick = function () { transientCollapsed = false; setCollapsed(false); };
-        (document.body || document.documentElement).appendChild(t);
+        mountRoot().appendChild(t);
       }
       t.style.display = effectiveCollapsed() ? 'flex' : 'none';
     }
@@ -390,11 +437,19 @@
 
     // 自愈：SPA hydration 可能移除顶栏，定期检查重建
     function ensureBar() {
-      if (!document.body) { setTimeout(ensureBar, 50); return; }
+      if (!mountReady()) { setTimeout(ensureBar, 50); return; }
+      if (SUPPRESSED) {
+        var existing = document.getElementById('mei-topbar');
+        if (existing) existing.remove();
+        var toggle = document.getElementById('mei-topbar-toggle');
+        if (toggle) toggle.style.display = 'none';
+        document.body.style.paddingTop = '';
+        return;
+      }
       ensureToggle();
       if (!document.getElementById('mei-topbar') && cachedPlugins) {
         var built = buildTopbar(cachedPlugins);
-        document.body.insertBefore(built.bar, document.body.firstChild);
+        mountRoot().appendChild(built.bar);
         // 应用折叠态（记忆或应用编程触发）
         if (effectiveCollapsed()) {
           document.getElementById('mei-topbar').style.display = 'none';
@@ -409,6 +464,15 @@
       setTimeout(healLoop, healCount < 20 ? 300 : 5000);
     }
     setTimeout(healLoop, 500);
+    // 应用切换后立即重建（不等自愈循环）
+    window.addEventListener('mei-topbar-rebuild', ensureBar);
+    // 承载页卸载（返回门户自研主页）时抑制顶栏
+    window.addEventListener('mei-topbar-suppress', function (e) {
+      var detail = (e && e.detail) || {};
+      SUPPRESSED = detail.suppressed !== false;
+      document.documentElement.classList.toggle('mei-topbar-off', SUPPRESSED);
+      ensureBar();
+    });
 
     // 拉取插件列表
     fetch('/api/plugins', { credentials: 'include' })

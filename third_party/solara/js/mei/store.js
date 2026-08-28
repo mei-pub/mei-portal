@@ -32,8 +32,16 @@ export const store = {
   temp: [],
   // 播放列表页当前选中的列表 id
   selectedPlaylistId: "",
+  // 宿主同步钩子（被门户外壳承载时由 hostbridge 注入）：
+  // 数据变更统一交给外壳写账户级存储，避免应用内与外壳双写冲突。
+  syncHook: null,
 
   async init() {
+    // 宿主模式：数据由外壳推送（账户级持久化），本地不再自行加载/合并
+    if (this.syncHook) {
+      emit("store");
+      return;
+    }
     // 本地优先
     try {
       this.playlists = JSON.parse(localStorage.getItem(LS_PLAYLISTS) || "[]");
@@ -69,12 +77,22 @@ export const store = {
   },
 
   persistPlaylists() {
+    if (this.syncHook) {
+      this.syncHook();
+      emit("playlists");
+      return;
+    }
     localStorage.setItem(LS_PLAYLISTS, JSON.stringify(this.playlists));
     localStorage.setItem(LS_SELECTED, this.selectedPlaylistId);
     remoteStorage.setItems({ [LS_PLAYLISTS]: JSON.stringify(this.playlists) });
     emit("playlists");
   },
   persistFavorites() {
+    if (this.syncHook) {
+      this.syncHook();
+      emit("favorites");
+      return;
+    }
     localStorage.setItem(LS_FAVORITES, JSON.stringify(this.favorites));
     remoteStorage.setItems({ [LS_FAVORITES]: JSON.stringify(this.favorites) });
     emit("favorites");
@@ -117,7 +135,8 @@ export const store = {
   selectPlaylist(id) {
     if (this.getPlaylist(id)) {
       this.selectedPlaylistId = id;
-      localStorage.setItem(LS_SELECTED, id);
+      if (this.syncHook) this.syncHook();
+      else localStorage.setItem(LS_SELECTED, id);
       emit("playlists");
     }
   },
@@ -174,11 +193,13 @@ export const store = {
   // ============ 临时列表（不持久化） ============
   setTemp(songs) {
     this.temp = songs.slice();
+    if (this.syncHook) this.syncHook();
     emit("temp");
   },
   addToTemp(song) {
     if (this.temp.some((s) => songKey(s) === songKey(song))) return "exists";
     this.temp.push({ ...song });
+    if (this.syncHook) this.syncHook();
     emit("temp");
     return true;
   },

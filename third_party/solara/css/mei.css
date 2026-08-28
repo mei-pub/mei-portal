@@ -22,6 +22,12 @@
   --playerbar-h: 76px;
 }
 
+/* 被门户外壳承载时（iframe 内），底部播放条由外壳常驻组件提供，
+   应用内不再渲染播放条，也不需要为它预留高度 */
+body.mei-hosted-player { --playerbar-h: 10px; }
+/* 承载模式下页面内不注入顶栏，顶部不需要为顶栏留白 */
+body.mei-hosted-player .mei-main { padding-top: 20px; }
+
 /* Mei Music 设计系统：与门户 shall tokens.css 对齐（浅色玻璃拟态 + 靛紫渐变） */
 * { box-sizing: border-box; }
 html, body { margin: 0; padding: 0; }

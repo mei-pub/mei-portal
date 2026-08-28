@@ -53,8 +53,12 @@ export const player = {
   _playToken: 0,
   _failureHandledToken: 0,
   _mediaObjectUrl: "",
+  // 宿主模式：被门户外壳以 iframe 承载时，音频由外壳常驻引擎持有，
+  // 本模块只做 UI 与数据编辑，播放控制通过桥接转发（跨应用切换不中断播放）。
+  _host: null,
 
   init() {
+    if (this._host) return;
     this.audio.preload = "auto";
     this.audio.addEventListener("ended", () => this.next(true));
     this.audio.addEventListener("timeupdate", () => this._onTime());
@@ -69,6 +73,34 @@ export const player = {
     // Do not treat a transient zero duration as a playback failure.
     // Some browsers report duration=0 at loadedmetadata before the media
     // timeline is available, especially for progressive MP4/M4A streams.
+  },
+
+  /** 切换到宿主模式：丢弃本地 Audio，改为一个只读状态镜像 */
+  enableHostMode(host) {
+    this._host = host;
+    try {
+      this.audio.pause();
+      this.audio.removeAttribute("src");
+    } catch { /* 已是镜像对象 */ }
+    this.audio = { paused: true, currentTime: 0, duration: 0, src: "" };
+  },
+
+  isHosted() {
+    return !!this._host;
+  },
+
+  /** 宿主模式下由桥接推进歌词高亮（本地没有 timeupdate 事件） */
+  syncLyricIdx(time) {
+    if (this.lyric.length === 0) return;
+    let idx = -1;
+    for (let k = 0; k < this.lyric.length; k++) {
+      if (this.lyric[k].t <= time + 0.3) idx = k;
+      else break;
+    }
+    if (idx !== this.lyricIdx) {
+      this.lyricIdx = idx;
+      emit("lyric");
+    }
   },
 
   // 当前队列（实时引用 store，列表变更自动反映）
@@ -101,6 +133,19 @@ export const player = {
     }
     const q = this.queue();
     this.index = q.length > 0 ? Math.min(Math.max(startIndex, 0), q.length - 1) : -1;
+    if (this._host) {
+      this._host.send({
+        type: "set-queue",
+        data: {
+          playlists: store.playlists,
+          favorites: store.favorites,
+          temp: store.temp,
+          selectedPlaylistId: store.selectedPlaylistId,
+        },
+        queue: { type: this.queueType, playlistId: this.playlistId, index: this.index },
+        play: false,
+      });
+    }
     emit("queue");
     emit("player");
   },
@@ -108,6 +153,13 @@ export const player = {
   async playIndex(i, autoplay = true) {
     const q = this.queue();
     if (i < 0 || i >= q.length) return;
+    if (this._host) {
+      this.index = i;
+      emit("queue");
+      emit("player");
+      this._host.send({ type: "play-index", index: i });
+      return;
+    }
     const playToken = ++this._playToken;
     this._failureHandledToken = 0;
     this.index = i;
@@ -195,6 +247,7 @@ export const player = {
   },
 
   toggle() {
+    if (this._host) { this._host.send({ type: "toggle" }); return; }
     if (!this.audio.src) {
       if (this.index >= 0) this.playIndex(this.index);
       return;
@@ -204,6 +257,7 @@ export const player = {
   },
 
   next(auto = false) {
+    if (this._host) { this._host.send({ type: "next" }); return; }
     const q = this.queue();
     if (q.length === 0) return;
     if (this.mode === "repeat" && auto) {
@@ -221,6 +275,7 @@ export const player = {
   },
 
   prev() {
+    if (this._host) { this._host.send({ type: "prev" }); return; }
     const q = this.queue();
     if (q.length === 0) return;
     const i = (this.index - 1 + q.length) % q.length;
@@ -228,6 +283,12 @@ export const player = {
   },
 
   cycleMode() {
+    if (this._host) {
+      const i = MODE_CYCLE.indexOf(this.mode);
+      const next = MODE_CYCLE[(i + 1) % MODE_CYCLE.length];
+      this._host.send({ type: "cycle-mode" });
+      return MODE_LABEL[next];
+    }
     const i = MODE_CYCLE.indexOf(this.mode);
     this.mode = MODE_CYCLE[(i + 1) % MODE_CYCLE.length];
     emit("player");
@@ -235,6 +296,7 @@ export const player = {
   },
 
   seekTo(ratio) {
+    if (this._host) { this._host.send({ type: "seek", ratio }); return; }
     if (Number.isFinite(this.audio.duration)) {
       this.audio.currentTime = ratio * this.audio.duration;
     }
@@ -278,6 +340,12 @@ export const player = {
   mountBar(el, { onOpenPlayer } = {}) {
     this._barEl = el;
     this._onOpenPlayer = onOpenPlayer;
+    // 宿主模式：底部播放条由外壳常驻组件提供，应用内不再重复渲染一条
+    if (this._host) {
+      el.style.display = "none";
+      document.body.classList.add("mei-hosted-player");
+      return;
+    }
     // 结构级重渲染仅发生在切歌/切队列/播放暂停；时间进度走轻量更新，
     // 避免每秒多次重建 <img> 封面导致闪烁
     ["player", "queue", "favorites", "playlists", "temp"].forEach((ev) => on(ev, () => this._renderBar()));

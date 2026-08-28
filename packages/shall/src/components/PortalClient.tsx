@@ -10,6 +10,8 @@ import { isSwitchable, isAppEnabled } from '@/lib/app-toggles';
 import { useHealth } from '@/lib/use-health';
 import type { PanelConfig, PanelItem, PanelGroup } from '@/lib/panel-store';
 import ItemIconPicker, { isImgIcon, isTextIcon, textIconContent, contrastColor } from './ItemIconPicker';
+import { appHostHref } from '@/lib/app-host';
+import { useRouter } from 'next/navigation';
 import 'iconify-icon';
 
 interface Item {
@@ -43,11 +45,29 @@ function itemHref(item: PanelItem, lanMode: boolean): string {
   return lanMode && item.lanUrl ? item.lanUrl : item.url;
 }
 
+/**
+ * 同源子应用统一走承载页 /app（外壳不卸载，音乐连续播放）；外链新窗口。
+ * navigate 传入时用客户端路由跳转 —— 整页加载会销毁常驻播放引擎。
+ */
+function openTarget(
+  href: string,
+  plugins: { id: string; url: string }[],
+  navigate?: (path: string) => void
+): void {
+  if (/^https?:\/\//.test(href)) {
+    window.open(href, '_blank');
+    return;
+  }
+  const target = appHostHref(href, plugins) || href;
+  if (navigate) navigate(target);
+  else window.open(target, '_self');
+}
+
 type HealthMap = Record<string, { ok: boolean; ms: number; loading: boolean }>;
 
 /* ============ 统一图标卡片 ============ */
 function UnifiedCard({
-  item, lanMode, health, disabled, editMode, iconMode,
+  item, lanMode, health, disabled, editMode, iconMode, plugins, navigate,
   onEdit, onDelete, onContext, onDragStart, onDragOver, onDrop, isDragging, shouldBlockClick,
 }: {
   item: PanelItem;
@@ -56,6 +76,8 @@ function UnifiedCard({
   disabled?: boolean;
   editMode: boolean;
   iconMode?: boolean;
+  plugins: { id: string; url: string }[];
+  navigate: (path: string) => void;
   onEdit: () => void;
   onDelete: () => void;
   onContext: (e: React.MouseEvent) => void;
@@ -66,7 +88,6 @@ function UnifiedCard({
   shouldBlockClick: () => boolean;
 }) {
   const href = itemHref(item, lanMode);
-  const external = /^https?:\/\//.test(href);
   const status = !health
     ? null
     : health.loading
@@ -106,7 +127,7 @@ function UnifiedCard({
         data-disabled={disabled ? 'true' : undefined}
         data-mode={iconMode ? 'icon' : 'compact'}
         type="button"
-        onClick={() => { if (shouldBlockClick()) return; if (!editMode && !disabled) window.open(href, external ? '_blank' : '_self'); }}
+        onClick={() => { if (shouldBlockClick()) return; if (!editMode && !disabled) openTarget(href, plugins, navigate); }}
         onContextMenu={onContext}
         title={editMode ? '拖拽排序 / 右键菜单' : item.title}
       >
@@ -274,6 +295,7 @@ function ItemFormModal({
 
 /* ============ 主页 ============ */
 export default function PortalClient({ items, panel: initialPanel }: { items: Item[]; panel: PanelConfig }) {
+  const router = useRouter();
   const [panel, setPanel] = useState(initialPanel);
   // 小说站点列表（首页站点图标项数据源，尊重 ns-open 可见性）
   const [novelSites, setNovelSites] = useState<Array<{ slug: string; name: string; type: 'normal' | 'secret'; icon?: string; iconColor?: string; description?: string }>>([]);
@@ -311,6 +333,12 @@ export default function PortalClient({ items, panel: initialPanel }: { items: It
   const [touchStartX, setTouchStartX] = useState<number | null>(null);
   const health = useHealth() as HealthMap;
   const style = panel.style;
+  // 插件路径表：首页图标点击时用于判断该地址属于哪个子应用（→ 走 /app 承载页）
+  const hostPlugins = useMemo(
+    () => items.map((it) => ({ id: it.plugin.id, url: it.url })),
+    [items]
+  );
+  const navigate = useCallback((path: string) => router.push(path), [router]);
 
   // 时钟
   useEffect(() => {
@@ -322,7 +350,18 @@ export default function PortalClient({ items, panel: initialPanel }: { items: It
   // favicon 联动：主页使用设置里配置的 Logo 作为网站图标（与子应用注入顶栏行为一致）
   useEffect(() => {
     const icon = panel.style?.logoImage || '/logo.svg';
-    document.querySelectorAll('link[rel="icon"],link[rel="shortcut icon"],link[rel="apple-touch-icon"]').forEach((el) => el.remove());
+    // 只改写 href、绝不 remove()：Next/React 把 <link rel=icon> 当 hoistable resource 托管，
+    // 外部删除后其 parentNode 变 null，下一次路由卸载会抛
+    // 「Cannot read properties of null (reading 'removeChild')」并整页白屏（连带销毁常驻播放器）。
+    const existing = document.querySelectorAll<HTMLLinkElement>(
+      'link[rel="icon"],link[rel="shortcut icon"],link[rel="apple-touch-icon"]'
+    );
+    if (existing.length) {
+      existing.forEach((el) => {
+        el.href = icon;
+      });
+      return;
+    }
     const link = document.createElement('link');
     link.rel = 'icon';
     link.href = icon;
@@ -608,6 +647,8 @@ export default function PortalClient({ items, panel: initialPanel }: { items: It
       key={item.id}
       item={item}
       lanMode={lanMode}
+      plugins={hostPlugins}
+      navigate={navigate}
       health={healthOf(item)}
       disabled={isSwitchedOff(item)}
       editMode={editMode}
@@ -836,7 +877,7 @@ export default function PortalClient({ items, panel: initialPanel }: { items: It
           onClick={(e) => e.stopPropagation()}
         >
           {[
-            { label: '打开', fn: () => { const h = itemHref(contextMenu.item, lanMode); window.open(h, /^https?:\/\//.test(h) ? '_blank' : '_self'); } },
+            { label: '打开', fn: () => openTarget(itemHref(contextMenu.item, lanMode), hostPlugins, navigate) },
             { label: '编辑', fn: () => setEditing(contextMenu.item) },
             { label: '删除', fn: () => deleteItem(contextMenu.item), danger: true },
           ].map((a) => (

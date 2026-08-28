@@ -1,6 +1,7 @@
 // Mei Music 入口：状态初始化 / 哈希路由 / 左侧窄面板 / 底部播放条
 import { store, on } from "./store.js";
 import { player } from "./player.js";
+import { hostBridge } from "./hostbridge.js";
 import { renderSearch, renderPlaylists, renderPlayer, renderRandom, renderFavorites, loadLyric } from "./views.js";
 import { I, toast } from "./ui.js";
 
@@ -72,6 +73,12 @@ function mountPanel() {
   window.addEventListener("hashchange", render);
   // 播放页切换队列（tab 切换列表）时联动刷新左侧面板选中态
   on("queue", render);
+  // 与顶栏/播放条同构：支持宿主编程收起（不写记忆）
+  window.addEventListener("mei-panel-set", (e) => {
+    const detail = (e && e.detail) || {};
+    open = !detail.collapsed;
+    render();
+  });
   render();
 }
 
@@ -111,6 +118,11 @@ function rerenderPreservingQueueScroll() {
 }
 
 async function boot() {
+  // 被门户外壳以 iframe 承载时进入宿主模式：播放由外壳常驻引擎负责
+  const hosted = hostBridge.connect();
+  if (hosted) {
+    store.syncHook = () => hostBridge.pushData();
+  }
   await store.init();
   player.init();
 
@@ -141,6 +153,10 @@ async function boot() {
   mountPanel();
   window.addEventListener("hashchange", route);
   route();
+  if (hosted) {
+    // 宿主已在 connect 时发过 hello；此处再补一次，覆盖外壳尚未 boot 完成的时序
+    hostBridge.send({ type: "hello" });
+  }
 }
 
 boot();

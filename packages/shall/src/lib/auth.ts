@@ -11,6 +11,7 @@ const COOKIE_NAME = 'mei-auth';
 const SESSION_MAX_AGE = 30 * 24 * 3600; // 30 天
 
 interface UserRecord {
+  uid?: string;
   username: string;
   salt: string;
   hash: string;
@@ -24,7 +25,18 @@ function hashPassword(password: string, salt: string): string {
 function loadUser(): UserRecord | null {
   try {
     if (!fs.existsSync(USER_FILE)) return null;
-    return JSON.parse(fs.readFileSync(USER_FILE, 'utf8')) as UserRecord;
+    const user = JSON.parse(fs.readFileSync(USER_FILE, 'utf8')) as UserRecord;
+    // 懒迁移：早期版本没有稳定 uid，账户级数据只能按用户名定位（改名即丢数据）。
+    // 补一个一次性生成的 uid 并落盘，之后所有账户级存储都按 uid 归档。
+    if (!user.uid) {
+      user.uid = crypto.randomBytes(8).toString('hex');
+      try {
+        saveUser(user);
+      } catch {
+        // 只读文件系统等异常：本次请求仍可用内存中的 uid
+      }
+    }
+    return user;
   } catch {
     return null;
   }
@@ -42,6 +54,7 @@ export function initUserIfNeeded(): void {
   const password = process.env.MEI_ADMIN_PASSWORD || 'mei-allin';
   const salt = crypto.randomBytes(16).toString('hex');
   saveUser({
+    uid: crypto.randomBytes(8).toString('hex'),
     username,
     salt,
     hash: hashPassword(password, salt),
@@ -94,6 +107,11 @@ export function clearSession(): void {
 
 export function getUsername(): string | null {
   return loadUser()?.username || null;
+}
+
+/** 账户稳定标识：账户级数据（音乐状态等）按此归档，改名不迁移数据 */
+export function getUserId(): string | null {
+  return loadUser()?.uid || null;
 }
 
 /** 修改账户名（需旧密码校验；改名后旧会话失效需重新登录） */
