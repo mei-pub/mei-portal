@@ -1,0 +1,139 @@
+'use client';
+
+import { useEffect, useState } from 'react';
+import {
+  EmptyState,
+  Pill,
+  SettingsButton,
+  SettingsField,
+  SettingsPage,
+  SettingsSection,
+  TextInput,
+  Toggle,
+} from '@/components/SettingsUI';
+import { authorizedJsonFetch } from '@/lib/app-settings-client';
+
+interface MediagoConfig {
+  local?: string;
+  language?: string;
+  proxy?: string;
+  downloadProxySwitch?: boolean;
+  deleteSegments?: boolean;
+  maxRunner?: number;
+  apiKey?: string;
+  enableMobilePlayer?: boolean;
+}
+
+interface Wrapped<T> { success?: boolean; message?: string; data?: T }
+
+export default function MediagoSettings() {
+  const [config, setConfig] = useState<MediagoConfig>({});
+  const [loading, setLoading] = useState(true);
+  const [savingKey, setSavingKey] = useState('');
+  const [message, setMessage] = useState('');
+  const [error, setError] = useState('');
+
+  async function load() {
+    setLoading(true);
+    try {
+      const d = await authorizedJsonFetch<Wrapped<MediagoConfig>>('/media/api/config', 'mediago');
+      setConfig(d.data || {});
+      setError('');
+    } catch (err) {
+      setError((err as Error).message || '读取媒体下载配置失败');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    void load();
+  }, []);
+
+  async function save(key: keyof MediagoConfig) {
+    setSavingKey(key);
+    setMessage('');
+    setError('');
+    try {
+      const d = await authorizedJsonFetch<Wrapped<{ message?: string }>>(`/media/api/config/${key}`, 'mediago', {
+        method: 'PUT',
+        body: JSON.stringify({ value: config[key] }),
+      });
+      setMessage(d.data?.message || `${key} 已保存`);
+    } catch (err) {
+      setError((err as Error).message || '保存失败');
+      await load();
+    } finally {
+      setSavingKey('');
+    }
+  }
+
+  const fields: Array<{ key: keyof MediagoConfig; label: string; hint?: string; type?: 'text' | 'number' }> = [
+    { key: 'local', label: '下载目录', hint: '服务器保存下载内容的位置。' },
+    { key: 'proxy', label: '网络代理', hint: '留空则不使用代理。' },
+    { key: 'maxRunner', label: '并发下载数', type: 'number' },
+  ];
+
+  return (
+    <SettingsPage
+      icon="lucide:download"
+      title="媒体下载设置"
+      description="配置下载目录、代理与任务执行策略。"
+      actions={<Pill tone={loading ? 'warning' : 'success'}>{loading ? '读取中' : '已连接'}</Pill>}
+    >
+      <SettingsSection title="基础设置" description="修改单项后点击对应保存按钮。">
+        {fields.map((f) => (
+          <SettingsField key={f.key} label={f.label} hint={f.hint}>
+            <div className="field-save">
+              <TextInput
+                type={f.type || 'text'}
+                value={String(config[f.key] ?? '')}
+                onChange={(e) => setConfig({ ...config, [f.key]: f.type === 'number' ? Number(e.target.value) : e.target.value })}
+              />
+              <SettingsButton variant="primary" onClick={() => void save(f.key)} disabled={savingKey === f.key}>
+                {savingKey === f.key ? '保存中' : '保存'}
+              </SettingsButton>
+            </div>
+          </SettingsField>
+        ))}
+      </SettingsSection>
+
+      <SettingsSection title="任务策略" description="影响下载稳定性与磁盘占用。">
+        <div className="toggle-stack">
+          <Toggle
+            checked={!!config.downloadProxySwitch}
+            onChange={(v) => setConfig({ ...config, downloadProxySwitch: v })}
+            label="下载使用代理"
+            description="开启后下载请求走上方代理地址。"
+          />
+          <Toggle
+            checked={!!config.deleteSegments}
+            onChange={(v) => setConfig({ ...config, deleteSegments: v })}
+            label="完成后删除分片"
+            description="合并成功后自动清理临时分片。"
+          />
+        </div>
+        <div className="footer-actions">
+          <SettingsButton variant="primary" onClick={() => void save('downloadProxySwitch')}>保存代理开关</SettingsButton>
+          <SettingsButton variant="primary" onClick={() => void save('deleteSegments')}>保存分片策略</SettingsButton>
+        </div>
+      </SettingsSection>
+
+      <SettingsSection title="访问凭据" description="Web 模式下的只读 API Key。">
+        <SettingsField label="API Key">
+          <TextInput value={config.apiKey || ''} readOnly />
+        </SettingsField>
+      </SettingsSection>
+
+      <SettingsSection title="操作结果" wide>
+        {error ? <EmptyState title={error} /> : message ? <EmptyState title={message} /> : <EmptyState title="即时保存" description="每个配置项独立保存，失败时自动回读服务端值。" />}
+      </SettingsSection>
+
+      <style>{`
+        .field-save{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;}
+        .toggle-stack{display:flex;flex-direction:column;gap:10px;}
+        .footer-actions{display:flex;justify-content:flex-end;gap:9px;margin-top:12px;flex-wrap:wrap;}
+      `}</style>
+    </SettingsPage>
+  );
+}

@@ -5,6 +5,7 @@ import { useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import MeiIcon from '@/components/MeiIcon';
 import { SETTING_GROUPS } from '@/lib/settings-entries';
+import { settingsUiStyles } from '@/components/SettingsUI';
 
 export default function SettingsShell({ children }: { children: React.ReactNode }) {
   const router = useRouter();
@@ -37,6 +38,14 @@ export default function SettingsShell({ children }: { children: React.ReactNode 
       <div className="mei-shell-body">
         {/* 左侧设置菜单栏（始终在） */}
         <nav className="mei-shell-nav">
+          <button className="mei-shell-home" onClick={() => router.push('/')} title="返回主页">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/logo.svg" alt="" />
+            <span>
+              <strong>Mei AllIn</strong>
+              <small>应用门户</small>
+            </span>
+          </button>
           {SETTING_GROUPS.map((g) => (
             <div key={g.id} className="mei-shell-group">
               <div className="mei-shell-group-title">
@@ -85,7 +94,13 @@ export default function SettingsShell({ children }: { children: React.ReactNode 
       <style>{`
         .mei-shell-root{height:100vh;display:flex;flex-direction:column;overflow:hidden;}
         .mei-shell-body{flex:1;display:flex;min-height:0;position:relative;z-index:5;}
-        .mei-shell-nav{width:224px;flex-shrink:0;padding:var(--mei-space-4);background:var(--mei-surface);backdrop-filter:blur(22px) saturate(1.5);-webkit-backdrop-filter:blur(22px) saturate(1.5);border-right:1px solid var(--mei-border);overflow-y:auto;}
+        .mei-shell-nav{width:236px;flex-shrink:0;padding:var(--mei-space-4);background:var(--mei-surface);backdrop-filter:blur(22px) saturate(1.5);-webkit-backdrop-filter:blur(22px) saturate(1.5);border-right:1px solid var(--mei-border);overflow-y:auto;}
+        .mei-shell-home{width:100%;display:flex;align-items:center;gap:10px;margin-bottom:16px;padding:8px;border:none;border-radius:15px;background:linear-gradient(135deg,rgba(99,102,241,.12),rgba(14,165,233,.09));cursor:pointer;text-align:left;transition:var(--mei-transition);}
+        .mei-shell-home:hover{transform:translateY(-1px);box-shadow:0 12px 26px rgba(79,70,229,.13);background:linear-gradient(135deg,rgba(99,102,241,.16),rgba(14,165,233,.12));}
+        .mei-shell-home img{width:31px;height:31px;border-radius:11px;}
+        .mei-shell-home span{display:flex;flex-direction:column;min-width:0;}
+        .mei-shell-home strong{font-size:13px;font-weight:850;letter-spacing:-.2px;}
+        .mei-shell-home small{font-size:10.5px;color:var(--mei-text-muted);}
         .mei-shell-group{margin-bottom:var(--mei-space-4);}
         .mei-shell-group-title{display:flex;align-items:center;gap:7px;padding:4px 8px 6px;font-size:10.5px;font-weight:800;letter-spacing:1.8px;text-transform:uppercase;color:var(--mei-text-faint);border-bottom:1px solid var(--mei-border);margin-bottom:6px;}
         .mei-shell-item{position:relative;width:100%;display:flex;align-items:center;gap:9px;padding:8px 10px 8px 13px;background:transparent;border:none;border-radius:10px;color:var(--mei-text);cursor:pointer;font-size:13px;font-weight:550;text-align:left;transition:var(--mei-transition);}
@@ -104,12 +119,15 @@ export default function SettingsShell({ children }: { children: React.ReactNode 
         @media(max-width:760px){
           .mei-shell-body{flex-direction:column;}
           .mei-shell-nav{width:100%;display:flex;gap:14px;overflow-x:auto;overflow-y:hidden;padding:var(--mei-space-2) var(--mei-space-3);border-right:none;border-bottom:1px solid var(--mei-border);}
+          .mei-shell-home{width:auto;flex-shrink:0;margin-bottom:0;padding:5px 8px;}
+          .mei-shell-home span{display:none;}
           .mei-shell-group{margin-bottom:0;display:flex;align-items:center;gap:4px;flex-shrink:0;}
           .mei-shell-group-title{padding:0 6px 0 0;white-space:nowrap;}
           .mei-shell-item{width:auto;white-space:nowrap;padding:6px 10px;}
           .mei-shell-main{padding:var(--mei-space-3);}
         }
-      `}</style>
+      `}
+      ${settingsUiStyles}</style>
     </div>
   );
 }

@@ -1,0 +1,38 @@
+import { notFound, redirect } from 'next/navigation';
+import { initUserIfNeeded, isLoggedIn } from '@/lib/auth';
+import SettingsShell from '@/components/SettingsShell';
+import AiDrawSettings from '@/components/settings-apps/AiDrawSettings';
+import AiDrawStatus from '@/components/settings-apps/AiDrawStatus';
+import LinkLogs from '@/components/settings-apps/LinkLogs';
+import LinkServerSettings from '@/components/settings-apps/LinkServerSettings';
+import MediagoSettings from '@/components/settings-apps/MediagoSettings';
+import PansouSettings from '@/components/settings-apps/PansouSettings';
+import SolaraSettings from '@/components/settings-apps/SolaraSettings';
+import TvSettings from '@/components/settings-apps/TvSettings';
+import TvSources from '@/components/settings-apps/TvSources';
+
+export const dynamic = 'force-dynamic';
+
+const PAGES = {
+  'ai-draw': AiDrawSettings,
+  'ai-draw-status': AiDrawStatus,
+  'link-logs': LinkLogs,
+  'link-server': LinkServerSettings,
+  mediago: MediagoSettings,
+  pansou: PansouSettings,
+  solara: SolaraSettings,
+  tv: TvSettings,
+  'tv-sources': TvSources,
+} as const;
+
+export default async function SettingsAppPage({ params }: { params: { slug: string } }) {
+  initUserIfNeeded();
+  if (!isLoggedIn()) redirect('/login');
+  const Page = PAGES[params.slug as keyof typeof PAGES];
+  if (!Page) notFound();
+  return (
+    <SettingsShell>
+      <Page />
+    </SettingsShell>
+  );
+}

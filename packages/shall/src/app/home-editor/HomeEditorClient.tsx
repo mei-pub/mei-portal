@@ -1,484 +1,486 @@
 'use client';
-// 主页设置 —— 全量复刻 Sun-Panel 管理能力
-// 分区：风格设置（背景/Logo/时钟/搜索/图标样式/边距/页脚/监控）/ 分组管理 / 图标项管理（图标上传/拖拽排序/双地址）/ 导入导出
+
 import { useCallback, useEffect, useRef, useState } from 'react';
 import MeiIcon from '@/components/MeiIcon';
-import 'iconify-icon';
-import type { PanelConfig, PanelItem, PanelGroup } from '@/lib/panel-store';
+import {
+  EmptyState,
+  Pill,
+  SettingsButton,
+  SettingsField,
+  SettingsPage,
+  SettingsSection,
+  Select,
+  TextInput,
+  Toggle,
+} from '@/components/SettingsUI';
+import type { PanelConfig, PanelGroup } from '@/lib/panel-store';
 import { PRESET_GROUP_IDS } from '@/lib/panel-presets';
 
 type Tab = 'style' | 'groups' | 'backup';
+type CloudTarget = 'webdav' | 's3';
+
+interface WebdavForm { url: string; username: string; password: string }
+interface S3Form { endpoint: string; region: string; bucket: string; key: string; accessKey: string; secretKey: string }
 
 export default function HomeEditorClient() {
   const [config, setConfig] = useState<PanelConfig | null>(null);
   const [tab, setTab] = useState<Tab>('style');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [dirty, setDirty] = useState(false);
   const [message, setMessage] = useState('');
+  const [error, setError] = useState('');
 
   const reload = useCallback(async () => {
     try {
       const res = await fetch('/api/panel', { credentials: 'include' });
       if (res.ok) setConfig(await res.json());
-    } catch {}
-    setLoading(false);
+      else setError('读取主页配置失败');
+    } catch {
+      setError('读取主页配置失败');
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
-  useEffect(() => { reload(); }, [reload]);
+  useEffect(() => { void reload(); }, [reload]);
 
-  async function save(next: PanelConfig) {
-    setSaving(true);
+  function update(next: PanelConfig) {
+    setConfig(next);
+    setDirty(true);
     setMessage('');
+    setError('');
+  }
+
+  async function save() {
+    if (!config) return;
+    setSaving(true);
+    setError('');
     try {
       const res = await fetch('/api/panel', {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify(next),
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(config),
       });
       const body = await res.json().catch(() => ({}));
-      if (!res.ok) { setMessage(body.error || '保存失败'); return; }
-      setConfig(body.config || next);
-      setMessage('已保存，刷新首页生效');
-    } catch {
-      setMessage('保存失败');
+      if (!res.ok) throw new Error(body.error || '保存失败');
+      setConfig(body.config || config);
+      setDirty(false);
+      setMessage('主页配置已保存，刷新首页生效');
+    } catch (err) {
+      setError((err as Error).message || '保存失败');
     } finally {
       setSaving(false);
     }
   }
 
   if (loading || !config) {
-    return <div style={{ padding: 60, textAlign: 'center', color: 'var(--mei-text-muted)' }}>加载中…</div>;
+    return <EmptyState title="正在读取主页配置…" description="首次加载可能需要几秒钟。" />;
   }
 
-  const tabs: { id: Tab; label: string; icon: string; desc: string }[] = [
-    { id: 'style', label: '风格设置', icon: 'lucide:palette', desc: '背景 / Logo / 布局' },
-    { id: 'groups', label: '分组管理', icon: 'lucide:folder', desc: '分组与拖拽排序' },
-    { id: 'backup', label: '导入导出', icon: 'lucide:database', desc: '配置备份恢复' },
+  const tabs: Array<{ id: Tab; label: string; icon: string }> = [
+    { id: 'style', label: '风格与布局', icon: 'lucide:palette' },
+    { id: 'groups', label: '分组管理', icon: 'lucide:folder' },
+    { id: 'backup', label: '备份与恢复', icon: 'lucide:cloud' },
   ];
 
   return (
-    <div style={{ color: 'var(--mei-text)' }}>
-      <div style={{ maxWidth: 1080, margin: '0 auto', padding: '4px 4px 120px' }}>
-        {/* 页头 */}
-        <div style={{ marginBottom: 22 }}>
-          <h1 style={{ fontSize: 22, fontWeight: 800, margin: '0 0 6px', letterSpacing: 0.3 }}>主页设置</h1>
-          <p style={{ fontSize: 12.5, color: 'var(--mei-text-muted)', margin: 0 }}>
-            内置应用由系统自动管理；此处管理主页风格、分组与自定义应用/链接。
-          </p>
-        </div>
-
-        <div style={{ display: 'flex', gap: 20, alignItems: 'flex-start' }}>
-          {/* 侧边导航 */}
-          <nav
-            style={{
-              width: 168, flexShrink: 0, position: 'sticky', top: 76,
-              background: 'var(--mei-surface)', border: '1px solid var(--mei-border)',
-              borderRadius: 'var(--mei-radius-lg)', padding: 8,
-              display: 'flex', flexDirection: 'column', gap: 4,
-              boxShadow: 'var(--mei-shadow-sm)',
-            }}
-          >
-            {tabs.map((t) => {
-              const active = tab === t.id;
-              return (
-                <button
-                  key={t.id}
-                  onClick={() => setTab(t.id)}
-                  style={{
-                    display: 'flex', alignItems: 'center', gap: 10, width: '100%',
-                    padding: '10px 12px', borderRadius: 'var(--mei-radius)',
-                    border: 'none', cursor: 'pointer', textAlign: 'left',
-                    background: active ? 'var(--mei-gradient)' : 'transparent',
-                    color: active ? '#fff' : 'var(--mei-text)',
-                    boxShadow: active ? 'var(--mei-glow)' : 'none',
-                    transition: 'var(--mei-transition)',
-                  }}
-                >
-                  <MeiIcon icon={t.icon} size={17} />
-                  <span>
-                    <span style={{ display: 'block', fontSize: 13, fontWeight: active ? 700 : 550 }}>{t.label}</span>
-                    <span style={{ display: 'block', fontSize: 10.5, opacity: active ? 0.85 : 0.55, marginTop: 1 }}>{t.desc}</span>
-                  </span>
-                </button>
-              );
-            })}
-          </nav>
-
-          {/* 内容区 */}
-          <div style={{ flex: 1, minWidth: 0 }}>
-            {tab === 'style' && <StyleTab config={config} setConfig={setConfig} />}
-            {tab === 'groups' && <GroupsTab config={config} setConfig={setConfig} />}
-            {tab === 'backup' && <BackupTab config={config} reload={reload} />}
-          </div>
-        </div>
-
-        {/* 悬浮保存条（毛玻璃） */}
-        <div
-          style={{
-            position: 'fixed', bottom: 20, left: '50%', transform: 'translateX(-50%)',
-            display: 'flex', alignItems: 'center', gap: 14,
-            padding: '10px 12px 10px 22px', borderRadius: 'var(--mei-radius-full)',
-            background: 'rgba(255,255,255,0.88)', backdropFilter: 'blur(20px) saturate(1.5)',
-            border: '1px solid var(--mei-border)', boxShadow: 'var(--mei-shadow)',
-            zIndex: 60,
-          }}
-        >
-          {message ? (
-            <span style={{ fontSize: 12.5, color: message.includes('失败') ? 'var(--mei-danger)' : 'var(--mei-success)' }}>{message}</span>
-          ) : (
-            <span style={{ fontSize: 12.5, color: 'var(--mei-text-faint)' }}>修改后记得保存</span>
-          )}
-          <button
-            onClick={() => save(config)}
-            disabled={saving}
-            style={{
-              padding: '9px 24px', borderRadius: 'var(--mei-radius-full)', border: 'none',
-              background: 'var(--mei-gradient)', color: '#fff', fontSize: 13.5, fontWeight: 650,
-              cursor: 'pointer', boxShadow: 'var(--mei-glow)', opacity: saving ? 0.6 : 1,
-            }}
-          >
-            {saving ? '保存中…' : '保存设置'}
-          </button>
+    <SettingsPage
+      icon="lucide:layout-dashboard"
+      title="主页设置"
+      description="管理背景、风格、分组与备份；内置应用由系统自动同步。"
+      actions={
+        <>
+          <Pill tone={dirty ? 'warning' : 'success'}>{dirty ? '有未保存修改' : '配置已同步'}</Pill>
+          <SettingsButton variant="primary" onClick={() => void save()} disabled={saving || !dirty}>
+            {saving ? '保存中…' : '保存配置'}
+          </SettingsButton>
+        </>
+      }
+    >
+      <div className="home-editor-layout">
+        <nav className="home-editor-tabs">
+          {tabs.map((item) => (
+            <button key={item.id} className={tab === item.id ? 'active' : ''} onClick={() => setTab(item.id)}>
+              <MeiIcon icon={item.icon} size={16} />
+              <span>{item.label}</span>
+            </button>
+          ))}
+        </nav>
+        <div className="home-editor-content">
+          {error ? <EmptyState title={error} /> : null}
+          {message ? <EmptyState title={message} /> : null}
+          {tab === 'style' && <StyleTab config={config} update={update} />}
+          {tab === 'groups' && <GroupsTab config={config} update={update} />}
+          {tab === 'backup' && <BackupTab config={config} reload={reload} />}
         </div>
       </div>
-    </div>
+
+      <style>{`
+        .home-editor-layout{display:grid;grid-template-columns:210px minmax(0,1fr);gap:16px;align-items:start;}
+        .home-editor-tabs{position:sticky;top:0;display:flex;flex-direction:column;gap:6px;padding:8px;background:rgba(255,255,255,.74);border:1px solid rgba(255,255,255,.82);border-radius:20px;box-shadow:var(--mei-shadow-sm);backdrop-filter:blur(18px);}
+        .home-editor-tabs button{display:flex;align-items:center;gap:9px;padding:10px;border:none;border-radius:13px;background:transparent;color:var(--mei-text);font-size:12.5px;font-weight:700;text-align:left;cursor:pointer;transition:var(--mei-transition);}
+        .home-editor-tabs button:hover{background:rgba(99,102,241,.07);color:var(--mei-primary);}
+        .home-editor-tabs button.active{background:var(--mei-gradient-soft);color:var(--mei-primary);}
+        .home-editor-content{min-width:0;}
+        .range-row{display:grid;grid-template-columns:1fr auto;gap:10px;align-items:center;min-height:38px;}
+        .range-row output{font-size:11.5px;color:var(--mei-text-muted);font-weight:750;min-width:52px;text-align:right;}
+        .group-row{display:grid;grid-template-columns:24px minmax(0,1fr) auto auto;gap:10px;align-items:center;padding:10px;border:1px solid var(--mei-border);border-radius:14px;background:rgba(255,255,255,.6);}
+        .group-row.drag{border-color:rgba(99,102,241,.45);background:rgba(99,102,241,.06);}
+        .group-handle{cursor:grab;color:var(--mei-text-faint);text-align:center;}
+        .cloud-grid{display:grid;grid-template-columns:180px minmax(0,1fr);gap:16px;align-items:start;}
+        @media(max-width:900px){.home-editor-layout{grid-template-columns:1fr;}.home-editor-tabs{position:static;flex-direction:row;overflow-x:auto;}.home-editor-tabs button{white-space:nowrap;}.cloud-grid{grid-template-columns:1fr;}}
+      `}</style>
+    </SettingsPage>
   );
 }
 
-/* ==================== 风格设置 ==================== */
-function StyleTab({ config, setConfig }: { config: PanelConfig; setConfig: (c: PanelConfig) => void }) {
+function StyleTab({ config, update }: { config: PanelConfig; update: (c: PanelConfig) => void }) {
   const setStyle = (patch: Partial<PanelConfig['style']>) =>
-    setConfig({ ...config, style: { ...config.style, ...patch } });
+    update({ ...config, style: { ...config.style, ...patch } });
   const setBg = (patch: Partial<PanelConfig['background']>) =>
-    setConfig({ ...config, background: { ...config.background, ...patch } });
+    update({ ...config, background: { ...config.background, ...patch } });
 
-  const input: React.CSSProperties = {
-    width: '100%', boxSizing: 'border-box', padding: '8px 12px', borderRadius: 10,
-    fontSize: 13, border: '1px solid var(--mei-border-strong)', outline: 'none',
-    color: 'var(--mei-text)', background: '#fff',
-  };
-  const card: React.CSSProperties = {
-    background: 'var(--mei-surface)', border: '1px solid var(--mei-border)',
-    borderRadius: 'var(--mei-radius)', padding: 16, marginBottom: 14,
-  };
-  const label: React.CSSProperties = { display: 'block', fontSize: 12, color: 'var(--mei-text-muted)', marginBottom: 4 };
-
-  const readImageFile = (file: File, cb: (dataUrl: string) => void) => {
-    if (file.size > 30 * 1024 * 1024) { alert('图片过大（>30MB）'); return; }
+  function readImage(file: File, cb: (dataUrl: string) => void) {
+    if (file.size > 30 * 1024 * 1024) {
+      window.alert('图片过大（>30MB）');
+      return;
+    }
     const reader = new FileReader();
     reader.onload = () => cb(String(reader.result));
     reader.readAsDataURL(file);
-  };
+  }
 
   return (
     <>
-      <section style={card}>
-        <h2 style={{ fontSize: 14, fontWeight: 650, margin: '0 0 12px' }}>背景图</h2>
-        <label style={label}>图片地址（留空使用默认极光背景）</label>
-        <div style={{ display: 'flex', gap: 8 }}>
-          <input style={input} placeholder="https://example.com/wallpaper.jpg" value={config.background.url} onChange={(e) => setBg({ url: e.target.value })} />
-          <label style={{ padding: '8px 14px', borderRadius: 10, border: '1px solid var(--mei-border-strong)', fontSize: 12, cursor: 'pointer', whiteSpace: 'nowrap' }}>
-            上传
-            <input type="file" accept="image/*" hidden onChange={(e) => { const f = e.target.files?.[0]; if (f) readImageFile(f, (d) => setBg({ url: d })); }} />
-          </label>
-        </div>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginTop: 14 }}>
-          <div>
-            <label style={label}>遮罩不透明度：{config.background.mask.toFixed(2)}</label>
-            <input type="range" min={0} max={0.9} step={0.05} value={config.background.mask} style={{ width: '100%' }} onChange={(e) => setBg({ mask: Number(e.target.value) })} />
-          </div>
-          <div>
-            <label style={label}>背景模糊：{config.background.blur}px</label>
-            <input type="range" min={0} max={24} step={1} value={config.background.blur} style={{ width: '100%' }} onChange={(e) => setBg({ blur: Number(e.target.value) })} />
-          </div>
-        </div>
-      </section>
-
-      <section style={card}>
-        <h2 style={{ fontSize: 14, fontWeight: 650, margin: '0 0 12px' }}>Logo 与时钟</h2>
-        <label style={label}>Logo 文字</label>
-        <input style={input} value={config.style.logoText} onChange={(e) => setStyle({ logoText: e.target.value })} placeholder="留空则不显示" />
-        <label style={{ ...label, marginTop: 10 }}>Logo 图片（优先于文字，留空使用默认 Logo）</label>
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-          {/* 默认/当前 Logo 预览 */}
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={config.style.logoImage || '/logo.svg'} alt="logo" style={{ width: 34, height: 34, borderRadius: 9, objectFit: 'contain', border: '1px solid var(--mei-border)', background: '#fff', flexShrink: 0 }} />
-          <input style={input} placeholder="图片地址或上传（留空 = 默认 Logo）" value={config.style.logoImage} onChange={(e) => setStyle({ logoImage: e.target.value })} />
-          <label style={{ padding: '8px 14px', borderRadius: 10, border: '1px solid var(--mei-border-strong)', fontSize: 12, cursor: 'pointer', whiteSpace: 'nowrap' }}>
-            上传
-            <input type="file" accept="image/*" hidden onChange={(e) => { const f = e.target.files?.[0]; if (f) readImageFile(f, (d) => setStyle({ logoImage: d })); }} />
-          </label>
-          {config.style.logoImage && (
-            <button onClick={() => setStyle({ logoImage: '' })} style={{ border: 'none', background: 'transparent', color: 'var(--mei-danger)', fontSize: 12, cursor: 'pointer', whiteSpace: 'nowrap' }}>重置为默认</button>
-          )}
-        </div>
-        <label style={{ ...label, marginTop: 10, display: 'flex', alignItems: 'center', gap: 8 }}>
-          <input type="checkbox" checked={config.style.clockShowSecond} onChange={(e) => setStyle({ clockShowSecond: e.target.checked })} />
-          时钟显示秒
-        </label>
-      </section>
-
-      <section style={card}>
-        <h2 style={{ fontSize: 14, fontWeight: 650, margin: '0 0 12px' }}>搜索框</h2>
-        <label style={{ ...label, display: 'flex', alignItems: 'center', gap: 8 }}>
-          <input type="checkbox" checked={config.style.searchBoxShow} onChange={(e) => setStyle({ searchBoxShow: e.target.checked })} />
-          显示搜索框（过滤应用/链接；无匹配回车跳转网页搜索）
-        </label>
-        <label style={{ ...label, marginTop: 8 }}>网页搜索引擎</label>
-        <select style={input} value={config.style.searchEngine} onChange={(e) => setStyle({ searchEngine: e.target.value as PanelConfig['style']['searchEngine'] })}>
-          <option value="bing">必应</option>
-          <option value="google">Google</option>
-          <option value="baidu">百度</option>
-          <option value="duckduckgo">DuckDuckGo</option>
-        </select>
-      </section>
-
-      <section style={card}>
-        <h2 style={{ fontSize: 14, fontWeight: 650, margin: '0 0 12px' }}>图标样式与布局</h2>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 12 }}>
-          <div>
-            <label style={label}>卡片样式</label>
-            <select style={input} value={config.style.iconStyle} onChange={(e) => setStyle({ iconStyle: e.target.value as 'icon' | 'info' })}>
-              <option value="info">卡片模式（图标+标题+描述）</option>
-              <option value="icon">图标模式（紧凑图标网格）</option>
-            </select>
-          </div>
-          <div>
-            <label style={label}>首页主色调（深色背景选深色，文字自动变浅）</label>
-            <select style={input} value={config.style.themeMode} onChange={(e) => setStyle({ themeMode: e.target.value as 'light' | 'dark' })}>
-              <option value="light">浅色（深色文字）</option>
-              <option value="dark">深色（浅色文字）</option>
-            </select>
-          </div>
-          <div>
-            <label style={label}>图标文字颜色（壁纸场景可调白）</label>
-            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-              <input type="color" value={config.style.iconTextColor || '#1c2333'} onChange={(e) => setStyle({ iconTextColor: e.target.value })} style={{ width: 44, height: 34, border: '1px solid var(--mei-border-strong)', borderRadius: 8, background: '#fff', cursor: 'pointer' }} />
-              {config.style.iconTextColor && (
-                <button onClick={() => setStyle({ iconTextColor: '' })} style={{ border: 'none', background: 'transparent', color: 'var(--mei-danger)', fontSize: 12, cursor: 'pointer' }}>重置</button>
-              )}
+      <SettingsSection title="背景" description="背景图、遮罩与模糊会实时影响首页氛围。">
+        <div className="mei-grid">
+          <SettingsField label="背景图地址" span>
+            <TextInput value={config.background.url} onChange={(e) => setBg({ url: e.target.value })} placeholder="https://example.com/wallpaper.jpg" />
+          </SettingsField>
+          <SettingsField label="上传背景图" span>
+            <input
+              className="mei-input"
+              type="file"
+              accept="image/*"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file) readImage(file, (dataUrl) => setBg({ url: dataUrl }));
+              }}
+            />
+          </SettingsField>
+          <SettingsField label="遮罩不透明度">
+            <div className="range-row">
+              <input type="range" min={0} max={0.9} step={0.05} value={config.background.mask} onChange={(e) => setBg({ mask: Number(e.target.value) })} />
+              <output>{config.background.mask.toFixed(2)}</output>
             </div>
-          </div>
-          <div>
-            <label style={label}>顶部边距 %：{config.style.marginTop}</label>
-            <input type="range" min={0} max={30} value={config.style.marginTop} style={{ width: '100%' }} onChange={(e) => setStyle({ marginTop: Number(e.target.value) })} />
-          </div>
-          <div>
-            <label style={label}>底部边距 %：{config.style.marginBottom}</label>
-            <input type="range" min={0} max={30} value={config.style.marginBottom} style={{ width: '100%' }} onChange={(e) => setStyle({ marginBottom: Number(e.target.value) })} />
-          </div>
-          <div>
-            <label style={label}>左右边距 px：{config.style.marginX}</label>
-            <input type="range" min={0} max={100} value={config.style.marginX} style={{ width: '100%' }} onChange={(e) => setStyle({ marginX: Number(e.target.value) })} />
-          </div>
-          <div>
-            <label style={label}>内容最大宽度 px：{config.style.maxWidth}</label>
-            <input type="range" min={600} max={2000} step={20} value={config.style.maxWidth} style={{ width: '100%' }} onChange={(e) => setStyle({ maxWidth: Number(e.target.value) })} />
+          </SettingsField>
+          <SettingsField label="背景模糊">
+            <div className="range-row">
+              <input type="range" min={0} max={24} step={1} value={config.background.blur} onChange={(e) => setBg({ blur: Number(e.target.value) })} />
+              <output>{config.background.blur}px</output>
+            </div>
+          </SettingsField>
+        </div>
+      </SettingsSection>
+
+      <SettingsSection title="标识与时钟">
+        <div className="mei-grid">
+          <SettingsField label="Logo 文字">
+            <TextInput value={config.style.logoText} onChange={(e) => setStyle({ logoText: e.target.value })} />
+          </SettingsField>
+          <SettingsField label="Logo 图片地址">
+            <TextInput value={config.style.logoImage} onChange={(e) => setStyle({ logoImage: e.target.value })} placeholder="留空使用默认 Logo" />
+          </SettingsField>
+          <SettingsField label="上传 Logo 图片" span>
+            <input className="mei-input" type="file" accept="image/*" onChange={(e) => { const file = e.target.files?.[0]; if (file) readImage(file, (dataUrl) => setStyle({ logoImage: dataUrl })); }} />
+          </SettingsField>
+          <div className="mei-field span">
+            <Toggle checked={config.style.clockShowSecond} onChange={(v) => setStyle({ clockShowSecond: v })} label="时钟显示秒" />
           </div>
         </div>
-        <label style={{ ...label, marginTop: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
-          <input type="checkbox" checked={config.style.systemMonitorShow} onChange={(e) => setStyle({ systemMonitorShow: e.target.checked })} />
-          显示系统监控（内存/CPU 负载，5s 刷新）
-        </label>
-      </section>
+      </SettingsSection>
 
-      <section style={card}>
-        <h2 style={{ fontSize: 14, fontWeight: 650, margin: '0 0 12px' }}>页脚 HTML</h2>
-        <textarea
-          style={{ ...input, minHeight: 64, resize: 'vertical' }}
-          placeholder="自定义页脚 HTML（默认空）"
-          value={config.style.footerHtml}
-          onChange={(e) => setStyle({ footerHtml: e.target.value })}
-        />
-      </section>
+      <SettingsSection title="搜索与主题">
+        <div className="mei-grid">
+          <div className="mei-field span">
+            <Toggle checked={config.style.searchBoxShow} onChange={(v) => setStyle({ searchBoxShow: v })} label="显示搜索框" description="支持过滤应用与网页搜索。" />
+          </div>
+          <SettingsField label="搜索引擎">
+            <Select value={config.style.searchEngine} onChange={(e) => setStyle({ searchEngine: e.target.value as PanelConfig['style']['searchEngine'] })}>
+              <option value="bing">必应</option>
+              <option value="google">Google</option>
+              <option value="baidu">百度</option>
+              <option value="duckduckgo">DuckDuckGo</option>
+            </Select>
+          </SettingsField>
+          <SettingsField label="主题模式">
+            <Select value={config.style.themeMode} onChange={(e) => setStyle({ themeMode: e.target.value as 'light' | 'dark' })}>
+              <option value="light">浅色文字</option>
+              <option value="dark">深色背景 / 浅色文字</option>
+            </Select>
+          </SettingsField>
+          <SettingsField label="卡片样式">
+            <Select value={config.style.iconStyle} onChange={(e) => setStyle({ iconStyle: e.target.value as 'icon' | 'info' })}>
+              <option value="info">卡片模式</option>
+              <option value="icon">图标模式</option>
+            </Select>
+          </SettingsField>
+          <SettingsField label="图标文字颜色">
+            <TextInput type="color" value={config.style.iconTextColor || '#1c2333'} onChange={(e) => setStyle({ iconTextColor: e.target.value })} />
+          </SettingsField>
+        </div>
+      </SettingsSection>
+
+      <SettingsSection title="布局与页脚" wide>
+        <div className="mei-grid">
+          <SettingsField label="顶部边距">
+            <div className="range-row"><input type="range" min={0} max={30} value={config.style.marginTop} onChange={(e) => setStyle({ marginTop: Number(e.target.value) })} /><output>{config.style.marginTop}%</output></div>
+          </SettingsField>
+          <SettingsField label="底部边距">
+            <div className="range-row"><input type="range" min={0} max={30} value={config.style.marginBottom} onChange={(e) => setStyle({ marginBottom: Number(e.target.value) })} /><output>{config.style.marginBottom}%</output></div>
+          </SettingsField>
+          <SettingsField label="左右边距">
+            <div className="range-row"><input type="range" min={0} max={100} value={config.style.marginX} onChange={(e) => setStyle({ marginX: Number(e.target.value) })} /><output>{config.style.marginX}px</output></div>
+          </SettingsField>
+          <SettingsField label="内容最大宽度">
+            <div className="range-row"><input type="range" min={600} max={2000} step={20} value={config.style.maxWidth} onChange={(e) => setStyle({ maxWidth: Number(e.target.value) })} /><output>{config.style.maxWidth}px</output></div>
+          </SettingsField>
+          <SettingsField label="页脚 HTML" span>
+            <textarea className="mei-input" value={config.style.footerHtml} onChange={(e) => setStyle({ footerHtml: e.target.value })} />
+          </SettingsField>
+          <div className="mei-field span">
+            <Toggle checked={config.style.systemMonitorShow} onChange={(v) => setStyle({ systemMonitorShow: v })} label="显示系统监控" description="每 5 秒刷新内存与 CPU 负载。" />
+          </div>
+        </div>
+      </SettingsSection>
     </>
   );
 }
 
-/* ==================== 分组管理（拖拽排序；预设分组内置只读） ==================== */
-function GroupsTab({ config, setConfig }: { config: PanelConfig; setConfig: (c: PanelConfig) => void }) {
+function GroupsTab({ config, update }: { config: PanelConfig; update: (c: PanelConfig) => void }) {
   const [name, setName] = useState('');
-  const dragIdx = useRef<number | null>(null);
+  const dragIndex = useRef<number | null>(null);
   const [dragOver, setDragOver] = useState<number | null>(null);
-  const input: React.CSSProperties = {
-    flex: 1, padding: '8px 12px', borderRadius: 10, fontSize: 13,
-    border: '1px solid var(--mei-border-strong)', outline: 'none', color: 'var(--mei-text)', background: '#fff',
-  };
 
-  const moveGroup = (from: number, to: number) => {
+  function move(from: number, to: number) {
     if (to < 0 || to >= config.groups.length || from === to) return;
     const groups = [...config.groups];
-    const [g] = groups.splice(from, 1);
-    groups.splice(to, 0, g);
-    setConfig({ ...config, groups });
-  };
+    const [group] = groups.splice(from, 1);
+    groups.splice(to, 0, group);
+    update({ ...config, groups });
+  }
+
+  function addGroup() {
+    const value = name.trim();
+    if (!value) return;
+    const group: PanelGroup = { id: `g${Date.now()}${Math.random().toString(36).slice(2, 6)}`, name: value };
+    update({ ...config, groups: [...config.groups, group] });
+    setName('');
+  }
 
   return (
-    <section style={{ background: 'var(--mei-surface)', border: '1px solid var(--mei-border)', borderRadius: 'var(--mei-radius-lg)', padding: 18, boxShadow: 'var(--mei-shadow-sm)' }}>
-      <h2 style={{ fontSize: 15, fontWeight: 700, margin: '0 0 4px' }}>分组管理</h2>
-      <p style={{ fontSize: 12, color: 'var(--mei-text-muted)', margin: '0 0 14px' }}>
-        拖动 ⠿ 手柄调整分组顺序；带「内置」标的为系统预设分组，名称只读、不可删除。
-      </p>
-      <div style={{ display: 'flex', gap: 8, marginBottom: 14 }}>
-        <input style={input} placeholder="新分组名称" value={name} onChange={(e) => setName(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && name.trim()) { setConfig({ ...config, groups: [...config.groups, { id: `g${Date.now()}${Math.random().toString(36).slice(2, 6)}`, name: name.trim() }] }); setName(''); } }} />
-        <button
-          onClick={() => {
-            if (!name.trim()) return;
-            setConfig({ ...config, groups: [...config.groups, { id: `g${Date.now()}${Math.random().toString(36).slice(2, 6)}`, name: name.trim() }] });
-            setName('');
-          }}
-          style={{ padding: '8px 16px', borderRadius: 10, border: 'none', background: 'var(--mei-gradient)', color: '#fff', fontSize: 13, cursor: 'pointer', whiteSpace: 'nowrap' }}
-        >
-          添加分组
-        </button>
-      </div>
-      {config.groups.length === 0 ? (
-        <p style={{ fontSize: 12, color: 'var(--mei-text-muted)', textAlign: 'center', padding: '14px 0' }}>暂无分组，自定义项将显示在「其他链接」</p>
-      ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          {config.groups.map((g, idx) => {
-            const preset = PRESET_GROUP_IDS.has(g.id);
+    <SettingsSection
+      title="分组管理"
+      description="拖动行排序；内置分组由系统维护，不可删除。"
+      wide
+      actions={
+        <>
+          <TextInput value={name} onChange={(e) => setName(e.target.value)} placeholder="新分组名称" onKeyDown={(e) => e.key === 'Enter' && addGroup()} />
+          <SettingsButton variant="primary" onClick={addGroup}>添加</SettingsButton>
+        </>
+      }
+    >
+      {config.groups.length === 0 ? <EmptyState title="暂无分组" /> : (
+        <div className="source-stack">
+          {config.groups.map((group, index) => {
+            const preset = PRESET_GROUP_IDS.has(group.id);
             return (
               <div
-                key={g.id}
+                key={group.id}
+                className={`group-row${dragOver === index ? ' drag' : ''}`}
                 draggable
-                onDragStart={() => { dragIdx.current = idx; }}
-                onDragOver={(e) => { e.preventDefault(); setDragOver(idx); }}
-                onDragLeave={() => setDragOver((d) => (d === idx ? null : d))}
-                onDrop={() => { if (dragIdx.current !== null) moveGroup(dragIdx.current, idx); dragIdx.current = null; setDragOver(null); }}
-                onDragEnd={() => { dragIdx.current = null; setDragOver(null); }}
-                style={{
-                  display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px',
-                  borderRadius: 12,
-                  border: `1px solid ${dragOver === idx ? 'var(--mei-primary)' : 'var(--mei-border)'}`,
-                  background: dragOver === idx ? 'rgba(99,102,241,0.06)' : 'rgba(255,255,255,0.7)',
-                  cursor: 'grab', transition: 'border-color .15s, background .15s',
+                onDragStart={() => { dragIndex.current = index; }}
+                onDragOver={(e) => { e.preventDefault(); setDragOver(index); }}
+                onDragLeave={() => setDragOver((v) => (v === index ? null : v))}
+                onDrop={() => {
+                  if (dragIndex.current !== null) move(dragIndex.current, index);
+                  dragIndex.current = null;
+                  setDragOver(null);
                 }}
+                onDragEnd={() => { dragIndex.current = null; setDragOver(null); }}
               >
-                <span style={{ color: 'var(--mei-text-faint)', fontSize: 12, cursor: 'grab' }} title="拖拽排序">⠿</span>
-                <MeiIcon icon="lucide:library" size={16} />
+                <span className="group-handle">⠿</span>
                 <input
-                  value={g.name}
+                  className="mei-input"
+                  value={group.name}
                   readOnly={preset}
-                  onChange={(e) => setConfig({ ...config, groups: config.groups.map((x) => (x.id === g.id ? { ...x, name: e.target.value } : x)) })}
-                  style={{ ...input, border: 'none', background: 'transparent', padding: '4px 0', fontWeight: 600, color: preset ? 'var(--mei-text-muted)' : 'var(--mei-text)', cursor: preset ? 'default' : 'text' }}
+                  onChange={(e) => update({
+                    ...config,
+                    groups: config.groups.map((g) => (g.id === group.id ? { ...g, name: e.target.value } : g)),
+                  })}
                 />
-                {preset && (
-                  <span style={{ fontSize: 10, padding: '2px 8px', borderRadius: 99, background: 'rgba(99,102,241,0.12)', color: 'var(--mei-primary)', fontWeight: 700, letterSpacing: 0.5 }}>内置</span>
-                )}
-                <span style={{ fontSize: 11, color: 'var(--mei-text-faint)', whiteSpace: 'nowrap' }}>{config.items.filter((i) => i.groupId === g.id).length} 项</span>
-                {!preset && (
-                  <button
+                <Pill tone="neutral">{config.items.filter((item) => item.groupId === group.id).length} 项</Pill>
+                {!preset ? (
+                  <SettingsButton
+                    variant="danger"
                     onClick={() => {
-                      if (!confirm(`删除分组「${g.name}」？组内 ${config.items.filter((i) => i.groupId === g.id).length} 个项将移至未分组。`)) return;
-                      setConfig({ ...config, groups: config.groups.filter((x) => x.id !== g.id), items: config.items.map((i) => (i.groupId === g.id ? { ...i, groupId: '' } : i)) });
+                      const count = config.items.filter((item) => item.groupId === group.id).length;
+                      if (!window.confirm(`删除分组「${group.name}」？组内 ${count} 个项将移至未分组。`)) return;
+                      update({
+                        ...config,
+                        groups: config.groups.filter((g) => g.id !== group.id),
+                        items: config.items.map((item) => (item.groupId === group.id ? { ...item, groupId: '' } : item)),
+                      });
                     }}
-                    style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: 'var(--mei-danger)', fontSize: 12 }}
                   >
                     删除
-                  </button>
-                )}
+                  </SettingsButton>
+                ) : <Pill tone="neutral">内置</Pill>}
               </div>
             );
           })}
         </div>
       )}
-    </section>
+      <style>{`.source-stack{display:flex;flex-direction:column;gap:8px;}`}</style>
+    </SettingsSection>
   );
 }
 
-/* ==================== 导入导出（两个子 tab，按方式给出行动路径） ==================== */
 function BackupTab({ config, reload }: { config: PanelConfig; reload: () => void }) {
-  const [sub, setSub] = useState<'export' | 'import'>('export');
-  const [msg, setMsg] = useState('');
+  const [target, setTarget] = useState<CloudTarget>('webdav');
+  const [webdav, setWebdav] = useState<WebdavForm>({ url: '', username: '', password: '' });
+  const [s3, setS3] = useState<S3Form>({ endpoint: '', region: '', bucket: '', key: 'backups/mei-panel.json', accessKey: '', secretKey: '' });
+  const [busy, setBusy] = useState('');
+  const [message, setMessage] = useState('');
+  const [error, setError] = useState('');
   const fileRef = useRef<HTMLInputElement>(null);
 
-  async function doImport(file: File) {
+  async function remote(direction: 'export' | 'import') {
+    setBusy(`${target}-${direction}`);
+    setMessage('');
+    setError('');
     try {
-      const text = await file.text();
-      const parsed = JSON.parse(text);
-      const res = await fetch('/api/panel', {
-        method: 'PUT', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify(parsed),
+      const res = await fetch('/api/panel/remote', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ direction, target, config: target === 'webdav' ? webdav : s3 }),
       });
-      if (!res.ok) { setMsg('导入失败：格式不正确'); return; }
-      setMsg('导入成功，刷新生效');
-      reload();
-    } catch {
-      setMsg('导入失败：JSON 解析错误');
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(body.error || `云端${direction === 'export' ? '备份' : '恢复'}失败`);
+      setMessage(direction === 'export' ? '已备份到云端' : '已从云端恢复');
+      if (direction === 'import') reload();
+    } catch (err) {
+      setError((err as Error).message || '云端操作失败');
+    } finally {
+      setBusy('');
     }
   }
 
-  function doExport() {
+  function exportJson() {
     const blob = new Blob([JSON.stringify(config, null, 2)], { type: 'application/json' });
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = `mei-panel-backup-${new Date().toISOString().slice(0, 10)}.json`;
-    a.click();
-    URL.revokeObjectURL(a.href);
-    setMsg('已导出 JSON 配置文件');
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `mei-panel-backup-${new Date().toISOString().slice(0, 10)}.json`;
+    link.click();
+    URL.revokeObjectURL(url);
+    setMessage('已导出 JSON 文件');
   }
 
-  const card: React.CSSProperties = {
-    background: 'var(--mei-surface)', border: '1px solid var(--mei-border)',
-    borderRadius: 'var(--mei-radius-lg)', padding: 18, boxShadow: 'var(--mei-shadow-sm)',
-  };
-  const btnPrimary: React.CSSProperties = {
-    padding: '10px 22px', borderRadius: 'var(--mei-radius-full)', fontSize: 13, fontWeight: 600,
-    cursor: 'pointer', border: 'none', background: 'var(--mei-gradient)', color: '#fff', boxShadow: 'var(--mei-glow)',
-  };
+  async function importJson(file: File) {
+    try {
+      const parsed = JSON.parse(await file.text());
+      const res = await fetch('/api/panel', {
+        method: 'PUT',
+        credentials: 'include',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(parsed),
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(body.error || '导入失败');
+      setMessage('导入成功，刷新首页生效');
+      reload();
+    } catch (err) {
+      setError((err as Error).message || '导入失败：JSON 解析错误');
+    }
+  }
 
   return (
-    <section style={card}>
-      <h2 style={{ fontSize: 15, fontWeight: 700, margin: '0 0 4px' }}>配置备份与恢复</h2>
-      <p style={{ fontSize: 12, color: 'var(--mei-text-muted)', margin: '0 0 14px' }}>
-        备份内容：主页风格、分组与图标项配置（JSON 格式）。
-      </p>
-      {/* 子 tab */}
-      <div style={{ display: 'inline-flex', gap: 4, padding: 4, borderRadius: 'var(--mei-radius-full)', background: 'rgba(23,32,56,0.06)', marginBottom: 16 }}>
-        {(['export', 'import'] as const).map((k) => (
-          <button
-            key={k}
-            onClick={() => { setSub(k); setMsg(''); }}
-            style={{
-              padding: '6px 18px', borderRadius: 'var(--mei-radius-full)', border: 'none', fontSize: 13, cursor: 'pointer',
-              background: sub === k ? '#fff' : 'transparent',
-              color: sub === k ? 'var(--mei-text)' : 'var(--mei-text-muted)',
-              fontWeight: sub === k ? 650 : 400,
-              boxShadow: sub === k ? '0 1px 4px rgba(23,32,56,0.12)' : 'none',
-              transition: 'var(--mei-transition)',
-            }}
-          >
-            {k === 'export' ? '导出' : '导入'}
-          </button>
-        ))}
-      </div>
+    <>
+      <SettingsSection title="本地备份" description="导出或导入完整 JSON 配置。">
+        <div className="cloud-grid">
+          <EmptyState title="JSON 文件" description="适合手动迁移与临时存档。" />
+          <div className="footer-actions">
+            <SettingsButton onClick={exportJson}>导出 JSON</SettingsButton>
+            <SettingsButton variant="primary" onClick={() => fileRef.current?.click()}>导入 JSON</SettingsButton>
+            <input ref={fileRef} type="file" accept="application/json,.json" hidden onChange={(e) => { const file = e.target.files?.[0]; if (file) void importJson(file); }} />
+          </div>
+        </div>
+      </SettingsSection>
 
-      {sub === 'export' ? (
-        <div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 14px', borderRadius: 12, border: '1px solid var(--mei-border)', background: 'rgba(255,255,255,0.6)', marginBottom: 12 }}>
-            <MeiIcon icon="lucide:file-json" size={18} />
-            <div style={{ flex: 1 }}>
-              <div style={{ fontSize: 13, fontWeight: 600 }}>导出为 JSON 文件</div>
-              <div style={{ fontSize: 11.5, color: 'var(--mei-text-muted)', marginTop: 2 }}>下载当前全部主页配置，可用于迁移或存档</div>
-            </div>
-            <button onClick={doExport} style={btnPrimary}>立即导出</button>
+      <SettingsSection title="云端备份" description="支持 WebDAV 与 S3 兼容对象存储。" wide>
+        <div className="cloud-grid">
+          <div className="cloud-target">
+            {(['webdav', 's3'] as const).map((item) => (
+              <button key={item} className={target === item ? 'active' : ''} onClick={() => setTarget(item)}>
+                {item === 'webdav' ? 'WebDAV' : 'S3'}
+              </button>
+            ))}
           </div>
-        </div>
-      ) : (
-        <div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 14px', borderRadius: 12, border: '1px solid var(--mei-border)', background: 'rgba(255,255,255,0.6)', marginBottom: 12 }}>
-            <MeiIcon icon="lucide:upload" size={18} />
-            <div style={{ flex: 1 }}>
-              <div style={{ fontSize: 13, fontWeight: 600 }}>从 JSON 文件导入</div>
-              <div style={{ fontSize: 11.5, color: 'var(--mei-text-muted)', marginTop: 2 }}>选择之前导出的配置文件，导入将覆盖现有配置</div>
+          {target === 'webdav' ? (
+            <div className="mei-grid">
+              <SettingsField label="文件地址" span>
+                <TextInput value={webdav.url} onChange={(e) => setWebdav({ ...webdav, url: e.target.value })} placeholder="https://dav.example.com/backups/mei-panel.json" />
+              </SettingsField>
+              <SettingsField label="用户名">
+                <TextInput value={webdav.username} onChange={(e) => setWebdav({ ...webdav, username: e.target.value })} />
+              </SettingsField>
+              <SettingsField label="密码">
+                <TextInput type="password" value={webdav.password} onChange={(e) => setWebdav({ ...webdav, password: e.target.value })} />
+              </SettingsField>
             </div>
-            <button onClick={() => fileRef.current?.click()} style={btnPrimary}>选择文件</button>
-            <input ref={fileRef} type="file" accept="application/json,.json" hidden onChange={(e) => { const f = e.target.files?.[0]; if (f) doImport(f); }} />
-          </div>
+          ) : (
+            <div className="mei-grid">
+              <SettingsField label="Endpoint" span>
+                <TextInput value={s3.endpoint} onChange={(e) => setS3({ ...s3, endpoint: e.target.value })} placeholder="https://s3.example.com" />
+              </SettingsField>
+              <SettingsField label="Region">
+                <TextInput value={s3.region} onChange={(e) => setS3({ ...s3, region: e.target.value })} placeholder="us-east-1" />
+              </SettingsField>
+              <SettingsField label="Bucket">
+                <TextInput value={s3.bucket} onChange={(e) => setS3({ ...s3, bucket: e.target.value })} />
+              </SettingsField>
+              <SettingsField label="对象路径">
+                <TextInput value={s3.key} onChange={(e) => setS3({ ...s3, key: e.target.value })} />
+              </SettingsField>
+              <SettingsField label="Access Key">
+                <TextInput value={s3.accessKey} onChange={(e) => setS3({ ...s3, accessKey: e.target.value })} />
+              </SettingsField>
+              <SettingsField label="Secret Key">
+                <TextInput type="password" value={s3.secretKey} onChange={(e) => setS3({ ...s3, secretKey: e.target.value })} />
+              </SettingsField>
+            </div>
+          )}
         </div>
-      )}
-      {msg && <p style={{ fontSize: 12, color: msg.includes('失败') ? 'var(--mei-danger)' : 'var(--mei-success)', marginTop: 4 }}>{msg}</p>}
-    </section>
+        <div className="footer-actions">
+          <SettingsButton onClick={() => void remote('export')} disabled={busy !== ''}>{busy === 'webdav-export' || busy === 's3-export' ? '备份中…' : '备份到云端'}</SettingsButton>
+          <SettingsButton variant="primary" onClick={() => { if (window.confirm('从云端恢复将覆盖当前主页配置，确定继续吗？')) void remote('import'); }} disabled={busy !== ''}>{busy === 'webdav-import' || busy === 's3-import' ? '恢复中…' : '从云端恢复'}</SettingsButton>
+        </div>
+      </SettingsSection>
+
+      <SettingsSection title="操作结果" wide>
+        {error ? <EmptyState title={error} /> : message ? <EmptyState title={message} /> : <EmptyState title="云端凭据不落盘" description="仅在本次操作中提交，不会保存到服务器。" />}
+      </SettingsSection>
+
+      <style>{`
+        .cloud-target{display:flex;flex-direction:column;gap:7px;padding:10px;background:rgba(255,255,255,.58);border:1px solid var(--mei-border);border-radius:16px;}
+        .cloud-target button{height:36px;border:1px solid var(--mei-border);border-radius:12px;background:transparent;font-size:12.5px;font-weight:750;color:var(--mei-text-muted);cursor:pointer;transition:var(--mei-transition);}
+        .cloud-target button.active{border-color:rgba(99,102,241,.4);background:rgba(99,102,241,.1);color:var(--mei-primary);}
+        .footer-actions{display:flex;justify-content:flex-end;gap:9px;margin-top:12px;flex-wrap:wrap;}
+      `}</style>
+    </>
   );
 }
