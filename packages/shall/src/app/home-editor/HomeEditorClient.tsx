@@ -13,6 +13,7 @@ import {
   TextInput,
   Toggle,
 } from '@/components/SettingsUI';
+import { Alert, FileInput, StickyBar } from '@/components/SettingsUI';
 import type { PanelConfig, PanelGroup } from '@/lib/panel-store';
 import { PRESET_GROUP_IDS } from '@/lib/panel-presets';
 
@@ -101,8 +102,8 @@ export default function HomeEditorClient() {
       }
       tabs={<SettingsTabs items={tabs} active={tab} onChange={(id) => setTab(id as Tab)} />}
     >
-      {error ? <EmptyState title={error} /> : null}
-      {message ? <EmptyState title={message} /> : null}
+      {error ? <Alert tone="error" title={error} /> : null}
+      {message ? <Alert tone="success" title={message} /> : null}
       <div className="home-editor-content">
         {tab === 'style' && <StyleTab config={config} update={update} />}
         {tab === 'groups' && <GroupsTab config={config} update={update} />}
@@ -151,9 +152,7 @@ function StyleTab({ config, update }: { config: PanelConfig; update: (c: PanelCo
             />
           </SettingsField>
           <SettingsField label="上传背景图" span>
-            <input
-              className="mei-input"
-              type="file"
+            <FileInput
               accept="image/*"
               onChange={(e) => {
                 const file = e.target.files?.[0];
@@ -185,7 +184,7 @@ function StyleTab({ config, update }: { config: PanelConfig; update: (c: PanelCo
             <TextInput value={config.style.logoImage} onChange={(e) => setStyle({ logoImage: e.target.value })} placeholder="留空使用默认 Logo" />
           </SettingsField>
           <SettingsField label="上传 Logo 图片" span>
-            <input className="mei-input" type="file" accept="image/*" onChange={(e) => { const file = e.target.files?.[0]; if (file) readImage(file, (dataUrl) => setStyle({ logoImage: dataUrl })); }} />
+            <FileInput accept="image/*" onChange={(e) => { const file = e.target.files?.[0]; if (file) readImage(file, (dataUrl) => setStyle({ logoImage: dataUrl })); }} />
           </SettingsField>
           <div className="mei-field span">
             <Toggle checked={config.style.clockShowSecond} onChange={(v) => setStyle({ clockShowSecond: v })} label="时钟显示秒" />
@@ -275,14 +274,11 @@ function GroupsTab({ config, update }: { config: PanelConfig; update: (c: PanelC
     <SettingsSection
       title="分组管理"
       description="拖动行排序；内置分组由系统维护，不可删除。"
-      wide
-      actions={
-        <>
-          <TextInput value={name} onChange={(e) => setName(e.target.value)} placeholder="新分组名称" onKeyDown={(e) => e.key === 'Enter' && addGroup()} />
-          <SettingsButton variant="primary" onClick={addGroup}>添加</SettingsButton>
-        </>
-      }
     >
+      <div className="channel-add" style={{ marginBottom: 12 }}>
+        <TextInput value={name} onChange={(e) => setName(e.target.value)} placeholder="新分组名称" onKeyDown={(e) => e.key === 'Enter' && addGroup()} />
+        <SettingsButton variant="primary" onClick={addGroup}>添加分组</SettingsButton>
+      </div>
       {config.groups.length === 0 ? <EmptyState title="暂无分组" /> : (
         <div className="source-stack">
           {config.groups.map((group, index) => {
@@ -403,7 +399,10 @@ function BackupTab({ config, reload }: { config: PanelConfig; reload: () => void
     <>
       <SettingsSection title="本地备份" description="导出或导入完整 JSON 配置。">
         <div className="cloud-grid">
-          <EmptyState title="JSON 文件" description="适合手动迁移与临时存档。" />
+          <div className="cloud-info">
+            <strong>JSON 文件</strong>
+            <p>适合手动迁移与临时存档。</p>
+          </div>
           <div className="footer-actions">
             <SettingsButton onClick={exportJson}>导出 JSON</SettingsButton>
             <SettingsButton variant="primary" onClick={() => fileRef.current?.click()}>导入 JSON</SettingsButton>
@@ -463,13 +462,16 @@ function BackupTab({ config, reload }: { config: PanelConfig; reload: () => void
       </SettingsSection>
 
       <SettingsSection title="操作结果" wide>
-        {error ? <EmptyState title={error} /> : message ? <EmptyState title={message} /> : <EmptyState title="云端凭据不落盘" description="仅在本次操作中提交，不会保存到服务器。" />}
+        {error ? <Alert tone="error" title={error} /> : message ? <Alert tone="success" title={message} /> : <div className="cloud-info"><strong>云端凭据不落盘</strong><p>仅在本次操作中提交，不会保存到服务器。</p></div>}
       </SettingsSection>
 
       <style>{`
         .cloud-target{display:flex;flex-direction:column;gap:7px;padding:10px;background:rgba(255,255,255,.58);border:1px solid var(--mei-border);border-radius:16px;}
         .cloud-target button{height:36px;border:1px solid var(--mei-border);border-radius:12px;background:transparent;font-size:12.5px;font-weight:750;color:var(--mei-text-muted);cursor:pointer;transition:var(--mei-transition);}
         .cloud-target button.active{border-color:rgba(99,102,241,.4);background:rgba(99,102,241,.1);color:var(--mei-primary);}
+        .cloud-info{padding:14px;border-radius:14px;background:rgba(255,255,255,.5);border:1px solid var(--mei-border);}
+        .cloud-info strong{font-size:13px;font-weight:800;display:block;}
+        .cloud-info p{margin:5px 0 0;font-size:11.5px;color:var(--mei-text-muted);line-height:1.5;}
         .footer-actions{display:flex;justify-content:flex-end;gap:9px;margin-top:12px;flex-wrap:wrap;}
       `}</style>
     </>

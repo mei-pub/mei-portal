@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
+  Alert,
   EmptyState,
   Pill,
   SettingsButton,
@@ -136,7 +137,7 @@ export default function LinkLogs() {
       </SettingsSection>
 
       <SettingsSection title="日志流" description="最新日志在最上方，每 3 秒自动刷新。" wide>
-        {error ? <EmptyState title={error} /> : loading ? <EmptyState title="正在读取日志…" /> : filtered.length === 0 ? <EmptyState title="暂无日志" description="当前筛选条件下没有匹配记录。" /> : (
+        {error ? <Alert tone="error" title={error} /> : loading ? <EmptyState title="正在读取日志…" /> : filtered.length === 0 ? <EmptyState title="暂无日志" description="当前筛选条件下没有匹配记录。" /> : (
           <div className="mei-logs">
             {filtered.map((e, i) => (
               <div key={`${e.timestamp}-${i}`} className={`mei-log ${e.level}`}>

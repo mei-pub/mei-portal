@@ -2,12 +2,14 @@
 
 import { useEffect, useState } from 'react';
 import {
+  Alert,
   EmptyState,
   Pill,
   SettingsButton,
   SettingsPage,
   SettingsSection,
   Toggle,
+  StickyBar,
 } from '@/components/SettingsUI';
 import { readJsonStorage, writeJsonStorage } from '@/lib/app-settings-client';
 
@@ -103,12 +105,10 @@ export default function SolaraSettings() {
         </div>
       </SettingsSection>
 
-      <SettingsSection title="保存" wide>
-        {error ? <EmptyState title={error} /> : message ? <EmptyState title={message} /> : <EmptyState title="本浏览器配置" description="设置保存在当前浏览器，刷新播放器后生效。" />}
-        <div className="footer-actions">
-          <SettingsButton variant="primary" onClick={save}>保存设置</SettingsButton>
-        </div>
-      </SettingsSection>
+      {error ? <Alert tone="error" title={error} /> : message ? <Alert tone="success" title={message} /> : null}
+      <StickyBar>
+        <SettingsButton variant="primary" onClick={save}>保存设置</SettingsButton>
+      </StickyBar>
 
       <style>{`
         .genre-cloud{display:flex;flex-wrap:wrap;gap:7px;}

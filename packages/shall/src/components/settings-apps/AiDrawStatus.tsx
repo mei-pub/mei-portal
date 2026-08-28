@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
+  Alert,
   EmptyState,
   Pill,
   SettingsButton,
@@ -117,7 +118,7 @@ export default function AiDrawStatus() {
       </SettingsSection>
 
       <SettingsSection title="AI 对话记录" wide>
-        {error ? <EmptyState title={error} /> : !chatLogs?.items.length ? <EmptyState title="暂无对话记录" /> : (
+        {error ? <Alert tone="error" title={error} /> : !chatLogs?.items.length ? <EmptyState title="暂无对话记录" /> : (
           <table className="mei-table">
             <thead><tr><th>时间</th><th>用户</th><th>模型</th><th>详情</th></tr></thead>
             <tbody>

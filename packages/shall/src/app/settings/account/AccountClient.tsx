@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import {
-  EmptyState,
+  Alert,
   SettingsButton,
   SettingsField,
   SettingsPage,
@@ -86,20 +86,20 @@ export default function AccountClient() {
               {busy === 'name' ? '提交中…' : '修改账户名'}
             </SettingsButton>
           </div>
-          {nameMsg ? <EmptyState title={nameMsg} /> : null}
+          {nameMsg ? <Alert tone={nameMsg.includes('失败') || nameMsg.includes('错误') ? 'error' : 'success'} title={nameMsg} /> : null}
         </form>
       </SettingsSection>
 
       <SettingsSection title="修改密码" description="建议定期更换密码以保障安全。" wide>
         <form onSubmit={submitPassword}>
           <div className="mei-grid">
-            <SettingsField label="当前密码">
+            <SettingsField label="当前密码" span>
               <TextInput type="password" value={pwForm.oldPassword} onChange={(e) => setPwForm({ ...pwForm, oldPassword: e.target.value })} />
             </SettingsField>
             <SettingsField label="新密码" hint="至少 4 位。">
               <TextInput type="password" value={pwForm.newPassword} onChange={(e) => setPwForm({ ...pwForm, newPassword: e.target.value })} />
             </SettingsField>
-            <SettingsField label="确认新密码" span>
+            <SettingsField label="确认新密码">
               <TextInput type="password" value={pwForm.confirm} onChange={(e) => setPwForm({ ...pwForm, confirm: e.target.value })} />
             </SettingsField>
           </div>
@@ -108,7 +108,7 @@ export default function AccountClient() {
               {busy === 'pw' ? '提交中…' : '修改密码'}
             </SettingsButton>
           </div>
-          {pwMsg ? <EmptyState title={pwMsg} /> : null}
+          {pwMsg ? <Alert tone={pwMsg.includes('失败') || pwMsg.includes('不一致') || pwMsg.includes('错误') ? 'error' : 'success'} title={pwMsg} /> : null}
         </form>
       </SettingsSection>
       <style>{`.footer-actions{display:flex;justify-content:flex-end;gap:9px;margin-top:14px;}`}</style>

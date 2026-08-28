@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import {
+  Alert,
   EmptyState,
   Pill,
   SettingsButton,
@@ -296,7 +297,7 @@ export default function AiDrawSettings() {
       </SettingsSection>
 
       <SettingsSection title="操作结果" wide>
-        {error ? <EmptyState title={error} /> : message ? <EmptyState title={message} /> : <EmptyState title="统一配置中心" description="多语言、示例文件与统计入口已移除。" />}
+        {error ? <Alert tone="error" title={error} /> : message ? <Alert tone="success" title={message} /> : null}
       </SettingsSection>
 
       <style>{`

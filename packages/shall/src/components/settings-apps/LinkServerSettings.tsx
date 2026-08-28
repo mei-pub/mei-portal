@@ -2,13 +2,14 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import {
-  EmptyState,
+  Alert,
   Pill,
   SettingsButton,
   SettingsField,
   SettingsPage,
   SettingsSection,
   Select,
+  StickyBar,
   TextInput,
   Toggle,
 } from '@/components/SettingsUI';
@@ -263,10 +264,10 @@ export default function LinkServerSettings() {
       </SettingsSection>
 
       <SettingsSection title="操作结果" wide>
-        {message ? <EmptyState title={message} /> : null}
-        {error ? <EmptyState title={error} description="请根据错误提示调整上方配置后重试。" /> : null}
-        {!message && !error ? <EmptyState title="修改后保存" description="连接令牌与管理密码留空时会沿用已有值。" /> : null}
-        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 14 }}>
+        {message ? <Alert tone="success" title={message} /> : null}
+        {error ? <Alert tone="error" title={error} description="请根据错误提示调整上方配置后重试。" /> : null}
+        {!message && !error ? <div className="cloud-info"><strong>连接令牌与管理密码留空时会沿用已有值</strong></div> : null}
+        <StickyBar>
           <SettingsButton variant="secondary" onClick={() => void load()} disabled={busy !== ''}>
             重新读取
           </SettingsButton>
@@ -276,7 +277,7 @@ export default function LinkServerSettings() {
           <SettingsButton variant="primary" onClick={() => void save(true)} disabled={busy !== ''}>
             {busy === 'connect' ? '连接中' : '保存并连接'}
           </SettingsButton>
-        </div>
+        </StickyBar>
       </SettingsSection>
     </SettingsPage>
   );

@@ -2,12 +2,13 @@
 
 import { useEffect, useState } from 'react';
 import {
-  EmptyState,
+  Alert,
   Pill,
   SettingsButton,
   SettingsField,
   SettingsPage,
   SettingsSection,
+  StickyBar,
   TextInput,
   Toggle,
 } from '@/components/SettingsUI';
@@ -60,11 +61,23 @@ export default function MediagoSettings() {
         body: JSON.stringify({ value: config[key] }),
       });
       setMessage(d.data?.message || `${key} 已保存`);
+      return true;
     } catch (err) {
       setError((err as Error).message || '保存失败');
       await load();
+      return false;
     } finally {
       setSavingKey('');
+    }
+  }
+
+  async function saveAllFields() {
+    setMessage('');
+    setError('');
+    const keys: Array<keyof MediagoConfig> = ['local', 'proxy', 'maxRunner', 'downloadProxySwitch', 'deleteSegments'];
+    for (const key of keys) {
+      const ok = await save(key);
+      if (!ok) break;
     }
   }
 
@@ -81,19 +94,14 @@ export default function MediagoSettings() {
       description="配置下载目录、代理与任务执行策略。"
       actions={<Pill tone={loading ? 'warning' : 'success'}>{loading ? '读取中' : '已连接'}</Pill>}
     >
-      <SettingsSection title="基础设置" description="修改单项后点击对应保存按钮。">
+      <SettingsSection title="基础设置" description="修改后点击底部保存按钮统一保存。">
         {fields.map((f) => (
           <SettingsField key={f.key} label={f.label} hint={f.hint}>
-            <div className="field-save">
-              <TextInput
-                type={f.type || 'text'}
-                value={String(config[f.key] ?? '')}
-                onChange={(e) => setConfig({ ...config, [f.key]: f.type === 'number' ? Number(e.target.value) : e.target.value })}
-              />
-              <SettingsButton variant="primary" onClick={() => void save(f.key)} disabled={savingKey === f.key}>
-                {savingKey === f.key ? '保存中' : '保存'}
-              </SettingsButton>
-            </div>
+            <TextInput
+              type={f.type || 'text'}
+              value={String(config[f.key] ?? '')}
+              onChange={(e) => setConfig({ ...config, [f.key]: f.type === 'number' ? Number(e.target.value) : e.target.value })}
+            />
           </SettingsField>
         ))}
       </SettingsSection>
@@ -113,10 +121,6 @@ export default function MediagoSettings() {
             description="合并成功后自动清理临时分片。"
           />
         </div>
-        <div className="footer-actions">
-          <SettingsButton variant="primary" onClick={() => void save('downloadProxySwitch')}>保存代理开关</SettingsButton>
-          <SettingsButton variant="primary" onClick={() => void save('deleteSegments')}>保存分片策略</SettingsButton>
-        </div>
       </SettingsSection>
 
       <SettingsSection title="访问凭据" description="Web 模式下的只读 API Key。">
@@ -125,9 +129,10 @@ export default function MediagoSettings() {
         </SettingsField>
       </SettingsSection>
 
-      <SettingsSection title="操作结果" wide>
-        {error ? <EmptyState title={error} /> : message ? <EmptyState title={message} /> : <EmptyState title="即时保存" description="每个配置项独立保存，失败时自动回读服务端值。" />}
-      </SettingsSection>
+      {error ? <Alert tone="error" title={error} /> : message ? <Alert tone="success" title={message} /> : null}
+      <StickyBar>
+        <SettingsButton variant="primary" onClick={() => { void saveAllFields(); }} disabled={savingKey !== ''}>保存全部设置</SettingsButton>
+      </StickyBar>
 
       <style>{`
         .field-save{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;}

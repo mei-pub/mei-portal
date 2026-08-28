@@ -2,11 +2,13 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import {
+  Alert,
   EmptyState,
   Pill,
   SettingsButton,
   SettingsPage,
   SettingsSection,
+  StickyBar,
   TextInput,
   Toggle,
 } from '@/components/SettingsUI';
@@ -198,13 +200,11 @@ export default function PansouSettings() {
         <Toggle checked={detection} onChange={setDetection} label="启用链接有效性检测" description="检测结果会按链接缓存，减少重复检测。" />
       </SettingsSection>
 
-      <SettingsSection title="保存与重置" wide>
-        {error ? <EmptyState title={error} /> : message ? <EmptyState title={message} /> : <EmptyState title="配置保存在本浏览器" description="切换设备后需要重新配置。" />}
-        <div className="footer-actions">
-          <SettingsButton onClick={reset}>恢复默认</SettingsButton>
-          <SettingsButton variant="primary" onClick={save}>保存配置</SettingsButton>
-        </div>
-      </SettingsSection>
+      {error ? <Alert tone="error" title={error} /> : message ? <Alert tone="success" title={message} /> : null}
+      <StickyBar>
+        <SettingsButton onClick={reset}>恢复默认</SettingsButton>
+        <SettingsButton variant="primary" onClick={save}>保存配置</SettingsButton>
+      </StickyBar>
 
       <style>{`
         .chip-cloud{display:flex;flex-wrap:wrap;gap:7px;max-height:280px;overflow:auto;padding-right:3px;}

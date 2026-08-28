@@ -3,12 +3,14 @@
 import { useEffect, useState } from 'react';
 import {
   EmptyState,
+  Alert,
   SettingsButton,
   SettingsField,
   SettingsSection,
   Select,
   TextInput,
   Toggle,
+  StickyBar,
 } from '@/components/SettingsUI';
 
 interface FormState {
@@ -126,16 +128,14 @@ export default function TvSettings() {
         </div>
       </SettingsSection>
 
-      <SettingsSection title="保存" wide>
-        {message ? <EmptyState title={message} /> : <EmptyState title="本地设置" description="保存后立即生效，无需重启。" />}
-        <div className="footer-actions">
-          <SettingsButton onClick={() => {
-            setForm(DEFAULTS);
-            setMessage('已恢复默认值，尚未保存');
-          }}>恢复默认</SettingsButton>
-          <SettingsButton variant="primary" onClick={save}>保存设置</SettingsButton>
-        </div>
-      </SettingsSection>
+      {message ? <Alert tone="success" title={message} /> : null}
+      <StickyBar>
+        <SettingsButton onClick={() => {
+          setForm(DEFAULTS);
+          setMessage('已恢复默认值，尚未保存');
+        }}>恢复默认</SettingsButton>
+        <SettingsButton variant="primary" onClick={save}>保存设置</SettingsButton>
+      </StickyBar>
 
       <style>{`.toggle-stack{display:flex;flex-direction:column;gap:9px;}.footer-actions{display:flex;justify-content:flex-end;gap:9px;margin-top:12px;}`}</style>
     </div>
