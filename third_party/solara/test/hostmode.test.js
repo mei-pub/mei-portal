@@ -66,3 +66,19 @@ test('hosted store delegates persistence to the shell instead of local storage',
   assert.equal(pushed, 3);
   store.syncHook = null;
 });
+
+test('host bridge relays dock form switching and mirrors it onto body classes', async () => {
+  globalThis.Audio = FakeAudio;
+  const sent = [];
+  const { hostBridge } = await import('../js/mei/hostbridge.js');
+  hostBridge.enabled = true;
+  hostBridge.send = (msg) => sent.push(msg);
+
+  hostBridge.setDockMode('mini');
+  hostBridge.setDockMode('hidden');
+
+  assert.deepEqual(sent, [
+    { type: 'set-dock-mode', mode: 'mini' },
+    { type: 'set-dock-mode', mode: 'hidden' },
+  ]);
+});

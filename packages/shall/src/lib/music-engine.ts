@@ -9,6 +9,14 @@
 
 export type QueueType = 'temp' | 'playlist' | 'fav';
 export type PlayMode = 'order' | 'shuffle' | 'repeat';
+/**
+ * 播放条三形态：
+ * - full：完整形态，封面 + 信息 + 全部控件 + 进度 + 音量 + 队列
+ * - mini：缩小形态，胶囊小球，只留封面 + 播放/暂停 + 环形进度
+ * - hidden：隐藏形态，仅保留贴底渐变把手
+ */
+export type DockMode = 'full' | 'mini' | 'hidden';
+export const DOCK_MODES: DockMode[] = ['full', 'mini', 'hidden'];
 
 export interface Song {
   id: string;
@@ -44,7 +52,8 @@ export interface EngineSnapshot {
   currentTime: number;
   duration: number;
   volume: number;
-  dockCollapsed: boolean;
+  dockMode: DockMode;
+  dockLastVisible: Exclude<DockMode, 'hidden'>;
   error: string;
 }
 
@@ -52,7 +61,9 @@ const STATE_API = '/api/music/state';
 const LEGACY_PLAYLISTS = 'meiMusicPlaylists.v1';
 const LEGACY_FAVORITES = 'favoriteSongs';
 const LEGACY_SELECTED = 'meiMusicSelectedList.v1';
-const DOCK_KEY = 'mei-music-dock-collapsed';
+const DOCK_KEY = 'mei-music-dock-mode';
+const DOCK_LAST_KEY = 'mei-music-dock-last-visible';
+const LEGACY_DOCK_KEY = 'mei-music-dock-collapsed';
 const LOCAL_SNAPSHOT = 'mei-music-local-state.v1';
 
 const ALL_SOURCES = ['netease', 'qq', 'kugou', 'kuwo', 'migu', 'joox', 'bilibili', 'youtube'];
@@ -88,7 +99,8 @@ class MusicEngine {
   index = -1;
   mode: PlayMode = 'order';
   volume = 1;
-  dockCollapsed = false;
+  dockMode: DockMode = 'full';
+  dockLastVisible: Exclude<DockMode, 'hidden'> = 'full';
   ready = false;
   loading = false;
   error = '';
@@ -138,13 +150,15 @@ class MusicEngine {
       currentTime: this.audio ? this.audio.currentTime || 0 : 0,
       duration: this.audio && Number.isFinite(this.audio.duration) ? this.audio.duration : 0,
       volume: this.volume,
-      dockCollapsed: this.dockCollapsed,
+      dockMode: this.dockMode,
+      dockLastVisible: this.dockLastVisible,
       error: this.error,
     };
   }
 
   private emit(): void {
     this.snapshot = this.buildSnapshot();
+    this.pushMediaSession();
     this.listeners.forEach((fn) => {
       try {
         fn();
@@ -175,13 +189,26 @@ class MusicEngine {
       if (song) this.handlePlaybackFailure(song, this.playToken);
       this.emit();
     });
-    try {
-      this.dockCollapsed = localStorage.getItem(DOCK_KEY) === '1';
-    } catch {}
+    this.readDockPrefs();
     await this.resolveMusicBase();
     await this.loadState();
     this.ready = true;
     this.emit();
+  }
+
+  /** 形态偏好优先读本地（切页即时生效），并兼容旧版布尔 key */
+  private readDockPrefs(): void {
+    try {
+      const stored = localStorage.getItem(DOCK_KEY);
+      if (stored && (DOCK_MODES as string[]).includes(stored)) {
+        this.dockMode = stored as DockMode;
+      } else if (localStorage.getItem(LEGACY_DOCK_KEY) === '1') {
+        this.dockMode = 'hidden';
+      }
+      const last = localStorage.getItem(DOCK_LAST_KEY);
+      this.dockLastVisible = last === 'mini' ? 'mini' : 'full';
+      if (this.dockMode !== 'hidden') this.dockLastVisible = this.dockMode;
+    } catch {}
   }
 
   private async resolveMusicBase(): Promise<void> {
@@ -239,6 +266,21 @@ class MusicEngine {
     this.mode = (['order', 'shuffle', 'repeat'].includes(String(playback.mode)) ? playback.mode : 'order') as PlayMode;
     this.volume = Number.isFinite(Number(playback.volume)) ? Math.min(1, Math.max(0, Number(playback.volume))) : 1;
     if (this.audio) this.audio.volume = this.volume;
+    // 服务端形态仅在本地无偏好时采纳，避免跨设备偏好互相覆盖
+    const ui = (source.ui || {}) as Record<string, unknown>;
+    let hasLocalDockPref = false;
+    try {
+      hasLocalDockPref = !!localStorage.getItem(DOCK_KEY) || !!localStorage.getItem(LEGACY_DOCK_KEY);
+    } catch {}
+    if (!hasLocalDockPref) {
+      if ((DOCK_MODES as string[]).includes(String(ui.dockMode))) {
+        this.dockMode = ui.dockMode as DockMode;
+      } else if (ui.dockCollapsed === true) {
+        this.dockMode = 'hidden';
+      }
+      this.dockLastVisible = ui.dockLastVisible === 'mini' ? 'mini' : 'full';
+      if (this.dockMode !== 'hidden') this.dockLastVisible = this.dockMode;
+    }
     if (this.playlists.length === 0) {
       this.playlists = [{ id: `pl${Date.now()}`, name: '默认列表', songs: [] }];
     }
@@ -265,7 +307,7 @@ class MusicEngine {
       selectedPlaylistId: this.selectedPlaylistId,
       queue: { type: this.queueType, playlistId: this.playlistId, index: this.index },
       playback: { mode: this.mode, position: this.pendingPosition, volume: this.volume },
-      ui: { dockCollapsed: this.dockCollapsed },
+      ui: { dockMode: this.dockMode, dockLastVisible: this.dockLastVisible },
     };
   }
 
@@ -380,6 +422,45 @@ class MusicEngine {
     return this.favorites.some((s) => songKey(s) === songKey(song));
   }
 
+  /** 从当前队列移除一首（正在播的那首被移除时顺延到下一首） */
+  removeFromQueue(i: number): void {
+    const q = this.queue();
+    if (i < 0 || i >= q.length) return;
+    const removingCurrent = i === this.index;
+    q.splice(i, 1);
+    if (this.queueType === 'fav') this.favorites = [...q];
+    else if (this.queueType === 'temp') this.temp = [...q];
+    else {
+      const pl = this.getPlaylist(this.playlistId);
+      if (pl) pl.songs = [...q];
+      this.playlists = [...this.playlists];
+    }
+    if (q.length === 0) {
+      this.index = -1;
+      this.stop();
+    } else if (removingCurrent) {
+      void this.playIndex(Math.min(i, q.length - 1));
+    } else if (i < this.index) {
+      this.index -= 1;
+    }
+    this.save();
+    this.emit();
+  }
+
+  /** 停止播放并清空音频源（队列被清空时使用） */
+  stop(): void {
+    const audio = this.audio;
+    if (!audio) return;
+    audio.pause();
+    audio.removeAttribute('src');
+    audio.load();
+    if (this.mediaObjectUrl) {
+      URL.revokeObjectURL(this.mediaObjectUrl);
+      this.mediaObjectUrl = '';
+    }
+    this.emit();
+  }
+
   toggleFavorite(song: Song): boolean {
     const key = songKey(song);
     const idx = this.favorites.findIndex((s) => songKey(s) === key);
@@ -396,13 +477,30 @@ class MusicEngine {
     return true;
   }
 
-  setDockCollapsed(collapsed: boolean): void {
-    this.dockCollapsed = collapsed;
+  /** 设置播放条形态（full / mini / hidden），记忆到本地 + 账户 */
+  setDockMode(mode: DockMode): void {
+    if (!DOCK_MODES.includes(mode) || mode === this.dockMode) return;
+    this.dockMode = mode;
+    if (mode !== 'hidden') this.dockLastVisible = mode;
     try {
-      localStorage.setItem(DOCK_KEY, collapsed ? '1' : '0');
+      localStorage.setItem(DOCK_KEY, this.dockMode);
+      localStorage.setItem(DOCK_LAST_KEY, this.dockLastVisible);
+      localStorage.removeItem(LEGACY_DOCK_KEY);
     } catch {}
     this.save();
     this.emit();
+  }
+
+  /** 从隐藏态展开：回到上一次的可见形态 */
+  restoreDock(): void {
+    this.setDockMode(this.dockLastVisible);
+  }
+
+  /** 形态循环：完整 → 缩小 → 隐藏 → 完整（供快捷键/顶栏入口使用） */
+  cycleDockMode(): DockMode {
+    const next = DOCK_MODES[(DOCK_MODES.indexOf(this.dockMode) + 1) % DOCK_MODES.length];
+    this.setDockMode(next);
+    return next;
   }
 
   // ---- 播放地址解析（复用音乐应用服务端源）----
@@ -690,6 +788,61 @@ class MusicEngine {
     this.emit();
   }
 
+  /**
+   * 系统媒体控制（MediaSession）：让锁屏 / 通知中心 / 键盘媒体键
+   * 能显示当前曲目并控制播放，这是常驻播放器的基本预期。
+   */
+  private syncMediaSession(song: Song | null): void {
+    const ms = typeof navigator === 'undefined' ? null : navigator.mediaSession;
+    if (!ms) return;
+    if (!song) {
+      ms.metadata = null;
+      ms.playbackState = 'none';
+      return;
+    }
+    const cover = this.picUrl(song, 300);
+    try {
+      ms.metadata = new MediaMetadata({
+        title: song.name || '未知歌曲',
+        artist: song.artist || '',
+        album: song.album || '',
+        artwork: cover ? [{ src: cover, sizes: '300x300', type: 'image/jpeg' }] : [],
+      });
+    } catch {
+      // 部分浏览器无 MediaMetadata 构造器：跳过元数据，控件仍可用
+    }
+    if (this.mediaHandlersBound) return;
+    this.mediaHandlersBound = true;
+    const bind = (action: MediaSessionAction, handler: () => void) => {
+      try {
+        ms.setActionHandler(action, handler);
+      } catch {
+        // 浏览器不支持该动作
+      }
+    };
+    bind('play', () => this.toggle());
+    bind('pause', () => this.toggle());
+    bind('previoustrack', () => this.prev());
+    bind('nexttrack', () => this.next());
+    bind('stop', () => this.stop());
+  }
+
+  private mediaHandlersBound = false;
+  private mediaKey = '';
+
+  /** emit 时同步系统媒体控件（换歌才重建元数据，避免每次 timeupdate 都重设） */
+  private pushMediaSession(): void {
+    const snap = this.snapshot;
+    if (!snap) return;
+    const key = snap.song ? songKey(snap.song) : '';
+    if (key !== this.mediaKey) {
+      this.mediaKey = key;
+      this.syncMediaSession(snap.song);
+    }
+    const ms = typeof navigator === 'undefined' ? null : navigator.mediaSession;
+    if (ms) ms.playbackState = snap.song ? (snap.playing ? 'playing' : 'paused') : 'none';
+  }
+
   /** 供 iframe 内音乐应用同步的完整状态 */
   guestState(): Record<string, unknown> {
     const snap = this.getSnapshot();
@@ -708,6 +861,7 @@ class MusicEngine {
         volume: snap.volume,
         loading: snap.loading,
       },
+      ui: { dockMode: snap.dockMode, dockLastVisible: snap.dockLastVisible },
       error: snap.error,
     };
   }

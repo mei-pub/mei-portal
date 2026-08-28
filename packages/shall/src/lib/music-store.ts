@@ -15,6 +15,9 @@ const MAX_QUEUE = 2000;
 
 export type QueueType = 'temp' | 'playlist' | 'fav';
 export type PlayMode = 'order' | 'shuffle' | 'repeat';
+/** 播放条形态：完整 / 缩小 / 隐藏（隐藏态仅留贴底把手） */
+export type DockMode = 'full' | 'mini' | 'hidden';
+const DOCK_MODES: DockMode[] = ['full', 'mini', 'hidden'];
 
 export interface MusicSong {
   id: string;
@@ -50,7 +53,9 @@ export interface MusicState {
     volume: number; // 0~1
   };
   ui: {
-    dockCollapsed: boolean;
+    dockMode: DockMode;
+    /** 上一次的可见形态，隐藏态展开时回到它 */
+    dockLastVisible: Exclude<DockMode, 'hidden'>;
   };
 }
 
@@ -63,7 +68,7 @@ export const DEFAULT_STATE: MusicState = {
   temp: [],
   queue: { type: 'temp', playlistId: '', index: -1 },
   playback: { mode: 'order', position: 0, volume: 1 },
-  ui: { dockCollapsed: false },
+  ui: { dockMode: 'full', dockLastVisible: 'full' },
 };
 
 function str(v: unknown, maxLen: number, dft = ''): string {
@@ -139,7 +144,19 @@ export function normalizeState(raw: unknown): MusicState {
       position: num(playback.position, 0, 24 * 3600, 0),
       volume: num(playback.volume, 0, 1, 1),
     },
-    ui: { dockCollapsed: ui.dockCollapsed === true },
+    ui: normalizeUi(ui),
+  };
+}
+
+/** 播放条形态归一化，并兼容旧版布尔字段 dockCollapsed */
+function normalizeUi(ui: Record<string, unknown>): MusicState['ui'] {
+  let mode = DOCK_MODES.includes(ui.dockMode as DockMode) ? (ui.dockMode as DockMode) : null;
+  if (!mode && 'dockCollapsed' in ui) mode = ui.dockCollapsed === true ? 'hidden' : 'full';
+  const last = ui.dockLastVisible === 'mini' ? 'mini' : 'full';
+  return {
+    dockMode: mode || 'full',
+    // 可见形态本身即为「上一次可见形态」，避免展开时回到过期值
+    dockLastVisible: mode && mode !== 'hidden' ? mode : last,
   };
 }
 

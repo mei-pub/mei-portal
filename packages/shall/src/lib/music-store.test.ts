@@ -66,7 +66,7 @@ test('normalizeState clamps and drops invalid entries', () => {
     playlists: [{ id: 'pl1', name: 'L', songs: [song, { name: 'no id' }] }],
     queue: { type: 'bogus', index: -9 },
     playback: { mode: 'bogus', position: -5, volume: 9 },
-    ui: { dockCollapsed: 'yes' },
+    ui: { dockMode: 'bogus' },
   });
   assert.equal(state.playlists[0].songs.length, 1);
   assert.equal(state.queue.type, 'temp');
@@ -74,7 +74,26 @@ test('normalizeState clamps and drops invalid entries', () => {
   assert.equal(state.playback.mode, 'order');
   assert.equal(state.playback.position, 0);
   assert.equal(state.playback.volume, 1);
-  assert.equal(state.ui.dockCollapsed, false);
+  assert.equal(state.ui.dockMode, 'full');
+  assert.equal(state.ui.dockLastVisible, 'full');
+});
+
+test('dock mode accepts the three forms and remembers the last visible one', () => {
+  for (const mode of ['full', 'mini', 'hidden']) {
+    assert.equal(normalizeState({ ui: { dockMode: mode } }).ui.dockMode, mode);
+  }
+  // 可见形态即为「上一次可见形态」，避免展开时回到过期值
+  assert.equal(normalizeState({ ui: { dockMode: 'mini', dockLastVisible: 'full' } }).ui.dockLastVisible, 'mini');
+  // 隐藏态保留记录下来的可见形态
+  assert.equal(normalizeState({ ui: { dockMode: 'hidden', dockLastVisible: 'mini' } }).ui.dockLastVisible, 'mini');
+  assert.equal(normalizeState({ ui: { dockMode: 'hidden', dockLastVisible: 'bogus' } }).ui.dockLastVisible, 'full');
+});
+
+test('legacy boolean dockCollapsed migrates to the three-form model', () => {
+  assert.equal(normalizeState({ ui: { dockCollapsed: true } }).ui.dockMode, 'hidden');
+  assert.equal(normalizeState({ ui: { dockCollapsed: false } }).ui.dockMode, 'full');
+  // 新字段优先于旧字段
+  assert.equal(normalizeState({ ui: { dockMode: 'mini', dockCollapsed: true } }).ui.dockMode, 'mini');
 });
 
 test('rejects unsafe account identifiers', () => {

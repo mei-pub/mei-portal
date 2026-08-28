@@ -43,6 +43,14 @@ export const hostBridge = {
       applyState(data.state || {});
     });
     this.send({ type: "hello" });
+    // iframe 内的按键不会冒泡到外壳，Alt+M 需要显式转发才能切播放条形态
+    window.addEventListener("keydown", (e) => {
+      if (!e.altKey || e.ctrlKey || e.metaKey || String(e.key).toLowerCase() !== "m") return;
+      const el = e.target;
+      if (el && /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName)) return;
+      e.preventDefault();
+      this.send({ type: "cycle-dock-mode" });
+    });
     return true;
   },
 
@@ -58,7 +66,20 @@ export const hostBridge = {
       },
     });
   },
+
+  /** 切换外壳播放条形态：full / mini / hidden */
+  setDockMode(mode) {
+    this.send({ type: "set-dock-mode", mode });
+  },
 };
+
+const DOCK_MODES = ["full", "mini", "hidden"];
+
+/** 外壳播放条形态 → body class，让应用内底部留白随形态收缩 */
+function applyDockMode(mode) {
+  if (!DOCK_MODES.includes(mode)) return;
+  DOCK_MODES.forEach((m) => document.body.classList.toggle("mei-dock-" + m, m === mode));
+}
 
 function sameSongList(a, b) {
   if (a === b) return true;
@@ -72,6 +93,8 @@ function sameSongList(a, b) {
 function applyState(state) {
   const queue = state.queue || {};
   const playback = state.playback || {};
+  const ui = state.ui || {};
+  if (ui.dockMode) applyDockMode(ui.dockMode);
 
   let dataChanged = false;
   if (Array.isArray(state.playlists)) {
