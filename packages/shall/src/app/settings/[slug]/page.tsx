@@ -6,6 +6,7 @@ import AiDrawStatus from '@/components/settings-apps/AiDrawStatus';
 import LinkLogs from '@/components/settings-apps/LinkLogs';
 import LinkServerSettings from '@/components/settings-apps/LinkServerSettings';
 import MediagoSettings from '@/components/settings-apps/MediagoSettings';
+import NovelsManage from '@/components/settings-apps/NovelsManage';
 import PansouSettings from '@/components/settings-apps/PansouSettings';
 import SolaraSettings from '@/components/settings-apps/SolaraSettings';
 import TvCombined from '@/components/settings-apps/TvCombined';
@@ -18,6 +19,7 @@ const PAGES = {
   'link-logs': LinkLogs,
   'link-server': LinkServerSettings,
   mediago: MediagoSettings,
+  'novels-manage': NovelsManage,
   pansou: PansouSettings,
   solara: SolaraSettings,
   tv: TvCombined,

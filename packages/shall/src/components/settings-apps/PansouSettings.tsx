@@ -8,7 +8,6 @@ import {
   SettingsButton,
   SettingsPage,
   SettingsSection,
-  StickyBar,
   TextInput,
   Toggle,
 } from '@/components/SettingsUI';
@@ -152,8 +151,15 @@ export default function PansouSettings() {
       icon="lucide:search"
       title="网盘搜索设置"
       description="管理搜索频道、插件、网盘类型与链接检测。"
-      actions={<Pill tone={loading ? 'warning' : 'success'}>{loading ? '读取中' : `${health?.plugin_count ?? plugins.length} 个插件`}</Pill>}
+      actions={
+        <>
+          <Pill tone={loading ? 'warning' : 'success'}>{loading ? '读取中' : `${health?.plugin_count ?? plugins.length} 个插件`}</Pill>
+          <SettingsButton onClick={reset}>恢复默认</SettingsButton>
+          <SettingsButton variant="primary" onClick={save}>保存配置</SettingsButton>
+        </>
+      }
     >
+      {error ? <Alert tone="error" title={error} /> : message ? <Alert tone="success" title={message} /> : null}
       <SettingsSection title="搜索频道" description="TG 频道决定搜索的数据来源，可添加自定义频道。">
         <div className="section-tools">
           <SettingsButton onClick={() => setChannels(channels.length === allChannels.length ? [] : allChannels)}>
@@ -199,12 +205,6 @@ export default function PansouSettings() {
       <SettingsSection title="链接有效性检测" description="搜索后检测链接是否可用，会额外消耗请求。">
         <Toggle checked={detection} onChange={setDetection} label="启用链接有效性检测" description="检测结果会按链接缓存，减少重复检测。" />
       </SettingsSection>
-
-      {error ? <Alert tone="error" title={error} /> : message ? <Alert tone="success" title={message} /> : null}
-      <StickyBar>
-        <SettingsButton onClick={reset}>恢复默认</SettingsButton>
-        <SettingsButton variant="primary" onClick={save}>保存配置</SettingsButton>
-      </StickyBar>
 
       <style>{`
         .chip-cloud{display:flex;flex-wrap:wrap;gap:7px;max-height:280px;overflow:auto;padding-right:3px;}

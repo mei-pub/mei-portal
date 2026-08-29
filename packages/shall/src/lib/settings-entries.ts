@@ -27,7 +27,7 @@ export const SETTING_GROUPS: SettingGroup[] = [
       { id: 'mediago-settings', name: '媒体下载设置', url: '/settings/mediago', icon: 'lucide:download' },
       { id: 'pansou-config', name: '网盘搜索设置', url: '/settings/pansou', icon: 'lucide:search' },
       { id: 'draw-settings', name: 'AI 绘图设置', url: '/settings/ai-draw', icon: 'lucide:pen-tool' },
-      { id: 'novels-manage', name: '小说站点管理', url: '/novels/manage', icon: 'lucide:book-open' },
+      { id: 'novels-manage', name: '小说站点管理', url: '/settings/novels-manage', icon: 'lucide:book-open' },
       { id: 'novels-backup', name: '小说阅读数据备份', url: '/novels/backup', icon: 'lucide:database' },
       { id: 'link-server', name: '隧道服务器设置', url: '/settings/link-server', icon: 'lucide:server' },
     ],

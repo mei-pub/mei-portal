@@ -3,13 +3,11 @@
 import { useEffect, useState } from 'react';
 import {
   Alert,
-  EmptyState,
   Pill,
   SettingsButton,
   SettingsPage,
   SettingsSection,
   Toggle,
-  StickyBar,
 } from '@/components/SettingsUI';
 import { readJsonStorage, writeJsonStorage } from '@/lib/app-settings-client';
 
@@ -73,8 +71,15 @@ export default function SolaraSettings() {
       icon="lucide:music"
       title="音乐播放设置"
       description="管理探索雷达风格与音乐源启停。"
-      actions={<Pill tone="neutral">{sources.length} 个源启用</Pill>}
+      actions={
+        <>
+          <Pill tone="neutral">{sources.length} 个源启用</Pill>
+          <SettingsButton onClick={() => { setSources(DEFAULT_SOURCES); setMessage('已恢复默认源，尚未保存'); }}>恢复默认</SettingsButton>
+          <SettingsButton variant="primary" onClick={save}>保存设置</SettingsButton>
+        </>
+      }
     >
+      {error ? <Alert tone="error" title={error} /> : message ? <Alert tone="success" title={message} /> : null}
       <SettingsSection title="探索雷达风格" description="控制发现页随机推荐的曲风池。">
         <div className="genre-cloud">
           {GENRES.map((name) => (
@@ -97,18 +102,7 @@ export default function SolaraSettings() {
             />
           ))}
         </div>
-        <div className="footer-actions">
-          <SettingsButton onClick={() => {
-            setSources(DEFAULT_SOURCES);
-            setMessage('已恢复默认源，尚未保存');
-          }}>恢复默认源</SettingsButton>
-        </div>
       </SettingsSection>
-
-      {error ? <Alert tone="error" title={error} /> : message ? <Alert tone="success" title={message} /> : null}
-      <StickyBar>
-        <SettingsButton variant="primary" onClick={save}>保存设置</SettingsButton>
-      </StickyBar>
 
       <style>{`
         .genre-cloud{display:flex;flex-wrap:wrap;gap:7px;}

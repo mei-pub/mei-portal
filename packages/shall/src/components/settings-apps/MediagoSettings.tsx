@@ -8,7 +8,6 @@ import {
   SettingsField,
   SettingsPage,
   SettingsSection,
-  StickyBar,
   TextInput,
   Toggle,
 } from '@/components/SettingsUI';
@@ -93,8 +92,14 @@ export default function MediagoSettings() {
       icon="lucide:download"
       title="媒体下载设置"
       description="配置下载目录、代理与任务执行策略。"
-      actions={<Pill tone={loading ? 'warning' : 'success'}>{loading ? '读取中' : '已连接'}</Pill>}
+      actions={
+        <>
+          <Pill tone={loading ? 'warning' : 'success'}>{loading ? '读取中' : '已连接'}</Pill>
+          <SettingsButton variant="primary" onClick={() => { void saveAllFields(); }} disabled={savingKey !== ''}>保存全部设置</SettingsButton>
+        </>
+      }
     >
+      {error ? <Alert tone="error" title={error} /> : message ? <Alert tone="success" title={message} /> : null}
       <SettingsSection title="基础设置" description="修改后点击底部保存按钮统一保存。">
         {fields.map((f) => (
           <SettingsField key={f.key} label={f.label} hint={f.hint}>
@@ -129,11 +134,6 @@ export default function MediagoSettings() {
           <TextInput value={config.apiKey || ''} readOnly />
         </SettingsField>
       </SettingsSection>
-
-      {error ? <Alert tone="error" title={error} /> : message ? <Alert tone="success" title={message} /> : null}
-      <StickyBar>
-        <SettingsButton variant="primary" onClick={() => { void saveAllFields(); }} disabled={savingKey !== ''}>保存全部设置</SettingsButton>
-      </StickyBar>
 
       <style>{`
         .toggle-stack{display:flex;flex-direction:column;gap:10px;}

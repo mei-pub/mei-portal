@@ -9,7 +9,6 @@ import {
   SettingsPage,
   SettingsSection,
   Select,
-  StickyBar,
   TextInput,
   Toggle,
 } from '@/components/SettingsUI';
@@ -172,7 +171,17 @@ export default function LinkServerSettings() {
       icon="lucide:server"
       title="隧道服务器设置"
       description="配置 frp 服务器连接、管理接口与断线恢复策略。"
-      actions={<Pill tone={loading ? 'warning' : 'neutral'}>{loading ? '读取中' : '已同步'}</Pill>}
+      actions={
+        <>
+          <Pill tone={loading ? 'warning' : 'neutral'}>{loading ? '读取中' : '已同步'}</Pill>
+          <SettingsButton variant="secondary" onClick={() => void save(false)} disabled={busy !== ''}>
+            {busy === 'save' ? '保存中' : '保存设置'}
+          </SettingsButton>
+          <SettingsButton variant="primary" onClick={() => void save(true)} disabled={busy !== ''}>
+            {busy === 'connect' ? '连接中' : '保存并连接'}
+          </SettingsButton>
+        </>
+      }
     >
       <SettingsSection
         title="服务器连接"
@@ -266,17 +275,6 @@ export default function LinkServerSettings() {
         {message ? <Alert tone="success" title={message} /> : null}
         {error ? <Alert tone="error" title={error} description="请根据错误提示调整上方配置后重试。" /> : null}
         {!message && !error ? <div className="mei-cloud-info"><strong>连接令牌与管理密码留空时会沿用已有值</strong></div> : null}
-        <StickyBar>
-          <SettingsButton variant="secondary" onClick={() => void load()} disabled={busy !== ''}>
-            重新读取
-          </SettingsButton>
-          <SettingsButton variant="secondary" onClick={() => void save(false)} disabled={busy !== ''}>
-            {busy === 'save' ? '保存中' : '保存设置'}
-          </SettingsButton>
-          <SettingsButton variant="primary" onClick={() => void save(true)} disabled={busy !== ''}>
-            {busy === 'connect' ? '连接中' : '保存并连接'}
-          </SettingsButton>
-        </StickyBar>
       </SettingsSection>
     </SettingsPage>
   );
