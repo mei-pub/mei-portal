@@ -198,7 +198,7 @@ export const settingsUiStyles = `
 .mei-tabs button{display:inline-flex;align-items:center;gap:7px;height:36px;padding:0 16px;border:none;border-radius:11px;background:transparent;font-size:12.5px;font-weight:700;color:var(--mei-text-muted);cursor:pointer;white-space:nowrap;transition:var(--mei-transition);}
 .mei-tabs button:hover{background:rgba(99,102,241,.06);color:var(--mei-primary);}
 .mei-tabs button.active{background:linear-gradient(135deg,rgba(99,102,241,.14),rgba(139,92,246,.1));color:var(--mei-primary);font-weight:800;box-shadow:0 2px 8px rgba(99,102,241,.1);}
-.mei-section{background:rgba(255,255,255,.96);border:1px solid var(--mei-border);border-radius:18px;padding:28px 32px;box-shadow:0 1px 3px rgba(23,32,56,.06);min-width:0;margin-bottom:36px;}
+.mei-section{background:rgba(255,255,255,.96);border:1px solid var(--mei-border);border-radius:18px;padding:24px 28px;box-shadow:0 1px 3px rgba(23,32,56,.06);min-width:0;margin-bottom:20px;}
 .mei-section:last-child{margin-bottom:0;}
 .mei-section.wide{grid-column:1/-1;}
 .mei-section-head{display:flex;justify-content:space-between;gap:14px;margin-bottom:20px;}
