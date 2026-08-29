@@ -114,7 +114,8 @@ export default function HomeEditorClient() {
         .home-editor-content{min-width:0;}
         .range-row{display:grid;grid-template-columns:1fr auto;gap:10px;align-items:center;min-height:38px;}
         .range-row output{font-size:11.5px;color:var(--mei-text-muted);font-weight:750;min-width:52px;text-align:right;}
-        .group-row{display:grid;grid-template-columns:24px minmax(0,1fr) auto auto;gap:10px;align-items:center;padding:10px;border:1px solid var(--mei-border);border-radius:14px;background:rgba(255,255,255,.6);}
+        .group-row{display:grid;grid-template-columns:24px minmax(0,1fr) auto auto;gap:10px;align-items:center;padding:10px;border:1px solid var(--mei-border);border-radius:14px;background:rgba(255,255,255,.6);margin-bottom:10px;}
+        .group-row:last-child{margin-bottom:0;}
         .group-row.drag{border-color:rgba(99,102,241,.45);background:rgba(99,102,241,.06);}
         .group-handle{cursor:grab;color:var(--mei-text-faint);text-align:center;}
         .cloud-grid{display:grid;grid-template-columns:180px minmax(0,1fr);gap:16px;align-items:start;}
