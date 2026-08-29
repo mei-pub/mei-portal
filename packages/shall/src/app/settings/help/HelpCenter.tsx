@@ -117,7 +117,7 @@ export default function HelpCenter() {
       </SettingsPage>
       <style>{`
         .help-layout{display:grid;grid-template-columns:250px minmax(0,1fr);gap:16px;align-items:start;}
-        .help-nav{display:flex;flex-direction:column;gap:5px;padding:10px;background:rgba(255,255,255,.74);border:1px solid rgba(255,255,255,.82);border-radius:20px;box-shadow:var(--mei-shadow-sm);backdrop-filter:blur(18px);}
+        .help-nav{display:flex;flex-direction:column;gap:5px;padding:10px;background:rgba(255,255,255,.94);border:1px solid var(--mei-border);border-radius:20px;box-shadow:var(--mei-shadow-sm);}
         .help-nav button{display:flex;align-items:center;gap:9px;padding:9px 10px;border:none;border-radius:12px;background:transparent;color:var(--mei-text);font-size:12.5px;font-weight:650;text-align:left;cursor:pointer;transition:var(--mei-transition);}
         .help-nav button:hover{background:rgba(99,102,241,.07);color:var(--mei-primary);}
         .help-nav button.active{background:var(--mei-gradient-soft);color:var(--mei-primary);}

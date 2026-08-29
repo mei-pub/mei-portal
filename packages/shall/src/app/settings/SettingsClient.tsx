@@ -54,12 +54,12 @@ export default function SettingsClient() {
 
       <style>{`
         .settings-home{max-width:1180px;margin:0 auto;padding:4px 0 48px;}
-        .settings-hero{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,.9fr);gap:18px;align-items:end;padding:24px;margin-bottom:16px;border-radius:24px;border:1px solid rgba(255,255,255,.82);background:linear-gradient(135deg,rgba(255,255,255,.85),rgba(255,255,255,.58));box-shadow:var(--mei-shadow-sm);backdrop-filter:blur(20px);}
+        .settings-hero{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,.9fr);gap:18px;align-items:end;padding:24px;margin-bottom:16px;border-radius:24px;border:1px solid var(--mei-border);background:linear-gradient(135deg,rgba(255,255,255,.96),rgba(255,255,255,.88));box-shadow:var(--mei-shadow-sm);}
         .settings-hero span{font-size:10.5px;font-weight:900;letter-spacing:1.8px;color:var(--mei-primary);}
         .settings-hero h1{margin:5px 0 0;font-size:31px;letter-spacing:-1px;font-weight:900;}
         .settings-hero p{margin:0;font-size:13px;line-height:1.7;color:var(--mei-text-muted);}
         .settings-groups{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:14px;align-items:stretch;}
-        .settings-groups section{min-width:0;background:rgba(255,255,255,.74);border:1px solid rgba(255,255,255,.82);border-radius:20px;padding:14px;box-shadow:var(--mei-shadow-sm);backdrop-filter:blur(18px);}
+        .settings-groups section{min-width:0;background:rgba(255,255,255,.94);border:1px solid var(--mei-border);border-radius:20px;padding:14px;box-shadow:var(--mei-shadow-sm);}
         .settings-groups header{display:flex;align-items:center;gap:10px;margin-bottom:11px;}
         .settings-groups header>span{width:31px;height:31px;border-radius:11px;display:inline-flex;align-items:center;justify-content:center;color:var(--mei-primary);background:rgba(99,102,241,.1);}
         .settings-groups h2{margin:0;font-size:14px;font-weight:850;}
