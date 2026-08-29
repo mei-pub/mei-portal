@@ -110,7 +110,6 @@ export default function TvSources() {
       <SettingsSection
         title="源列表"
         description="检测会向源站发起一次搜索请求，全部检测按顺序执行。"
-        wide
         actions={
           <>
             <SettingsButton onClick={() => void check('', true)} disabled={loading}>全部检测</SettingsButton>
@@ -155,7 +154,7 @@ export default function TvSources() {
         )}
       </SettingsSection>
 
-      <SettingsSection title="添加自定义源" description="API 地址需为标准 CMS 资源接口。" wide>
+      <SettingsSection title="添加自定义源" description="API 地址需为标准 CMS 资源接口。">
         <div className="mei-grid">
           <SettingsField label="名称">
             <TextInput value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="资源站名称" />
@@ -172,7 +171,7 @@ export default function TvSources() {
         </div>
       </SettingsSection>
 
-      <SettingsSection title="操作结果" wide>
+      <SettingsSection title="操作结果">
         {error ? <Alert tone="error" title={error} /> : message ? <Alert tone="success" title={message} /> : null}
       </SettingsSection>
 

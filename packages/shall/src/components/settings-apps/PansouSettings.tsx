@@ -154,7 +154,7 @@ export default function PansouSettings() {
       description="管理搜索频道、插件、网盘类型与链接检测。"
       actions={<Pill tone={loading ? 'warning' : 'success'}>{loading ? '读取中' : `${health?.plugin_count ?? plugins.length} 个插件`}</Pill>}
     >
-      <SettingsSection title="搜索频道" description="TG 频道决定搜索的数据来源，可添加自定义频道。" wide>
+      <SettingsSection title="搜索频道" description="TG 频道决定搜索的数据来源，可添加自定义频道。">
         <div className="section-tools">
           <SettingsButton onClick={() => setChannels(channels.length === allChannels.length ? [] : allChannels)}>
             {channels.length === allChannels.length ? '取消全选' : '全选'}
@@ -167,7 +167,7 @@ export default function PansouSettings() {
         </div>
       </SettingsSection>
 
-      <SettingsSection title="网盘与网页插件" description="常规搜索插件，覆盖大部分网盘资源。" wide>
+      <SettingsSection title="网盘与网页插件" description="常规搜索插件，覆盖大部分网盘资源。">
         <div className="section-tools">
           <SettingsButton onClick={() => {
             const all = webPlugins.every((p) => plugins.includes(p));
@@ -177,7 +177,7 @@ export default function PansouSettings() {
         {webPlugins.length === 0 ? <EmptyState title="暂无网盘插件" description="后端未返回可用插件。" /> : renderChips(webPlugins, plugins, setPlugins, pluginLabel)}
       </SettingsSection>
 
-      <SettingsSection title="磁力与电驴插件" description="支持 magnet/ed2k 链接的专用搜索源。" wide>
+      <SettingsSection title="磁力与电驴插件" description="支持 magnet/ed2k 链接的专用搜索源。">
         <div className="section-tools">
           <SettingsButton onClick={() => {
             const all = magnetPlugins.every((p) => plugins.includes(p));
@@ -187,7 +187,7 @@ export default function PansouSettings() {
         {magnetPlugins.length === 0 ? <EmptyState title="暂无磁力插件" /> : renderChips(magnetPlugins, plugins, setPlugins, pluginLabel)}
       </SettingsSection>
 
-      <SettingsSection title="网盘类型筛选" description="控制聚合结果中保留哪些网盘类型。" wide>
+      <SettingsSection title="网盘类型筛选" description="控制聚合结果中保留哪些网盘类型。">
         <div className="section-tools">
           <SettingsButton onClick={() => setDiskTypes(diskTypes.length === DISK_TYPES.length ? [] : DISK_TYPES.map(([id]) => id))}>
             {diskTypes.length === DISK_TYPES.length ? '取消全选' : '全选'}
@@ -196,7 +196,7 @@ export default function PansouSettings() {
         {renderChips(DISK_TYPES.map(([id]) => id), diskTypes, setDiskTypes, (id) => DISK_TYPES.find(([d]) => d === id)?.[1] || id)}
       </SettingsSection>
 
-      <SettingsSection title="链接有效性检测" description="搜索后检测链接是否可用，会额外消耗请求。" wide>
+      <SettingsSection title="链接有效性检测" description="搜索后检测链接是否可用，会额外消耗请求。">
         <Toggle checked={detection} onChange={setDetection} label="启用链接有效性检测" description="检测结果会按链接缓存，减少重复检测。" />
       </SettingsSection>
 

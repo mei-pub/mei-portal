@@ -223,7 +223,7 @@ function StyleTab({ config, update }: { config: PanelConfig; update: (c: PanelCo
         </div>
       </SettingsSection>
 
-      <SettingsSection title="布局与页脚" wide>
+      <SettingsSection title="布局与页脚">
         <div className="mei-grid">
           <SettingsField label="顶部边距">
             <div className="range-row"><input type="range" min={0} max={30} value={config.style.marginTop} onChange={(e) => setStyle({ marginTop: Number(e.target.value) })} /><output>{config.style.marginTop}%</output></div>
@@ -411,7 +411,7 @@ function BackupTab({ config, reload }: { config: PanelConfig; reload: () => void
         </div>
       </SettingsSection>
 
-      <SettingsSection title="云端备份" description="支持 WebDAV 与 S3 兼容对象存储。" wide>
+      <SettingsSection title="云端备份" description="支持 WebDAV 与 S3 兼容对象存储。">
         <div className="cloud-grid">
           <div className="cloud-target">
             {(['webdav', 's3'] as const).map((item) => (
@@ -461,7 +461,7 @@ function BackupTab({ config, reload }: { config: PanelConfig; reload: () => void
         </div>
       </SettingsSection>
 
-      <SettingsSection title="操作结果" wide>
+      <SettingsSection title="操作结果">
         {error ? <Alert tone="error" title={error} /> : message ? <Alert tone="success" title={message} /> : <div className="mei-cloud-info"><strong>云端凭据不落盘</strong><p>仅在本次操作中提交，不会保存到服务器。</p></div>}
       </SettingsSection>
 

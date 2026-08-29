@@ -75,7 +75,6 @@ export default function AiDrawStatus() {
     >
       <SettingsSection
         title="筛选"
-        wide
         actions={<SettingsButton variant="primary" onClick={() => void load()}>查询</SettingsButton>}
       >
         <div className="mei-grid">
@@ -85,7 +84,7 @@ export default function AiDrawStatus() {
         </div>
       </SettingsSection>
 
-      <SettingsSection title="生成概览" wide>
+      <SettingsSection title="生成概览">
         <div className="metric-grid">
           <div className="metric chat">
             <span>AI 对话</span>
@@ -98,7 +97,7 @@ export default function AiDrawStatus() {
         </div>
       </SettingsSection>
 
-      <SettingsSection title="近 7 天趋势" wide>
+      <SettingsSection title="近 7 天趋势">
         {chatStats.length === 0 && fileStats.length === 0 ? <EmptyState title="暂无统计数据" /> : (
           <div className="chart-wrap">
             <div className="chart-legend">
@@ -123,7 +122,7 @@ export default function AiDrawStatus() {
         )}
       </SettingsSection>
 
-      <SettingsSection title="AI 对话记录" wide>
+      <SettingsSection title="AI 对话记录">
         {error ? <Alert tone="error" title={error} /> : !chatLogs?.items.length ? <EmptyState title="暂无对话记录" /> : (
           <table className="mei-table">
             <thead><tr><th>时间</th><th>用户</th><th>模型</th><th>详情</th></tr></thead>
@@ -141,7 +140,7 @@ export default function AiDrawStatus() {
         )}
       </SettingsSection>
 
-      <SettingsSection title="文件生成记录" wide>
+      <SettingsSection title="文件生成记录">
         {!fileLogs?.items.length ? <EmptyState title="暂无文件记录" /> : (
           <table className="mei-table">
             <thead><tr><th>时间</th><th>用户</th><th>文件</th></tr></thead>

@@ -110,7 +110,6 @@ export default function LinkLogs() {
     >
       <SettingsSection
         title="日志筛选"
-        wide
         actions={
           <>
             <SettingsButton onClick={() => void load()}>刷新</SettingsButton>
@@ -136,7 +135,7 @@ export default function LinkLogs() {
         </div>
       </SettingsSection>
 
-      <SettingsSection title="日志流" description="最新日志在最上方，每 3 秒自动刷新。" wide>
+      <SettingsSection title="日志流" description="最新日志在最上方，每 3 秒自动刷新。">
         {error ? <Alert tone="error" title={error} /> : loading ? <EmptyState title="正在读取日志…" /> : filtered.length === 0 ? <EmptyState title="暂无日志" description="当前筛选条件下没有匹配记录。" /> : (
           <div className="mei-logs">
             {filtered.map((e, i) => (
@@ -150,7 +149,7 @@ export default function LinkLogs() {
         )}
       </SettingsSection>
 
-      <SettingsSection title="状态摘要" wide>
+      <SettingsSection title="状态摘要">
         <div className="status-grid">
           <div>
             <span>配置状态</span>

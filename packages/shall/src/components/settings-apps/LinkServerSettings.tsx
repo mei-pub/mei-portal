@@ -177,7 +177,6 @@ export default function LinkServerSettings() {
       <SettingsSection
         title="服务器连接"
         description="这些参数用于生成 frpc.toml 并建立隧道连接。"
-        wide
         actions={
           <>
             <SettingsButton onClick={testConnection} disabled={busy !== '' || !config.serverAddr}>
@@ -214,35 +213,35 @@ export default function LinkServerSettings() {
         </div>
       </SettingsSection>
 
-      <SettingsSection title="域名管理接口" description="用于从服务端拉取可用域名。" wide>
-        <div className="mei-grid">
-          <SettingsField label="管理页地址" span>
-            <TextInput value={config.managementURL || ''} onChange={(e) => setConfig({ ...config, managementURL: e.target.value })} />
-          </SettingsField>
-          <SettingsField label="API Token" span>
-            <TextInput type="password" value={config.domainAPIToken || ''} onChange={(e) => setConfig({ ...config, domainAPIToken: e.target.value })} />
-          </SettingsField>
-        </div>
-      </SettingsSection>
-
-      <SettingsSection title="本地管理接口" description="frpc Admin API，用于状态读取与进程管理。" wide>
-        <div className="mei-grid">
-          <SettingsField label="端口">
-            <TextInput type="number" value={config.adminPort || ''} onChange={(e) => setConfig({ ...config, adminPort: e.target.value })} />
-          </SettingsField>
-          <SettingsField label="用户名">
-            <TextInput value={config.adminUser || ''} onChange={(e) => setConfig({ ...config, adminUser: e.target.value })} />
-          </SettingsField>
-          <SettingsField label="密码" hint="留空表示沿用已保存的密码。" span>
-            <TextInput type="password" value={config.adminPassword || ''} onChange={(e) => setConfig({ ...config, adminPassword: e.target.value })} />
-          </SettingsField>
-        </div>
-      </SettingsSection>
+      <div className="mei-grid">
+        <SettingsSection title="域名管理接口" description="用于从服务端拉取可用域名。">
+          <div className="mei-field-stack">
+            <SettingsField label="管理页地址" span>
+              <TextInput value={config.managementURL || ''} onChange={(e) => setConfig({ ...config, managementURL: e.target.value })} />
+            </SettingsField>
+            <SettingsField label="API Token" span>
+              <TextInput type="password" value={config.domainAPIToken || ''} onChange={(e) => setConfig({ ...config, domainAPIToken: e.target.value })} />
+            </SettingsField>
+          </div>
+        </SettingsSection>
+        <SettingsSection title="本地管理接口" description="frpc Admin API，用于状态读取与进程管理。">
+          <div className="mei-field-stack">
+            <SettingsField label="端口">
+              <TextInput type="number" value={config.adminPort || ''} onChange={(e) => setConfig({ ...config, adminPort: e.target.value })} />
+            </SettingsField>
+            <SettingsField label="用户名">
+              <TextInput value={config.adminUser || ''} onChange={(e) => setConfig({ ...config, adminUser: e.target.value })} />
+            </SettingsField>
+            <SettingsField label="密码" hint="留空表示沿用已保存的密码。" span>
+              <TextInput type="password" value={config.adminPassword || ''} onChange={(e) => setConfig({ ...config, adminPassword: e.target.value })} />
+            </SettingsField>
+          </div>
+        </SettingsSection>
+      </div>
 
       <SettingsSection
         title="自动重连"
         description="重连打满次数后自动升级为重启，两种方式都失败才停止。"
-        wide
       >
         <div className="mei-grid">
           <div className="mei-field span">
@@ -263,7 +262,7 @@ export default function LinkServerSettings() {
         </div>
       </SettingsSection>
 
-      <SettingsSection title="操作结果" wide>
+      <SettingsSection title="操作结果">
         {message ? <Alert tone="success" title={message} /> : null}
         {error ? <Alert tone="error" title={error} description="请根据错误提示调整上方配置后重试。" /> : null}
         {!message && !error ? <div className="mei-cloud-info"><strong>连接令牌与管理密码留空时会沿用已有值</strong></div> : null}

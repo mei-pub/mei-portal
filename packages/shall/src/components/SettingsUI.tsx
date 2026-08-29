@@ -184,14 +184,14 @@ export function StickyBar({ children }: { children: ReactNode }) {
 }
 
 export const settingsUiStyles = `
-.mei-page{max-width:1180px;margin:0 auto;padding:4px 0 48px;}
+.mei-page{max-width:920px;margin:0 auto;padding:4px 0 56px;}
 .mei-page-head{display:flex;align-items:flex-end;justify-content:space-between;gap:18px;margin-bottom:20px;}
 .mei-page-title{display:flex;align-items:center;gap:14px;min-width:0;}
 .mei-page-icon{width:44px;height:44px;border-radius:15px;display:inline-flex;align-items:center;justify-content:center;color:#fff;background:linear-gradient(140deg,#6366f1,#8b5cf6 55%,#0ea5e9);box-shadow:0 12px 28px rgba(79,70,229,.22);}
 .mei-page-title h1{margin:0;font-size:24px;letter-spacing:-.5px;font-weight:850;}
 .mei-page-title p{margin:3px 0 0;font-size:12.5px;color:var(--mei-text-muted);}
 .mei-page-actions{display:flex;gap:8px;flex-shrink:0;align-items:center;}
-.mei-page-tabs{margin-bottom:16px;}
+.mei-page-tabs{margin-bottom:20px;}
 .mei-page-body{display:flex;flex-direction:column;gap:24px;align-items:stretch;}
 .mei-page-tabs ~ .mei-page-body{}
 .mei-tabs{display:flex;gap:4px;padding:4px;background:rgba(255,255,255,.92);border:1px solid var(--mei-border);border-radius:14px;margin-bottom:18px;box-shadow:var(--mei-shadow-sm);overflow-x:auto;}
@@ -200,13 +200,13 @@ export const settingsUiStyles = `
 .mei-tabs button.active{background:linear-gradient(135deg,rgba(99,102,241,.14),rgba(139,92,246,.1));color:var(--mei-primary);font-weight:800;box-shadow:0 2px 8px rgba(99,102,241,.1);}
 .mei-section{background:rgba(255,255,255,.94);border:1px solid var(--mei-border);border-radius:20px;padding:24px;box-shadow:var(--mei-shadow-sm);min-width:0;}
 .mei-section.wide{grid-column:1/-1;}
-.mei-section-head{display:flex;justify-content:space-between;gap:14px;margin-bottom:15px;}
+.mei-section-head{display:flex;justify-content:space-between;gap:14px;margin-bottom:18px;}
 .mei-section-head h2{margin:0;font-size:15px;font-weight:800;letter-spacing:-.2px;}
 .mei-section-head p{margin:4px 0 0;font-size:12px;color:var(--mei-text-muted);}
 .mei-section-actions{display:flex;gap:8px;align-items:center;flex-shrink:0;}
-.mei-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:13px;}
+.mei-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;}
 .mei-grid.cols-3{grid-template-columns:repeat(3,minmax(0,1fr));}
-.mei-field{display:flex;flex-direction:column;gap:6px;min-width:0;}
+.mei-field{display:flex;flex-direction:column;gap:8px;min-width:0;}
 .mei-field.span{grid-column:1/-1;}
 .mei-field>span{font-size:12px;font-weight:750;color:var(--mei-text-muted);}
 .mei-field small{font-size:11px;color:var(--mei-text-faint);line-height:1.5;}
@@ -254,10 +254,10 @@ textarea.mei-input{height:auto;min-height:86px;padding:10px 12px;line-height:1.5
 .mei-file-input::-webkit-file-upload-button:hover{border-color:rgba(99,102,241,.35);color:var(--mei-primary);}
 .mei-file-input::file-selector-button{height:32px;padding:0 14px;border:1px solid var(--mei-border-strong);border-radius:10px;background:rgba(255,255,255,.8);color:var(--mei-text);font-size:12.5px;font-weight:700;cursor:pointer;margin-right:10px;transition:var(--mei-transition);}
 .mei-file-input::file-selector-button:hover{border-color:rgba(99,102,241,.35);color:var(--mei-primary);}
-.mei-sticky-bar{position:sticky;bottom:0;display:flex;justify-content:flex-end;gap:10px;padding:14px 0;margin-top:8px;background:linear-gradient(to top,rgba(255,255,255,.96),rgba(255,255,255,0));z-index:10;}
+.mei-sticky-bar{position:sticky;bottom:0;display:flex;justify-content:flex-end;gap:10px;padding:16px 0 4px;margin-top:12px;background:linear-gradient(to top,rgba(255,255,255,.98),rgba(255,255,255,0) 80%);z-index:10;}
 .mei-footer-actions{display:flex;justify-content:flex-end;gap:9px;margin-top:12px;flex-wrap:wrap;}
-.mei-toggle-stack{display:flex;flex-direction:column;gap:9px;}
-.mei-source-stack{display:flex;flex-direction:column;gap:9px;}
+.mei-toggle-stack{display:flex;flex-direction:column;gap:10px;}
+.mei-source-stack{display:flex;flex-direction:column;gap:10px;}
 .mei-cloud-info{padding:14px;border-radius:14px;background:rgba(255,255,255,.5);border:1px solid var(--mei-border);}
 .mei-cloud-info strong{font-size:13px;font-weight:800;display:block;}
 .mei-cloud-info p{margin:5px 0 0;font-size:11.5px;color:var(--mei-text-muted);line-height:1.5;}
