@@ -110,7 +110,7 @@ export default function SettingsShell({ children }: { children: React.ReactNode 
         .mei-shell-item.active::before{background:var(--mei-primary);}
         .mei-shell-item.danger{color:#dc2626;}
         .mei-shell-item.danger:hover{background:rgba(220,38,38,0.07);}
-        .mei-shell-main{flex:1;min-width:0;overflow-y:auto;padding:24px 28px;}
+        .mei-shell-main{flex:1;min-width:0;overflow-y:auto;padding:32px 40px;}
         .mei-modal-mask{position:fixed;inset:0;z-index:100;background:rgba(10,14,26,0.45);display:flex;align-items:center;justify-content:center;backdrop-filter:blur(4px);}
         .mei-modal{width:380px;max-width:calc(100vw - 40px);background:rgba(255,255,255,0.97);border:1px solid var(--mei-border);border-radius:var(--mei-radius-lg);padding:20px;box-shadow:var(--mei-shadow-lg);}
 .mei-modal-head{display:flex;align-items:center;gap:10px;margin-bottom:8px;}
@@ -130,6 +130,7 @@ export default function SettingsShell({ children }: { children: React.ReactNode 
           .mei-shell-group-title{border-bottom:none;margin-bottom:0;}
           .mei-shell-item{width:auto;white-space:nowrap;padding:6px 10px;}
           .mei-shell-main{padding:var(--mei-space-3);}
+          .mei-shell-main{padding:20px;}
         }
       `}
       ${settingsUiStyles}</style>
