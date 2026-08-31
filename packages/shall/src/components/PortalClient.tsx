@@ -911,7 +911,8 @@ export default function PortalClient({ items, panel: initialPanel }: { items: It
         onClick={() => setEditMode((v) => !v)}
         title={editMode ? '完成编辑' : '编辑主页'}
         style={{
-          position: 'fixed', right: 22, bottom: 22, zIndex: 900,
+          // 避让右下角常驻音乐播放器（缩小形态贴右下角、完整形态贴底部居中）
+          position: 'fixed', right: 22, bottom: 96, zIndex: 900,
           width: 46, height: 46, borderRadius: '50%', border: 'none', cursor: 'pointer',
           background: editMode ? 'linear-gradient(135deg,#10b981,#059669)' : 'var(--mei-gradient)',
           color: '#fff', fontSize: 19, boxShadow: '0 8px 28px rgba(99,102,241,0.4)',
