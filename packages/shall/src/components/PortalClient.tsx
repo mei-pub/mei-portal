@@ -328,7 +328,9 @@ export default function PortalClient({ items, panel: initialPanel }: { items: It
   const [dragId, setDragId] = useState<string | null>(null);
   const [toast, setToast] = useState('');
   // 分组分页
-  const [pageIdx, setPageIdx] = useState(0);
+  // 用分组 id 而非索引记忆当前页：进入/退出编辑模式时 pages 形态会变化，
+  // 按 id 锚定可避免激活页跳到空的「常用」页导致图标全消失
+  const [pageId, setPageId] = useState('');
   const [dragPage, setDragPage] = useState<{ startX: number; startIdx: number; offset: number; active: boolean } | null>(null);
   const [touchStartX, setTouchStartX] = useState<number | null>(null);
   const health = useHealth() as HealthMap;
@@ -413,17 +415,26 @@ export default function PortalClient({ items, panel: initialPanel }: { items: It
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       if (editMode) return;
-      if (e.key === 'ArrowLeft' && !e.ctrlKey && !e.metaKey) { setPageIdx(i => Math.max(0, i - 1)); }
-      if (e.key === 'ArrowRight' && !e.ctrlKey && !e.metaKey) { setPageIdx(i => i + 1); }
+      const idx = pagesRef.current.findIndex((p) => p.id === pageId);
+      const cur = idx >= 0 ? idx : 0;
+      if (e.key === 'ArrowLeft' && !e.ctrlKey && !e.metaKey) {
+        const target = pagesRef.current[Math.max(0, cur - 1)];
+        if (target) setPageId(target.id);
+      }
+      if (e.key === 'ArrowRight' && !e.ctrlKey && !e.metaKey) {
+        const target = pagesRef.current[cur + 1];
+        if (target) setPageId(target.id);
+      }
     }
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [editMode]);
+  }, [editMode, pageId]);
 
   // 全局鼠标拖拽翻页（mousedown/mousemove/mouseup 全部全局监听，无区域限制）
   // 防护：输入框/弹层内不触发；拖拽后抑制卡片点击，避免误打开应用
   const swiperRef = useRef<HTMLDivElement>(null);
   const dragMovedRef = useRef(false);
+  const pagesRef = useRef<Array<{ id: string; name: string; items: PanelItem[]; group?: PanelGroup }>>([]);
   useEffect(() => {
     const mouseDown = (e: MouseEvent) => {
       // 编辑模式：锁定分组切换，避免鼠标拖拽翻页与卡片拖拽排序冲突
@@ -431,7 +442,8 @@ export default function PortalClient({ items, panel: initialPanel }: { items: It
       const t = e.target as HTMLElement | null;
       if (t && t.closest('input, textarea, select, [contenteditable="true"], [data-no-pagedrag]')) return;
       dragMovedRef.current = false;
-      setDragPage({ startX: e.clientX, startIdx: pageIdx, offset: 0, active: true });
+      const idx = pagesRef.current.findIndex((p) => p.id === pageId);
+      setDragPage({ startX: e.clientX, startIdx: idx >= 0 ? idx : 0, offset: 0, active: true });
     };
     const mouseMove = (e: MouseEvent) => {
       if (dragPage?.active) {
@@ -443,8 +455,13 @@ export default function PortalClient({ items, panel: initialPanel }: { items: It
     const mouseUp = () => {
       if (dragPage?.active) {
         const threshold = 80;
-        if (dragPage.offset < -threshold) setPageIdx(i => i + 1);
-        else if (dragPage.offset > threshold) setPageIdx(i => Math.max(0, i - 1));
+        if (dragPage.offset < -threshold) {
+          const target = pagesRef.current[dragPage.startIdx + 1];
+          if (target) setPageId(target.id);
+        } else if (dragPage.offset > threshold) {
+          const target = pagesRef.current[Math.max(0, dragPage.startIdx - 1)];
+          if (target) setPageId(target.id);
+        }
         setDragPage(null);
         // click 事件在 mouseup 之后同步触发，先置标志再在宏任务中复位
         setTimeout(() => { dragMovedRef.current = false; }, 0);
@@ -458,7 +475,7 @@ export default function PortalClient({ items, panel: initialPanel }: { items: It
       document.removeEventListener('mousemove', mouseMove);
       document.removeEventListener('mouseup', mouseUp);
     };
-  }, [dragPage, pageIdx, editMode]);
+  }, [dragPage, pageId, editMode]);
 
   // 点击关闭右键菜单
   useEffect(() => {
@@ -593,11 +610,24 @@ export default function PortalClient({ items, panel: initialPanel }: { items: It
     ...grouped.map(g => ({ id: g.group.id, name: g.group.name, items: g.list, group: g.group })),
     ...(siteItems.length > 0 ? [{ id: 'g-novel-sites', name: '小说站点', items: siteItems }] : []),
   ].filter(p => p.items.length > 0 || editMode || query);
+  pagesRef.current = pages;
+  // 按分组 id 锚定当前页：进入/退出编辑模式时 pages 形态会变化，
+  // 找不到（如小说站点页在编辑态被清空）时落到第一个有图标的页，避免停在空「常用」页
+  const pageIdx = (() => {
+    const i = pages.findIndex((p) => p.id === pageId);
+    if (i >= 0) return i;
+    const first = pages.findIndex((p) => p.items.length > 0);
+    return first >= 0 ? first : 0;
+  })();
   const activePage = pages[pageIdx] || pages[0];
 
   // 分页切换（含方向键和拖拽）
   const goPage = (dir: number) => {
-    setPageIdx(i => Math.max(0, Math.min(pages.length - 1, i + dir)));
+    const idx = pages.findIndex((p) => p.id === pageId);
+    const cur = idx >= 0 ? idx : 0;
+    const next = Math.max(0, Math.min(pages.length - 1, cur + dir));
+    const target = pages[next];
+    if (target) setPageId(target.id);
   };
 
   // 隐秘小说站点命令：open:{标识}:{密码} / close:{标识}:{密码}
@@ -762,7 +792,7 @@ export default function PortalClient({ items, panel: initialPanel }: { items: It
         <div
           style={{ position: 'relative', overflow: 'hidden', userSelect: 'none' }}
           onTouchStart={(e) => { if (editMode) return; setTouchStartX(e.touches[0].clientX); }}
-          onTouchEnd={(e) => { if (editMode) { setTouchStartX(null); return; } if (touchStartX !== null) { const d = e.changedTouches[0].clientX - touchStartX; if (d < -80) setPageIdx(i => i + 1); else if (d > 80) setPageIdx(i => Math.max(0, i - 1)); setTouchStartX(null); } }}
+          onTouchEnd={(e) => { if (editMode) { setTouchStartX(null); return; } if (touchStartX !== null) { const d = e.changedTouches[0].clientX - touchStartX; if (d < -80) goPage(1); else if (d > 80) goPage(-1); setTouchStartX(null); } }}
         >
           {/* 页面指示器 */}
           {pages.length > 1 && !editMode && !query && (
@@ -771,7 +801,7 @@ export default function PortalClient({ items, panel: initialPanel }: { items: It
               {pages.map((p, i) => (
                 <button
                   key={p.id}
-                  onClick={() => setPageIdx(i)}
+                  onClick={() => setPageId(p.id)}
                   style={{
                     border: 'none', background: 'transparent', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4,
                     padding: '4px 10px', borderRadius: 'var(--mei-radius-full)', fontSize: 12,
