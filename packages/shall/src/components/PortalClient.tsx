@@ -412,12 +412,13 @@ export default function PortalClient({ items, panel: initialPanel }: { items: It
   // 方向键翻页
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
+      if (editMode) return;
       if (e.key === 'ArrowLeft' && !e.ctrlKey && !e.metaKey) { setPageIdx(i => Math.max(0, i - 1)); }
       if (e.key === 'ArrowRight' && !e.ctrlKey && !e.metaKey) { setPageIdx(i => i + 1); }
     }
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, []);
+  }, [editMode]);
 
   // 全局鼠标拖拽翻页（mousedown/mousemove/mouseup 全部全局监听，无区域限制）
   // 防护：输入框/弹层内不触发；拖拽后抑制卡片点击，避免误打开应用
@@ -425,6 +426,8 @@ export default function PortalClient({ items, panel: initialPanel }: { items: It
   const dragMovedRef = useRef(false);
   useEffect(() => {
     const mouseDown = (e: MouseEvent) => {
+      // 编辑模式：锁定分组切换，避免鼠标拖拽翻页与卡片拖拽排序冲突
+      if (editMode) return;
       const t = e.target as HTMLElement | null;
       if (t && t.closest('input, textarea, select, [contenteditable="true"], [data-no-pagedrag]')) return;
       dragMovedRef.current = false;
@@ -455,7 +458,7 @@ export default function PortalClient({ items, panel: initialPanel }: { items: It
       document.removeEventListener('mousemove', mouseMove);
       document.removeEventListener('mouseup', mouseUp);
     };
-  }, [dragPage, pageIdx]);
+  }, [dragPage, pageIdx, editMode]);
 
   // 点击关闭右键菜单
   useEffect(() => {
@@ -758,8 +761,8 @@ export default function PortalClient({ items, panel: initialPanel }: { items: It
         {/* ===== 分页容器：macOS 应用页切屏风格 ===== */}
         <div
           style={{ position: 'relative', overflow: 'hidden', userSelect: 'none' }}
-          onTouchStart={(e) => { setTouchStartX(e.touches[0].clientX); }}
-          onTouchEnd={(e) => { if (touchStartX !== null) { const d = e.changedTouches[0].clientX - touchStartX; if (d < -80) setPageIdx(i => i + 1); else if (d > 80) setPageIdx(i => Math.max(0, i - 1)); setTouchStartX(null); } }}
+          onTouchStart={(e) => { if (editMode) return; setTouchStartX(e.touches[0].clientX); }}
+          onTouchEnd={(e) => { if (editMode) { setTouchStartX(null); return; } if (touchStartX !== null) { const d = e.changedTouches[0].clientX - touchStartX; if (d < -80) setPageIdx(i => i + 1); else if (d > 80) setPageIdx(i => Math.max(0, i - 1)); setTouchStartX(null); } }}
         >
           {/* 页面指示器 */}
           {pages.length > 1 && !editMode && !query && (
@@ -807,7 +810,15 @@ export default function PortalClient({ items, panel: initialPanel }: { items: It
                     {page.name} · {page.items.length}
                     {lanMode && <span style={{ marginLeft: 8, fontSize: 11, letterSpacing: 0, color: 'var(--mei-primary)' }}>内网模式</span>}
                   </span>
-                  <span className="mei-group-ops" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                  <span className="mei-group-ops" data-no-pagedrag style={{ display: 'inline-flex', alignItems: 'center', gap: 6, opacity: editMode ? 1 : undefined }}>
+                    <button
+                      onClick={() => setEditMode((v) => !v)}
+                      title={editMode ? '完成编辑' : '编辑主页'}
+                      className="mei-group-op-btn"
+                      style={{ cursor: 'pointer' }}
+                    >
+                      <MeiIcon icon={editMode ? 'lucide:check' : 'lucide:pencil'} size={13} />
+                    </button>
                     <button
                       onClick={() => {
                         if (page.group) {
@@ -905,22 +916,6 @@ export default function PortalClient({ items, panel: initialPanel }: { items: It
           onSubmit={upsertItem}
         />
       )}
-
-      {/* 编辑模式切换（右下浮动按钮） */}
-      <button
-        onClick={() => setEditMode((v) => !v)}
-        title={editMode ? '完成编辑' : '编辑主页'}
-        style={{
-          // 避让右下角常驻音乐播放器（缩小形态贴右下角、完整形态贴底部居中）
-          position: 'fixed', right: 22, bottom: 96, zIndex: 900,
-          width: 46, height: 46, borderRadius: '50%', border: 'none', cursor: 'pointer',
-          background: editMode ? 'linear-gradient(135deg,#10b981,#059669)' : 'var(--mei-gradient)',
-          color: '#fff', fontSize: 19, boxShadow: '0 8px 28px rgba(99,102,241,0.4)',
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-        }}
-      >
-        {editMode ? '✓' : '✎'}
-      </button>
 
       {/* 保存 toast */}
       {toast && (
