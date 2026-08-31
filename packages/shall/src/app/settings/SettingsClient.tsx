@@ -7,6 +7,7 @@ import { SETTING_GROUPS } from '@/lib/settings-entries';
 
 const SPANS: Record<string, string> = {
   apps: 'span 5',
+  data: 'span 3',
   runtime: 'span 3',
   docs: 'span 2',
   system: 'span 2',

@@ -64,7 +64,7 @@ const DOCS: Record<string, HelpDoc> = {
     intro: '个人小说站点：多站点管理、章节编辑、全文导入与沉浸阅读。',
     sections: [
       { title: '站点类型', body: ['普通站点：公开可访问，无需密码。', '隐秘站点：需开启密码，未开启时路径不可访问。'] },
-      { title: '数据备份', body: ['「设置 → 小说阅读数据备份」支持导出 zip / SQLite / WebDAV / S3。'] },
+      { title: '数据备份', body: ['「设置 → 数据备份/恢复」可按应用选择备份范围，支持 Zip 与 WebDAV/S3 云端恢复。'] },
     ],
   },
   'mei-link': {

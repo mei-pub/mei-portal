@@ -28,8 +28,15 @@ export const SETTING_GROUPS: SettingGroup[] = [
       { id: 'pansou-config', name: '网盘搜索设置', url: '/settings/pansou', icon: 'lucide:search' },
       { id: 'draw-settings', name: 'AI 绘图设置', url: '/settings/ai-draw', icon: 'lucide:pen-tool' },
       { id: 'novels-manage', name: '小说站点管理', url: '/settings/novels-manage', icon: 'lucide:book-open' },
-      { id: 'novels-backup', name: '小说阅读数据备份', url: '/novels/backup', icon: 'lucide:database' },
       { id: 'link-server', name: '隧道服务器设置', url: '/settings/link-server', icon: 'lucide:server' },
+    ],
+  },
+  {
+    id: 'data',
+    label: '数据备份/恢复',
+    icon: 'lucide:database',
+    entries: [
+      { id: 'data-backup', name: '数据备份/恢复', url: '/settings/backup', icon: 'lucide:cloud' },
     ],
   },
   {

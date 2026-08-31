@@ -17,11 +17,7 @@ import { Alert, FileInput } from '@/components/SettingsUI';
 import type { PanelConfig, PanelGroup } from '@/lib/panel-store';
 import { PRESET_GROUP_IDS } from '@/lib/panel-presets';
 
-type Tab = 'style' | 'groups' | 'backup';
-type CloudTarget = 'webdav' | 's3';
-
-interface WebdavForm { url: string; username: string; password: string }
-interface S3Form { endpoint: string; region: string; bucket: string; key: string; accessKey: string; secretKey: string }
+type Tab = 'style' | 'groups';
 
 export default function HomeEditorClient() {
   const [config, setConfig] = useState<PanelConfig | null>(null);
@@ -84,14 +80,13 @@ export default function HomeEditorClient() {
   const tabs: Array<{ id: Tab; label: string; icon: string }> = [
     { id: 'style', label: '风格与布局', icon: 'lucide:palette' },
     { id: 'groups', label: '分组管理', icon: 'lucide:folder' },
-    { id: 'backup', label: '备份与恢复', icon: 'lucide:cloud' },
   ];
 
   return (
     <SettingsPage
       icon="lucide:layout-dashboard"
       title="主页设置"
-      description="管理背景、风格、分组与备份；内置应用由系统自动同步。"
+      description="管理背景、风格与分组；内置应用由系统自动同步。"
       actions={
         <>
           <Pill tone={dirty ? 'warning' : 'success'}>{dirty ? '有未保存修改' : '配置已同步'}</Pill>
@@ -107,7 +102,6 @@ export default function HomeEditorClient() {
       <div className="home-editor-content">
         {tab === 'style' && <StyleTab config={config} update={update} />}
         {tab === 'groups' && <GroupsTab config={config} update={update} />}
-        {tab === 'backup' && <BackupTab config={config} reload={reload} />}
       </div>
 
       <style>{`
@@ -333,144 +327,5 @@ function GroupsTab({ config, update }: { config: PanelConfig; update: (c: PanelC
       )}
       <style>{``}</style>
     </SettingsSection>
-  );
-}
-
-function BackupTab({ config, reload }: { config: PanelConfig; reload: () => void }) {
-  const [target, setTarget] = useState<CloudTarget>('webdav');
-  const [webdav, setWebdav] = useState<WebdavForm>({ url: '', username: '', password: '' });
-  const [s3, setS3] = useState<S3Form>({ endpoint: '', region: '', bucket: '', key: 'backups/mei-panel.json', accessKey: '', secretKey: '' });
-  const [busy, setBusy] = useState('');
-  const [message, setMessage] = useState('');
-  const [error, setError] = useState('');
-  const fileRef = useRef<HTMLInputElement>(null);
-
-  async function remote(direction: 'export' | 'import') {
-    setBusy(`${target}-${direction}`);
-    setMessage('');
-    setError('');
-    try {
-      const res = await fetch('/api/panel/remote', {
-        method: 'POST',
-        credentials: 'include',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ direction, target, config: target === 'webdav' ? webdav : s3 }),
-      });
-      const body = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(body.error || `云端${direction === 'export' ? '备份' : '恢复'}失败`);
-      setMessage(direction === 'export' ? '已备份到云端' : '已从云端恢复');
-      if (direction === 'import') reload();
-    } catch (err) {
-      setError((err as Error).message || '云端操作失败');
-    } finally {
-      setBusy('');
-    }
-  }
-
-  function exportJson() {
-    const blob = new Blob([JSON.stringify(config, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `mei-panel-backup-${new Date().toISOString().slice(0, 10)}.json`;
-    link.click();
-    URL.revokeObjectURL(url);
-    setMessage('已导出 JSON 文件');
-  }
-
-  async function importJson(file: File) {
-    try {
-      const parsed = JSON.parse(await file.text());
-      const res = await fetch('/api/panel', {
-        method: 'PUT',
-        credentials: 'include',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify(parsed),
-      });
-      const body = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(body.error || '导入失败');
-      setMessage('导入成功，刷新首页生效');
-      reload();
-    } catch (err) {
-      setError((err as Error).message || '导入失败：JSON 解析错误');
-    }
-  }
-
-  return (
-    <>
-      <SettingsSection title="本地备份" description="导出或导入完整 JSON 配置。">
-        <div className="cloud-grid">
-          <div className="mei-cloud-info">
-            <strong>JSON 文件</strong>
-            <p>适合手动迁移与临时存档。</p>
-          </div>
-          <div className="mei-footer-actions">
-            <SettingsButton onClick={exportJson}>导出 JSON</SettingsButton>
-            <SettingsButton variant="primary" onClick={() => fileRef.current?.click()}>导入 JSON</SettingsButton>
-            <input ref={fileRef} type="file" accept="application/json,.json" hidden onChange={(e) => { const file = e.target.files?.[0]; if (file) void importJson(file); }} />
-          </div>
-        </div>
-      </SettingsSection>
-
-      <SettingsSection title="云端备份" description="支持 WebDAV 与 S3 兼容对象存储。">
-        <div className="cloud-grid">
-          <div className="cloud-target">
-            {(['webdav', 's3'] as const).map((item) => (
-              <button key={item} className={target === item ? 'active' : ''} onClick={() => setTarget(item)}>
-                {item === 'webdav' ? 'WebDAV' : 'S3'}
-              </button>
-            ))}
-          </div>
-          {target === 'webdav' ? (
-            <div className="mei-grid">
-              <SettingsField label="文件地址" span>
-                <TextInput value={webdav.url} onChange={(e) => setWebdav({ ...webdav, url: e.target.value })} placeholder="https://dav.example.com/backups/mei-panel.json" />
-              </SettingsField>
-              <SettingsField label="用户名">
-                <TextInput value={webdav.username} onChange={(e) => setWebdav({ ...webdav, username: e.target.value })} />
-              </SettingsField>
-              <SettingsField label="密码">
-                <TextInput type="password" value={webdav.password} onChange={(e) => setWebdav({ ...webdav, password: e.target.value })} />
-              </SettingsField>
-            </div>
-          ) : (
-            <div className="mei-grid">
-              <SettingsField label="Endpoint" span>
-                <TextInput value={s3.endpoint} onChange={(e) => setS3({ ...s3, endpoint: e.target.value })} placeholder="https://s3.example.com" />
-              </SettingsField>
-              <SettingsField label="Region">
-                <TextInput value={s3.region} onChange={(e) => setS3({ ...s3, region: e.target.value })} placeholder="us-east-1" />
-              </SettingsField>
-              <SettingsField label="Bucket">
-                <TextInput value={s3.bucket} onChange={(e) => setS3({ ...s3, bucket: e.target.value })} />
-              </SettingsField>
-              <SettingsField label="对象路径">
-                <TextInput value={s3.key} onChange={(e) => setS3({ ...s3, key: e.target.value })} />
-              </SettingsField>
-              <SettingsField label="Access Key">
-                <TextInput value={s3.accessKey} onChange={(e) => setS3({ ...s3, accessKey: e.target.value })} />
-              </SettingsField>
-              <SettingsField label="Secret Key">
-                <TextInput type="password" value={s3.secretKey} onChange={(e) => setS3({ ...s3, secretKey: e.target.value })} />
-              </SettingsField>
-            </div>
-          )}
-        </div>
-        <div className="mei-footer-actions">
-          <SettingsButton onClick={() => void remote('export')} disabled={busy !== ''}>{busy === 'webdav-export' || busy === 's3-export' ? '备份中…' : '备份到云端'}</SettingsButton>
-          <SettingsButton variant="primary" onClick={() => { if (window.confirm('从云端恢复将覆盖当前主页配置，确定继续吗？')) void remote('import'); }} disabled={busy !== ''}>{busy === 'webdav-import' || busy === 's3-import' ? '恢复中…' : '从云端恢复'}</SettingsButton>
-        </div>
-      </SettingsSection>
-
-      <SettingsSection title="操作结果">
-        {error ? <Alert tone="error" title={error} /> : message ? <Alert tone="success" title={message} /> : <div className="mei-cloud-info"><strong>云端凭据不落盘</strong><p>仅在本次操作中提交，不会保存到服务器。</p></div>}
-      </SettingsSection>
-
-      <style>{`
-        .cloud-target{display:flex;flex-direction:column;gap:7px;padding:10px;background:rgba(255,255,255,.58);border:1px solid var(--mei-border);border-radius:16px;}
-        .cloud-target button{height:36px;border:1px solid var(--mei-border);border-radius:12px;background:transparent;font-size:12.5px;font-weight:750;color:var(--mei-text-muted);cursor:pointer;transition:var(--mei-transition);}
-        .cloud-target button.active{border-color:rgba(99,102,241,.4);background:rgba(99,102,241,.1);color:var(--mei-primary);}
-      `}</style>
-    </>
   );
 }

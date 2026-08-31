@@ -182,13 +182,6 @@ export default function ManagePage() {
             <h1 className="text-xl font-bold">小说站点管理</h1>
           </div>
           <div className="flex items-center gap-2">
-            <Link
-              href="/backup"
-              prefetch={false}
-              className="px-4 py-2 text-sm border border-[var(--border)] text-[var(--muted)] rounded-lg hover:bg-[var(--accent)] transition-colors"
-            >
-              数据备份
-            </Link>
             <button
               onClick={() => setCreating(!creating)}
               className="mei-btn-primary"

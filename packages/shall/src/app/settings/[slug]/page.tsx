@@ -3,6 +3,7 @@ import { initUserIfNeeded, isLoggedIn } from '@/lib/auth';
 import SettingsShell from '@/components/SettingsShell';
 import AiDrawSettings from '@/components/settings-apps/AiDrawSettings';
 import AiDrawStatus from '@/components/settings-apps/AiDrawStatus';
+import BackupSettings from '@/components/settings-apps/BackupSettings';
 import LinkLogs from '@/components/settings-apps/LinkLogs';
 import LinkServerSettings from '@/components/settings-apps/LinkServerSettings';
 import MediagoSettings from '@/components/settings-apps/MediagoSettings';
@@ -16,6 +17,7 @@ export const dynamic = 'force-dynamic';
 const PAGES = {
   'ai-draw': AiDrawSettings,
   'ai-draw-status': AiDrawStatus,
+  backup: BackupSettings,
   'link-logs': LinkLogs,
   'link-server': LinkServerSettings,
   mediago: MediagoSettings,

@@ -66,7 +66,7 @@ const DOCS: Record<string, HelpDoc> = {
     sections: [
       { title: '站点类型', body: ['普通站点：公开可访问，无需密码。', '隐秘站点：需开启密码，未开启时路径不可访问；通过首页搜索框 open:标识:密码 开启。'] },
       { title: '路径体系', body: ['站点：/novels/s/{站点标识}；书籍：/novels/s/{站点标识}/novels/{书籍标识}。', '标识在创建时可自定义（小写字母/数字/中划线），全局唯一。'] },
-      { title: '数据备份', body: ['「设置 → 站点数据备份」支持导出 zip / SQLite / WebDAV / S3，导入兼容旧版数据。'] },
+      { title: '数据备份', body: ['「设置 → 数据备份/恢复」可按应用选择备份范围，支持 Zip 与 WebDAV/S3 云端恢复。'] },
     ],
   },
   'mei-link': {

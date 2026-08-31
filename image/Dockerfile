@@ -4,7 +4,8 @@
 # =============================================================================
 
 # ---- Shell 门户 builder ----
-FROM node:20-bookworm-slim AS shell-builder
+# node:sqlite（数据备份/恢复）需要 Node 22，运行时也是 node:22-bookworm-slim
+FROM node:22-bookworm-slim AS shell-builder
 WORKDIR /build
 COPY packages/shall/package.json packages/shall/package-lock.json* ./
 RUN npm install --no-audit --no-fund

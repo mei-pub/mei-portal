@@ -74,8 +74,9 @@ export function buildWebdavRequest(
   cfg: WebdavBackupConfig,
   method: 'GET' | 'PUT',
   payload: Buffer,
+  contentType = 'application/json',
 ): { url: string; headers: Record<string, string>; body?: BodyInit } {
-  const headers: Record<string, string> = { 'content-type': 'application/json' };
+  const headers: Record<string, string> = { 'content-type': contentType };
   if (cfg.username) {
     headers.Authorization = `Basic ${Buffer.from(`${cfg.username}:${cfg.password || ''}`).toString('base64')}`;
   }
@@ -90,6 +91,7 @@ export function buildS3Request(
   cfg: S3BackupConfig,
   method: 'GET' | 'PUT',
   payload: Buffer,
+  contentType = 'application/json',
 ): { url: string; headers: Record<string, string>; body?: BodyInit } {
   const region = cfg.region?.trim() || 'us-east-1';
   const endpoint = cfg.endpoint.replace(/\/+$/, '');
@@ -104,7 +106,7 @@ export function buildS3Request(
     'x-amz-content-sha256': payloadHash,
     'x-amz-date': amzDate,
   };
-  if (method === 'PUT') headers['content-type'] = 'application/json';
+  if (method === 'PUT') headers['content-type'] = contentType;
 
   const signedHeaderKeys = Object.keys(headers).sort();
   const canonicalHeaders = signedHeaderKeys.map((k) => `${k}:${headers[k]}\n`).join('');
