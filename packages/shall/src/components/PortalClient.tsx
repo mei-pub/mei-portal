@@ -297,6 +297,13 @@ function ItemFormModal({
 export default function PortalClient({ items, panel: initialPanel }: { items: Item[]; panel: PanelConfig }) {
   const router = useRouter();
   const [panel, setPanel] = useState(initialPanel);
+  // 本地配置同步真源：所有变更先写 ref 再写 state，避免连续操作读到过期闭包里的 panel
+  const panelRef = useRef(initialPanel);
+  const applyPanel = useCallback((next: PanelConfig) => {
+    panelRef.current = next;
+    setPanel(next);
+  }, []);
+  const editModeRef = useRef(false);
   // 小说站点列表（首页站点图标项数据源，尊重 ns-open 可见性）
   const [novelSites, setNovelSites] = useState<Array<{ slug: string; name: string; type: 'normal' | 'secret'; icon?: string; iconColor?: string; description?: string }>>([]);
   const reloadNovelSites = useCallback(() => {
@@ -310,19 +317,30 @@ export default function PortalClient({ items, panel: initialPanel }: { items: It
   useEffect(() => {
     const sync = () => fetch('/api/panel', { credentials: 'include' })
       .then(r => r.json())
-      .then(cfg => { if (cfg && cfg.background && cfg.style) setPanel(cfg); })
+      .then(cfg => {
+        if (!cfg || !cfg.background || !cfg.style) return;
+        // 编辑排序时后台只同步外观，避免旧 items 覆盖正在排的顺序
+        if (editModeRef.current) applyPanel({ ...panelRef.current, background: cfg.background, style: cfg.style });
+        else applyPanel(cfg);
+      })
       .catch(() => {});
     sync();
     // 顶栏滑块/主题切换保存后广播 mei-panel-change，这里实时刷新（否则遮罩/模糊/主题不生效）
-    window.addEventListener('mei-panel-change', sync);
-    return () => window.removeEventListener('mei-panel-change', sync);
-  }, []);
+    // 自身保存已乐观更新，跳过 source=portal，避免用可能未落盘的旧配置覆盖本地排序
+    const onPanelChange = (e: Event) => {
+      if ((e as CustomEvent).detail?.source === 'portal') return;
+      sync();
+    };
+    window.addEventListener('mei-panel-change', onPanelChange);
+    return () => window.removeEventListener('mei-panel-change', onPanelChange);
+  }, [applyPanel]);
   const [query, setQuery] = useState('');
   const searchRef = useRef<HTMLInputElement>(null);
   const [now, setNow] = useState<Date | null>(null);
   const [sys, setSys] = useState<{ memory: { percent: number; used: number; total: number }; loadavg: number[]; cpuCount: number } | null>(null);
   const [lanMode, setLanMode] = useState(false);
   const [editMode, setEditMode] = useState(false);
+  editModeRef.current = editMode;
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; item: PanelItem } | null>(null);
   const [editing, setEditing] = useState<PanelItem | null>(null);
   const [dragId, setDragId] = useState<string | null>(null);
@@ -486,26 +504,33 @@ export default function PortalClient({ items, panel: initialPanel }: { items: It
   }, [contextMenu]);
 
   // 自动保存（items/groups/removedBuiltin 变更后调用）
-  const savePanel = useCallback(async (next: PanelConfig, tip = '已保存') => {
-    setPanel(next);
-    try {
-      const res = await fetch('/api/panel', {
-        method: 'PUT', headers: { 'Content-Type': 'application/json' },
-        credentials: 'include', body: JSON.stringify(next),
+  const saveChainRef = useRef<Promise<void>>(Promise.resolve());
+  const savePanel = useCallback((next: PanelConfig, tip = '已保存') => {
+    applyPanel(next);
+    // 串行落盘：连续快速拖拽时按调用顺序持久化，最终服务端状态等于最后一次操作
+    saveChainRef.current = saveChainRef.current
+      .catch(() => {})
+      .then(async () => {
+        try {
+          const res = await fetch('/api/panel', {
+            method: 'PUT', headers: { 'Content-Type': 'application/json' },
+            credentials: 'include', body: JSON.stringify(next),
+          });
+          if (res.ok) setToast(tip); else setToast('保存失败');
+          // 广播配置变更（顶栏滑块/主题状态同步）
+          window.dispatchEvent(new CustomEvent('mei-panel-change', { detail: { source: 'portal' } }));
+        } catch { setToast('保存失败'); }
+        setTimeout(() => setToast(''), 1500);
       });
-      if (!res.ok) { setToast('保存失败'); } else { setToast(tip); }
-      // 广播配置变更（顶栏滑块/主题状态同步）
-      window.dispatchEvent(new CustomEvent('mei-panel-change', { detail: { source: 'portal' } }));
-    } catch { setToast('保存失败'); }
-    setTimeout(() => setToast(''), 1500);
-  }, []);
+  }, [applyPanel]);
 
   /* ---- 管理操作 ---- */
   const upsertItem = async (item: PanelItem) => {
+    const cur = panelRef.current;
     // 分组归一：输入可能是分组 id 或分组名称（datalist 选出来的是名称）；
     // 名称必须映射回 id，否则渲染时匹配不上分组，全部落到「常用」
     let groupId = item.groupId.trim();
-    let groups = panel.groups;
+    let groups = cur.groups;
     if (groupId) {
       const byId = groups.find((g) => g.id === groupId);
       const byName = groups.find((g) => g.name === groupId);
@@ -521,22 +546,23 @@ export default function PortalClient({ items, panel: initialPanel }: { items: It
       }
     }
     const finalItem = { ...item, groupId };
-    const exists = panel.items.some((i) => i.id === finalItem.id);
+    const exists = cur.items.some((i) => i.id === finalItem.id);
     const next = exists
-      ? { ...panel, groups, items: panel.items.map((i) => (i.id === finalItem.id ? finalItem : i)) }
-      : { ...panel, groups, items: [...panel.items, finalItem] };
+      ? { ...cur, groups, items: cur.items.map((i) => (i.id === finalItem.id ? finalItem : i)) }
+      : { ...cur, groups, items: [...cur.items, finalItem] };
     setEditing(null);
     savePanel(next, exists ? '已更新' : '已添加');
   };
 
   const deleteItem = (item: PanelItem) => {
     if (!confirm(`删除「${item.title}」？`)) return;
+    const cur = panelRef.current;
     const next: PanelConfig = {
-      ...panel,
-      items: panel.items.filter((i) => i.id !== item.id),
-      removedBuiltin: item.builtin && !panel.removedBuiltin.includes(item.builtin)
-        ? [...panel.removedBuiltin, item.builtin]
-        : panel.removedBuiltin,
+      ...cur,
+      items: cur.items.filter((i) => i.id !== item.id),
+      removedBuiltin: item.builtin && !cur.removedBuiltin.includes(item.builtin)
+        ? [...cur.removedBuiltin, item.builtin]
+        : cur.removedBuiltin,
     };
     savePanel(next, '已删除');
   };
@@ -545,7 +571,8 @@ export default function PortalClient({ items, panel: initialPanel }: { items: It
   // 向下拖 → 插到目标之后；向上拖 → 插到目标之前，保证相邻一格交换也能生效
   const moveBefore = (targetId: string) => {
     if (!dragId || dragId === targetId) return;
-    const list = [...panel.items];
+    const cur = panelRef.current;
+    const list = [...cur.items];
     const from = list.findIndex((i) => i.id === dragId);
     const rawTo = list.findIndex((i) => i.id === targetId);
     if (from < 0 || rawTo < 0) return;
@@ -557,12 +584,13 @@ export default function PortalClient({ items, panel: initialPanel }: { items: It
     const insertAt = from < rawTo ? to + 1 : to;
     list.splice(insertAt >= 0 ? insertAt : list.length, 0, it);
     setDragId(null);
-    savePanel({ ...panel, items: list }, '已排序');
+    savePanel({ ...cur, items: list }, '已排序');
   };
   // 拖拽到组末尾（追加到该组最后一个项之后）
   const moveToGroupEnd = (groupId: string) => {
     if (!dragId) return;
-    const list = [...panel.items];
+    const cur = panelRef.current;
+    const list = [...cur.items];
     const from = list.findIndex((i) => i.id === dragId);
     if (from < 0) return;
     const [it] = list.splice(from, 1);
@@ -571,7 +599,7 @@ export default function PortalClient({ items, panel: initialPanel }: { items: It
     list.forEach((i, idx) => { if (i.groupId === groupId) lastIdx = idx; });
     list.splice(lastIdx + 1, 0, it);
     setDragId(null);
-    savePanel({ ...panel, items: list }, '已移动');
+    savePanel({ ...cur, items: list }, '已移动');
   };
 
   /* ---- 过滤与分组 ---- */
@@ -859,13 +887,14 @@ export default function PortalClient({ items, panel: initialPanel }: { items: It
                     </button>
                     <button
                       onClick={() => {
+                        const cur = panelRef.current;
                         if (page.group) {
                           const next = pageIconMode ? 'info' : 'icon';
-                          const groups: PanelGroup[] = panel.groups.map(g => g.id === page.group!.id ? { ...g, iconStyle: next as 'icon' | 'info' } : g);
-                          savePanel({ ...panel, groups }, next === 'icon' ? '已切换为图标布局' : '已切换为卡片布局');
+                          const groups: PanelGroup[] = cur.groups.map(g => g.id === page.group!.id ? { ...g, iconStyle: next as 'icon' | 'info' } : g);
+                          savePanel({ ...cur, groups }, next === 'icon' ? '已切换为图标布局' : '已切换为卡片布局');
                         } else {
                           const next = iconMode ? 'info' : 'icon';
-                          savePanel({ ...panel, style: { ...panel.style, iconStyle: next as 'icon' | 'info' } }, next === 'icon' ? '已切换为图标布局' : '已切换为卡片布局');
+                          savePanel({ ...cur, style: { ...cur.style, iconStyle: next as 'icon' | 'info' } }, next === 'icon' ? '已切换为图标布局' : '已切换为卡片布局');
                         }
                       }}
                       title={pageIconMode ? '当前：图标布局（点击切换为卡片布局）' : '当前：卡片布局（点击切换为图标布局）'}
