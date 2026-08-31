@@ -129,12 +129,6 @@ export default function MediagoSettings() {
         </div>
       </SettingsSection>
 
-      <SettingsSection title="访问凭据" description="Web 模式下的只读 API Key。">
-        <SettingsField label="API Key">
-          <TextInput value={config.apiKey || ''} readOnly />
-        </SettingsField>
-      </SettingsSection>
-
       <style>{`
         .toggle-stack{display:flex;flex-direction:column;gap:10px;}
       `}</style>

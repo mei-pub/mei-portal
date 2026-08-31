@@ -222,7 +222,7 @@ export default function LinkServerSettings() {
         </div>
       </SettingsSection>
 
-      <div className="mei-grid">
+      <div className="mei-grid mei-grid-equal">
         <SettingsSection title="域名管理接口" description="用于从服务端拉取可用域名。">
           <div className="mei-field-stack">
             <SettingsField label="管理页地址" span>
@@ -276,6 +276,12 @@ export default function LinkServerSettings() {
         {error ? <Alert tone="error" title={error} description="请根据错误提示调整上方配置后重试。" /> : null}
         {!message && !error ? <div className="mei-cloud-info"><strong>连接令牌与管理密码留空时会沿用已有值</strong></div> : null}
       </SettingsSection>
+
+      <style>{`
+        .mei-grid-equal{align-items:stretch;}
+        .mei-grid-equal>section{height:100%;display:flex;flex-direction:column;}
+        .mei-grid-equal .mei-field-stack{display:flex;flex-direction:column;gap:12px;height:100%;}
+      `}</style>
     </SettingsPage>
   );
 }

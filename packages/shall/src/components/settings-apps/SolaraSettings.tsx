@@ -91,7 +91,7 @@ export default function SolaraSettings() {
       </SettingsSection>
 
       <SettingsSection title="音乐源" description="解析失败时播放器会自动尝试其他启用源。">
-        <div className="source-stack">
+        <div className="source-grid">
           {SOURCES.map((s) => (
             <Toggle
               key={s.value}
@@ -108,8 +108,9 @@ export default function SolaraSettings() {
         .genre-cloud{display:flex;flex-wrap:wrap;gap:7px;}
         .genre-cloud button{height:29px;padding:0 12px;border:1px solid var(--mei-border);border-radius:99px;background:rgba(255,255,255,.66);font-size:11.5px;font-weight:720;color:var(--mei-text-muted);cursor:pointer;transition:var(--mei-transition);}
         .genre-cloud button.active{border-color:rgba(99,102,241,.4);background:rgba(99,102,241,.1);color:var(--mei-primary);}
-        .source-stack{display:flex;flex-direction:column;gap:9px;}
-        .footer-actions{display:flex;justify-content:flex-end;gap:9px;margin-top:12px;}
+        .source-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;}
+        @media(max-width:820px){.source-grid{grid-template-columns:repeat(2,minmax(0,1fr));}}
+        @media(max-width:480px){.source-grid{grid-template-columns:1fr;}}
       `}</style>
     </SettingsPage>
   );

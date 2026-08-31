@@ -118,11 +118,13 @@ export default function AiDrawSettings() {
   async function saveSystem(next: SystemSettings) {
     setBusy('system');
     try {
+      // 禁止注册：不再提供注册开关，保存时强制关闭注册入口
+      const payload = { ...next, allowRegister: false };
       await authorizedJsonFetch('/draw/api/admin/settings', 'ai-draw', {
         method: 'PUT',
-        body: JSON.stringify({ system: next }),
+        body: JSON.stringify({ system: payload }),
       });
-      setSystem(next);
+      setSystem(payload);
       setMessage('基础设置已保存');
       setError('');
     } catch (err) {
@@ -179,11 +181,17 @@ export default function AiDrawSettings() {
       icon="lucide:pen-tool"
       title="AI 绘图设置"
       description="基础设置与模型供应商管理。"
-      actions={<Pill tone={loading ? 'warning' : 'success'}>{loading ? '读取中' : globalProvider ? `全局：${globalProvider.name}` : '全局供应商未选择'}</Pill>}
+      actions={
+        <>
+          <Pill tone={loading ? 'warning' : 'success'}>{loading ? '读取中' : globalProvider ? `全局：${globalProvider.name}` : '全局供应商未选择'}</Pill>
+          <SettingsButton variant="primary" onClick={() => void saveSystem(system)} disabled={busy !== '' || loading}>
+            {busy === 'system' ? '保存中…' : '保存基础设置'}
+          </SettingsButton>
+        </>
+      }
     >
-      <SettingsSection title="基础设置" description="控制注册、默认引擎与绘图服务。">
+      <SettingsSection title="基础设置" description="控制默认引擎与绘图服务。">
         <div className="toggle-stack">
-          <Toggle checked={system.allowRegister !== false} onChange={(v) => setSystem({ ...system, allowRegister: v })} label="允许注册" description="关闭后仅已有账号可登录。" />
           <Toggle checked={!!system.useLocalDrawio} onChange={(v) => setSystem({ ...system, useLocalDrawio: v })} label="使用本地 Draw.io" description="启用后优先访问内网部署的 Draw.io。" />
         </div>
         <div className="mei-grid" style={{ marginTop: 12 }}>
@@ -202,9 +210,6 @@ export default function AiDrawSettings() {
               <TextInput value={system.drawioBaseUrl || ''} onChange={(e) => setSystem({ ...system, drawioBaseUrl: e.target.value })} placeholder="http://127.0.0.1:8080" />
             </SettingsField>
           ) : null}
-        </div>
-        <div className="footer-actions">
-          <SettingsButton variant="primary" onClick={() => void saveSystem(system)} disabled={busy !== ''}>保存基础设置</SettingsButton>
         </div>
       </SettingsSection>
 

@@ -218,7 +218,36 @@ export default function BackupSettings() {
       icon="lucide:database"
       title="数据备份/恢复"
       description="按应用勾选备份范围，支持 Zip 与 WebDAV/S3 两种备份目标。"
-      actions={<Pill tone="neutral">已选 {scopes.length}/{BACKUP_SCOPES.length} 项</Pill>}
+      actions={
+        <>
+          <Pill tone="neutral">已选 {scopes.length}/{BACKUP_SCOPES.length} 项</Pill>
+          {tab === 'local' ? (
+            <>
+              <SettingsButton onClick={() => fileRef.current?.click()} disabled={busy !== ''}>
+                {busy === 'import' ? '恢复中…' : `按「${restoreLabel}」恢复`}
+              </SettingsButton>
+              <SettingsButton variant="primary" onClick={() => void exportZip()} disabled={busy !== ''}>
+                {busy === 'export' ? '导出中…' : '导出 Zip 包'}
+              </SettingsButton>
+            </>
+          ) : (
+            <>
+              <SettingsButton onClick={() => void remote('export')} disabled={busy !== ''}>
+                {busy === `${target}-export` ? '备份中…' : '备份到云端'}
+              </SettingsButton>
+              <SettingsButton
+                variant="primary"
+                onClick={() => {
+                  if (window.confirm(`从云端按「${restoreLabel}」恢复所选范围数据，确定继续吗？`)) void remote('import');
+                }}
+                disabled={busy !== ''}
+              >
+                {busy === `${target}-import` ? '恢复中…' : '从云端恢复'}
+              </SettingsButton>
+            </>
+          )}
+        </>
+      }
       tabs={
         <SettingsTabs
           items={[
@@ -279,34 +308,22 @@ export default function BackupSettings() {
 
       {tab === 'local' ? (
         <SettingsSection title="本机 Zip 备份" description="导出整个备份包或从备份包恢复。">
-          <div className="backup-actions-row">
-            <div className="backup-action-card">
-              <strong>导出 Zip 包</strong>
-              <p>下载包含所选应用数据的压缩包。</p>
-              <SettingsButton variant="primary" onClick={() => void exportZip()} disabled={busy !== ''}>
-                {busy === 'export' ? '导出中…' : '导出 Zip 包'}
-              </SettingsButton>
-            </div>
-            <div className="backup-action-card">
-              <strong>导入 Zip 包</strong>
-              <p>从备份包按当前策略恢复数据。</p>
-              <SettingsButton onClick={() => fileRef.current?.click()} disabled={busy !== ''}>
-                {busy === 'import' ? '恢复中…' : `按「${restoreLabel}」恢复`}
-              </SettingsButton>
-              <input
-                ref={fileRef}
-                type="file"
-                accept=".zip,application/zip"
-                className="mei-file-input"
-                style={{ display: 'none' }}
-                onChange={(e) => {
-                  const file = e.target.files?.[0];
-                  if (file) void importZip(file);
-                  e.target.value = '';
-                }}
-              />
-            </div>
+          <div className="mei-cloud-info">
+            <strong>操作入口在页面右上角</strong>
+            <p>「导出 Zip 包」下载包含所选应用数据的压缩包；「按策略恢复」从备份包按当前恢复策略还原数据。</p>
           </div>
+          <input
+            ref={fileRef}
+            type="file"
+            accept=".zip,application/zip"
+            className="mei-file-input"
+            style={{ display: 'none' }}
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (file) void importZip(file);
+              e.target.value = '';
+            }}
+          />
         </SettingsSection>
       ) : (
         <SettingsSection title="云端备份" description="支持 WebDAV 与 S3 兼容对象存储，凭据仅本次操作使用。">
@@ -351,19 +368,9 @@ export default function BackupSettings() {
               </SettingsField>
             </div>
           )}
-          <div className="backup-cloud-actions">
-            <SettingsButton onClick={() => void remote('export')} disabled={busy !== ''}>
-              {busy === `${target}-export` ? '备份中…' : '备份到云端'}
-            </SettingsButton>
-            <SettingsButton
-              variant="primary"
-              onClick={() => {
-                if (window.confirm(`从云端按「${restoreLabel}」恢复所选范围数据，确定继续吗？`)) void remote('import');
-              }}
-              disabled={busy !== ''}
-            >
-              {busy === `${target}-import` ? '恢复中…' : '从云端恢复'}
-            </SettingsButton>
+          <div className="mei-cloud-info" style={{ marginTop: 16 }}>
+            <strong>操作入口在页面右上角</strong>
+            <p>「备份到云端」上传当前范围数据；「从云端恢复」按当前恢复策略拉取云端备份。</p>
           </div>
         </SettingsSection>
       )}
@@ -380,16 +387,11 @@ export default function BackupSettings() {
         .backup-check{width:20px;height:20px;border-radius:7px;border:1px solid var(--mei-border-strong);display:inline-flex;align-items:center;justify-content:center;font-size:11px;color:#fff;background:transparent;flex-shrink:0;}
         .backup-scope-card.checked .backup-check{background:var(--mei-primary);border-color:var(--mei-primary);}
         .backup-mode-hint{margin:0;font-size:12px;color:var(--mei-text-muted);line-height:1.6;padding-top:9px;}
-        .backup-actions-row{display:grid;grid-template-columns:1fr 1fr;gap:14px;}
-        .backup-action-card{padding:16px;border:1px solid var(--mei-border);border-radius:16px;background:rgba(255,255,255,.6);display:flex;flex-direction:column;gap:8px;align-items:flex-start;}
-        .backup-action-card strong{font-size:13.5px;}
-        .backup-action-card p{margin:0;font-size:11.5px;color:var(--mei-text-muted);}
         .cloud-target-row{display:inline-flex;gap:6px;padding:4px;background:rgba(255,255,255,.8);border:1px solid var(--mei-border);border-radius:12px;}
         .cloud-target-row button{height:32px;padding:0 14px;border:none;border-radius:9px;background:transparent;font-size:12px;font-weight:750;color:var(--mei-text-muted);cursor:pointer;}
         .cloud-target-row button.active{background:var(--mei-primary);color:#fff;}
-        .backup-cloud-actions{display:flex;justify-content:flex-end;gap:9px;margin-top:16px;}
         @media(max-width:1000px){.backup-scope-grid{grid-template-columns:repeat(2,minmax(0,1fr));}}
-        @media(max-width:680px){.backup-scope-grid,.backup-actions-row{grid-template-columns:1fr;}}
+        @media(max-width:680px){.backup-scope-grid{grid-template-columns:1fr;}}
       `}</style>
     </SettingsPage>
   );

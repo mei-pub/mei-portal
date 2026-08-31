@@ -38,14 +38,14 @@ export default function SettingsShell({ children }: { children: React.ReactNode 
       <div className="mei-shell-body">
         {/* 左侧设置菜单栏（始终在） */}
         <nav className="mei-shell-nav">
-          <button className="mei-shell-home" onClick={() => router.push('/')} title="返回主页">
+          <a className="mei-shell-home" href="/" title="返回主页">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src="/logo.svg" alt="" />
             <span>
               <strong>Mei AllIn</strong>
               <small>应用门户</small>
             </span>
-          </button>
+          </a>
           {SETTING_GROUPS.map((g) => (
             <div key={g.id} className="mei-shell-group">
               <div className="mei-shell-group-title">
@@ -96,6 +96,7 @@ export default function SettingsShell({ children }: { children: React.ReactNode 
         .mei-shell-body{flex:1;display:flex;min-height:0;position:relative;z-index:5;}
         .mei-shell-nav{width:236px;flex-shrink:0;padding:var(--mei-space-4);background:rgba(255,255,255,.96);border-right:1px solid var(--mei-border);overflow-y:auto;}
         .mei-shell-home{width:100%;display:flex;align-items:center;gap:10px;margin-bottom:16px;padding:8px;border:none;border-radius:15px;background:linear-gradient(135deg,rgba(99,102,241,.12),rgba(14,165,233,.09));cursor:pointer;text-align:left;transition:var(--mei-transition);}
+        .mei-shell-home{text-decoration:none;color:inherit;}
         .mei-shell-home:hover{transform:translateY(-1px);box-shadow:0 12px 26px rgba(79,70,229,.13);background:linear-gradient(135deg,rgba(99,102,241,.16),rgba(14,165,233,.12));}
         .mei-shell-home img{width:31px;height:31px;border-radius:11px;}
         .mei-shell-home span{display:flex;flex-direction:column;min-width:0;}

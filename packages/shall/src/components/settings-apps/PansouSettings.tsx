@@ -54,6 +54,15 @@ function channelLabel(id: string): string {
   return id;
 }
 
+function SelectAllCheck({ all, onToggle }: { all: boolean; onToggle: () => void }) {
+  return (
+    <label className="mei-select-all">
+      <input type="checkbox" checked={all} onChange={onToggle} />
+      <span>全选</span>
+    </label>
+  );
+}
+
 export default function PansouSettings() {
   const [health, setHealth] = useState<Health | null>(null);
   const [channels, setChannels] = useState<string[]>([]);
@@ -160,12 +169,16 @@ export default function PansouSettings() {
       }
     >
       {error ? <Alert tone="error" title={error} /> : message ? <Alert tone="success" title={message} /> : null}
-      <SettingsSection title="搜索频道" description="TG 频道决定搜索的数据来源，可添加自定义频道。">
-        <div className="section-tools">
-          <SettingsButton onClick={() => setChannels(channels.length === allChannels.length ? [] : allChannels)}>
-            {channels.length === allChannels.length ? '取消全选' : '全选'}
-          </SettingsButton>
-        </div>
+      <SettingsSection
+        title="搜索频道"
+        description="TG 频道决定搜索的数据来源，可添加自定义频道。"
+        actions={
+          <SelectAllCheck
+            all={channels.length === allChannels.length}
+            onToggle={() => setChannels(channels.length === allChannels.length ? [] : allChannels)}
+          />
+        }
+      >
         {renderChips(allChannels, channels, setChannels, channelLabel, true)}
         <div className="channel-add">
           <TextInput value={newChannel} onChange={(e) => setNewChannel(e.target.value)} placeholder="输入自定义频道名" onKeyDown={(e) => e.key === 'Enter' && addChannel()} />
@@ -173,32 +186,48 @@ export default function PansouSettings() {
         </div>
       </SettingsSection>
 
-      <SettingsSection title="网盘与网页插件" description="常规搜索插件，覆盖大部分网盘资源。">
-        <div className="section-tools">
-          <SettingsButton onClick={() => {
-            const all = webPlugins.every((p) => plugins.includes(p));
-            setPlugins(all ? plugins.filter((p) => !webPlugins.includes(p)) : [...new Set([...plugins, ...webPlugins])]);
-          }}>{webPlugins.every((p) => plugins.includes(p)) ? '取消全选' : '全选'}</SettingsButton>
-        </div>
+      <SettingsSection
+        title="网盘与网页插件"
+        description="常规搜索插件，覆盖大部分网盘资源。"
+        actions={
+          <SelectAllCheck
+            all={webPlugins.length > 0 && webPlugins.every((p) => plugins.includes(p))}
+            onToggle={() => {
+              const all = webPlugins.length > 0 && webPlugins.every((p) => plugins.includes(p));
+              setPlugins(all ? plugins.filter((p) => !webPlugins.includes(p)) : [...new Set([...plugins, ...webPlugins])]);
+            }}
+          />
+        }
+      >
         {webPlugins.length === 0 ? <EmptyState title="暂无网盘插件" description="后端未返回可用插件。" /> : renderChips(webPlugins, plugins, setPlugins, pluginLabel)}
       </SettingsSection>
 
-      <SettingsSection title="磁力与电驴插件" description="支持 magnet/ed2k 链接的专用搜索源。">
-        <div className="section-tools">
-          <SettingsButton onClick={() => {
-            const all = magnetPlugins.every((p) => plugins.includes(p));
-            setPlugins(all ? plugins.filter((p) => !magnetPlugins.includes(p)) : [...new Set([...plugins, ...magnetPlugins])]);
-          }}>{magnetPlugins.every((p) => plugins.includes(p)) ? '取消全选' : '全选'}</SettingsButton>
-        </div>
+      <SettingsSection
+        title="磁力与电驴插件"
+        description="支持 magnet/ed2k 链接的专用搜索源。"
+        actions={
+          <SelectAllCheck
+            all={magnetPlugins.length > 0 && magnetPlugins.every((p) => plugins.includes(p))}
+            onToggle={() => {
+              const all = magnetPlugins.length > 0 && magnetPlugins.every((p) => plugins.includes(p));
+              setPlugins(all ? plugins.filter((p) => !magnetPlugins.includes(p)) : [...new Set([...plugins, ...magnetPlugins])]);
+            }}
+          />
+        }
+      >
         {magnetPlugins.length === 0 ? <EmptyState title="暂无磁力插件" /> : renderChips(magnetPlugins, plugins, setPlugins, pluginLabel)}
       </SettingsSection>
 
-      <SettingsSection title="网盘类型筛选" description="控制聚合结果中保留哪些网盘类型。">
-        <div className="section-tools">
-          <SettingsButton onClick={() => setDiskTypes(diskTypes.length === DISK_TYPES.length ? [] : DISK_TYPES.map(([id]) => id))}>
-            {diskTypes.length === DISK_TYPES.length ? '取消全选' : '全选'}
-          </SettingsButton>
-        </div>
+      <SettingsSection
+        title="网盘类型筛选"
+        description="控制聚合结果中保留哪些网盘类型。"
+        actions={
+          <SelectAllCheck
+            all={diskTypes.length === DISK_TYPES.length}
+            onToggle={() => setDiskTypes(diskTypes.length === DISK_TYPES.length ? [] : DISK_TYPES.map(([id]) => id))}
+          />
+        }
+      >
         {renderChips(DISK_TYPES.map(([id]) => id), diskTypes, setDiskTypes, (id) => DISK_TYPES.find(([d]) => d === id)?.[1] || id)}
       </SettingsSection>
 
@@ -211,9 +240,9 @@ export default function PansouSettings() {
         .chip-cloud button{display:inline-flex;align-items:center;gap:5px;height:29px;padding:0 11px;border:1px solid var(--mei-border);border-radius:99px;background:rgba(255,255,255,.66);font-size:11.5px;font-weight:700;color:var(--mei-text-muted);cursor:pointer;transition:var(--mei-transition);}
         .chip-cloud button.active{border-color:rgba(99,102,241,.4);background:rgba(99,102,241,.1);color:var(--mei-primary);}
         .chip-cloud i{font-style:normal;opacity:.65;}
-        .section-tools{display:flex;justify-content:flex-end;margin-bottom:10px;}
+        .mei-select-all{display:inline-flex;align-items:center;gap:7px;font-size:12px;font-weight:700;color:var(--mei-text-muted);cursor:pointer;user-select:none;}
+        .mei-select-all input{width:16px;height:16px;margin:0;accent-color:var(--mei-primary);cursor:pointer;}
         .channel-add{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;margin-top:13px;}
-        .footer-actions{display:flex;justify-content:flex-end;gap:9px;margin-top:13px;}
       `}</style>
     </SettingsPage>
   );
