@@ -1,9 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
 import {
-  Alert,
-  SettingsButton,
   SettingsField,
   SettingsSection,
   Select,
@@ -11,7 +8,7 @@ import {
   Toggle,
 } from '@/components/SettingsUI';
 
-interface FormState {
+export interface TvFormState {
   defaultAggregateSearch: boolean;
   fluidSearch: boolean;
   enableOptimization: boolean;
@@ -22,7 +19,7 @@ interface FormState {
   doubanImageProxyUrl: string;
 }
 
-const DEFAULTS: FormState = {
+export const TV_DEFAULTS: TvFormState = {
   defaultAggregateSearch: true,
   fluidSearch: true,
   enableOptimization: true,
@@ -48,8 +45,8 @@ const IMAGE_OPTIONS = [
   ['custom', '自定义代理'],
 ];
 
-function load(): FormState {
-  const f = { ...DEFAULTS };
+export function loadTvSettings(): TvFormState {
+  const f = { ...TV_DEFAULTS };
   try {
     const bool = (key: string, fallback: boolean) => {
       const raw = localStorage.getItem(key);
@@ -67,75 +64,55 @@ function load(): FormState {
   return f;
 }
 
-export default function TvSettings() {
-  const [form, setForm] = useState(DEFAULTS);
-  const [message, setMessage] = useState('');
-
-  useEffect(() => setForm(load()), []);
-
-  function save() {
-    localStorage.setItem('defaultAggregateSearch', JSON.stringify(form.defaultAggregateSearch));
-    localStorage.setItem('fluidSearch', JSON.stringify(form.fluidSearch));
-    localStorage.setItem('enableOptimization', JSON.stringify(form.enableOptimization));
-    localStorage.setItem('liveDirectConnect', JSON.stringify(form.liveDirectConnect));
-    localStorage.setItem('doubanDataSource', form.doubanDataSource);
-    localStorage.setItem('doubanProxyUrl', form.doubanProxyUrl);
-    localStorage.setItem('doubanImageProxyType', form.doubanImageProxyType);
-    localStorage.setItem('doubanImageProxyUrl', form.doubanImageProxyUrl);
-    setMessage('影视设置已保存');
-  }
-
+export default function TvSettings({
+  form,
+  onChange,
+}: {
+  form: TvFormState;
+  onChange: (next: TvFormState) => void;
+}) {
   return (
     <div>
       <SettingsSection title="搜索">
         <div className="toggle-stack">
-          <Toggle checked={form.defaultAggregateSearch} onChange={(v) => setForm({ ...form, defaultAggregateSearch: v })} label="默认聚合搜索" description="同时聚合全部启用源。" />
-          <Toggle checked={form.fluidSearch} onChange={(v) => setForm({ ...form, fluidSearch: v })} label="流式搜索" description="边返回边展示结果。" />
+          <Toggle checked={form.defaultAggregateSearch} onChange={(v) => onChange({ ...form, defaultAggregateSearch: v })} label="默认聚合搜索" description="同时聚合全部启用源。" />
+          <Toggle checked={form.fluidSearch} onChange={(v) => onChange({ ...form, fluidSearch: v })} label="流式搜索" description="边返回边展示结果。" />
         </div>
       </SettingsSection>
 
       <SettingsSection title="播放与直播">
         <div className="toggle-stack">
-          <Toggle checked={form.enableOptimization} onChange={(v) => setForm({ ...form, enableOptimization: v })} label="优选最佳播放源" description="自动选择最佳清晰度与线路。" />
-          <Toggle checked={form.liveDirectConnect} onChange={(v) => setForm({ ...form, liveDirectConnect: v })} label="直播直连" description="服务器无法访问直播源时开启。" />
+          <Toggle checked={form.enableOptimization} onChange={(v) => onChange({ ...form, enableOptimization: v })} label="优选最佳播放源" description="自动选择最佳清晰度与线路。" />
+          <Toggle checked={form.liveDirectConnect} onChange={(v) => onChange({ ...form, liveDirectConnect: v })} label="直播直连" description="服务器无法访问直播源时开启。" />
         </div>
       </SettingsSection>
 
       <SettingsSection title="豆瓣数据源">
         <div className="mei-grid">
           <SettingsField label="数据获取方式">
-            <Select value={form.doubanDataSource} onChange={(e) => setForm({ ...form, doubanDataSource: e.target.value })}>
+            <Select value={form.doubanDataSource} onChange={(e) => onChange({ ...form, doubanDataSource: e.target.value })}>
               {SOURCE_OPTIONS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
             </Select>
           </SettingsField>
           <SettingsField label="图片代理">
-            <Select value={form.doubanImageProxyType} onChange={(e) => setForm({ ...form, doubanImageProxyType: e.target.value })}>
+            <Select value={form.doubanImageProxyType} onChange={(e) => onChange({ ...form, doubanImageProxyType: e.target.value })}>
               {IMAGE_OPTIONS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
             </Select>
           </SettingsField>
           {form.doubanDataSource === 'custom' ? (
             <SettingsField label="自定义代理地址" span>
-              <TextInput value={form.doubanProxyUrl} onChange={(e) => setForm({ ...form, doubanProxyUrl: e.target.value })} placeholder="https://your-proxy.example.com/?url=" />
+              <TextInput value={form.doubanProxyUrl} onChange={(e) => onChange({ ...form, doubanProxyUrl: e.target.value })} placeholder="https://your-proxy.example.com/?url=" />
             </SettingsField>
           ) : null}
           {form.doubanImageProxyType === 'custom' ? (
             <SettingsField label="自定义图片代理地址" span>
-              <TextInput value={form.doubanImageProxyUrl} onChange={(e) => setForm({ ...form, doubanImageProxyUrl: e.target.value })} placeholder="https://your-image-proxy.example.com/?url=" />
+              <TextInput value={form.doubanImageProxyUrl} onChange={(e) => onChange({ ...form, doubanImageProxyUrl: e.target.value })} placeholder="https://your-image-proxy.example.com/?url=" />
             </SettingsField>
           ) : null}
         </div>
       </SettingsSection>
 
-      {message ? <Alert tone="success" title={message} /> : null}
-      <div className="mei-footer-actions">
-        <SettingsButton onClick={() => {
-          setForm(DEFAULTS);
-          setMessage('已恢复默认值，尚未保存');
-        }}>恢复默认</SettingsButton>
-        <SettingsButton variant="primary" onClick={save}>保存设置</SettingsButton>
-      </div>
-
-      <style>{`.toggle-stack{display:flex;flex-direction:column;gap:9px;}.footer-actions{display:flex;justify-content:flex-end;gap:9px;margin-top:12px;}`}</style>
+      <style>{`.toggle-stack{display:flex;flex-direction:column;gap:9px;}`}</style>
     </div>
   );
 }
