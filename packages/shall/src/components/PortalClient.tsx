@@ -83,7 +83,7 @@ function UnifiedCard({
   onContext: (e: React.MouseEvent) => void;
   onDragStart: () => void;
   onDragOver: (e: React.DragEvent) => void;
-  onDrop: () => void;
+  onDrop: (e: React.DragEvent) => void;
   isDragging: boolean;
   shouldBlockClick: () => boolean;
 }) {
@@ -541,17 +541,21 @@ export default function PortalClient({ items, panel: initialPanel }: { items: It
     savePanel(next, '已删除');
   };
 
-  // 拖拽：把 dragId 项移动到 target 项之前（同组或跨组）
+  // 拖拽：把 dragId 项移动到 target 项附近（同组或跨组）
+  // 向下拖 → 插到目标之后；向上拖 → 插到目标之前，保证相邻一格交换也能生效
   const moveBefore = (targetId: string) => {
     if (!dragId || dragId === targetId) return;
     const list = [...panel.items];
     const from = list.findIndex((i) => i.id === dragId);
-    if (from < 0) return;
+    const rawTo = list.findIndex((i) => i.id === targetId);
+    if (from < 0 || rawTo < 0) return;
     const [it] = list.splice(from, 1);
+    // 移除后目标索引可能前移，需重新定位
     const to = list.findIndex((i) => i.id === targetId);
     const target = to >= 0 ? list[to] : null;
     it.groupId = target ? target.groupId : it.groupId;
-    list.splice(to >= 0 ? to : list.length, 0, it);
+    const insertAt = from < rawTo ? to + 1 : to;
+    list.splice(insertAt >= 0 ? insertAt : list.length, 0, it);
     setDragId(null);
     savePanel({ ...panel, items: list }, '已排序');
   };
@@ -695,7 +699,11 @@ export default function PortalClient({ items, panel: initialPanel }: { items: It
       }}
       onDragStart={() => setDragId(item.id)}
       onDragOver={(e) => e.preventDefault()}
-      onDrop={() => moveBefore(item.id)}
+      onDrop={(e) => {
+        // 阻止冒泡：落点落在卡片上只做卡片级排序，不触发分组的「移到组尾」
+        e.stopPropagation();
+        moveBefore(item.id);
+      }}
       shouldBlockClick={() => dragMovedRef.current}
     />
   );
