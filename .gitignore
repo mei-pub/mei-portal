@@ -25,8 +25,13 @@ dist/
 *.swp
 
 # Docker volumes (local data)
-data/
-volumes/
+# 锚定根目录：无锚点的 data/、volumes/ 会递归吞掉子应用源码里的
+# data/ 目录（omni-tools 数据表、tutorial volumes API 路由均曾被吞）
+/data/
+/volumes/
+
+# tutorial 字体为运行时首启从 Google Fonts 下载，不入库
+third_party/tutorial/data/fonts/
 
 # Generated theme assets —— 提交到 git（Docker 构建依赖）
 # 修改 plugins/*/theme.css 或 tokens.css 后运行 npm run build:theme 重新生成
