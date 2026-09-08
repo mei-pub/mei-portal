@@ -97,7 +97,10 @@ RUN echo "3545ac7ffc0869498755cb3b4760a72fa2f176689d0890a6f5b898d163012ba2  /tmp
 # ---- pansou 网盘搜索（Go 后端 + Vue 前端，vendored 本地编译）----
 FROM golang:1.25-bookworm AS pansou-builder
 WORKDIR /build
-ENV GOPROXY=https://goproxy.cn,direct
+# Go 模块代理：默认官方源（CI 海外 runner 直连最快）；国内本地构建经
+# docker-compose 传 goproxy.cn。写死单代理曾致 CI 绕道国内 TLS 握手超时。
+ARG GOPROXY=https://proxy.golang.org,direct
+ENV GOPROXY=${GOPROXY}
 COPY third_party/pansou/ ./
 RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/pansou .
 FROM node:22-bookworm-slim AS pansou-web-builder
@@ -131,7 +134,8 @@ RUN pnpm build:web
 RUN pnpm deps:download --platform $(cat /tmp/deps-platform)
 FROM golang:1.25-bookworm AS mediago-go-builder
 WORKDIR /src
-ENV GOPROXY=https://goproxy.cn,direct
+ARG GOPROXY=https://proxy.golang.org,direct
+ENV GOPROXY=${GOPROXY}
 COPY third_party/mediago/apps/core/go.mod third_party/mediago/apps/core/go.sum apps/core/
 RUN cd apps/core && go mod download
 COPY third_party/mediago/apps/core/ apps/core/

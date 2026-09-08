@@ -7,6 +7,9 @@ services:
     build:
       context: .
       dockerfile: image/Dockerfile
+      # 国内本地构建走 goproxy.cn；CI（release.yml）不传，用默认官方源
+      args:
+        GOPROXY: https://goproxy.cn,direct
     image: mei-allin:latest
     container_name: mei-allin
     restart: unless-stopped
