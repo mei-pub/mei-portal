@@ -218,9 +218,7 @@ COPY image/plugins.json /etc/mei-plugins.json
 COPY image/supervisord.conf /etc/supervisor/conf.d/mei-allin.conf
 RUN mkdir -p /etc/supervisor && ln -sf /etc/supervisor/conf.d/mei-allin.conf /etc/supervisor/supervisord.conf
 COPY image/entrypoint.sh /entrypoint.sh
-COPY image/services/ /etc/mei-services/
 RUN chmod +x /entrypoint.sh
-RUN find /etc/mei-services -name run -exec chmod +x {} \; 2>/dev/null || true
 
 VOLUME ["/data"]
 ENV NODE_ENV=production TZ=Asia/Shanghai
