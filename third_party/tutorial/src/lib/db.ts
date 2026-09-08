@@ -152,10 +152,12 @@ try {
 } catch { /* 已存在 */ }
 
 // ── DEFAULT_LIB_SEED: 首次启动若无站点则创建默认普通站点 ──
+// INSERT OR IGNORE：next build 收集 page data 会在多个 worker 中各自加载本模块，
+// 并发打开同一 DB 文件时空表判断存在竞态，第二个插入者会撞 slug 唯一索引
 const libCount = db.prepare('SELECT COUNT(*) as c FROM libraries').get() as { c: number };
 if (libCount && libCount.c === 0) {
-  db.prepare("INSERT INTO libraries (name, slug, type, password) VALUES (?, ?, 'normal', '')").run('我的书架', 'my-books');
-  console.log('[tutorial] 已创建默认小说站点');
+  const seed = db.prepare("INSERT OR IGNORE INTO libraries (name, slug, type, password) VALUES (?, ?, 'normal', '')").run('我的书架', 'my-books');
+  if (seed.changes > 0) console.log('[tutorial] 已创建默认小说站点');
 }
 
 // ── Interfaces ──
