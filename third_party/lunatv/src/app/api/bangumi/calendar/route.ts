@@ -37,7 +37,7 @@ const CACHE_FILE = path.join(
 );
 
 const BGM_HEADERS = {
-  'User-Agent': 'mei-allin/lunatv (https://github.com/mei-allin)',
+  'User-Agent': 'mei-portal/lunatv (https://github.com/mei-pub/mei-portal)',
   Accept: 'application/json',
 };
 

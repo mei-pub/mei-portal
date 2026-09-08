@@ -15,8 +15,8 @@ permissions:
 
 jobs:
   # ---------------------------------------------------------------------------
-  # Docker 镜像（mei-allin 单镜像，全应用合一）
-  #   - 推送到 GHCR（ghcr.io/<owner>/mei-allin）
+  # Docker 镜像（mei-portal 单镜像，全应用合一）
+  #   - 推送到 GHCR（ghcr.io/<owner>/mei-portal）
   #   - 配置 secrets.ALIYUN_ACR_USERNAME / ALIYUN_ACR_PASSWORD 和
   #     vars.ACR_REGISTRY / ACR_NAMESPACE 后，同时推送到阿里云 ACR
   #   - 导出 OCI 离线包（linux/amd64 + linux/arm64）作为 Release 附件
@@ -76,10 +76,10 @@ jobs:
         shell: bash
         run: |
           v="${{ steps.ver.outputs.APP_VERSION }}"
-          ghcr="ghcr.io/${{ github.repository_owner }}/mei-allin"
+          ghcr="ghcr.io/${{ github.repository_owner }}/mei-portal"
           tags="$ghcr:$v,$ghcr:latest"
           if [ -n "${{ secrets.ALIYUN_ACR_USERNAME }}" ] && [ -n "${{ vars.ACR_REGISTRY }}" ]; then
-            acr="${{ vars.ACR_REGISTRY }}/${{ vars.ACR_NAMESPACE }}/mei-allin"
+            acr="${{ vars.ACR_REGISTRY }}/${{ vars.ACR_NAMESPACE }}/mei-portal"
             tags="$tags,$acr:$v,$acr:latest"
           fi
           echo "tags=$tags" >> "$GITHUB_OUTPUT"
@@ -119,7 +119,7 @@ jobs:
             --platform linux/amd64,linux/arm64 \
             --file image/Dockerfile \
             --cache-from type=gha \
-            --output type=oci,dest="release/mei-allin-${{ steps.ver.outputs.APP_VERSION }}.oci.tar" \
+            --output type=oci,dest="release/mei-portal-${{ steps.ver.outputs.APP_VERSION }}.oci.tar" \
             .
           ls -lh release/
 
@@ -133,7 +133,7 @@ jobs:
         run: |
           v="${{ steps.ver.outputs.APP_VERSION }}"
           for mirror in ghcr.nju.edu.cn ghcr.m.daocloud.io ghcr.dockerproxy.net; do
-            img="${{ github.repository_owner }}/mei-allin"
+            img="${{ github.repository_owner }}/mei-portal"
             echo "==> warming $mirror/$img:$v"
             docker pull "$mirror/$img:$v" || echo "!! warm failed for $mirror/$img:$v"
           done
@@ -141,8 +141,8 @@ jobs:
       - name: Upload artifacts
         uses: actions/upload-artifact@v6
         with:
-          name: mei-allin-docker
-          path: release/mei-allin-*.oci.tar
+          name: mei-portal-docker
+          path: release/mei-portal-*.oci.tar
 
   # ---------------------------------------------------------------------------
   # 汇总产物到 Release
@@ -177,22 +177,22 @@ jobs:
         uses: softprops/action-gh-release@v3
         with:
           tag_name: v${{ needs.docker-image.outputs.version }}
-          name: Mei-Allin v${{ needs.docker-image.outputs.version }}
+          name: Mei-Portal v${{ needs.docker-image.outputs.version }}
           generate_release_notes: true
           body: |
             ## 使用
 
             ```bash
-            docker run -d --name mei-allin --restart unless-stopped \
-              -p 7777:7777 -v mei-allin-data:/data \
-              ghcr.io/${{ github.repository_owner }}/mei-allin:${{ needs.docker-image.outputs.version }}
+            docker run -d --name mei-portal --restart unless-stopped \
+              -p 7777:7777 -v mei-portal-data:/data \
+              ghcr.io/${{ github.repository_owner }}/mei-portal:${{ needs.docker-image.outputs.version }}
             ```
 
             国内可拉阿里云 ACR（配置后自动推送）：
-            ```${{ vars.ACR_REGISTRY && format('{0}/{1}/mei-allin:{2}', vars.ACR_REGISTRY, vars.ACR_NAMESPACE, needs.docker-image.outputs.version) || ' 未配置 ACR_REGISTRY / ACR_NAMESPACE' }}```
+            ```${{ vars.ACR_REGISTRY && format('{0}/{1}/mei-portal:{2}', vars.ACR_REGISTRY, vars.ACR_NAMESPACE, needs.docker-image.outputs.version) || ' 未配置 ACR_REGISTRY / ACR_NAMESPACE' }}```
 
-            离线环境：下载附件 `mei-allin-*.oci.tar` 后
-            `docker load -i mei-allin-<version>.oci.tar`（多架构 OCI 归档，需 Docker 25+）。
+            离线环境：下载附件 `mei-portal-*.oci.tar` 后
+            `docker load -i mei-portal-<version>.oci.tar`（多架构 OCI 归档，需 Docker 25+）。
 
             首次启动后访问 `http://<host>:7777` 完成初始化；数据全部落在 `/data` 卷。
           files: |
