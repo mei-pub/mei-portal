@@ -16,6 +16,12 @@ import {
 import { Alert, FileInput } from '@/components/SettingsUI';
 import type { PanelConfig, PanelGroup } from '@/lib/panel-store';
 import { PRESET_GROUP_IDS } from '@/lib/panel-presets';
+import {
+  MAX_SEARCH_ENGINES,
+  resolveDefaultEngineId,
+  resolveSearchEngines,
+  type ManagedSearchEngine,
+} from '@/lib/search-engines';
 
 type Tab = 'style' | 'groups';
 
@@ -190,16 +196,8 @@ function StyleTab({ config, update }: { config: PanelConfig; update: (c: PanelCo
       <SettingsSection title="搜索与主题">
         <div className="mei-grid">
           <div className="mei-field span">
-            <Toggle checked={config.style.searchBoxShow} onChange={(v) => setStyle({ searchBoxShow: v })} label="显示搜索框" description="支持过滤应用与网页搜索。" />
+            <Toggle checked={config.style.searchBoxShow} onChange={(v) => setStyle({ searchBoxShow: v })} label="显示搜索框" description="支持应用过滤、综合搜索与网页搜索。" />
           </div>
-          <SettingsField label="搜索引擎">
-            <Select value={config.style.searchEngine} onChange={(e) => setStyle({ searchEngine: e.target.value as PanelConfig['style']['searchEngine'] })}>
-              <option value="bing">必应</option>
-              <option value="google">Google</option>
-              <option value="baidu">百度</option>
-              <option value="duckduckgo">DuckDuckGo</option>
-            </Select>
-          </SettingsField>
           <SettingsField label="主题模式">
             <Select value={config.style.themeMode} onChange={(e) => setStyle({ themeMode: e.target.value as 'light' | 'dark' })}>
               <option value="light">浅色文字</option>
@@ -217,6 +215,8 @@ function StyleTab({ config, update }: { config: PanelConfig; update: (c: PanelCo
           </SettingsField>
         </div>
       </SettingsSection>
+
+      <EnginesSection config={config} update={update} />
 
       <SettingsSection title="布局与页脚">
         <div className="mei-grid">
@@ -241,6 +241,91 @@ function StyleTab({ config, update }: { config: PanelConfig; update: (c: PanelCo
         </div>
       </SettingsSection>
     </>
+  );
+}
+
+/**
+ * 搜索引擎管理：新增 / 编辑 / 删除 / 设为默认。
+ * 展示列表 = resolveSearchEngines（未自定义时显示内置种子）；任何修改即整体物化到
+ * style.searchEngines（保存配置后落盘，服务端 normalizeSearchEngines 再次清洗兜底）。
+ */
+function EnginesSection({ config, update }: { config: PanelConfig; update: (c: PanelConfig) => void }) {
+  const engines = resolveSearchEngines(config.style);
+  const defaultId = resolveDefaultEngineId(config.style, engines);
+  const [name, setName] = useState('');
+  const [url, setUrl] = useState('');
+
+  // 列表变更（增/改/删）后的统一落地：默认引擎不在新列表内时回落第一个
+  function commit(next: ManagedSearchEngine[]) {
+    const saved = config.style.searchEngine;
+    const nextDefault = next.some((e) => e.id === saved) ? saved : next[0]?.id || '';
+    update({ ...config, style: { ...config.style, searchEngines: next, searchEngine: nextDefault } });
+  }
+
+  function setDefault(id: string) {
+    update({ ...config, style: { ...config.style, searchEngines: engines, searchEngine: id } });
+  }
+
+  function addEngine() {
+    const n = name.trim();
+    const u = url.trim();
+    if (!n || !/^https?:\/\//i.test(u) || engines.length >= MAX_SEARCH_ENGINES) return;
+    commit([...engines, { id: `ce${Date.now()}${Math.random().toString(36).slice(2, 6)}`, name: n, url: u }]);
+    setName('');
+    setUrl('');
+  }
+
+  function removeEngine(id: string) {
+    if (engines.length <= 1) return;
+    const target = engines.find((e) => e.id === id);
+    if (!target || !window.confirm(`删除搜索引擎「${target.name}」？`)) return;
+    commit(engines.filter((e) => e.id !== id));
+  }
+
+  return (
+    <SettingsSection title="搜索引擎管理" description="网页搜索可用的引擎列表；链接模板中用 {q} 表示关键词。">
+      <div className="mei-channel-add" style={{ marginBottom: 12 }}>
+        <TextInput value={name} placeholder="名称（如 必应）" onChange={(e) => setName(e.target.value)} />
+        <TextInput value={url} placeholder="https://www.bing.com/search?q={q}" onChange={(e) => setUrl(e.target.value)} />
+        <SettingsButton variant="primary" onClick={addEngine} disabled={engines.length >= MAX_SEARCH_ENGINES}>添加引擎</SettingsButton>
+      </div>
+      <div className="source-stack">
+        {engines.map((eng) => (
+          <div key={eng.id} className="engine-row" data-default={eng.id === defaultId || undefined}>
+            <button
+              type="button"
+              className="engine-default-btn"
+              title={eng.id === defaultId ? '当前默认引擎' : '设为默认'}
+              onClick={() => setDefault(eng.id)}
+            >
+              {eng.id === defaultId ? '★ 默认' : '设默认'}
+            </button>
+            <input
+              className="mei-input"
+              value={eng.name}
+              placeholder="名称"
+              onChange={(e) => commit(engines.map((x) => (x.id === eng.id ? { ...x, name: e.target.value } : x)))}
+            />
+            <input
+              className="mei-input engine-url"
+              value={eng.url}
+              placeholder="https://…?q={q}"
+              onChange={(e) => commit(engines.map((x) => (x.id === eng.id ? { ...x, url: e.target.value } : x)))}
+            />
+            <SettingsButton variant="danger" disabled={engines.length <= 1} onClick={() => removeEngine(eng.id)}>
+              删除
+            </SettingsButton>
+          </div>
+        ))}
+      </div>
+      <style>{`
+        .engine-row{display:grid;grid-template-columns:84px 128px minmax(0,1fr) auto;gap:10px;align-items:center;padding:10px;border:1px solid var(--mei-border);border-radius:14px;background:rgba(255,255,255,.6);margin-bottom:10px;}
+        .engine-row:last-child{margin-bottom:0;}
+        .engine-row[data-default]{border-color:rgba(99,102,241,.45);}
+        .engine-default-btn{border:1px solid var(--mei-border);border-radius:10px;background:#fff;color:var(--mei-text-muted);font-size:12px;padding:7px 10px;cursor:pointer;white-space:nowrap;}
+        .engine-row[data-default] .engine-default-btn{border-color:transparent;background:var(--mei-gradient-soft);color:var(--mei-primary);font-weight:650;}
+      `}</style>
+    </SettingsSection>
   );
 }
 

@@ -10,7 +10,7 @@ interface HelpDoc { name: string; icon: string; intro: string; sections: HelpSec
 const DOCS: Record<string, HelpDoc> = {
   portal: {
     name: '门户使用指南', icon: 'lucide:home',
-    intro: 'mei-allin 统一应用门户：一个入口管理所有自托管应用。',
+    intro: 'Mei-Portal 统一应用门户：一个入口管理所有自托管应用。',
     sections: [
       { title: '首页图标项', body: ['卡片支持点击直达应用；编辑模式下可拖拽排序、跨分组拖动。', '卡片右键（或长按）呼出操作菜单：编辑、双地址切换、删除。', '布局可在卡片模式与图标模式间切换（分组标题行的切换按钮）。'] },
       { title: '分组与分页', body: ['未分组的项显示在「常用」页；分组页按分组管理中的顺序排列。', '内置应用自动归入「内置应用」预设分组。'] },

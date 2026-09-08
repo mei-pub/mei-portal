@@ -3,6 +3,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { PRESET_GROUPS, BUILTIN_GROUP_ID } from './panel-presets.ts';
+import { BUILTIN_SEARCH_ENGINES, normalizeSearchEngines, type ManagedSearchEngine } from './search-engines.ts';
 export { PRESET_GROUPS, PRESET_GROUP_IDS, BUILTIN_GROUP_ID, DEFAULT_GROUP_ID } from './panel-presets.ts';
 
 const DATA_DIR = process.env.DATA_DIR || '/data';
@@ -20,7 +21,8 @@ export interface PanelStyle {
   logoImage: string; // Logo 图片（URL/base64，优先于文字）
   clockShowSecond: boolean;
   searchBoxShow: boolean;
-  searchEngine: 'bing' | 'google' | 'baidu' | 'duckduckgo';
+  searchEngine: string; // 默认搜索引擎 id（必须在 searchEngines 列表内）
+  searchEngines: ManagedSearchEngine[]; // 用户管理的搜索引擎列表；空 = 使用内置种子（见 lib/search-engines）
   iconStyle: 'icon' | 'info'; // icon=纯图标 info=图标+标题+描述
   iconTextColor: string; // 图标文字颜色（壁纸场景可调白）
   themeMode: 'light' | 'dark'; // 首页主色调：深色背景用 dark（文字浅色），浅色背景用 light
@@ -64,11 +66,12 @@ export interface PanelConfig {
 export const DEFAULT_CONFIG: PanelConfig = {
   background: { url: '', mask: 0.35, blur: 0 },
   style: {
-    logoText: 'Mei-Allin',
+   logoText: 'Mei-Portal',
     logoImage: '',
     clockShowSecond: true,
     searchBoxShow: true,
     searchEngine: 'bing',
+    searchEngines: [],
     iconStyle: 'info',
     iconTextColor: '',
     themeMode: 'light',
@@ -99,9 +102,11 @@ export function normalizeConfig(raw: unknown): PanelConfig {
   const r = (raw || {}) as Record<string, unknown>;
   const bg = (r.background || {}) as Record<string, unknown>;
   const st = (r.style || {}) as Record<string, unknown>;
-  const engine = ['bing', 'google', 'baidu', 'duckduckgo'].includes(String(st.searchEngine))
-    ? (st.searchEngine as PanelStyle['searchEngine'])
-    : 'bing';
+  // 搜索引擎管理：先清洗列表，再校验默认 id（不在列表内时回落第一个）
+  const searchEngines = normalizeSearchEngines(st.searchEngines);
+  const enginePool = searchEngines.length > 0 ? searchEngines : BUILTIN_SEARCH_ENGINES;
+  const engineId = typeof st.searchEngine === 'string' ? st.searchEngine : '';
+  const engine = enginePool.some((e) => e.id === engineId) ? engineId : enginePool[0].id;
   const groups = (Array.isArray(r.groups) ? r.groups : [])
     .filter((g) => g && g.name)
     .slice(0, 24)
@@ -143,12 +148,13 @@ export function normalizeConfig(raw: unknown): PanelConfig {
       mask: clampNum(bg.mask, 0, 0.9, 0.35),
       blur: clampNum(bg.blur, 0, 24, 0),
     },
-    style: {
-      logoText: str(st.logoText, 40, 'Mei-Allin'),
+   style: {
+     logoText: str(st.logoText, 40, 'Mei-Portal'),
       logoImage: str(st.logoImage, 40 * 1024 * 1024),
       clockShowSecond: st.clockShowSecond !== false,
       searchBoxShow: st.searchBoxShow !== false,
       searchEngine: engine,
+      searchEngines,
       iconStyle: st.iconStyle === 'icon' ? 'icon' : 'info',
       iconTextColor: /^#[0-9a-fA-F]{3,8}$/.test(String(st.iconTextColor)) ? String(st.iconTextColor) : '',
       themeMode: st.themeMode === 'dark' ? 'dark' : 'light',

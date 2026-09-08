@@ -55,11 +55,11 @@ const showExportModal = ref(false);
 
 // Tab状态
 // 磁力/电驴类搜索源（支持 magnet:/ed2k:// 链接的插件集合，独立 tab 配置）
+// 与门户 packages/shall/src/lib/disk-sources.ts 的 magnet 分类保持一致
 const MAGNET_PLUGIN_IDS = new Set([
-  'muou','zhizhen','fox4k','lou1','wanou','ouge','huban','cyg','pianku','qqpd','nyaa',
-  'erxiao','duoduo','qiwei','xiaoji','gying','lingjisp','xuexizhinan','meitizy','xys',
-  'dyyj','dyyjpro','yulinshufa','mizixing','jsnoteclub','yiove','panlian','xiaozhang',
-  'qupansou','shandian','clmao','cldi','clxiong','daishudj','djgou','haisou','hdr4k'
+  'ciligou','clmao','cldi','clxiong','thepiratebay','nyaa','lingjisp','melost','lou1',
+  'erxiao','dy4k','dygang','leso','rrbt','gaoqing888','u3c3','huban',
+  'labi','shandian','zhizhen','pianku','sdso'
 ]);
 const activeTab = ref<'channels' | 'plugins' | 'magnet' | 'diskTypes' | 'detection'>('channels');
 const detectionSettings = ref<DetectionSettings>(loadDetectionSettings());

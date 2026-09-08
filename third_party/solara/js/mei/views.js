@@ -13,6 +13,7 @@ import {
 import { store, songKey, on, emit } from "./store.js";
 import { player, PLAYER_ICONS as PI, MODE_LABELS, fmtTime } from "./player.js";
 import { I, toast, openDialog, confirmDialog, promptDialog } from "./ui.js";
+import { pushRoute } from "./router.js";
 
 const EXPLORE_GENRES = ["流行", "摇滚", "古典音乐", "民谣", "电子", "爵士", "说唱", "乡村", "蓝调", "R&B", "金属", "嘻哈", "轻音乐"];
 
@@ -80,7 +81,11 @@ let searchControls = { source: "" };
 const searchRequests = createSearchRequestGuard();
 let searchAutoObserver = null;
 
-export async function renderSearch(root, targetListId = "") {
+export async function renderSearch(root, params = new URLSearchParams()) {
+  const routeParams = params instanceof URLSearchParams ? params : new URLSearchParams(params || "");
+  const targetListId = routeParams.get("list") || "";
+  const initialQuery = routeParams.get("q") || "";
+  const initialSource = routeParams.get("source") || "";
   searchState.targetListId = targetListId;
   const targetPl = targetListId ? store.getPlaylist(targetListId) : null;
 
@@ -130,7 +135,7 @@ export async function renderSearch(root, targetListId = "") {
       if (kw) doSearch(kw, sourceSelect.value);
     };
     const clearBtn = root.querySelector("#meiTargetClear");
-    if (clearBtn) clearBtn.onclick = () => { location.hash = "#/search"; };
+    if (clearBtn) clearBtn.onclick = () => { pushRoute("/search"); };
     drawResults();
   };
 
@@ -278,6 +283,9 @@ export async function renderSearch(root, targetListId = "") {
   };
 
   draw();
+  if (initialQuery && searchState.keyword !== initialQuery) {
+    await doSearch(initialQuery, initialSource);
+  }
 }
 
 function songCardHtml(song, i) {
@@ -455,11 +463,13 @@ export function renderPlaylists(root) {
       </div>
       <div id="plSongs"></div>
     `;
-    main.querySelector("#plAddSongs").onclick = () => { location.hash = `#/search?list=${selected.id}`; };
+    main.querySelector("#plAddSongs").onclick = () => {
+      pushRoute("/search", new URLSearchParams({ list: selected.id }));
+    };
     main.querySelector("#plPlayAll").onclick = () => {
       player.setQueue("playlist", 0, selected.id);
       player.playIndex(0);
-      location.hash = "#/player";
+      pushRoute("/player");
     };
 
     const songsBox = main.querySelector("#plSongs");
@@ -806,7 +816,7 @@ export function renderRandom(root) {
       player.playIndex(0);
       loadLyric();
       toast(`已随机挑选 ${picked.length} 首歌，随机播放中`);
-      location.hash = "#/player";
+      pushRoute("/player");
     } catch {
       root.querySelector("#randTip").textContent = "随机获取失败，请检查音乐源后重试";
     }
@@ -821,18 +831,74 @@ export function renderFavorites(root) {
         <div class="e-icon">${I.heart}</div>
         <div>还没有收藏的歌曲</div>
         <div style="margin:6px 0 18px;font-size:12px;color:var(--faint)">在搜索结果中点击心形图标收藏喜欢的歌</div>
-        <a class="mei-btn" href="#/search">${I.search} 去搜索</a>
+        <button class="mei-btn" id="goSearch">${I.search} 去搜索</button>
       </div>
     `;
+    root.querySelector("#goSearch").onclick = () => pushRoute("/search");
     return;
   }
-  // 进入收藏列表播放模式
+  // 收藏页是浏览页：展示收藏列表，点击歌曲才播放，不自动跳转播放页
   if (player.queueType !== "fav") {
+    // 仅设置队列但不开播播放，保持当前播放状态
+    player.setQueue("fav", 0);
+  }
+  root.classList.add("wide");
+  root.innerHTML = `
+    <div class="mei-fav-page">
+      <div class="mei-fav-head">
+        <h2 class="mei-fav-title">${I.heart} 我的收藏</h2>
+        <span class="mei-fav-count">${store.favorites.length} 首</span>
+        <div class="mei-fav-actions">
+          <button class="mei-btn-ghost" id="favPlayAll">${I.play} 播放全部</button>
+          <button class="mei-btn-ghost" id="favShuffle">${I.shuffle} 随机播放</button>
+        </div>
+      </div>
+      <div class="mei-fav-list" id="favList">
+        ${store.favorites.map((song, i) => songRowHtml(song, i, {
+          playing: player.queueType === "fav" && i === player.index,
+          showSort: false,
+          showFav: true,
+        })).join("")}
+      </div>
+    </div>
+  `;
+
+  // 播放全部：设置队列为收藏，从第一首开始播放，然后跳播放页
+  root.querySelector("#favPlayAll").onclick = () => {
     player.setQueue("fav", 0);
     player.playIndex(0);
     loadLyric();
-  }
-  location.hash = "#/player";
+    pushRoute("/player");
+  };
+
+  // 随机播放
+  root.querySelector("#favShuffle").onclick = () => {
+    player.setQueue("fav", Math.floor(Math.random() * store.favorites.length));
+    player.playIndex(player.index);
+    loadLyric();
+    pushRoute("/player");
+  };
+
+  // 逐首歌曲操作
+  root.querySelectorAll(".mei-song-row").forEach((row) => {
+    const i = parseInt(row.dataset.idx, 10);
+    row.querySelector('[data-act="play"]').onclick = () => {
+      if (player.queueType !== "fav") player.setQueue("fav", i);
+      player.playIndex(i);
+      loadLyric();
+      pushRoute("/player");
+    };
+    const unfav = row.querySelector('[data-act="unfav"]');
+    if (unfav) unfav.onclick = () => {
+      store.removeFavorite(songKey(store.favorites[i]));
+      renderFavorites(root);
+    };
+    const del = row.querySelector('[data-act="del"]');
+    if (del) del.onclick = () => {
+      store.removeFavorite(songKey(store.favorites[i]));
+      renderFavorites(root);
+    };
+  });
 }
 
 function escapeHtml(value) {

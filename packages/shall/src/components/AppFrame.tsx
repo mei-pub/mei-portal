@@ -5,8 +5,10 @@
 // 顶栏仍由唯一来源 /__shell/topbar.js 提供（本页注入，data-app 随当前应用变化）。
 // 顶栏内的应用链接点击被本组件拦截为客户端切换，避免整页导航销毁播放引擎。
 import { useEffect, useRef, useState } from 'react';
-import { useSearchParams } from 'next/navigation';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import IframeHost from './IframeHost';
+import { appendEmbedParam, parseAppRoute, sameAppPath } from '@/lib/app-routes';
+import { syncAppTokens } from '@/lib/token-sync';
 
 interface Plugin {
   id: string;
@@ -18,32 +20,24 @@ declare global {
   interface Window {
     /** topbar.js 的单例标记，注入后为 true */
     __meiTopbar?: boolean;
+    /** 当前文档是否为门户 Shell 承载页 */
+    __meiShellHost?: boolean;
   }
-}
-
-/** iframe URL：统一带 meiEmbed=1，子应用内不再重复注入顶栏 */
-function embedUrl(path: string): string {
-  const [beforeHash, hash] = path.split('#');
-  const [pathname, search] = beforeHash.split('?');
-  const params = new URLSearchParams(search || '');
-  params.set('meiEmbed', '1');
-  return `${pathname || '/'}?${params.toString()}${hash ? `#${hash}` : ''}`;
-}
-
-function samePath(a: string, b: string): boolean {
-  const strip = (v: string) => v.replace(/\?[^#]*/, '').replace(/\/+$/, '');
-  return strip(a) === strip(b);
 }
 
 /** 同时保活的 iframe 上限：超过后淘汰最久未访问的那个（当前应用永不淘汰） */
 const MAX_LIVE_FRAMES = 4;
 
 export default function AppFrame() {
+  const pathname = usePathname();
   const searchParams = useSearchParams();
-  const appId = searchParams.get('app') || '';
-  const rawPath = searchParams.get('path') || '';
+  const router = useRouter();
   const [plugins, setPlugins] = useState<Plugin[]>([]);
   const scriptRef = useRef<HTMLScriptElement | null>(null);
+  const [routeHash, setRouteHash] = useState('');
+  const search = searchParams.toString();
+  const currentPath = `${pathname}${search ? `?${search}` : ''}${routeHash}`;
+  const [activePath, setActivePath] = useState(currentPath);
   // 已经打开过的应用：保留各自的 iframe，切回时直接显示，不重新加载。
   // 只记录「首次进入该应用时的 src」，后续同应用内的路径变化由子应用自己的路由处理，
   // 否则每次回写 URL 都会换 src、把 iframe 打回重新加载。
@@ -54,14 +48,37 @@ export default function AppFrame() {
   // 上一次「路由级」导航目标，用于区分真实跳转与 URL 回写
   const navKeyRef = useRef('');
 
+  const parsedRoute = parseAppRoute(currentPath, plugins);
+  const appId = parsedRoute?.appId || '';
   const plugin = plugins.find((p) => p.id === appId) || null;
-  const targetPath = rawPath || plugin?.url || '';
+  const targetPath = activePath || plugin?.url || '';
   // src 直接由当前 URL 推导，不经过 state：
   // 走 state 的话，同一轮渲染里保活列表读到的还是上一个应用的 src，
   // 新挂的 iframe 会装错应用（表现为切到 B 却加载出 A）。
-  const desiredSrc = targetPath ? embedUrl(targetPath) : '';
+  const desiredSrc = targetPath ? appendEmbedParam(targetPath) : '';
   const pluginsRef = useRef<Plugin[]>([]);
   pluginsRef.current = plugins;
+
+  useEffect(() => {
+    window.__meiShellHost = true;
+  }, []);
+
+  // 统一身份：承载应用前把主应用会话令牌写入 localStorage，
+  // 供 mediago（X-API-Key）/ai-draw（Bearer）等前端随请求携带。
+  useEffect(() => {
+    syncAppTokens().catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    setRouteHash(window.location.hash);
+    const onHashChange = () => setRouteHash(window.location.hash);
+    window.addEventListener('hashchange', onHashChange);
+    return () => window.removeEventListener('hashchange', onHashChange);
+  }, []);
+
+  useEffect(() => {
+    setActivePath(currentPath);
+  }, [currentPath]);
 
   useEffect(() => {
     fetch('/api/plugins', { credentials: 'include' })
@@ -92,33 +109,40 @@ export default function AppFrame() {
     const key = `${appId}|${desiredSrc}`;
     if (navKeyRef.current === key) return;
     navKeyRef.current = key;
-    if (!rawPath) return;
+    if (!activePath) return;
     const rootPath = plugin?.url || '';
-    if (rootPath && samePath(rawPath, rootPath)) return;
+    if (rootPath && sameAppPath(activePath, rootPath)) return;
     const frame = document.querySelector<HTMLIFrameElement>(`iframe[data-mei-app="${appId}"]`);
     if (!frame) return; // 首次挂载：src 已经是目标路径
     try {
       const loc = frame.contentWindow?.location;
       if (!loc) return;
-      if (samePath(`${loc.pathname}${loc.hash}`, rawPath)) return;
+      if (sameAppPath(`${loc.pathname}${loc.search}${loc.hash}`, activePath)) return;
       loc.replace(desiredSrc);
     } catch {
       /* 跨域应用：忽略 */
     }
-  }, [appId, desiredSrc, rawPath, plugin?.url]);
+  }, [activePath, appId, desiredSrc, plugin?.url]);
 
   // 预热：顶栏按钮悬停时提前挂目标应用的隐藏 iframe。
   // 用户真正点击时资源已在下载或已就绪，切换接近瞬时。
   // 只挂应用根路径（悬停时还不知道用户要去哪个内页），后续深链由上面的 effect 导航。
   useEffect(() => {
     function onMsg(ev: MessageEvent) {
+      if (ev.origin !== window.location.origin) return;
       const d = ev.data || {};
+      // 子应用请求外壳导航（如内网穿透引导弹层跳设置中心的隧道服务器设置页）
+      if (d.source === 'mei-iframe' && d.type === 'navigate') {
+        const path = String(d.path || '');
+        if (path.startsWith('/') && !path.startsWith('//')) router.push(path);
+        return;
+      }
       if (d.source !== 'mei-topbar' || d.type !== 'prefetch-app') return;
       const id = String(d.app || '');
       if (!id || id === appId) return;
       const target = pluginsRef.current.find((p) => p.id === id);
       if (!target?.url || /^https?:\/\//i.test(target.url)) return;
-      const src = embedUrl(target.url);
+      const src = appendEmbedParam(target.url);
       setMounted((prev) => {
         if (prev.some((m) => m.appId === id)) return prev;
         // 预热不进 orderRef：没被真正访问过的应用应当最先被淘汰
@@ -163,7 +187,7 @@ export default function AppFrame() {
     []
   );
 
-  // 子应用内部导航（hash 路由等）回写到外层 URL，保证刷新/分享可复原
+  // 子应用内部导航回写到顶层资源 URL，保证刷新/分享可复原
   useEffect(() => {
     if (!appId) return;
     const timer = setInterval(() => {
@@ -175,19 +199,24 @@ export default function AppFrame() {
       try {
         const loc = frame.contentWindow?.location;
         if (!loc) return;
-        inner = `${loc.pathname}${loc.hash}`;
+        inner = `${loc.pathname}${loc.search}${loc.hash}`;
       } catch {
         return; // 跨域应用：忽略
       }
       if (!inner || !appId) return;
-      const params = new URLSearchParams({ app: appId, path: inner });
-      const next = `/app?${params.toString()}`;
-      if (window.location.pathname + window.location.search !== next) {
+      const [beforeHash = '', hash = ''] = inner.split('#');
+      const [innerPathname = '', innerSearch = ''] = beforeHash.split('?');
+      const params = new URLSearchParams(innerSearch || '');
+      params.delete('meiEmbed');
+      const canonicalSearch = params.toString();
+      const next = `${innerPathname}${canonicalSearch ? `?${canonicalSearch}` : ''}${hash ? `#${hash}` : ''}`;
+      if (!sameAppPath(next, activePath)) setActivePath(next);
+      if (window.location.pathname + window.location.search + window.location.hash !== next) {
         window.history.replaceState(null, '', next);
       }
     }, 1200);
     return () => clearInterval(timer);
-  }, [appId]);
+  }, [activePath, appId]);
 
   if (!appId) {
     return (

@@ -148,8 +148,13 @@ $("#setupGoto").addEventListener("click", () => {
   const fields = (currentSetup && currentSetup.fields) || [];
   hideSetupDialog();
   setupDismissedCode = (currentSetup && currentSetup.code) || "";
-  // 设置面板就在本应用内（门户设置中心的「隧道服务器设置」也是深链到这里），
-  // 直接切面板即可：既不重挂 iframe，也不依赖外壳额外的导航协议。
+  // 门户 iframe 内：跳门户设置中心的「隧道服务器设置」原生页（外壳 NavBridge 客户端路由，不重挂 iframe），
+  // 字段名作为 highlight 参数带给设置页高亮；独立访问时才切本应用内设置面板。
+  if (window.parent !== window.self) {
+    const query = fields && fields.length ? `?highlight=${encodeURIComponent(fields.join(","))}` : "";
+    try { window.parent.postMessage({ source: "mei-iframe", type: "navigate", path: `/settings/link-server${query}` }, window.location.origin); } catch (e) {}
+    return;
+  }
   setView("settings");
   window.scrollTo({ top: 0, behavior: "smooth" });
   highlightSetupFields(fields);
@@ -277,10 +282,18 @@ function fillReconnect(settings) {
   setSwitch(form.querySelector('[data-switch="reconnectEnabled"]'), enabled);
 }
 function beginPolling() { clearInterval(polling); polling = setInterval(() => load().catch(() => {}), 3000); }
-function setView(view) {
+const LINK_VIEWS = new Set(["tunnels", "settings", "logs"]);
+function viewFromLocation() {
+  const suffix = location.pathname.replace(/^\/link\/?/, "").replace(/\/+$/, "");
+  if (LINK_VIEWS.has(suffix)) return suffix;
+  const legacyView = new URLSearchParams(location.search).get("meiView");
+  return LINK_VIEWS.has(legacyView) ? legacyView : "tunnels";
+}
+function setView(view, { updateUrl = true } = {}) {
   activeView = view;
   document.querySelectorAll("[data-view]").forEach(item => item.classList.toggle("active", item.dataset.view === view));
   document.querySelectorAll("[data-panel]").forEach(panel => panel.classList.toggle("hidden", panel.dataset.panel !== view));
+  if (updateUrl) window.history.pushState(null, "", `/link/${view}`);
 }
 function formForTunnel(tunnel = {}) {
   const form = $("#tunnelForm"); form.reset();
@@ -374,12 +387,12 @@ async function saveConfig(connectAfterSave = false) {
 async function copyText(value, success) { if (!value) throw new Error("没有可复制的内容"); if (navigator.clipboard?.writeText) await navigator.clipboard.writeText(value); else { const area = document.createElement("textarea"); area.value = value; document.body.append(area); area.select(); document.execCommand("copy"); area.remove(); } notify(success); }
 
 $("#loginForm").addEventListener("submit", async event => { event.preventDefault(); $("#loginError").textContent = ""; try { await api("/api/login", { method: "POST", body: JSON.stringify({ user: formValue(event.target, "user"), password: formValue(event.target, "password") }) }); $("#loginView").classList.add("hidden"); $("#appView").classList.remove("hidden"); await load(); beginPolling(); } catch (error) { $("#loginError").textContent = error.message; } });
-// mei-allin 集成：Console 侧栏已移除，主界面锁死隧道管理页（默认 tunnels）。
-// 门户设置集成页通过 ?meiView=settings|logs 深链打开对应面板。
-{
-  const meiView = new URLSearchParams(location.search).get("meiView");
-  if (meiView === "settings" || meiView === "logs" || meiView === "tunnels") setView(meiView);
+// mei-allin 集成：资源路径 /link/{tunnels|settings|logs}，兼容旧 ?meiView 深链。
+setView(viewFromLocation(), { updateUrl: false });
+if (location.pathname.replace(/\/+$/, "") !== `/link/${activeView}`) {
+  window.history.replaceState(null, "", `/link/${activeView}`);
 }
+window.addEventListener("popstate", () => setView(viewFromLocation(), { updateUrl: false }));
 $("#configForm").addEventListener("submit", async event => { event.preventDefault(); const button = event.submitter; setBusy(button, true); try { await saveConfig(); } catch (error) { reportError(error); } finally { setBusy(button, false); } });
 $("#saveAndConnectButton").addEventListener("click", async event => { setBusy(event.currentTarget, true); try { await saveConfig(true); } catch (error) { reportError(error); } finally { setBusy(event.currentTarget, false); } });
 // 自动重连设置独立保存，不牵动服务器凭据字段

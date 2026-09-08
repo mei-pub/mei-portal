@@ -60,7 +60,7 @@ app.use(express.static(ROOT_DIR, {
 }));
 
 // ─── 主页（index.html，需要已通过认证中间件）──────────────────────────────────
-app.get('/', (req, res) => {
+app.get('*', (req, res) => {
   res.sendFile(path.join(ROOT_DIR, 'index.html'));
 });
 

@@ -45,7 +45,7 @@ const EMPTY_S3: S3Form = {
   endpoint: '',
   region: '',
   bucket: '',
-  key: 'backups/mei-allin-backup.zip',
+  key: 'backups/mei-portal-backup.zip',
   accessKey: '',
   secretKey: '',
 };
@@ -126,7 +126,7 @@ export default function BackupSettings() {
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
-      link.download = `mei-allin-backup-${new Date().toISOString().slice(0, 10)}.zip`;
+      link.download = `mei-portal-backup-${new Date().toISOString().slice(0, 10)}.zip`;
       link.click();
       URL.revokeObjectURL(url);
       setMessage(`已导出 ${scopes.length} 项数据的 Zip 备份包`);
@@ -336,8 +336,8 @@ export default function BackupSettings() {
           </div>
           {target === 'webdav' ? (
             <div className="mei-grid" style={{ marginTop: 14 }}>
-              <SettingsField label="文件地址" span>
-                <TextInput value={webdav.url} onChange={(e) => setWebdav({ ...webdav, url: e.target.value })} placeholder="https://dav.example.com/backups/mei-allin-backup.zip" />
+             <SettingsField label="文件地址" span>
+                <TextInput value={webdav.url} onChange={(e) => setWebdav({ ...webdav, url: e.target.value })} placeholder="https://dav.example.com/backups/mei-portal-backup.zip" />
               </SettingsField>
               <SettingsField label="用户名">
                 <TextInput value={webdav.username} onChange={(e) => setWebdav({ ...webdav, username: e.target.value })} />

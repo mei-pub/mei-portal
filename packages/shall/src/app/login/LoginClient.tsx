@@ -43,10 +43,10 @@ export default function LoginClient() {
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 24 }}>
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/logo.svg" alt="mei-allin" style={{ width: 40, height: 40, borderRadius: 'var(--mei-radius-sm)' }} />
-          <div>
-            <div style={{ fontWeight: 700, fontSize: 20 }}>mei-allin</div>
-            <div style={{ fontSize: 12, color: 'var(--mei-text-muted)' }}>统一应用门户</div>
+          <img src="/logo.svg" alt="Mei-Portal" style={{ width: 40, height: 40, borderRadius: 'var(--mei-radius-sm)' }} />
+         <div>
+            <div style={{ fontWeight: 700, fontSize: 20 }}>Mei-Portal</div>
+           <div style={{ fontSize: 12, color: 'var(--mei-text-muted)' }}>统一应用门户</div>
           </div>
         </div>
         <input
@@ -83,7 +83,7 @@ export default function LoginClient() {
           {loading ? '登录中…' : '登录'}
         </button>
         <div style={{ fontSize: 12, color: 'var(--mei-text-faint)', marginTop: 16, textAlign: 'center' }}>
-          初始账户 admin / mei-allin
+          初始账户 admin / mei-portal
         </div>
       </form>
     </div>

@@ -640,12 +640,12 @@ function SearchPageClient() {
 
   return (
     <PageLayout activePath='/search'>
-      <div className={`px-4 sm:px-10 overflow-visible mb-10 ${showResults ? 'py-4 sm:py-8' : 'flex min-h-[calc(100vh-9rem)] flex-col py-4'}`}>
+      <div className={`px-4 sm:px-10 overflow-visible mb-10 ${showResults ? 'py-4 sm:py-4' : 'flex min-h-[calc(100vh-9rem)] flex-col py-4'}`}>
         {/* 搜索框 */}
-        <div className={showResults ? 'mb-8' : 'flex flex-1 flex-col items-center justify-center'}>
+        <div className={showResults ? 'mb-5' : 'flex flex-1 flex-col items-center justify-center'}>
           {/* 入口态：品牌区 + 垂直居中搜索框（对齐主应用风格） */}
           {!showResults && (
-            <div className='mb-8 flex flex-col items-center text-center'>
+            <div className='mb-5 flex flex-col items-center text-center'>
               <div className='mb-4 flex items-center gap-3'>
                 <span className='flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500 text-white shadow-lg shadow-indigo-500/30'>
                   <svg width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='currentColor' strokeWidth='2' strokeLinecap='round' strokeLinejoin='round'><rect width='20' height='15' x='2' y='7' rx='2' ry='2'/><polyline points='17 2 12 7 7 2'/></svg>
@@ -779,7 +779,7 @@ function SearchPageClient() {
                 </h2>
               </div>
               {/* 筛选器 + 聚合开关 同行 */}
-              <div className='mb-8 flex items-center justify-between gap-3'>
+              <div className='mb-5 flex items-center justify-between gap-3'>
                 <div className='flex-1 min-w-0'>
                   {viewMode === 'agg' ? (
                     <SearchResultFilter
@@ -816,7 +816,7 @@ function SearchPageClient() {
                     <div className='animate-spin rounded-full h-8 w-8 border-b-2 border-green-500'></div>
                   </div>
                 ) : (
-                  <div className='text-center text-gray-500 py-8 dark:text-gray-400'>
+                  <div className='text-center text-gray-500 py-4 dark:text-gray-400'>
                     未找到相关结果
                   </div>
                 )
@@ -825,8 +825,8 @@ function SearchPageClient() {
                   {viewMode === 'agg' ? (
                     <VirtualGrid
                       items={filteredAggResults}
-                      className='grid-cols-3 gap-x-2 px-0 sm:px-2 sm:grid-cols-[repeat(auto-fill,_minmax(11rem,_1fr))] sm:gap-x-8'
-                      rowGapClass='pb-14 sm:pb-20'
+                      className='grid-cols-3 gap-x-2 px-0 sm:px-2 sm:grid-cols-[repeat(auto-fill,_minmax(8rem,_1fr))] sm:gap-x-4'
+                      rowGapClass='pb-6 sm:pb-8'
                       estimateRowHeight={320}
                       renderItem={([mapKey, group]) => {
                         const title = group[0]?.title || '';
@@ -865,8 +865,8 @@ function SearchPageClient() {
                   ) : (
                     <VirtualGrid
                       items={filteredAllResults}
-                      className='grid-cols-3 gap-x-2 px-0 sm:px-2 sm:grid-cols-[repeat(auto-fill,_minmax(11rem,_1fr))] sm:gap-x-8'
-                      rowGapClass='pb-14 sm:pb-20'
+                      className='grid-cols-3 gap-x-2 px-0 sm:px-2 sm:grid-cols-[repeat(auto-fill,_minmax(8rem,_1fr))] sm:gap-x-4'
+                      rowGapClass='pb-6 sm:pb-8'
                       estimateRowHeight={320}
                       renderItem={(item) => (
                         <div

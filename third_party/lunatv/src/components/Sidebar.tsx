@@ -126,25 +126,25 @@ const Sidebar = ({ onToggle, activePath = '/' }: SidebarProps) => {
 
   const [menuItems, setMenuItems] = useState([
     {
-      icon: Film,
-      label: '电影',
-      href: '/douban?type=movie',
-    },
-    {
-      icon: Tv,
-      label: '剧集',
-      href: '/douban?type=tv',
-    },
-    {
-      icon: Cat,
-      label: '动漫',
-      href: '/douban?type=anime',
-    },
-    {
-      icon: Clover,
-      label: '综艺',
-      href: '/douban?type=show',
-    },
+     icon: Film,
+     label: '电影',
+      href: '/douban/movie',
+   },
+   {
+     icon: Tv,
+     label: '剧集',
+      href: '/douban/tv',
+   },
+   {
+     icon: Cat,
+     label: '动漫',
+      href: '/douban/anime',
+   },
+   {
+     icon: Clover,
+     label: '综艺',
+      href: '/douban/show',
+   },
   ]);
 
   useEffect(() => {
@@ -164,13 +164,13 @@ const Sidebar = ({ onToggle, activePath = '/' }: SidebarProps) => {
     }
     if (runtimeConfig?.CUSTOM_CATEGORIES?.length > 0) {
       setMenuItems((prevItems) => {
-        if (prevItems.some((item) => item.href === '/douban?type=custom')) return prevItems;
+        if (prevItems.some((item) => item.href === '/douban/custom')) return prevItems;
         return [
           ...prevItems,
           {
             icon: Star,
             label: '自定义',
-            href: '/douban?type=custom',
+            href: '/douban/custom',
           },
         ];
       });
@@ -253,19 +253,16 @@ const Sidebar = ({ onToggle, activePath = '/' }: SidebarProps) => {
             {/* 菜单项 */}
             <div className='flex-1 overflow-y-auto px-2 pt-4'>
               <div className='space-y-1'>
-                {menuItems.map((item) => {
-                  // 检查当前路径是否匹配这个菜单项
-                  const typeMatch = item.href.match(/type=([^&]+)/)?.[1];
-
-                  // 解码URL以进行正确的比较
-                  const decodedActive = decodeURIComponent(active);
-                  const decodedItemHref = decodeURIComponent(item.href);
+               {menuItems.map((item) => {
+                 // 检查当前路径是否匹配这个菜单项
+                 const decodedActive = decodeURIComponent(active);
+                 const decodedItemHref = decodeURIComponent(item.href);
 
                   const isActive =
                     decodedActive === decodedItemHref ||
-                    (decodedActive.startsWith('/douban') &&
-                      decodedActive.includes(`type=${typeMatch}`));
-                  const Icon = item.icon;
+                    (decodedItemHref.startsWith('/douban/') &&
+                      decodedActive.startsWith(decodedItemHref));
+                 const Icon = item.icon;
                   return (
                     <Link
                       key={item.label}

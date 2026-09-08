@@ -3,6 +3,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 
 import { getAuthInfoFromCookie } from '@/lib/auth';
+import {
+  injectLegacyAuthCookie,
+  isPortalSession,
+  legacyAuthCookieJson,
+} from '@/lib/portal-auth';
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
@@ -20,7 +25,29 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(warningUrl);
   }
 
-  // 从cookie获取认证信息
+  // mei-allin 统一身份：主应用会话有效即放行，并注入下游路由所需的旧 auth cookie。
+  // 会话无效时：API 返回 401，页面统一跳回门户登录页（lunatv 自身登录页已废弃）。
+  if (await isPortalSession(request)) {
+    const headers = injectLegacyAuthCookie(request, new Headers(request.headers));
+    const response = NextResponse.next({ request: { headers } });
+    // 浏览器侧同步补一份 legacy auth cookie（httpOnly=false）：
+    // localstorage 模式下前端 db.client/UserMenu 直接读浏览器 cookie 取 username，
+    // 不补发会导致前端登录态判定与本地缓存 key 失效。
+    const legacyValue = legacyAuthCookieJson();
+    if (legacyValue) {
+      const expires = new Date();
+      expires.setDate(expires.getDate() + 30);
+      response.cookies.set('auth', legacyValue, {
+        path: '/',
+        expires,
+        sameSite: 'lax',
+        httpOnly: false,
+        secure: false,
+      });
+    }
+    return response;
+  }
+
   const authInfo = getAuthInfoFromCookie(request);
 
   if (!authInfo) {
@@ -107,7 +134,7 @@ function handleAuthFailure(
     return new NextResponse('Unauthorized', { status: 401 });
   }
 
-  // 否则重定向到登录页面
+  // 统一身份：页面请求一律跳回门户登录页（根路径 /login 由 Shell 提供）
   const loginUrl = new URL('/login', request.url);
   // 保留完整的URL，包括查询参数
   const fullUrl = `${pathname}${request.nextUrl.search}`;

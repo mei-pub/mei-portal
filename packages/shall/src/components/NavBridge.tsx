@@ -44,5 +44,18 @@ export default function NavBridge() {
     return () => document.removeEventListener('click', onClick, true);
   }, [router]);
 
+  useEffect(() => {
+    function onOpenSearch(e: Event) {
+      const detail = (e as CustomEvent).detail || {};
+      const query = String(detail.query || '').trim();
+      const scope = String(detail.scope || 'all');
+      if (!query) return;
+      const params = new URLSearchParams({ q: query, scope });
+      router.push(`/search?${params.toString()}`);
+    }
+    window.addEventListener('mei-open-search', onOpenSearch);
+    return () => window.removeEventListener('mei-open-search', onOpenSearch);
+  }, [router]);
+
   return null;
 }

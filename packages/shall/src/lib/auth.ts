@@ -81,6 +81,19 @@ function sessionToken(u: UserRecord): string {
   return crypto.createHash('sha256').update(u.username + ':' + u.hash).digest('hex');
 }
 
+/** 主应用会话令牌：统一身份改造后，这是所有子应用唯一接受的鉴权凭据 */
+export function getPortalToken(): string {
+  const u = loadUser();
+  return u ? sessionToken(u) : '';
+}
+
+/** 校验一个凭据是否为当前有效的主应用会话令牌（cookie 值或 Bearer 值） */
+export function isPortalTokenValid(token: string | undefined | null): boolean {
+  if (!token) return false;
+  const expected = getPortalToken();
+  return !!expected && token === expected;
+}
+
 export function isLoggedIn(): boolean {
   const c = cookies().get(COOKIE_NAME)?.value;
   if (!c) return false;

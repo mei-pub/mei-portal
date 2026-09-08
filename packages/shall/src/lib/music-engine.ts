@@ -618,8 +618,7 @@ class MusicEngine {
 
   /** 音乐应用播放页入口（走承载页，外壳不卸载） */
   playerPageHref(): string {
-    const path = `${this.musicBase}/#/player`;
-    return `/app?${new URLSearchParams({ app: 'solara', path }).toString()}`;
+    return `${this.musicBase}/player`;
   }
 
   // ---- 播放控制 ----
@@ -632,6 +631,9 @@ class MusicEngine {
     this.error = '';
     this.loading = true;
     const song = q[i];
+    // 立即同步快照：即便后续 URL 解析失败或音频未就绪，snap.song 也已就绪供 Dock 渲染
+    this.emit();
+    this.save();
     const audio = this.audio;
     if (!audio) return;
     // 切歌瞬间必须先停旧音频：地址解析是异步的，否则旧歌会继续放

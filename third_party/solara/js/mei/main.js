@@ -1,24 +1,23 @@
-// Mei Music 入口：状态初始化 / 哈希路由 / 左侧窄面板 / 底部播放条
+// Mei Music 入口：状态初始化 / history 路由 / 左侧窄面板 / 底部播放条
 import { store, on } from "./store.js";
 import { player } from "./player.js";
 import { hostBridge } from "./hostbridge.js";
 import { renderSearch, renderPlaylists, renderPlayer, renderRandom, renderFavorites, loadLyric } from "./views.js";
 import { I, toast } from "./ui.js";
+import { migrateLegacyHashRoute, pushRoute, resolveRoute } from "./router.js";
 
 const PANEL_KEY = "mei-float-solara";
 
 const NAV_ITEMS = [
-  { hash: "#/search", title: "搜索音乐播放", icon: I.search },
-  { hash: "#/playlists", title: "播放列表", icon: I.list },
-  { hash: "#/random", title: "随便听听", icon: I.shuffle },
-  { hash: "#/favorites", title: "我的收藏", icon: I.heart },
+  { path: "/search", title: "搜索音乐播放", icon: I.search },
+  { path: "/playlists", title: "播放列表", icon: I.list },
+  { path: "/player", title: "正在播放", icon: I.play },
+  { path: "/random", title: "随便听听", icon: I.shuffle },
+  { path: "/favorites", title: "我的收藏", icon: I.heart },
 ];
 
 function currentRoute() {
-  const hash = location.hash || "#/search";
-  const [path, query] = hash.slice(1).split("?");
-  const params = new URLSearchParams(query || "");
-  return { path: path || "/search", params };
+  return resolveRoute(location.pathname, location.search, location.hash);
 }
 
 function mountPanel() {
@@ -30,12 +29,13 @@ function mountPanel() {
     const route = currentRoute().path;
     // 播放页：左侧面板选中态跟随当前播放队列（列表/收藏/随机）
     let activeRoute = route;
-    if (route === "/player") {
-      if (player.queueType === "fav") activeRoute = "/favorites";
-      else if (player.queueType === "playlist") activeRoute = "/playlists";
-      else if (player.mode === "shuffle") activeRoute = "/random";
-    }
-    if (!open) {
+   if (route === "/player") {
+     if (player.queueType === "fav") activeRoute = "/favorites";
+     else if (player.queueType === "playlist") activeRoute = "/playlists";
+    else if (player.mode === "shuffle") activeRoute = "/random";
+      else activeRoute = "/player";
+   }
+   if (!open) {
       const handle = document.createElement("button");
       handle.className = "mei-panel-handle";
       handle.title = "展开面板";
@@ -53,16 +53,16 @@ function mountPanel() {
       </button>
       <div class="p-divider"></div>
       ${NAV_ITEMS.map((item) => `
-        <button class="p-item ${activeRoute === item.hash.slice(1) ? "active" : ""}" data-hash="${item.hash}" title="${item.title}">${item.icon}</button>
+        <button class="p-item ${activeRoute === item.path ? "active" : ""}" data-path="${item.path}" title="${item.title}">${item.icon}</button>
       `).join("")}
       <div class="p-divider"></div>
       <button class="p-collapse" title="收起面板">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>
       </button>
     `;
-    panel.querySelector(".p-info").onclick = () => { location.hash = "#/search"; };
+    panel.querySelector(".p-info").onclick = () => { pushRoute("/search"); };
     panel.querySelectorAll(".p-item").forEach((btn) => {
-      btn.onclick = () => { location.hash = btn.dataset.hash; };
+      btn.onclick = () => { pushRoute(btn.dataset.path); };
     });
     panel.querySelector(".p-collapse").onclick = () => { open = false; persist(); render(); };
     document.body.appendChild(panel);
@@ -70,7 +70,7 @@ function mountPanel() {
   const persist = () => {
     try { localStorage.setItem(PANEL_KEY, open ? "0" : "1"); } catch { /* ignore */ }
   };
-  window.addEventListener("hashchange", render);
+  window.addEventListener("popstate", render);
   // 播放页切换队列（tab 切换列表）时联动刷新左侧面板选中态
   on("queue", render);
   // 与顶栏/播放条同构：支持宿主编程收起（不写记忆）
@@ -86,11 +86,11 @@ function route() {
   const { path, params } = currentRoute();
   const root = document.getElementById("view");
   if (!root) return;
-  // 播放列表管理页与播放页加宽（左右布局需要更多横向空间）
-  root.classList.toggle("wide", path === "/search" || path === "/playlists" || path === "/player");
-  switch (path) {
+ // 播放列表管理页与播放页加宽（左右布局需要更多横向空间）
+  root.classList.toggle("wide", path === "/search" || path === "/playlists" || path === "/player" || path === "/favorites");
+ switch (path) {
     case "/search":
-      renderSearch(root, params.get("list") || "");
+      renderSearch(root, params);
       break;
     case "/playlists":
       renderPlaylists(root);
@@ -105,7 +105,7 @@ function route() {
       renderFavorites(root);
       break;
     default:
-      location.hash = "#/search";
+      pushRoute("/search");
   }
 }
 
@@ -127,7 +127,7 @@ async function boot() {
   player.init();
 
   const bar = document.getElementById("playerBar");
-  player.mountBar(bar, { onOpenPlayer: () => { location.hash = "#/player"; } });
+  player.mountBar(bar, { onOpenPlayer: () => { pushRoute("/player"); } });
 
   // 播放器核心事件：切歌时同步加载歌词（播放页歌词渲染）
   on("queue", () => {
@@ -151,7 +151,8 @@ async function boot() {
   );
 
   mountPanel();
-  window.addEventListener("hashchange", route);
+  migrateLegacyHashRoute();
+  window.addEventListener("popstate", route);
   route();
   if (hosted) {
     // 宿主已在 connect 时发过 hello；此处再补一次，覆盖外壳尚未 boot 完成的时序

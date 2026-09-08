@@ -16,6 +16,7 @@ import WeiboManager from '@/components/WeiboManager.vue';
 import ExportResultsModal from '@/components/ExportResultsModal.vue';
 import MeiPanel from '@/components/MeiPanel.vue';
 import { getDiskTypeName } from '@/utils/diskTypes';
+import { pushPage, resolveRoute, type PansouPage } from '@/router';
 
 // 后端健康状态缓存（应用启动时获取一次）
 const backendHealth = ref<HealthStatus | null>(null);
@@ -74,18 +75,13 @@ const exportableDiskTypes = computed(() => {
 // 强制刷新逻辑
 let forceRefreshPending = false;
 
-// 当前页面状态（默认搜索页；支持 ?view= 深链：config=配置页，api=API页）
-const VIEW_MAP: Record<string, 'search' | 'status' | 'docs'> = {
-  config: 'status',
-  api: 'docs',
+// 当前页面状态：资源路径 /disks/{page}，兼容旧 ?view= 深链
+const initialRoute = resolveRoute(window.location.pathname, window.location.search);
+const currentPage = ref<PansouPage>(initialRoute.page);
+const handlePopState = () => {
+  currentPage.value = resolveRoute(window.location.pathname, window.location.search).page;
 };
-const currentPage = ref<'search' | 'status' | 'docs' | 'accounts' | 'qqpd' | 'gying' | 'panlian' | 'weibo'>('search');
-try {
-  const viewParam = new URLSearchParams(window.location.search).get('view');
-  if (viewParam && VIEW_MAP[viewParam]) {
-    currentPage.value = VIEW_MAP[viewParam];
-  }
-} catch (e) { /* 忽略，保持默认搜索页 */ }
+window.addEventListener('popstate', handlePopState);
 
 // 登录状态
 const showLogin = ref(false);
@@ -110,24 +106,29 @@ const hasAccountServices = computed(() => {
 });
 
 // 页面切换
+const navigateTo = (page: PansouPage) => {
+  currentPage.value = page;
+  pushPage(page);
+};
+
 const switchToAccounts = () => {
-  currentPage.value = 'accounts';
+  navigateTo('accounts');
 };
 
 const switchToQQPD = () => {
-  currentPage.value = 'qqpd';
+  navigateTo('qqpd');
 };
 
 const switchToGying = () => {
-  currentPage.value = 'gying';
+  navigateTo('gying');
 };
 
 const switchToPanlian = () => {
-  currentPage.value = 'panlian';
+  navigateTo('panlian');
 };
 
 const switchToWeibo = () => {
-  currentPage.value = 'weibo';
+  navigateTo('weibo');
 };
 
 // 从账号中心导航到具体服务
@@ -191,6 +192,15 @@ const handleSearch = async (params: SearchParams) => {
 
   // 先保存用户输入的原始参数，不带 refresh
   lastSearchParams.value = { ...params };
+
+  const searchUrl = new URLSearchParams();
+  for (const [key, value] of Object.entries(params as Record<string, unknown>)) {
+    if (value === undefined || value === null || value === '') continue;
+    if (Array.isArray(value)) value.forEach((item) => searchUrl.append(key, String(item)));
+    else searchUrl.set(key, String(value));
+  }
+  const searchQuery = searchUrl.toString();
+  window.history.replaceState(null, '', `/disks/search${searchQuery ? `?${searchQuery}` : ''}`);
 
   // 强制刷新: 只影响本次请求参数
   let innerParams = { ...params };
@@ -912,7 +922,7 @@ const stopUpdate = () => {
 
 // 切换到搜索页面（保持搜索结果）
 const switchToSearch = () => {
-  currentPage.value = 'search';
+  navigateTo('search');
 };
 
 // 重置到初始页面（清空搜索结果，仅在必要时使用）
@@ -921,7 +931,7 @@ const resetToInitial = () => {
   stopUpdate();
   
   // 切换到搜索页面
-  currentPage.value = 'search';
+  navigateTo('search');
   
   // 重置所有状态
   hasSearched.value = false;
@@ -1166,6 +1176,11 @@ onMounted(async () => {
   window.addEventListener('storage', handleStorageChange);
   window.addEventListener('config:saved', handleConfigSaved);
   window.addEventListener('resize', syncMobileSearchLayout);
+
+  const initialKeyword = initialRoute.params.get('kw');
+  if (initialKeyword) {
+    await handleSearch({ kw: initialKeyword, res: 'merge', src: 'all' });
+  }
 });
 
 onUnmounted(() => {
@@ -1175,6 +1190,7 @@ onUnmounted(() => {
   window.removeEventListener('storage', handleStorageChange);
   window.removeEventListener('config:saved', handleConfigSaved);
   window.removeEventListener('resize', syncMobileSearchLayout);
+  window.removeEventListener('popstate', handlePopState);
 });
 </script>
 

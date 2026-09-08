@@ -65,6 +65,19 @@
     "hasSkin": true
   },
   {
+    "id": "pansou",
+    "name": "网盘搜索",
+    "description": "聚合网盘资源搜索（TG频道 + 多插件）",
+    "icon": "lucide:search",
+    "category": "utility",
+    "weight": 40,
+    "subdomainPrefix": "disks",
+    "endpoint": "http://pansou:3000",
+    "healthPath": "/disks/api/health",
+    "healthExpect": 200,
+    "hasSkin": false
+  },
+  {
     "id": "ai-draw",
     "name": "AI 绘图",
     "description": "AI 驱动的绘图工具，支持 Excalidraw/Mermaid/Drawio",

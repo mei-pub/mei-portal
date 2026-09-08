@@ -36,6 +36,8 @@ function HomeClient() {
     BangumiCalendarData[]
   >([]);
   const [loading, setLoading] = useState(true);
+  // 番剧放送独立加载：不能与豆瓣数据共用 loading（放送源慢/失败时不应拖住整个首屏）
+  const [bangumiLoading, setBangumiLoading] = useState(true);
   const { announcement } = useSite();
 
   const [showAnnouncement, setShowAnnouncement] = useState(false);
@@ -72,9 +74,9 @@ function HomeClient() {
       try {
         setLoading(true);
 
-        // 并行获取热门电影、热门剧集、热门综艺和番剧日历
+        // 并行获取热门电影、热门剧集、热门综艺
         // 使用 allSettled 避免单个请求失败导致全部数据为空
-        const [moviesRes, tvShowsRes, varietyShowsRes, bangumiRes] =
+        const [moviesRes, tvShowsRes, varietyShowsRes] =
           await Promise.allSettled([
             getDoubanCategories({
               kind: 'movie',
@@ -83,8 +85,9 @@ function HomeClient() {
             }),
             getDoubanCategories({ kind: 'tv', category: 'tv', type: 'tv' }),
             getDoubanCategories({ kind: 'tv', category: 'show', type: 'show' }),
-            GetBangumiCalendarData(),
           ]);
+        // 豆瓣三栏完成后立即解除整页 loading；番剧放送自行独立渲染
+        setLoading(false);
 
         if (moviesRes.status === 'fulfilled' && moviesRes.value.code === 200) {
           setHotMovies(moviesRes.value.list);
@@ -106,12 +109,6 @@ function HomeClient() {
         } else if (varietyShowsRes.status === 'rejected') {
           console.error('获取热门综艺失败:', varietyShowsRes.reason);
         }
-
-        if (bangumiRes.status === 'fulfilled') {
-          setBangumiCalendarData(bangumiRes.value);
-        } else {
-          console.error('获取番剧日历失败:', bangumiRes.reason);
-        }
       } catch (error) {
         console.error('获取推荐数据失败:', error);
       } finally {
@@ -119,7 +116,19 @@ function HomeClient() {
       }
     };
 
+    // 番剧日历独立加载：上游慢或失败时不拖住首页其余内容
+    const fetchBangumiCalendar = async () => {
+      try {
+        setBangumiCalendarData(await GetBangumiCalendarData());
+      } catch (error) {
+        console.error('获取番剧日历失败:', error);
+      } finally {
+        setBangumiLoading(false);
+      }
+    };
+
     fetchRecommendData();
+    fetchBangumiCalendar();
   }, []);
 
   // 处理收藏数据更新的函数
@@ -183,9 +192,9 @@ function HomeClient() {
 
   return (
     <PageLayout>
-      <div className='px-2 sm:px-10 py-4 sm:py-8 overflow-visible'>
+      <div className='px-2 sm:px-8 py-2 sm:py-4 overflow-visible'>
         {/* 顶部 Tab 切换 */}
-        <div className='mb-8 flex justify-center'>
+        <div className='mb-4 flex justify-center'>
           <CapsuleSwitch
             options={[
               { label: '首页', value: 'home' },
@@ -196,12 +205,12 @@ function HomeClient() {
           />
         </div>
 
-        <div className='max-w-[85%] 2xl:max-w-[1500px] mx-auto'>
+        <div className='max-w-[92%] 2xl:max-w-[1500px] mx-auto'>
           {activeTab === 'favorites' ? (
             // 收藏夹视图
-            <section className='mb-8'>
-              <div className='mb-4 flex items-center justify-between'>
-                <h2 className='text-xl font-bold text-gray-800 dark:text-gray-200'>
+            <section className='mb-5'>
+              <div className='mb-3 flex items-center justify-between'>
+                <h2 className='text-lg font-bold text-gray-800 dark:text-gray-200'>
                   我的收藏
                 </h2>
                 {favoriteItems.length > 0 && (
@@ -216,7 +225,7 @@ function HomeClient() {
                   </button>
                 )}
               </div>
-              <div className='justify-start grid grid-cols-3 gap-x-2 gap-y-14 sm:gap-y-20 px-0 sm:px-2 sm:grid-cols-[repeat(auto-fill,_minmax(11rem,_1fr))] sm:gap-x-8'>
+              <div className='justify-start grid grid-cols-3 gap-x-2 gap-y-6 sm:gap-y-8 px-0 sm:px-2 sm:grid-cols-[repeat(auto-fill,_minmax(8rem,_1fr))] sm:gap-x-4'>
                 {favoriteItems.map((item) => (
                   <div key={item.id + item.source} className='w-full'>
                     <VideoCard
@@ -240,29 +249,29 @@ function HomeClient() {
               {/* 继续观看 */}
               <ContinueWatching />
 
-              {/* 热门电影 */}
-              <section className='mb-8'>
-                <div className='mb-4 flex items-center justify-between'>
-                  <h2 className='text-xl font-bold text-gray-800 dark:text-gray-200'>
-                    热门电影
-                  </h2>
-                  <Link
-                    href='/douban?type=movie'
-                    className='flex items-center text-sm text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200'
-                  >
-                    查看更多
-                    <ChevronRight className='w-4 h-4 ml-1' />
-                  </Link>
+            {/* 热门电影 */}
+            <section className='mb-5'>
+              <div className='mb-3 flex items-center justify-between'>
+                <h2 className='text-lg font-bold text-gray-800 dark:text-gray-200'>
+                  热门电影
+                 </h2>
+               <Link
+                 href='/douban/movie'
+               className='flex items-center text-sm text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200'
+               >
+                 查看更多
+                   <ChevronRight className='w-4 h-4 ml-1' />
+                 </Link>
                 </div>
                 <ScrollableRow>
                   {loading
                     ? // 加载状态显示灰色占位数据
                     Array.from({ length: 8 }).map((_, index) => (
-                      <div
-                        key={index}
-                        className='min-w-[96px] w-24 sm:min-w-[180px] sm:w-44'
-                      >
-                        <div className='relative aspect-[2/3] w-full overflow-hidden rounded-lg bg-gray-200 animate-pulse dark:bg-gray-800'>
+                     <div
+                       key={index}
+                        className='min-w-[80px] w-20 sm:min-w-[130px] sm:w-32'
+                     >
+                       <div className='relative aspect-[2/3] w-full overflow-hidden rounded-lg bg-gray-200 animate-pulse dark:bg-gray-800'>
                           <div className='absolute inset-0 bg-gray-300 dark:bg-gray-700'></div>
                         </div>
                         <div className='mt-2 h-4 bg-gray-200 rounded animate-pulse dark:bg-gray-800'></div>
@@ -272,7 +281,7 @@ function HomeClient() {
                     hotMovies.map((movie, index) => (
                       <div
                         key={index}
-                        className='min-w-[96px] w-24 sm:min-w-[180px] sm:w-44'
+                        className='min-w-[80px] w-20 sm:min-w-[130px] sm:w-32'
                       >
                         <VideoCard
                           from='douban'
@@ -288,19 +297,19 @@ function HomeClient() {
                 </ScrollableRow>
               </section>
 
-              {/* 热门剧集 */}
-              <section className='mb-8'>
-                <div className='mb-4 flex items-center justify-between'>
-                  <h2 className='text-xl font-bold text-gray-800 dark:text-gray-200'>
-                    热门剧集
-                  </h2>
-                  <Link
-                    href='/douban?type=tv'
-                    className='flex items-center text-sm text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200'
-                  >
-                    查看更多
-                    <ChevronRight className='w-4 h-4 ml-1' />
-                  </Link>
+            {/* 热门剧集 */}
+            <section className='mb-5'>
+              <div className='mb-3 flex items-center justify-between'>
+                <h2 className='text-lg font-bold text-gray-800 dark:text-gray-200'>
+                  热门剧集
+                 </h2>
+                 <Link
+                   href='/douban/tv'
+                  className='flex items-center text-sm text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200'
+                >
+                  查看更多
+                  <ChevronRight className='w-4 h-4 ml-1' />
+                 </Link>
                 </div>
                 <ScrollableRow>
                   {loading
@@ -308,7 +317,7 @@ function HomeClient() {
                     Array.from({ length: 8 }).map((_, index) => (
                       <div
                         key={index}
-                        className='min-w-[96px] w-24 sm:min-w-[180px] sm:w-44'
+                        className='min-w-[80px] w-20 sm:min-w-[130px] sm:w-32'
                       >
                         <div className='relative aspect-[2/3] w-full overflow-hidden rounded-lg bg-gray-200 animate-pulse dark:bg-gray-800'>
                           <div className='absolute inset-0 bg-gray-300 dark:bg-gray-700'></div>
@@ -320,7 +329,7 @@ function HomeClient() {
                     hotTvShows.map((show, index) => (
                       <div
                         key={index}
-                        className='min-w-[96px] w-24 sm:min-w-[180px] sm:w-44'
+                        className='min-w-[80px] w-20 sm:min-w-[130px] sm:w-32'
                       >
                         <VideoCard
                           from='douban'
@@ -335,27 +344,27 @@ function HomeClient() {
                 </ScrollableRow>
               </section>
 
-              {/* 每日新番放送 */}
-              <section className='mb-8'>
-                <div className='mb-4 flex items-center justify-between'>
-                  <h2 className='text-xl font-bold text-gray-800 dark:text-gray-200'>
-                    新番放送
+            {/* 每日新番放送 */}
+            <section className='mb-5'>
+              <div className='mb-3 flex items-center justify-between'>
+                <h2 className='text-lg font-bold text-gray-800 dark:text-gray-200'>
+                  新番放送
                   </h2>
-                  <Link
-                    href='/douban?type=anime'
-                    className='flex items-center text-sm text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200'
-                  >
-                    查看更多
-                    <ChevronRight className='w-4 h-4 ml-1' />
-                  </Link>
+                 <Link
+                   href='/douban/anime'
+                  className='flex items-center text-sm text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200'
+                >
+                  查看更多
+                  <ChevronRight className='w-4 h-4 ml-1' />
+                 </Link>
                 </div>
                 <ScrollableRow>
-                  {loading
+                  {loading || bangumiLoading
                     ? // 加载状态显示灰色占位数据
                     Array.from({ length: 8 }).map((_, index) => (
                       <div
                         key={index}
-                        className='min-w-[96px] w-24 sm:min-w-[180px] sm:w-44'
+                        className='min-w-[80px] w-20 sm:min-w-[130px] sm:w-32'
                       >
                         <div className='relative aspect-[2/3] w-full overflow-hidden rounded-lg bg-gray-200 animate-pulse dark:bg-gray-800'>
                           <div className='absolute inset-0 bg-gray-300 dark:bg-gray-700'></div>
@@ -387,16 +396,18 @@ function HomeClient() {
                       return todayAnimes.map((anime, index) => (
                         <div
                           key={`${anime.id}-${index}`}
-                          className='min-w-[96px] w-24 sm:min-w-[180px] sm:w-44'
+                          className='min-w-[80px] w-20 sm:min-w-[130px] sm:w-32'
                         >
                           <VideoCard
                             from='douban'
                             title={anime.name_cn || anime.name}
                             poster={
-                              anime.images.large ||
+                              // 卡片场景优先小图：bgm 的 common(180px) 比 large(原图)
+                              // 小 10-50 倍，冷缓存经 DoH 代理拉取时避免单张 1-3s/3MB
                               anime.images.common ||
                               anime.images.medium ||
                               anime.images.small ||
+                              anime.images.large ||
                               anime.images.grid
                             }
                             douban_id={anime.id}
@@ -410,19 +421,19 @@ function HomeClient() {
                 </ScrollableRow>
               </section>
 
-              {/* 热门综艺 */}
-              <section className='mb-8'>
-                <div className='mb-4 flex items-center justify-between'>
-                  <h2 className='text-xl font-bold text-gray-800 dark:text-gray-200'>
-                    热门综艺
+            {/* 热门综艺 */}
+            <section className='mb-5'>
+              <div className='mb-3 flex items-center justify-between'>
+                <h2 className='text-lg font-bold text-gray-800 dark:text-gray-200'>
+                  热门综艺
                   </h2>
-                  <Link
-                    href='/douban?type=show'
-                    className='flex items-center text-sm text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200'
-                  >
-                    查看更多
-                    <ChevronRight className='w-4 h-4 ml-1' />
-                  </Link>
+                 <Link
+                   href='/douban/show'
+                  className='flex items-center text-sm text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200'
+                >
+                  查看更多
+                  <ChevronRight className='w-4 h-4 ml-1' />
+                 </Link>
                 </div>
                 <ScrollableRow>
                   {loading
@@ -430,7 +441,7 @@ function HomeClient() {
                     Array.from({ length: 8 }).map((_, index) => (
                       <div
                         key={index}
-                        className='min-w-[96px] w-24 sm:min-w-[180px] sm:w-44'
+                        className='min-w-[80px] w-20 sm:min-w-[130px] sm:w-32'
                       >
                         <div className='relative aspect-[2/3] w-full overflow-hidden rounded-lg bg-gray-200 animate-pulse dark:bg-gray-800'>
                           <div className='absolute inset-0 bg-gray-300 dark:bg-gray-700'></div>
@@ -442,7 +453,7 @@ function HomeClient() {
                     hotVarietyShows.map((show, index) => (
                       <div
                         key={index}
-                        className='min-w-[96px] w-24 sm:min-w-[180px] sm:w-44'
+                        className='min-w-[80px] w-20 sm:min-w-[130px] sm:w-32'
                       >
                         <VideoCard
                           from='douban'

@@ -78,7 +78,9 @@ export async function createMeilinkServer(options: MeilinkServerOptions = {}): P
         response.setHeader("set-cookie", `meilink_session=${token}; HttpOnly; SameSite=Lax; Path=/`);
         return json(response, 200, { ok: true });
       }
-      if (url.pathname === "/") return sendFile(response, webDir, "index.html", "text/html; charset=utf-8");
+      if (["/", "/tunnels", "/settings", "/logs"].includes(url.pathname)) {
+        return sendFile(response, webDir, "index.html", "text/html; charset=utf-8");
+      }
       if (url.pathname === "/app.js") return sendFile(response, webDir, "app.js", "text/javascript; charset=utf-8");
       if (url.pathname === "/api/logout" && request.method === "POST") {
         await auth.logout(request.headers.cookie);
@@ -130,14 +132,21 @@ export async function createMeilinkServer(options: MeilinkServerOptions = {}): P
       }
       // 代理到服务端管理页拉取域名目录 / 启动信息，简化隧道编辑（选基域+填前缀）。
       // 失败返回 {error} 让前端 fallback 到手填。
+      // GET 用已保存配置；POST 允许用表单当前值覆盖（填完管理页地址不用先保存再拉取）。
       if (url.pathname === "/api/domains" && request.method === "GET") {
         const cfg = manager.serverConfig();
         const result = cfg ? await fetchManagement(cfg.managementURL, cfg.domainAPIToken, "/api/domains") : { error: "未配置管理页地址或 token" };
         return json(response, 200, withSetupHint(result));
       }
-      if (url.pathname === "/api/bootstrap" && request.method === "GET") {
-        const cfg = manager.serverConfig();
-        const result = cfg ? await fetchManagement(cfg.managementURL, cfg.domainAPIToken, "/api/bootstrap") : { error: "未配置管理页地址或 token" };
+      if (url.pathname === "/api/bootstrap" && (request.method === "GET" || request.method === "POST")) {
+        const cfg = manager.serverConfig() || {};
+        let override: { managementURL?: unknown; domainAPIToken?: unknown } = {};
+        if (request.method === "POST") {
+          try { override = await body(request); } catch { override = {}; }
+        }
+        const managementURL = typeof override.managementURL === "string" && override.managementURL.trim() ? override.managementURL.trim() : cfg.managementURL;
+        const token = typeof override.domainAPIToken === "string" && override.domainAPIToken.trim() ? override.domainAPIToken.trim() : cfg.domainAPIToken;
+        const result = managementURL && token ? await fetchManagement(managementURL, token, "/api/bootstrap") : { error: "未配置管理页地址或 token" };
         return json(response, 200, withSetupHint(result));
       }
       // 自动重连设置：独立路由，便于设置面板单独保存开关/间隔/方式而不动服务器凭据

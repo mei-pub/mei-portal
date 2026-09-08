@@ -81,3 +81,17 @@ test("events API can clear the in-memory log", async () => {
     await rm(app.dataDir, { recursive: true, force: true });
   }
 });
+
+test("history routes serve the single-page management UI", async () => {
+  const app = await startServer();
+  try {
+    for (const path of ["/tunnels", "/settings", "/logs"]) {
+      const response = await fetch(`${app.base}${path}`);
+      assert.equal(response.status, 200);
+      assert.equal(response.headers.get("content-type"), "text/html; charset=utf-8");
+    }
+  } finally {
+    await new Promise<void>(resolve => app.server.close(() => resolve()));
+    await rm(app.dataDir, { recursive: true, force: true });
+  }
+});

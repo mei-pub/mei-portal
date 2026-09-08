@@ -140,6 +140,23 @@ export default function MusicDock() {
     return () => window.removeEventListener('mei-music-dock-set', onSet);
   }, [engine]);
 
+  // 全站搜索页的「直接播放」入口：单曲进临时队列并立即播放。
+  useEffect(() => {
+    if (!engine) return;
+    const eng = engine;
+    function onPlay(e: Event) {
+      const song = (e as CustomEvent).detail?.song as Song | undefined;
+      if (!song) return;
+      const key = songKey(song);
+      eng.replaceData({ temp: [song, ...eng.temp.filter((item) => songKey(item) !== key)] });
+      eng.setQueue('temp', 0, '');
+      eng.setDockMode(eng.dockMode === 'hidden' ? 'full' : eng.dockMode);
+      void eng.playIndex(0);
+    }
+    window.addEventListener('mei:music-play', onPlay);
+    return () => window.removeEventListener('mei:music-play', onPlay);
+  }, [engine]);
+
   // 全局快捷键：Alt+M 循环形态（完整 → 缩小 → 隐藏）。
   // 走快捷键而非顶栏按钮，是为了不侵入「顶栏唯一样式来源」这一约束。
   useEffect(() => {

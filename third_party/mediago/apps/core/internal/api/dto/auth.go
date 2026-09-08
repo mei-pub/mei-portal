@@ -14,3 +14,4 @@ type SigninRequest struct {
 type AuthStatusResponse struct {
 	Setuped bool `json:"setuped"`
 }
+

@@ -44,9 +44,9 @@ const ITEMS: NavItem[] = [
     ),
   },
   {
-    label: '电影',
-    href: '/douban?type=movie',
-    icon: (
+   label: '电影',
+    href: '/douban/movie',
+   icon: (
       <svg className='h-[15px] w-[15px]' viewBox='0 0 24 24' {...stroke}>
         <rect width='18' height='18' x='3' y='3' rx='2' />
         <path d='M7 3v18M3 7.5h4M3 12h18M3 16.5h4M17 3v18M17 7.5h4M17 16.5h4' />
@@ -54,9 +54,9 @@ const ITEMS: NavItem[] = [
     ),
   },
   {
-    label: '剧集',
-    href: '/douban?type=tv',
-    icon: (
+   label: '剧集',
+    href: '/douban/tv',
+   icon: (
       <svg className='h-[15px] w-[15px]' viewBox='0 0 24 24' {...stroke}>
         <rect width='20' height='15' x='2' y='7' rx='2' />
         <path d='m17 2-5 5-5-5' />
@@ -64,12 +64,21 @@ const ITEMS: NavItem[] = [
     ),
   },
   {
-    label: '动漫',
-    href: '/douban?type=anime',
-    icon: (
+  label: '动漫',
+   href: '/douban/anime',
+  icon: (
+     <svg className='h-[15px] w-[15px]' viewBox='0 0 24 24' {...stroke}>
+       <path d='M12 2c5.5 0 10 3.6 10 8s-4.5 8-10 8c-1 0-2-.1-2.9-.35L5 20l.5-3.2C3.3 15.3 2 12.8 2 10c0-4.4 4.5-8 10-8z' />
+       <path d='M8.5 10.5h.01M15.5 10.5h.01M12 13.5h.01' />
+     </svg>
+   ),
+ },
+  {
+   label: '综艺',
+    href: '/douban/show',
+   icon: (
       <svg className='h-[15px] w-[15px]' viewBox='0 0 24 24' {...stroke}>
-        <path d='M12 2c5.5 0 10 3.6 10 8s-4.5 8-10 8c-1 0-2-.1-2.9-.35L5 20l.5-3.2C3.3 15.3 2 12.8 2 10c0-4.4 4.5-8 10-8z' />
-        <path d='M8.5 10.5h.01M15.5 10.5h.01M12 13.5h.01' />
+        <path d='M2 10v3M6 6v11M10 3v18M14 6v11M18 10v3M22 8v7' />
       </svg>
     ),
   },
@@ -135,9 +144,8 @@ export default function FloatingNav({ activePath }: { activePath?: string }) {
       </Link>
       <div className='h-px w-6 bg-black/10 dark:bg-white/10' />
       {ITEMS.map((item) => {
-        // 选中态：带查询串的入口精确匹配完整路径（修复 /douban?type=* 三入口同时高亮）；
-        // 无查询串的入口按路径前缀匹配
-        const isActive = item.href === '/'
+        // 选中态：精确匹配或路径前缀匹配（/douban/movie 等路径段入口互不干扰）
+       const isActive = item.href === '/'
           ? current === '/'
           : item.href.includes('?')
             ? current === item.href

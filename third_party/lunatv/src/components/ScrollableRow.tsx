@@ -101,9 +101,9 @@ export default function ScrollableRow({
       onMouseLeave={() => setIsHovered(false)}
     >
       <div
-        ref={containerRef}
-        className='flex space-x-6 overflow-x-auto scrollbar-hide py-1 sm:py-2 pb-12 sm:pb-14 px-4 sm:px-6'
-        onScroll={checkScroll}
+       ref={containerRef}
+      className='flex space-x-3 overflow-x-auto scrollbar-hide py-1 sm:py-1.5 pb-4 sm:pb-5 px-4 sm:px-6'
+       onScroll={checkScroll}
       >
         {children}
       </div>

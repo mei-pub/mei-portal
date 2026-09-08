@@ -11,6 +11,20 @@ import { useHealth } from '@/lib/use-health';
 import type { PanelConfig, PanelItem, PanelGroup } from '@/lib/panel-store';
 import ItemIconPicker, { isImgIcon, isTextIcon, textIconContent, contrastColor } from './ItemIconPicker';
 import { appHostHref } from '@/lib/app-host';
+import {
+  HOME_SEARCH_MODE_KEY,
+  HOME_SEARCH_SCOPE_KEY,
+  SEARCH_SCOPES,
+  homeSearchTarget,
+  parseHomeSearchMode,
+  parseHomeSearchScope,
+  type HomeSearchMode,
+} from '@/lib/home-search';
+import {
+  buildEngineSearchUrl,
+  resolveDefaultEngineId,
+  resolveSearchEngines,
+} from '@/lib/search-engines';
 import { useRouter } from 'next/navigation';
 import 'iconify-icon';
 
@@ -21,11 +35,12 @@ interface Item {
 
 const WEEKDAYS = ['星期日', '星期一', '星期二', '星期三', '星期四', '星期五', '星期六'];
 const pad = (n: number) => String(n).padStart(2, '0');
-const SEARCH_ENGINES: Record<string, string> = {
-  bing: 'https://www.bing.com/search?q=',
-  google: 'https://www.google.com/search?q=',
-  baidu: 'https://www.baidu.com/s?wd=',
-  duckduckgo: 'https://duckduckgo.com/?q=',
+/* 搜索框内右侧控制（综合筛选 / 搜索引擎下拉）统一样式 */
+const RIGHT_CONTROL_STYLE: React.CSSProperties = {
+  position: 'absolute', right: 8, maxWidth: 72, height: 26, padding: '0 0 0 6px',
+  border: '1px solid var(--mei-border)', borderRadius: 'var(--mei-radius-sm)',
+  background: 'rgba(23,32,56,0.04)', color: 'var(--mei-text-muted)', fontSize: 11,
+  outline: 'none', cursor: 'pointer',
 };
 const GRADIENTS = [
   'linear-gradient(135deg,#6366f1,#a855f7)', 'linear-gradient(135deg,#0ea5e9,#6366f1)',
@@ -336,6 +351,25 @@ export default function PortalClient({ items, panel: initialPanel }: { items: It
   }, [applyPanel]);
   const [query, setQuery] = useState('');
   const searchRef = useRef<HTMLInputElement>(null);
+  // 首页搜索框模式：web=网页搜索（Enter 用所选引擎跳外部，默认）| all=综合搜索（Enter 进 /search 聚合页）
+  // 选择记忆在 localStorage；SSR 首帧一律按 web 渲染，hydration 后再读记忆，避免水合不一致
+  const [searchMode, setSearchMode] = useState<HomeSearchMode>('web');
+  useEffect(() => {
+    try { setSearchMode(parseHomeSearchMode(localStorage.getItem(HOME_SEARCH_MODE_KEY))); } catch {}
+  }, []);
+  const switchSearchMode = useCallback((mode: HomeSearchMode) => {
+    setSearchMode(mode);
+    try { localStorage.setItem(HOME_SEARCH_MODE_KEY, mode); } catch {}
+  }, []);
+  // 综合搜索筛选范围（记忆在 localStorage，与模式独立）
+  const [searchScope, setSearchScope] = useState('all');
+  useEffect(() => {
+    try { setSearchScope(parseHomeSearchScope(localStorage.getItem(HOME_SEARCH_SCOPE_KEY))); } catch {}
+  }, []);
+  const switchSearchScope = useCallback((scope: string) => {
+    setSearchScope(scope);
+    try { localStorage.setItem(HOME_SEARCH_SCOPE_KEY, scope); } catch {}
+  }, []);
   const [now, setNow] = useState<Date | null>(null);
   const [sys, setSys] = useState<{ memory: { percent: number; used: number; total: number }; loadavg: number[]; cpuCount: number } | null>(null);
   const [lanMode, setLanMode] = useState(false);
@@ -359,6 +393,9 @@ export default function PortalClient({ items, panel: initialPanel }: { items: It
     [items]
   );
   const navigate = useCallback((path: string) => router.push(path), [router]);
+  // 有效搜索引擎列表与默认引擎（面板未自定义时回落内置种子，见 lib/search-engines）
+  const engines = useMemo(() => resolveSearchEngines(panel?.style), [panel?.style]);
+  const defaultEngineId = useMemo(() => resolveDefaultEngineId(panel?.style, engines), [panel?.style, engines]);
 
   // 时钟
   useEffect(() => {
@@ -388,15 +425,7 @@ export default function PortalClient({ items, panel: initialPanel }: { items: It
     document.head.appendChild(link);
   }, [panel.style?.logoImage]);
 
-  // 子应用登录态刷新：门户首页加载时补发各子应用 cookie（每个浏览器会话一次）
-  // 与注入顶栏 topbar.js 共用 sessionStorage 标记，避免重复调用
-  useEffect(() => {
-    try {
-      if (sessionStorage.getItem('mei-repenetrated')) return;
-      sessionStorage.setItem('mei-repenetrated', '1');
-      fetch('/api/auth/repenetrate', { method: 'POST', credentials: 'include' }).catch(() => {});
-    } catch {}
-  }, []);
+  // 统一身份改造后子应用不再各自持有登录态，无需补发 cookie/token。
 
   // 内网模式
   useEffect(() => {
@@ -523,6 +552,12 @@ export default function PortalClient({ items, panel: initialPanel }: { items: It
         setTimeout(() => setToast(''), 1500);
       });
   }, [applyPanel]);
+
+  // 框内切换搜索引擎 = 设为默认（与设置页「设为默认」同一字段，自动落盘）
+  const switchSearchEngine = useCallback((id: string) => {
+    const cur = panelRef.current;
+    savePanel({ ...cur, style: { ...cur.style, searchEngine: id } }, '已设为默认搜索引擎');
+  }, [savePanel]);
 
   /* ---- 管理操作 ---- */
   const upsertItem = async (item: PanelItem) => {
@@ -694,9 +729,16 @@ export default function PortalClient({ items, panel: initialPanel }: { items: It
       void runGateCommand(gate[1] as 'open' | 'close', gate[2], gate[3]);
       return;
     }
-    if (!q || visibleItems.length > 0) return;
-    const engine = SEARCH_ENGINES[style?.searchEngine || 'bing'] || SEARCH_ENGINES.bing;
-    window.open(engine + encodeURIComponent(q), '_blank');
+    if (!q) return;
+    // 综合搜索：客户端路由进 /search 聚合页（scope 由框内筛选决定，外壳不重载、播放不中断）
+    if (searchMode === 'all') {
+      navigate(homeSearchTarget(q, searchScope));
+      return;
+    }
+    // 网页搜索：有应用匹配时 Enter 不动作（点卡片打开）；无匹配才用所选引擎跳转
+    if (visibleItems.length > 0) return;
+    const engine = engines.find((e) => e.id === style?.searchEngine) || engines[0];
+    window.open(buildEngineSearchUrl(engine, q), '_blank');
   }
 
   const clock = now ? { hh: pad(now.getHours()), mm: pad(now.getMinutes()), ss: pad(now.getSeconds()) } : { hh: '--', mm: '--', ss: '--' };
@@ -786,21 +828,52 @@ export default function PortalClient({ items, panel: initialPanel }: { items: It
           )}
         </section>
 
-        {/* 搜索框 */}
+        {/* 搜索框：框内左侧模式切换 + 右侧按模式显示筛选/引擎 */}
         {style?.searchBoxShow !== false && (
-          <section style={{ maxWidth: 560, margin: '0 auto 32px' }}>
+          <section style={{ maxWidth: 640, margin: '0 auto 32px' }}>
             <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
-              <span style={{ position: 'absolute', left: 18, color: 'var(--mei-text-faint)', pointerEvents: 'none', display: 'inline-flex' }}>
-                <MeiIcon icon="lucide:search" size={18} />
-              </span>
+              {/* 模式切换：综合（/search 聚合页）/ 网页（外部引擎）—— 框内左侧 */}
+              <div
+                data-no-pagedrag
+                role="group"
+                aria-label="搜索模式"
+                title={searchMode === 'all' ? '综合搜索：聚合全站资源（右侧可筛选类型）' : '网页搜索：跳转所选搜索引擎'}
+                style={{
+                  position: 'absolute', left: 8, zIndex: 1, display: 'inline-flex', alignItems: 'center', gap: 1, padding: 2,
+                  borderRadius: 'var(--mei-radius-full)', background: 'rgba(23,32,56,0.055)',
+                  border: '1px solid var(--mei-border)',
+                }}
+              >
+                {([['all', '综合'], ['web', '网页']] as const).map(([mode, label]) => {
+                  const active = searchMode === mode;
+                  return (
+                    <button
+                      key={mode}
+                      type="button"
+                      aria-pressed={active}
+                      onClick={() => switchSearchMode(mode)}
+                      style={{
+                        border: 'none', borderRadius: '999px', padding: '3px 8px', fontSize: 11,
+                        lineHeight: 1.3, cursor: 'pointer', transition: 'all .18s ease',
+                        background: active ? 'var(--mei-gradient)' : 'transparent',
+                        color: active ? '#fff' : 'var(--mei-text-muted)',
+                        fontWeight: active ? 650 : 500,
+                        boxShadow: active ? '0 0 8px rgba(129,140,248,0.35)' : 'none',
+                      }}
+                    >
+                      {label}
+                    </button>
+                  );
+                })}
+              </div>
               <input
                 ref={searchRef}
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 onKeyDown={(e) => { if (e.key === 'Enter') submitSearch(); }}
-                placeholder="搜索应用与链接，或直接搜索网页…"
+                placeholder={searchMode === 'all' ? '综合搜索影视 / 音乐 / 网盘 / 工具…' : '搜索应用与链接，或直接搜索网页…'}
                 style={{
-                  width: '100%', padding: '14px 90px 14px 46px', fontSize: 14,
+                  width: '100%', padding: '14px 88px 14px 96px', fontSize: 14,
                   color: 'var(--mei-text)', background: 'var(--mei-surface)',
                   backdropFilter: 'blur(22px) saturate(1.5)', WebkitBackdropFilter: 'blur(22px) saturate(1.5)',
                   border: '1px solid var(--mei-border)', borderRadius: 'var(--mei-radius-full)',
@@ -809,9 +882,32 @@ export default function PortalClient({ items, panel: initialPanel }: { items: It
                 onFocus={(e) => { e.currentTarget.style.borderColor = 'rgba(99,102,248,0.55)'; e.currentTarget.style.boxShadow = 'var(--mei-glow)'; }}
                 onBlur={(e) => { e.currentTarget.style.borderColor = 'var(--mei-border)'; e.currentTarget.style.boxShadow = 'var(--mei-shadow-sm)'; }}
               />
-              <span style={{ position: 'absolute', right: 14, border: 'none', background: 'rgba(23,32,56,0.04)', borderRadius: 'var(--mei-radius-sm)', padding: '4px 8px', fontSize: 11.5, color: 'var(--mei-text-muted)', pointerEvents: 'none' }}>
-                {style?.searchEngine === 'google' ? 'Google' : style?.searchEngine === 'baidu' ? '百度' : style?.searchEngine === 'duckduckgo' ? 'Duck' : '必应'}
-              </span>
+              {/* 右侧控制：综合 = 范围筛选；网页 = 搜索引擎（选择即设为默认） */}
+              {searchMode === 'all' ? (
+                <select
+                  aria-label="综合搜索筛选"
+                  title="综合搜索筛选：按资源类型直达对应频道"
+                  value={searchScope}
+                  onChange={(e) => switchSearchScope(e.target.value)}
+                  style={RIGHT_CONTROL_STYLE}
+                >
+                  {SEARCH_SCOPES.map((s) => (
+                    <option key={s.id} value={s.id}>{s.label}</option>
+                  ))}
+                </select>
+              ) : (
+                <select
+                  aria-label="搜索引擎"
+                  title="搜索引擎（选择即设为默认，可在设置页管理）"
+                  value={defaultEngineId}
+                  onChange={(e) => switchSearchEngine(e.target.value)}
+                  style={RIGHT_CONTROL_STYLE}
+                >
+                  {engines.map((eng) => (
+                    <option key={eng.id} value={eng.id}>{eng.name}</option>
+                  ))}
+                </select>
+              )}
             </div>
           </section>
         )}
@@ -933,7 +1029,7 @@ export default function PortalClient({ items, panel: initialPanel }: { items: It
 
         {/* 空态 */}
         {q && visibleItems.length === 0 && (
-          <div className="mei-empty">没有匹配「{query}」的应用，按 Enter 进行网页搜索</div>
+          <div className="mei-empty">没有匹配「{query}」的应用，按 Enter 进行{searchMode === 'all' ? '综合' : '网页'}搜索</div>
         )}
 
         {/* 页脚 */}

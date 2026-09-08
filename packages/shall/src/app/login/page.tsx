@@ -11,4 +11,4 @@ export default function LoginPage() {
   return <LoginClient />;
 }
 
-export const metadata = { title: '登录 · mei-allin' };
+export const metadata = { title: '登录 · Mei-Portal' };

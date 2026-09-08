@@ -61,6 +61,8 @@ WORKDIR /build
 COPY third_party/omni-tools/ ./
 RUN npm ci --no-audit --no-fund || npm install --no-audit --no-fund
 RUN npm run build
+# 生成真实工具路径清单（locale 键是 camelCase，与 kebab-case 路由不一致，不能直接当 href 用）
+RUN node scripts/generate-tool-manifest.mjs
 
 # ---- ai-draw（Vite + React + Express，basePath=/draw，sqlite3，vendored）----
 FROM node:22-bookworm-slim AS ai-draw-builder
@@ -177,6 +179,7 @@ COPY --from=lunatv-builder /build/public ./apps/lunatv/public
 
 # ---- omni-tools（静态文件）----
 COPY --from=omni-tools-builder /build/dist ./apps/omni-tools
+COPY --from=omni-tools-builder /build/tool-manifest.json ./apps/omni-tools/tool-manifest.json
 
 # ---- ai-draw（Express + dist）----
 COPY --from=ai-draw-builder /build/dist ./apps/ai-draw/dist
@@ -196,6 +199,7 @@ COPY --from=pansou-web-builder /build/dist ./apps/pansou/frontend/dist
 
 # ---- mediago（本地编译 core + 前端静态 + 下载工具）----
 COPY --from=mediago-go-builder /out/mediago-core ./apps/mediago/mediago-core
+
 COPY --from=mediago-node-builder /src/apps/ui/build/server ./apps/mediago/static
 ARG TARGETARCH
 COPY --from=mediago-node-builder /src/.deps/linux-* /app/deps-tmp/

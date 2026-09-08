@@ -12,6 +12,12 @@ import {
   Toggle,
 } from '@/components/SettingsUI';
 import { jsonFetch, readJsonStorage, writeJsonStorage } from '@/lib/app-settings-client';
+import {
+  DISK_PLUGIN_BY_ID,
+  categorizeDiskPlugins,
+  diskPluginName,
+  isMagnetChannel,
+} from '@/lib/disk-sources';
 
 interface Health {
   status?: string;
@@ -25,34 +31,6 @@ const DISK_TYPES: Array<[string, string]> = [
   ['tianyi', '天翼云盘'], ['115', '115 网盘'], ['xunlei', '迅雷云盘'], ['uc', 'UC 网盘'],
   ['mobile', '移动云盘'], ['pikpak', 'PikPak'], ['123', '123 网盘'], ['magnet', '磁力链接'], ['ed2k', '电驴链接'],
 ];
-
-// 插件 ID → 中文可读名称
-const PLUGIN_LABELS: Record<string, string> = {
-  muou: '木偶搜索', zhizhen: '指针搜索', fox4k: 'Fox 4K', lou1: '楼层搜索', wanou: '玩偶搜索',
-  ouge: '欧歌搜索', huban: '虎斑搜索', cyg: 'CYG 搜索', pianku: '片库搜索', qqpd: 'QQ 频道',
-  nyaa: 'Nyaa 番剧', erxiao: '二小搜索', duoduo: '多多搜索', qiwei: '趣味搜索', xiaoji: '小鸡搜索',
-  gying: '广影搜索', lingjisp: '灵迹搜索', xuexizhinan: '学习指南', meitizy: '美蹄资源', xys: '校园搜索',
-  dyyj: '电影一级', dyyjpro: '电影一级 Pro', yulinshufa: '玉林书法', mizixing: '觅字星',
-  jsnoteclub: 'JS 笔记', yiove: '一搜', panlian: '盘链搜索', xiaozhang: '小张搜索',
-  qupansou: '去盘搜', shandian: '闪电搜索', clmao: 'CL 猫', cldi: 'CL 滴',
-  clxiong: 'CL 熊', daishudj: '代数 DJ', djgou: 'DJ 狗', haisou: '海搜', hdr4k: 'HDR 4K',
-};
-
-const MAGNET_PLUGINS = new Set([
-  'muou', 'zhizhen', 'fox4k', 'lou1', 'wanou', 'ouge', 'huban', 'cyg', 'pianku', 'qqpd', 'nyaa',
-  'erxiao', 'duoduo', 'qiwei', 'xiaoji', 'gying', 'lingjisp', 'xuexizhinan', 'meitizy', 'xys',
-  'dyyj', 'dyyjpro', 'yulinshufa', 'mizixing', 'jsnoteclub', 'yiove', 'panlian', 'xiaozhang',
-  'qupansou', 'shandian', 'clmao', 'cldi', 'clxiong', 'daishudj', 'djgou', 'haisou', 'hdr4k',
-]);
-
-function pluginLabel(id: string): string {
-  return PLUGIN_LABELS[id] || id;
-}
-
-function channelLabel(id: string): string {
-  // TG 频道通常是 @xxx 或纯英文标识，直接展示即可
-  return id;
-}
 
 function SelectAllCheck({ all, onToggle }: { all: boolean; onToggle: () => void }) {
   return (
@@ -96,8 +74,13 @@ export default function PansouSettings() {
   }, []);
 
   const allChannels = useMemo(() => [...(health?.channels || []), ...customChannels], [health, customChannels]);
-  const webPlugins = (health?.plugins || []).filter((p) => !MAGNET_PLUGINS.has(p));
-  const magnetPlugins = (health?.plugins || []).filter((p) => MAGNET_PLUGINS.has(p));
+  // Registry-driven grouping; unknown plugins fall back to the cloud group.
+  const { cloud: webPlugins, magnet: magnetPlugins, needsAccount } = useMemo(
+    () => categorizeDiskPlugins(health?.plugins || []),
+    [health],
+  );
+  const panChannels = useMemo(() => allChannels.filter((c) => !isMagnetChannel(c)), [allChannels]);
+  const magnetChannels = useMemo(() => allChannels.filter((c) => isMagnetChannel(c)), [allChannels]);
 
   function toggle(list: string[], value: string, setter: (v: string[]) => void) {
     setter(list.includes(value) ? list.filter((v) => v !== value) : [...list, value]);
@@ -110,7 +93,7 @@ export default function PansouSettings() {
     writeJsonStorage('pansou_custom_channels', customChannels);
     writeJsonStorage('pansou_detection_settings', { enabled: detection });
     window.dispatchEvent(new CustomEvent('config:saved'));
-    setMessage('搜索配置已保存');
+    setMessage('搜索配置已保存，搜索结果将按此生效');
     setError('');
   }
 
@@ -155,11 +138,32 @@ export default function PansouSettings() {
     );
   }
 
+  function renderSourceChips(list: string[]) {
+    return (
+      <div className="chip-cloud">
+        {list.map((item) => {
+          const meta = DISK_PLUGIN_BY_ID[item];
+          return (
+            <button
+              key={item}
+              className={plugins.includes(item) ? 'active' : ''}
+              onClick={() => toggle(plugins, item, setPlugins)}
+              title={meta?.note || undefined}
+            >
+              {diskPluginName(item)}
+              {meta?.needsAccount ? <em title="需要先在网盘应用内配置账户，否则无结果">需配置</em> : null}
+            </button>
+          );
+        })}
+      </div>
+    );
+  }
+
   return (
     <SettingsPage
       icon="lucide:search"
       title="网盘搜索设置"
-      description="管理搜索频道、插件、网盘类型与链接检测。"
+      description="管理搜索频道、插件、网盘类型与链接检测，保存后即时生效于综合搜索。"
       actions={
         <>
           <Pill tone={loading ? 'warning' : 'success'}>{loading ? '读取中' : `${health?.plugin_count ?? plugins.length} 个插件`}</Pill>
@@ -171,7 +175,7 @@ export default function PansouSettings() {
       {error ? <Alert tone="error" title={error} /> : message ? <Alert tone="success" title={message} /> : null}
       <SettingsSection
         title="搜索频道"
-        description="TG 频道决定搜索的数据来源，可添加自定义频道。"
+        description={`TG 频道决定搜索的数据来源，可添加自定义频道（当前 ${panChannels.length} 个网盘频道、${magnetChannels.length} 个磁力频道）。`}
         actions={
           <SelectAllCheck
             all={channels.length === allChannels.length}
@@ -179,7 +183,12 @@ export default function PansouSettings() {
           />
         }
       >
-        {renderChips(allChannels, channels, setChannels, channelLabel, true)}
+        {renderChips(panChannels, channels, setChannels, (v) => v, true)}
+        {magnetChannels.length > 0 ? (
+          <p className="group-hint">磁力/电驴频道：{magnetChannels.map((c) => (
+            <button key={c} className={`chip-inline ${channels.includes(c) ? 'active' : ''}`} onClick={() => toggle(channels, c, setChannels)}>{c}</button>
+          ))}</p>
+        ) : null}
         <div className="channel-add">
           <TextInput value={newChannel} onChange={(e) => setNewChannel(e.target.value)} placeholder="输入自定义频道名" onKeyDown={(e) => e.key === 'Enter' && addChannel()} />
           <SettingsButton variant="primary" onClick={addChannel}>添加频道</SettingsButton>
@@ -188,7 +197,7 @@ export default function PansouSettings() {
 
       <SettingsSection
         title="网盘与网页插件"
-        description="常规搜索插件，覆盖大部分网盘资源。"
+        description="网盘聚合与影视资源站，覆盖大部分网盘资源。"
         actions={
           <SelectAllCheck
             all={webPlugins.length > 0 && webPlugins.every((p) => plugins.includes(p))}
@@ -199,12 +208,15 @@ export default function PansouSettings() {
           />
         }
       >
-        {webPlugins.length === 0 ? <EmptyState title="暂无网盘插件" description="后端未返回可用插件。" /> : renderChips(webPlugins, plugins, setPlugins, pluginLabel)}
+        {webPlugins.length === 0 ? <EmptyState title="暂无网盘插件" description="后端未返回可用插件。" /> : renderSourceChips(webPlugins)}
+        {needsAccount.length > 0 ? (
+          <p className="group-hint">标有「需配置」的源需先在网盘应用内完成账户配置，否则不出结果。</p>
+        ) : null}
       </SettingsSection>
 
       <SettingsSection
         title="磁力与电驴插件"
-        description="支持 magnet/ed2k 链接的专用搜索源。"
+        description="以 magnet/ed2k 链接为主的专用搜索源。"
         actions={
           <SelectAllCheck
             all={magnetPlugins.length > 0 && magnetPlugins.every((p) => plugins.includes(p))}
@@ -215,7 +227,7 @@ export default function PansouSettings() {
           />
         }
       >
-        {magnetPlugins.length === 0 ? <EmptyState title="暂无磁力插件" /> : renderChips(magnetPlugins, plugins, setPlugins, pluginLabel)}
+        {magnetPlugins.length === 0 ? <EmptyState title="暂无磁力插件" /> : renderSourceChips(magnetPlugins)}
       </SettingsSection>
 
       <SettingsSection
@@ -239,7 +251,11 @@ export default function PansouSettings() {
         .chip-cloud{display:flex;flex-wrap:wrap;gap:7px;max-height:280px;overflow:auto;padding-right:3px;}
         .chip-cloud button{display:inline-flex;align-items:center;gap:5px;height:29px;padding:0 11px;border:1px solid var(--mei-border);border-radius:99px;background:rgba(255,255,255,.66);font-size:11.5px;font-weight:700;color:var(--mei-text-muted);cursor:pointer;transition:var(--mei-transition);}
         .chip-cloud button.active{border-color:rgba(99,102,241,.4);background:rgba(99,102,241,.1);color:var(--mei-primary);}
+        .chip-cloud button em{font-style:normal;font-size:10px;padding:1px 5px;border-radius:99px;background:rgba(245,158,11,.15);color:#b45309;}
         .chip-cloud i{font-style:normal;opacity:.65;}
+        .group-hint{margin:10px 0 0;font-size:11.5px;color:var(--mei-text-muted);display:flex;flex-wrap:wrap;gap:5px;align-items:center;}
+        .chip-inline{height:24px;padding:0 9px;border:1px solid var(--mei-border);border-radius:99px;background:rgba(255,255,255,.66);font-size:11px;font-weight:700;color:var(--mei-text-muted);cursor:pointer;}
+        .chip-inline.active{border-color:rgba(99,102,241,.4);background:rgba(99,102,241,.1);color:var(--mei-primary);}
         .mei-select-all{display:inline-flex;align-items:center;gap:7px;font-size:12px;font-weight:700;color:var(--mei-text-muted);cursor:pointer;user-select:none;}
         .mei-select-all input{width:16px;height:16px;margin:0;accent-color:var(--mei-primary);cursor:pointer;}
         .channel-add{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;margin-top:13px;}

@@ -1,0 +1,632 @@
+[
+  {
+    "path": "audio/change-speed",
+    "ns": "audio",
+    "key": "changeSpeed"
+  },
+  {
+    "path": "audio/extract-audio",
+    "ns": "audio",
+    "key": "extractAudio"
+  },
+  {
+    "path": "audio/merge-audio",
+    "ns": "audio",
+    "key": "mergeAudio"
+  },
+  {
+    "path": "audio/trim",
+    "ns": "audio",
+    "key": "trim"
+  },
+  {
+    "path": "converters/audio-converter",
+    "ns": "converters",
+    "key": "audioConverter"
+  },
+  {
+    "path": "converters/convert-to-jpg",
+    "ns": "converters",
+    "key": "convertToJPG"
+  },
+  {
+    "path": "converters/convert-to-webp",
+    "ns": "converters",
+    "key": "convertToWebp"
+  },
+  {
+    "path": "converters/video-to-gif",
+    "ns": "converters",
+    "key": "videoToGif"
+  },
+  {
+    "path": "csv/change-csv-separator",
+    "ns": "csv",
+    "key": "changeCsvSeparator"
+  },
+  {
+    "path": "csv/csv-rows-to-columns",
+    "ns": "csv",
+    "key": "csvRowsToColumns"
+  },
+  {
+    "path": "csv/csv-to-json",
+    "ns": "csv",
+    "key": "csvToJson"
+  },
+  {
+    "path": "csv/csv-to-tsv",
+    "ns": "csv",
+    "key": "csvToTsv"
+  },
+  {
+    "path": "csv/csv-to-xml",
+    "ns": "csv",
+    "key": "csvToXml"
+  },
+  {
+    "path": "csv/csv-to-yaml",
+    "ns": "csv",
+    "key": "csvToYaml"
+  },
+  {
+    "path": "csv/find-incomplete-csv-records",
+    "ns": "csv",
+    "key": "findIncompleteCsvRecords"
+  },
+  {
+    "path": "csv/insert-csv-columns",
+    "ns": "csv",
+    "key": "insertCsvColumns"
+  },
+  {
+    "path": "csv/swap-csv-columns",
+    "ns": "csv",
+    "key": "swapCsvColumns"
+  },
+  {
+    "path": "csv/transpose-csv",
+    "ns": "csv",
+    "key": "transposeCsv"
+  },
+  {
+    "path": "csv/tsv-to-json",
+    "ns": "csv",
+    "key": "tsvToJson"
+  },
+  {
+    "path": "gif/change-speed",
+    "ns": "gif",
+    "key": "change-speed"
+  },
+  {
+    "path": "gif/images-to-gif",
+    "ns": "gif",
+    "key": "images-to-gif"
+  },
+  {
+    "path": "image-generic/change-colors",
+    "ns": "image",
+    "key": "changeColors"
+  },
+  {
+    "path": "image-generic/change-opacity",
+    "ns": "image",
+    "key": "changeOpacity"
+  },
+  {
+    "path": "image-generic/compress",
+    "ns": "image",
+    "key": "compress"
+  },
+  {
+    "path": "image-generic/create-transparent",
+    "ns": "image",
+    "key": "createTransparent"
+  },
+  {
+    "path": "image-generic/crop",
+    "ns": "image",
+    "key": "crop"
+  },
+  {
+    "path": "image-generic/editor",
+    "ns": "image",
+    "key": "editor"
+  },
+  {
+    "path": "image-generic/image-to-text",
+    "ns": "image",
+    "key": "imageToText"
+  },
+  {
+    "path": "image-generic/qr-code",
+    "ns": "image",
+    "key": "qrCode"
+  },
+  {
+    "path": "image-generic/remove-background",
+    "ns": "image",
+    "key": "removeBackground"
+  },
+  {
+    "path": "image-generic/resize",
+    "ns": "image",
+    "key": "resize"
+  },
+  {
+    "path": "image-generic/rotate",
+    "ns": "image",
+    "key": "rotate"
+  },
+  {
+    "path": "image-generic/split-to-pages",
+    "ns": "image",
+    "key": "split"
+  },
+  {
+    "path": "image-generic/watermark",
+    "ns": "image",
+    "key": "watermark"
+  },
+  {
+    "path": "json/escape-json",
+    "ns": "json",
+    "key": "escapeJson"
+  },
+  {
+    "path": "json/json-comparison",
+    "ns": "json",
+    "key": "comparison"
+  },
+  {
+    "path": "json/json-to-csv",
+    "ns": "json",
+    "key": "jsonToCsv"
+  },
+  {
+    "path": "json/json-to-xml",
+    "ns": "json",
+    "key": "jsonToXml"
+  },
+  {
+    "path": "json/minify",
+    "ns": "json",
+    "key": "minify"
+  },
+  {
+    "path": "json/prettify",
+    "ns": "json",
+    "key": "prettify"
+  },
+  {
+    "path": "json/sort",
+    "ns": "json",
+    "key": "sortJson"
+  },
+  {
+    "path": "json/stringify",
+    "ns": "json",
+    "key": "stringify"
+  },
+  {
+    "path": "json/validateJson",
+    "ns": "json",
+    "key": "validateJson"
+  },
+  {
+    "path": "list/chunk",
+    "ns": "list",
+    "key": "chunk"
+  },
+  {
+    "path": "list/duplicate",
+    "ns": "list",
+    "key": "duplicate"
+  },
+  {
+    "path": "list/find-most-popular",
+    "ns": "list",
+    "key": "findMostPopular"
+  },
+  {
+    "path": "list/find-unique",
+    "ns": "list",
+    "key": "findUnique"
+  },
+  {
+    "path": "list/reverse",
+    "ns": "list",
+    "key": "reverse"
+  },
+  {
+    "path": "list/rotate",
+    "ns": "list",
+    "key": "rotate"
+  },
+  {
+    "path": "list/shuffle",
+    "ns": "list",
+    "key": "shuffle"
+  },
+  {
+    "path": "list/sort",
+    "ns": "list",
+    "key": "sort"
+  },
+  {
+    "path": "list/truncate",
+    "ns": "list",
+    "key": "truncate"
+  },
+  {
+    "path": "list/unwrap",
+    "ns": "list",
+    "key": "unwrap"
+  },
+  {
+    "path": "list/wrap",
+    "ns": "list",
+    "key": "wrap"
+  },
+  {
+    "path": "number/arithmetic-sequence",
+    "ns": "number",
+    "key": "arithmeticSequence"
+  },
+  {
+    "path": "number/byte-converter",
+    "ns": "number",
+    "key": "byteConverter"
+  },
+  {
+    "path": "number/generate",
+    "ns": "number",
+    "key": "generate"
+  },
+  {
+    "path": "number/generic-calc/",
+    "ns": "number",
+    "key": "generic-calc/"
+  },
+  {
+    "path": "number/number-to-words",
+    "ns": "number",
+    "key": "numberToWords"
+  },
+  {
+    "path": "number/random-number-generator",
+    "ns": "number",
+    "key": "randomNumberGenerator"
+  },
+  {
+    "path": "number/random-port-generator",
+    "ns": "number",
+    "key": "randomPortGenerator"
+  },
+  {
+    "path": "number/sum",
+    "ns": "number",
+    "key": "sum"
+  },
+  {
+    "path": "pdf/compress-pdf",
+    "ns": "pdf",
+    "key": "compressPdf"
+  },
+  {
+    "path": "pdf/convert-to-pdf",
+    "ns": "pdf",
+    "key": "convertToPdf"
+  },
+  {
+    "path": "pdf/editor",
+    "ns": "pdf",
+    "key": "editor"
+  },
+  {
+    "path": "pdf/extract-image-from-pdf",
+    "ns": "pdf",
+    "key": "extractImagesFromPdf"
+  },
+  {
+    "path": "pdf/merge-pdf",
+    "ns": "pdf",
+    "key": "mergePdf"
+  },
+  {
+    "path": "pdf/pdf-to-epub",
+    "ns": "pdf",
+    "key": "pdfToEpub"
+  },
+  {
+    "path": "pdf/pdf-to-png",
+    "ns": "pdf",
+    "key": "pdfToPng"
+  },
+  {
+    "path": "pdf/protect-pdf",
+    "ns": "pdf",
+    "key": "protectPdf"
+  },
+  {
+    "path": "pdf/rotate-pdf",
+    "ns": "pdf",
+    "key": "rotatePdf"
+  },
+  {
+    "path": "pdf/split-pdf",
+    "ns": "pdf",
+    "key": "splitPdf"
+  },
+  {
+    "path": "png/compress-png",
+    "ns": "image",
+    "key": "compressPng"
+  },
+  {
+    "path": "png/convert-jgp-to-png",
+    "ns": "image",
+    "key": "convertJgpToPng"
+  },
+  {
+    "path": "string/base64",
+    "ns": "string",
+    "key": "base64"
+  },
+  {
+    "path": "string/censor",
+    "ns": "string",
+    "key": "censor"
+  },
+  {
+    "path": "string/create-palindrome",
+    "ns": "string",
+    "key": "createPalindrome"
+  },
+  {
+    "path": "string/email-extractor",
+    "ns": "string",
+    "key": "emailExtractor"
+  },
+  {
+    "path": "string/extract-substring",
+    "ns": "string",
+    "key": "extractSubstring"
+  },
+  {
+    "path": "string/hidden-character-detector",
+    "ns": "string",
+    "key": "hiddenCharacterDetector"
+  },
+  {
+    "path": "string/join",
+    "ns": "string",
+    "key": "join"
+  },
+  {
+    "path": "string/palindrome",
+    "ns": "string",
+    "key": "palindrome"
+  },
+  {
+    "path": "string/password-generator",
+    "ns": "string",
+    "key": "passwordGenerator"
+  },
+  {
+    "path": "string/quote",
+    "ns": "string",
+    "key": "quote"
+  },
+  {
+    "path": "string/randomize-case",
+    "ns": "string",
+    "key": "randomizeCase"
+  },
+  {
+    "path": "string/remove-duplicate-lines",
+    "ns": "string",
+    "key": "removeDuplicateLines"
+  },
+  {
+    "path": "string/repeat",
+    "ns": "string",
+    "key": "repeat"
+  },
+  {
+    "path": "string/replacer",
+    "ns": "string",
+    "key": "textReplacer"
+  },
+  {
+    "path": "string/reverse",
+    "ns": "string",
+    "key": "reverse"
+  },
+  {
+    "path": "string/rot13",
+    "ns": "string",
+    "key": "rot13"
+  },
+  {
+    "path": "string/rotate",
+    "ns": "string",
+    "key": "rotate"
+  },
+  {
+    "path": "string/slug-generator",
+    "ns": "string",
+    "key": "slugGenerator"
+  },
+  {
+    "path": "string/split",
+    "ns": "string",
+    "key": "split"
+  },
+  {
+    "path": "string/statistics",
+    "ns": "string",
+    "key": "statistic"
+  },
+  {
+    "path": "string/text-compare",
+    "ns": "string",
+    "key": "textCompare"
+  },
+  {
+    "path": "string/to-morse",
+    "ns": "string",
+    "key": "toMorse"
+  },
+  {
+    "path": "string/truncate",
+    "ns": "string",
+    "key": "truncate"
+  },
+  {
+    "path": "string/unicode",
+    "ns": "string",
+    "key": "unicode"
+  },
+  {
+    "path": "string/uppercase",
+    "ns": "string",
+    "key": "uppercase"
+  },
+  {
+    "path": "string/url-decode-string",
+    "ns": "string",
+    "key": "url-decode-string"
+  },
+  {
+    "path": "string/url-editor",
+    "ns": "string",
+    "key": "url-editor"
+  },
+  {
+    "path": "string/url-encode-string",
+    "ns": "string",
+    "key": "url-encode-string"
+  },
+  {
+    "path": "time/check-leap-years",
+    "ns": "time",
+    "key": "checkLeapYears"
+  },
+  {
+    "path": "time/convert-days-to-hours",
+    "ns": "time",
+    "key": "convertDaysToHours"
+  },
+  {
+    "path": "time/convert-hours-to-days",
+    "ns": "time",
+    "key": "convertHoursToDays"
+  },
+  {
+    "path": "time/convert-seconds-to-time",
+    "ns": "time",
+    "key": "convertSecondsToTime"
+  },
+  {
+    "path": "time/convert-time-to-decimal",
+    "ns": "time",
+    "key": "convertTimeToDecimal"
+  },
+  {
+    "path": "time/convert-time-to-seconds",
+    "ns": "time",
+    "key": "convertTimeToSeconds"
+  },
+  {
+    "path": "time/convert-unix-to-date",
+    "ns": "time",
+    "key": "convertUnixToDate"
+  },
+  {
+    "path": "time/crontab-guru",
+    "ns": "time",
+    "key": "crontabGuru"
+  },
+  {
+    "path": "time/date-weekday-calculator",
+    "ns": "time",
+    "key": "dateWeekdayCalculator"
+  },
+  {
+    "path": "time/discord-timestamp",
+    "ns": "time",
+    "key": "discord-timestamp"
+  },
+  {
+    "path": "time/time-between-dates",
+    "ns": "time",
+    "key": "timeBetweenDates"
+  },
+  {
+    "path": "time/truncate-clock-time",
+    "ns": "time",
+    "key": "truncateClockTime"
+  },
+  {
+    "path": "video/add-audio",
+    "ns": "video",
+    "key": "addAudio"
+  },
+  {
+    "path": "video/change-speed",
+    "ns": "video",
+    "key": "changeSpeed"
+  },
+  {
+    "path": "video/compress",
+    "ns": "video",
+    "key": "compress"
+  },
+  {
+    "path": "video/crop-video",
+    "ns": "video",
+    "key": "cropVideo"
+  },
+  {
+    "path": "video/flip",
+    "ns": "video",
+    "key": "flip"
+  },
+  {
+    "path": "video/loop",
+    "ns": "video",
+    "key": "loop"
+  },
+  {
+    "path": "video/merge-video",
+    "ns": "video",
+    "key": "mergeVideo"
+  },
+  {
+    "path": "video/resize",
+    "ns": "video",
+    "key": "resize"
+  },
+  {
+    "path": "video/rotate",
+    "ns": "video",
+    "key": "rotate"
+  },
+  {
+    "path": "video/trim",
+    "ns": "video",
+    "key": "trim"
+  },
+  {
+    "path": "xml/xml-beautifier",
+    "ns": "xml",
+    "key": "xmlBeautifier"
+  },
+  {
+    "path": "xml/xml-validator",
+    "ns": "xml",
+    "key": "xmlValidator"
+  }
+]

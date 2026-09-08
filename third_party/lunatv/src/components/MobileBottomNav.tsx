@@ -23,25 +23,25 @@ const MobileBottomNav = ({ activePath }: MobileBottomNavProps) => {
   const [navItems, setNavItems] = useState([
     { icon: Home, label: '首页', href: '/' },
     {
-      icon: Film,
-      label: '电影',
-      href: '/douban?type=movie',
-    },
-    {
-      icon: Tv,
-      label: '剧集',
-      href: '/douban?type=tv',
-    },
-    {
-      icon: Cat,
-      label: '动漫',
-      href: '/douban?type=anime',
-    },
-    {
-      icon: Clover,
-      label: '综艺',
-      href: '/douban?type=show',
-    },
+     icon: Film,
+     label: '电影',
+      href: '/douban/movie',
+   },
+   {
+     icon: Tv,
+     label: '剧集',
+      href: '/douban/tv',
+   },
+   {
+     icon: Cat,
+     label: '动漫',
+      href: '/douban/anime',
+   },
+   {
+     icon: Clover,
+     label: '综艺',
+      href: '/douban/show',
+   },
     {
       icon: Radio,
       label: '直播',
@@ -55,27 +55,24 @@ const MobileBottomNav = ({ activePath }: MobileBottomNavProps) => {
       setNavItems((prevItems) => [
         ...prevItems,
         {
-          icon: Star,
-          label: '自定义',
-          href: '/douban?type=custom',
-        },
+         icon: Star,
+         label: '自定义',
+          href: '/douban/custom',
+       },
       ]);
     }
   }, []);
 
-  const isActive = (href: string) => {
-    const typeMatch = href.match(/type=([^&]+)/)?.[1];
+ const isActive = (href: string) => {
+   const decodedActive = decodeURIComponent(currentActive);
+   const decodedItemHref = decodeURIComponent(href);
 
-    // 解码URL以进行正确的比较
-    const decodedActive = decodeURIComponent(currentActive);
-    const decodedItemHref = decodeURIComponent(href);
-
-    return (
-      decodedActive === decodedItemHref ||
-      (decodedActive.startsWith('/douban') &&
-        decodedActive.includes(`type=${typeMatch}`))
-    );
-  };
+   return (
+     decodedActive === decodedItemHref ||
+      (decodedItemHref.startsWith('/douban/') &&
+        decodedActive.startsWith(decodedItemHref))
+   );
+ };
 
   return (
     <nav

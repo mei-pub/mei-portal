@@ -1,6 +1,6 @@
 /* =============================================================================
- * mei-allin 统一顶栏（注入到每个应用页面）
- * 亮色风格，无主题切换。所有样式严格 scope 到 #mei-topbar，不污染应用。
+ * Mei-Portal 统一顶栏（注入到每个应用页面）
+* 亮色风格，无主题切换。所有样式严格 scope 到 #mei-topbar，不污染应用。
  * 支持嵌入模式（?meiEmbed=1）：不注入顶栏，仅保留登录态副作用。
  * ========================================================================== */
 (function () {
@@ -267,11 +267,11 @@
     var style = document.createElement('style');
     style.id = 'mei-topbar-style';
     style.textContent = [
-      '#mei-topbar{position:fixed;top:14px;left:50%;transform:translateX(-50%);z-index:9999;height:46px;',
+     '#mei-topbar{position:fixed;top:14px;left:50%;transform:translateX(-50%);z-index:9999;height:46px;',
       'display:flex;align-items:center;gap:6px;padding:0 10px 0 14px !important;box-sizing:border-box;',
       'max-width:calc(100vw - 28px);width:max-content;',
       'background:linear-gradient(165deg,rgba(255,255,255,0.82),rgba(255,255,255,0.62));',
-      '-webkit-backdrop-filter:blur(24px) saturate(1.6);backdrop-filter:blur(24px) saturate(1.6);',
+     '-webkit-backdrop-filter:blur(24px) saturate(1.6);backdrop-filter:blur(24px) saturate(1.6);',
       'border:1px solid rgba(23,32,56,0.10);border-radius:999px;',
       'font-family:"Inter","Noto Sans SC","PingFang SC",sans-serif;font-size:13px;color:#1c2333;',
       'box-shadow:0 12px 36px rgba(23,32,56,0.16),0 2px 8px rgba(23,32,56,0.08),0 0 0 1px rgba(99,102,241,0.10),inset 0 1px 0 rgba(255,255,255,0.95) !important;}',
@@ -299,14 +299,24 @@
       'background:linear-gradient(135deg,#6366f1 0%,#a855f7 55%,#ec4899 100%);',
       'box-shadow:0 0 14px rgba(129,140,248,0.55),inset 0 1px 0 rgba(255,255,255,0.35);}',
       '#mei-topbar .mtb-apps{display:flex;align-items:center;gap:2px;overflow-x:auto;scrollbar-width:none;flex:1;min-width:0;}',
-      '#mei-topbar .mtb-apps::-webkit-scrollbar{display:none;}',
-      '#mei-topbar .mtb-btn{display:inline-flex;align-items:center;gap:6px;padding:6px 11px !important;border-radius:999px;border:none;background:transparent;',
+     '#mei-topbar .mtb-apps::-webkit-scrollbar{display:none;}',
+     '#mei-topbar .mtb-btn{display:inline-flex;align-items:center;gap:5px;padding:5px 9px !important;border-radius:999px;border:none;background:transparent;',
+     // 紧凑布局：搜索框占位收窄，应用按钮 padding 压缩，确保 8 个应用 + 搜索都能展示
       'cursor:pointer;color:#5d6778;',
       'font-size:12.5px !important;white-space:nowrap;transition:all .18s ease;text-decoration:none;}',
       '#mei-topbar .mtb-btn:hover{background:rgba(23,32,56,0.06);color:#1c2333;}',
       '#mei-topbar .mtb-btn.active{background:linear-gradient(135deg,#6366f1,#a855f7);color:#fff;',
       'box-shadow:0 0 18px rgba(129,140,248,0.45),inset 0 1px 0 rgba(255,255,255,0.25);}',
-      '#mei-topbar .mtb-btn.off{opacity:.4;}',
+   '#mei-topbar .mtb-btn.off{opacity:.4;}',
+   '#mei-topbar .mtb-search{display:flex;align-items:center;gap:4px;flex:0 1 240px;min-width:140px;height:32px;',
+     'padding:0 4px 0 9px;border-radius:999px;background:rgba(23,32,56,0.055);border:1px solid rgba(23,32,56,0.1);}',
+      '#mei-topbar .mtb-search input{flex:1;min-width:0;height:26px;border:0;background:transparent;outline:0;color:#1c2333;font-size:12.5px !important;}',
+      '#mei-topbar .mtb-search input::placeholder{color:#9aa3b8;}',
+      '#mei-topbar .mtb-search select{height:26px;border:0;background:transparent;outline:0;color:#5d6778;font-size:12px !important;cursor:pointer;}',
+      '#mei-topbar .mtb-search button{display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;border:0;border-radius:999px;',
+      'background:linear-gradient(135deg,#6366f1,#a855f7);color:#fff;cursor:pointer;flex-shrink:0;}',
+      '#mei-topbar .mtb-search-toggle{display:none;align-items:center;justify-content:center;width:32px;height:32px;border-radius:999px;',
+      'border:1px solid rgba(23,32,56,0.1);background:transparent;color:#5d6778;cursor:pointer;flex-shrink:0;}',
       /* spacer 不再 flex:1：否则与 .mei-apps 平分空间 */
       '#mei-topbar .mtb-spacer{flex:0 0 6px;}',
       '#mei-topbar .mtb-user{display:flex;align-items:center;gap:6px;padding:6px 12px;border-radius:999px;',
@@ -349,7 +359,13 @@
       '#mtb-lib-menu .mtb-menu-link{display:flex;align-items:center;gap:8px;width:100%;padding:7px 10px;border:none;',
       'background:transparent;cursor:pointer;border-radius:10px;color:#1c2333;font-size:13px;text-align:left;text-decoration:none;}',
       '#mtb-lib-menu .mtb-menu-link:hover{background:rgba(23,32,56,0.05);}',
-      '@media(max-width:900px){#mei-topbar .mtb-brand-text{display:none;}}',
+    '@media(max-width:1100px){#mei-topbar .mtb-search{flex-basis:220px;min-width:140px;}}',
+     '@media(max-width:1280px){#mei-topbar .mtb-search{flex-basis:200px;min-width:120px;}#mei-topbar .mtb-search select{display:none;}}',
+      '@media(max-width:900px){#mei-topbar .mtb-brand-text{display:none;}',
+      '#mei-topbar .mtb-search{display:none;position:absolute;top:52px;left:0;width:calc(100vw - 40px);height:38px;',
+      'background:rgba(255,255,255,0.96);box-shadow:0 16px 38px rgba(23,32,56,0.18);}',
+      '#mei-topbar.mtb-search-open .mtb-search{display:flex;}',
+      '#mei-topbar .mtb-search-toggle{display:inline-flex;}}',
     ].join('');
     document.head.appendChild(style);
 
@@ -365,7 +381,7 @@
       var brand = document.createElement('a');
       brand.className = 'mtb-brand';
       brand.href = '/';
-      brand.innerHTML = '<img src="/logo.svg" alt="logo" style="width:22px;height:22px;border-radius:7px;flex-shrink:0;" /><span class="mtb-brand-text" id="mtb-brand-text">mei-allin</span>';
+      brand.innerHTML = '<img src="/logo.svg" alt="logo" style="width:22px;height:22px;border-radius:7px;flex-shrink:0;" /><span class="mtb-brand-text" id="mtb-brand-text">Mei-Portal</span>';
       // 从面板配置加载品牌名
       fetch('/api/panel', { credentials: 'include' })
         .then(function(r) { return r.json(); })
@@ -501,6 +517,83 @@
         apps.appendChild(wrap);
       }
       bar.appendChild(apps);
+
+      // 全站搜索：综合或指定应用，提交后由 Shell 客户端路由接管
+      var SEARCH_SCOPES = [
+        ['all', '综合'], ['tv', '影视'], ['music', '音乐'], ['disks', '网盘'],
+        ['draw', 'AI 绘图'], ['tools', '工具箱'], ['novels', '小说']
+      ];
+      var savedScope = 'all';
+      try { savedScope = localStorage.getItem('mei-search-scope') || 'all'; } catch (e) {}
+      var search = document.createElement('form');
+      search.className = 'mtb-search';
+      search.setAttribute('aria-label', '全站搜索');
+      var searchInput = document.createElement('input');
+      searchInput.type = 'search';
+      searchInput.placeholder = '搜索全站资源';
+      searchInput.setAttribute('aria-label', '搜索关键词');
+      var searchScope = document.createElement('select');
+      searchScope.setAttribute('aria-label', '搜索范围');
+      SEARCH_SCOPES.forEach(function (item) {
+        var option = document.createElement('option');
+        option.value = item[0];
+        option.textContent = item[1];
+        option.selected = item[0] === savedScope;
+        searchScope.appendChild(option);
+      });
+      var searchButton = document.createElement('button');
+      searchButton.type = 'submit';
+      searchButton.title = '搜索';
+      searchButton.setAttribute('aria-label', '搜索');
+      searchButton.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>';
+      search.appendChild(searchInput);
+      search.appendChild(searchScope);
+      search.appendChild(searchButton);
+      function syncSearchFromLocation(detail) {
+        try {
+          var current = detail || new URL(window.location.href);
+          var params = current.searchParams || new URLSearchParams(current.search || '');
+          if (current.pathname === '/search' || (window.__meiShellHost && params.get('q'))) {
+            if (params.get('q')) searchInput.value = params.get('q');
+            if (params.get('scope')) searchScope.value = params.get('scope');
+          }
+        } catch (e) {}
+      }
+      syncSearchFromLocation();
+      window.addEventListener('mei-search-query', function (event) {
+        var detail = event && event.detail;
+        if (!detail) return;
+        if (typeof detail.query === 'string') searchInput.value = detail.query;
+        if (typeof detail.scope === 'string') searchScope.value = detail.scope;
+      });
+      search.onsubmit = function (e) {
+        e.preventDefault();
+        var keyword = searchInput.value.trim();
+        if (!keyword) return;
+        var scope = searchScope.value;
+        try { localStorage.setItem('mei-search-scope', scope); } catch (err) {}
+        var target = '/search?' + new URLSearchParams({ q: keyword, scope: scope }).toString();
+        if (window.__meiShellHost) {
+          window.dispatchEvent(new CustomEvent('mei-open-search', { detail: { query: keyword, scope: scope } }));
+        } else {
+          window.location.href = target;
+        }
+        bar.classList.remove('mtb-search-open');
+      };
+      bar.appendChild(search);
+
+      var searchToggle = document.createElement('button');
+      searchToggle.type = 'button';
+      searchToggle.className = 'mtb-search-toggle';
+      searchToggle.title = '打开全站搜索';
+      searchToggle.setAttribute('aria-label', '打开全站搜索');
+      searchToggle.innerHTML = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>';
+      searchToggle.onclick = function (e) {
+        e.stopPropagation();
+        var open = bar.classList.toggle('mtb-search-open');
+        if (open) setTimeout(function () { searchInput.focus(); }, 20);
+      };
+      bar.appendChild(searchToggle);
 
       var spacer = document.createElement('div');
       spacer.className = 'mtb-spacer';

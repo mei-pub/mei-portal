@@ -42,7 +42,7 @@ interface WakeLockSentinel {
   removeEventListener(type: 'release', listener: () => void): void;
 }
 
-function PlayPageClient() {
+export function PlayPageClient({ pathSource, pathId }: { pathSource?: string; pathId?: string } = {}) {
   const router = useRouter();
   const searchParams = useSearchParams();
 
@@ -101,11 +101,11 @@ function PlayPageClient() {
   const [videoYear, setVideoYear] = useState(searchParams.get('year') || '');
   const [videoCover, setVideoCover] = useState('');
   const [videoDoubanId, setVideoDoubanId] = useState(0);
-  // 当前源和ID
-  const [currentSource, setCurrentSource] = useState(
-    searchParams.get('source') || ''
-  );
-  const [currentId, setCurrentId] = useState(searchParams.get('id') || '');
+ // 当前源和ID
+ const [currentSource, setCurrentSource] = useState(
+    pathSource ?? searchParams.get('source') ?? ''
+ );
+  const [currentId, setCurrentId] = useState(pathId ?? searchParams.get('id') ?? '');
 
   // 搜索所需信息
   const [searchTitle] = useState(searchParams.get('stitle') || '');

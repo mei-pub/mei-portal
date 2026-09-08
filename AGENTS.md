@@ -230,3 +230,31 @@ mei-allin 是多应用聚合门户：`packages/shall` 为门户外壳，`third_p
 
 违规判定：切回访问过的应用仍出现完整重载（白屏 + 应用重启）；切换应用时装载出上一个
 应用的内容；静态资源响应里出现两条 Cache-Control；顶栏切应用把应用打回首页。
+
+## nginx 路由分发：Sec-Fetch-Dest 头缺失的 fallback
+
+nginx 通过 `Sec-Fetch-Dest` 请求头区分顶级文档请求（`document`）与 iframe 内嵌请求
+（`iframe`），document 请求通过 `error_page 418` 跳到 `@mei_shell` 路由到门户壳，其余
+请求正常代理到子应用。
+
+**外网域名经过的反向代理层可能剥离 `Sec-Fetch-Dest` 头。** 头缺失后 nginx 无法区分
+document 与 iframe 请求，所有请求都直接代理到子应用，Shell 不渲染，MusicDock 等外壳
+组件全部消失。
+
+约束：
+
+- `Sec-Fetch-Dest` 判别**必须包含头缺失时的 fallback 机制**：当头缺失时，用 `Accept`
+  头（`text/html` 开头）且 URL 不含 `meiEmbed=1` 参数判断为 document 请求
+- `meiEmbed=1` URL 参数始终优先：带此参数的请求一定是 iframe 子资源，不走 Shell，
+  不受 Accept 头影响
+- nginx 使用 composite map（`$mei_document_request` + `$mei_html_accept` +
+  `$mei_has_embed` 三值拼接查表）实现多信号组合判断，覆盖所有 8 种组合
+- 各应用 location 中的 `if` 判别使用 `$mei_is_doc`（复合判断结果），不得单独使用
+  `$mei_document_request`
+
+**本地验证通过不等于部署达标。** 实际部署场景是用户通过外网域名（含非默认端口映射）
+访问，中间可能经过一层或多层反向代理，这些代理可能修改或剥离请求头。所有基于请求头的
+路由判断必须用外网域名验证，或至少用 `curl` 不传 `Sec-Fetch-Dest` 头模拟头缺失场景。
+
+违规判定：外网域名下访问应用路径时页面标题是子应用名称而非门户名称；MusicDock 播放栏
+或顶栏不出现；`document.getElementById('mei-shell-slot')` 返回 null。

@@ -1,0 +1,23 @@
+id: pansou
+name: 网盘搜索
+description: 聚合网盘资源搜索（TG频道 + 多插件）
+icon: lucide:search
+category: utility
+weight: 40
+endpoint: http://pansou:3000
+ingress:
+  mode: subdomain
+  host: ${SUBDOMAIN_DISKS}.${ROOT_DOMAIN}
+auth:
+  strategy: independent
+embed:
+  iframe: true
+  strip_headers: [X-Frame-Options, Content-Security-Policy]
+theme:
+  has_skin: false
+health:
+  path: /disks/api/health
+  expect: 200
+upgrade:
+  image: ghcr.io/fish2018/pansou-web:latest
+  repo: https://github.com/fish2018/pansou-web

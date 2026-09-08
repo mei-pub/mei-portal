@@ -31,23 +31,47 @@ function isPublicPath(pathname) {
   );
 }
 
+// mei-allin 统一身份：主应用会话校验（带短 TTL 缓存，避免每个请求都回调门户）
+const SHELL_URL = process.env.MEI_SHELL_URL || 'http://127.0.0.1:3010';
+const verifyCache = new Map();
+const CACHE_TTL = 30 * 1000;
+const NEGATIVE_TTL = 5 * 1000;
+
+async function isPortalSessionValid(credential) {
+  const cached = verifyCache.get(credential);
+  if (cached && cached.exp > Date.now()) return cached.ok;
+  let ok = false;
+  try {
+    const res = await fetch(`${SHELL_URL}/api/auth/verify`, {
+      headers: { Authorization: `Bearer ${credential}` },
+      signal: AbortSignal.timeout(4000),
+    });
+    ok = res.ok;
+  } catch {
+    ok = false;
+  }
+  verifyCache.set(credential, { ok, exp: Date.now() + (ok ? CACHE_TTL : NEGATIVE_TTL) });
+  return ok;
+}
+
 /**
  * @param {string|null} password - 来自环境变量 PASSWORD
  * @returns {import('express').RequestHandler}
  */
 module.exports = function createAuthMiddleware(password) {
-  return (req, res, next) => {
+  return async (req, res, next) => {
     // 未配置密码时，全部放行
     if (typeof password !== 'string') return next();
 
     // 公开路径直接放行
     if (isPublicPath(req.path)) return next();
 
-    // 验证 cookie（cookie solara-auth = btoa(password)）
-    // mei-allin：原名 auth 与 lunatv 在同源下同名冲突（互相覆盖），改为 solara-auth
-    const cookieAuth = req.cookies && req.cookies['solara-auth'];
-    const expected = Buffer.from(password).toString('base64'); // 等价于 btoa(password)
-    if (cookieAuth && cookieAuth === expected) return next();
+    // mei-allin 统一身份：校验主应用会话（mei-auth），由门户 /api/auth/verify 裁决。
+    // 会话有效 → 放行；无效 → 跳门户登录页（根路径 /login 即 Shell 登录页）。
+    const portalCredential =
+      (req.cookies && req.cookies['mei-auth']) ||
+      (/^Bearer\s+(.+)$/i.exec(req.headers.authorization || '') || [])[1];
+    if (portalCredential && (await isPortalSessionValid(portalCredential))) return next();
 
     // 验证失败，重定向到登录页
     return res.redirect(302, '/login');

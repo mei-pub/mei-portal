@@ -1,4 +1,4 @@
-import { randomBytes, scryptSync, timingSafeEqual } from "node:crypto";
+import { createHash, randomBytes, scryptSync, timingSafeEqual } from "node:crypto";
 import { readFile, writeFile, mkdir } from "node:fs/promises";
 import { join } from "node:path";
 
@@ -52,8 +52,30 @@ export class AuthService {
     await this.persistSessions();
     return token;
   }
+  // mei-allin 统一身份：主应用会话令牌（mei-auth cookie 值）即视为已登录
+  private portalTokenCache: { value: string; exp: number } | null = null;
+  private async portalSessionToken(): Promise<string> {
+    const now = Date.now();
+    if (this.portalTokenCache && this.portalTokenCache.exp > now) return this.portalTokenCache.value;
+    try {
+      const userFile = process.env.MEI_SHELL_USER_FILE || "/data/shell/user.json";
+      const user = JSON.parse(await readFile(userFile, "utf8"));
+      const token = createHash("sha256").update(`${user.username}:${user.hash}`).digest("hex");
+      this.portalTokenCache = { value: token, exp: now + 30_000 };
+      return token;
+    } catch {
+      this.portalTokenCache = { value: "", exp: now + 5_000 };
+      return "";
+    }
+  }
   async valid(cookie = "") {
     await this.ensureRestored();
+    const portal = /(?:^|;\s*)mei-auth=([^;]+)/.exec(cookie)?.[1];
+    if (portal) {
+      try {
+        if (decodeURIComponent(portal) === (await this.portalSessionToken())) return true;
+      } catch { /* 非法编码按未登录处理 */ }
+    }
     const token = /(?:^|; )meilink_session=([^;]+)/.exec(cookie)?.[1];
     return !!token && (this.sessions.get(token) || 0) > Date.now();
   }

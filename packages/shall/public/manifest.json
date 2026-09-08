@@ -1,6 +1,7 @@
 {
-  "name": "mei-allin",
-  "short_name": "mei-allin",
+ "name": "mei-allin",
+  "name": "Mei-Portal",
+  "short_name": "Mei-Portal",
   "description": "统一应用门户",
   "start_url": "/",
   "display": "standalone",

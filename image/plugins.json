@@ -45,9 +45,9 @@
     "icon": "lucide:search",
     "category": "utility",
     "weight": 40,
-    "subdomainPrefix": "search",
+    "subdomainPrefix": "disks",
     "endpoint": "",
-    "healthPath": "/search/api/health",
+    "healthPath": "/disks/api/health",
     "healthExpect": 200,
     "hasSkin": false
   },

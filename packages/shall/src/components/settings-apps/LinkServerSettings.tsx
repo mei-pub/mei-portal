@@ -1,6 +1,7 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import {
   Alert,
   Pill,
@@ -63,6 +64,13 @@ export default function LinkServerSettings() {
   const [busy, setBusy] = useState('');
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
+  const searchParams = useSearchParams();
+  // mei-link 引导弹层深链带来 ?highlight=serverAddr,serverPort,authToken（字段名与其表单 name 对齐）
+  const highlight = useMemo(
+    () => (searchParams.get('highlight') || '').split(',').map((s) => s.trim()).filter(Boolean),
+    [searchParams]
+  );
+  const hl = useCallback((name: string) => highlight.includes(name), [highlight]);
 
   const load = useCallback(async (silent = false) => {
     if (!silent) setLoading(true);
@@ -149,7 +157,12 @@ export default function LinkServerSettings() {
     setMessage('');
     setError('');
     try {
-      const d = await jsonFetch<Partial<ServerConfig> & { error?: string }>('/link/api/bootstrap');
+      // POST 带上表单当前的管理页地址与 token：填完即可直接拉取，不需要先保存
+      const d = await jsonFetch<Partial<ServerConfig> & { error?: string }>('/link/api/bootstrap', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ managementURL: config.managementURL, domainAPIToken: config.domainAPIToken }),
+      });
       if (d.error) throw new Error(d.error);
       setConfig((prev) => ({
         ...prev,
@@ -157,8 +170,11 @@ export default function LinkServerSettings() {
         serverPort: d.serverPort || prev.serverPort,
         authToken: d.authToken || prev.authToken,
         subDomainHost: d.subDomainHost || prev.subDomainHost,
+        vhostHTTPPort: d.vhostHTTPPort ?? prev.vhostHTTPPort,
+        vhostHTTPSPort: d.vhostHTTPSPort ?? prev.vhostHTTPSPort,
+        tlsEnabled: d.tlsEnabled ?? prev.tlsEnabled,
       }));
-      setMessage('已拉取服务器配置，请检查后保存');
+      setMessage('已从服务端拉取配置，请确认后保存');
     } catch (err) {
       setError((err as Error).message || '拉取配置失败');
     } finally {
@@ -187,27 +203,22 @@ export default function LinkServerSettings() {
         title="服务器连接"
         description="这些参数用于生成 frpc.toml 并建立隧道连接。"
         actions={
-          <>
-            <SettingsButton onClick={testConnection} disabled={busy !== '' || !config.serverAddr}>
-              {busy === 'test' ? '测试中' : '测试连接'}
-            </SettingsButton>
-            <SettingsButton onClick={bootstrap} disabled={busy !== ''}>
-              拉取配置
-            </SettingsButton>
-          </>
+          <SettingsButton onClick={testConnection} disabled={busy !== '' || !config.serverAddr}>
+            {busy === 'test' ? '测试中' : '测试连接'}
+          </SettingsButton>
         }
       >
         <div className="mei-grid">
-          <SettingsField label="服务器地址">
+          <SettingsField label="服务器地址" highlight={hl('serverAddr')}>
             <TextInput value={config.serverAddr} onChange={(e) => setConfig({ ...config, serverAddr: e.target.value })} placeholder="frps.example.com" />
           </SettingsField>
-          <SettingsField label="服务器端口">
+          <SettingsField label="服务器端口" highlight={hl('serverPort')}>
             <TextInput type="number" value={config.serverPort} onChange={(e) => setConfig({ ...config, serverPort: e.target.value })} />
           </SettingsField>
-          <SettingsField label="连接令牌" hint="留空表示沿用已保存的令牌。">
+          <SettingsField label="连接令牌" hint="留空表示沿用已保存的令牌。" highlight={hl('authToken')}>
             <TextInput type="password" value={config.authToken || ''} onChange={(e) => setConfig({ ...config, authToken: e.target.value })} />
           </SettingsField>
-          <SettingsField label="子域名主机">
+          <SettingsField label="子域名主机" highlight={hl('subDomainHost')}>
             <TextInput value={config.subDomainHost || ''} onChange={(e) => setConfig({ ...config, subDomainHost: e.target.value })} placeholder="example.com" />
           </SettingsField>
           <SettingsField label="HTTP 端口">
@@ -223,19 +234,27 @@ export default function LinkServerSettings() {
       </SettingsSection>
 
       <div className="mei-grid mei-grid-equal">
-        <SettingsSection title="域名管理接口" description="用于从服务端拉取可用域名。">
+        <SettingsSection
+          title="服务端管理接口"
+          description="填写服务端管理页地址后即可一键拉取连接配置与可用域名，无需逐项手填。"
+          actions={
+            <SettingsButton onClick={bootstrap} disabled={busy !== ''}>
+              {busy === 'bootstrap' ? '拉取中' : '从服务端拉取配置'}
+            </SettingsButton>
+          }
+        >
           <div className="mei-field-stack">
-            <SettingsField label="管理页地址" span>
+            <SettingsField label="管理页地址" hint="服务端 mei-link 管理页地址，如 http://frps.example.com:8080" span highlight={hl('managementURL')}>
               <TextInput value={config.managementURL || ''} onChange={(e) => setConfig({ ...config, managementURL: e.target.value })} />
             </SettingsField>
-            <SettingsField label="API Token" span>
+            <SettingsField label="接口 Token" hint="服务端 MEILINK_DOMAIN_API_TOKEN。" span highlight={hl('domainAPIToken')}>
               <TextInput type="password" value={config.domainAPIToken || ''} onChange={(e) => setConfig({ ...config, domainAPIToken: e.target.value })} />
             </SettingsField>
           </div>
         </SettingsSection>
         <SettingsSection title="本地管理接口" description="frpc Admin API，用于状态读取与进程管理。">
           <div className="mei-field-stack">
-            <SettingsField label="端口">
+            <SettingsField label="端口" highlight={hl('adminPort')}>
               <TextInput type="number" value={config.adminPort || ''} onChange={(e) => setConfig({ ...config, adminPort: e.target.value })} />
             </SettingsField>
             <SettingsField label="用户名">
@@ -278,7 +297,7 @@ export default function LinkServerSettings() {
       </SettingsSection>
 
       <style>{`
-        .mei-grid-equal{align-items:stretch;}
+        .mei-grid-equal{align-items:stretch;margin-bottom:20px;}
         .mei-grid-equal>section{height:100%;display:flex;flex-direction:column;}
         .mei-grid-equal .mei-field-stack{display:flex;flex-direction:column;gap:12px;height:100%;}
       `}</style>

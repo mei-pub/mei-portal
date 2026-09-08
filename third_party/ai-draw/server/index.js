@@ -245,72 +245,82 @@ async function initializeAdmin() {
 }
 
 // --- Middleware ---
-const authenticateToken = (req, res, next) => {
-  const authHeader = req.headers['authorization'];
-  const token = authHeader && authHeader.split(' ')[1];
+// mei-allin 统一身份：不再有独立用户体系/JWT。
+// 鉴权 = 校验主应用会话（Bearer 令牌或 mei-auth cookie），由门户 /api/auth/verify 裁决；
+// 会话有效时以门户 admin 账户作为 req.user（数据仍按该账户隔离）。
+const SHELL_URL = process.env.MEI_SHELL_URL || 'http://127.0.0.1:3010';
+const portalVerifyCache = new Map();
+const PORTAL_CACHE_TTL = 30 * 1000;
+const PORTAL_NEG_TTL = 5 * 1000;
 
-  if (!token) {
-    if (process.env.DEBUG === 'true') console.log('[Auth] No token provided');
-    return res.sendStatus(401);
+async function isPortalSession(credential) {
+  if (!credential) return false;
+  const cached = portalVerifyCache.get(credential);
+  if (cached && cached.exp > Date.now()) return cached.ok;
+  let ok = false;
+  try {
+    const res = await fetch(`${SHELL_URL}/api/auth/verify`, {
+      headers: { Authorization: `Bearer ${credential}` },
+      signal: AbortSignal.timeout(4000),
+    });
+    ok = res.ok;
+  } catch (err) {
+    ok = false;
   }
+  portalVerifyCache.set(credential, { ok, exp: Date.now() + (ok ? PORTAL_CACHE_TTL : PORTAL_NEG_TTL) });
+  return ok;
+}
 
-  jwt.verify(token, JWT_SECRET, async (err, user) => {
-    if (err) {
-      if (process.env.DEBUG === 'true') console.error('[Auth] Token verification failed:', err.message);
-      return res.sendStatus(403);
-    }
-    req.user = user;
-
-    // Update last_seen_at with throttling (max once per 5 minutes per user)
-    const now = Date.now();
-    const lastUpdate = lastSeenUpdateCache.get(user.id);
-    const fiveMinutes = 5 * 60 * 1000;
-
-    if (!lastUpdate || (now - lastUpdate) > fiveMinutes) {
-      lastSeenUpdateCache.set(user.id, now);
-
-      // Async update, don't block the request
-      const timestamp = new Date().toISOString();
-      getDB().run('UPDATE users SET last_seen_at = ? WHERE id = ?', timestamp, user.id).catch(e => {
-        if (process.env.DEBUG === 'true') console.error('[Auth] Failed to update last_seen_at:', e);
-      });
-    }
-
-    next();
-  });
-};
-
-const optionalAuthenticateToken = (req, res, next) => {
+function extractPortalCredential(req) {
   const authHeader = req.headers['authorization'];
-  const token = authHeader && authHeader.split(' ')[1];
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    return authHeader.slice('Bearer '.length).trim();
+  }
+  const cookieHeader = req.headers.cookie || '';
+  const match = /(?:^|;\s*)mei-auth=([^;]+)/.exec(cookieHeader);
+  if (match) {
+    try { return decodeURIComponent(match[1]); } catch { return match[1]; }
+  }
+  return null;
+}
 
-  if (!token) {
+async function touchLastSeen(userId) {
+  const now = Date.now();
+  const lastUpdate = lastSeenUpdateCache.get(userId);
+  const fiveMinutes = 5 * 60 * 1000;
+  if (lastUpdate && (now - lastUpdate) <= fiveMinutes) return;
+  lastSeenUpdateCache.set(userId, now);
+  const timestamp = new Date().toISOString();
+  getDB().run('UPDATE users SET last_seen_at = ? WHERE id = ?', timestamp, userId).catch(e => {
+    if (process.env.DEBUG === 'true') console.error('[Auth] Failed to update last_seen_at:', e);
+  });
+}
+
+const authenticateToken = async (req, res, next) => {
+  const credential = extractPortalCredential(req);
+  if (credential && (await isPortalSession(credential))) {
+    const row = await getDB().get('SELECT * FROM users WHERE username = ?', process.env.MEI_ADMIN_USER || 'admin');
+    if (!row) return res.sendStatus(401);
+    req.user = { id: row.id, username: row.username, role: row.role || 'user' };
+    touchLastSeen(row.id);
     return next();
   }
+  if (process.env.DEBUG === 'true') console.log('[Auth] No valid portal session');
+  return res.sendStatus(401);
+};
 
-  jwt.verify(token, JWT_SECRET, async (err, user) => {
-    if (err) {
-      if (process.env.DEBUG === 'true') console.log('[Auth] Invalid token in optional auth, proceeding as anonymous');
-      return next();
+const optionalAuthenticateToken = async (req, res, next) => {
+  const credential = extractPortalCredential(req);
+  if (credential && (await isPortalSession(credential))) {
+    const row = await getDB().get('SELECT * FROM users WHERE username = ?', process.env.MEI_ADMIN_USER || 'admin');
+    if (row) {
+      req.user = { id: row.id, username: row.username, role: row.role || 'user' };
+      touchLastSeen(row.id);
     }
-    req.user = user;
-
-    // Update last_seen_at with throttling (same as authenticateToken)
-    const now = Date.now();
-    const lastUpdate = lastSeenUpdateCache.get(user.id);
-    const fiveMinutes = 5 * 60 * 1000;
-
-    if (!lastUpdate || (now - lastUpdate) > fiveMinutes) {
-      lastSeenUpdateCache.set(user.id, now);
-
-      const timestamp = new Date().toISOString();
-      getDB().run('UPDATE users SET last_seen_at = ? WHERE id = ?', timestamp, user.id).catch(e => {
-        if (process.env.DEBUG === 'true') console.error('[Auth] Failed to update last_seen_at:', e);
-      });
-    }
-
-    next();
-  });
+    return next();
+  }
+  // 无有效主应用会话 → 匿名继续
+  return next();
 };
 
 const isAdmin = (req, res, next) => {
@@ -847,17 +857,9 @@ app.post('/api/auth/register', async (req, res) => {
 });
 
 app.post('/api/auth/login', async (req, res) => {
-  const { username, password } = req.body;
-  const db = getDB();
-  const row = await db.get('SELECT * FROM users WHERE username = ?', username);
-
-  if (!row || !(await bcrypt.compare(password, row.password))) {
-    return res.status(400).json({ error: 'Invalid credentials' });
-  }
-
-  const user = mapUser(row);
-  const token = jwt.sign({ id: user.id, username: user.username, role: user.role || 'user' }, JWT_SECRET, { expiresIn: '24h' });
-  res.json({ token, user: { id: user.id, username: user.username, nickname: user.nickname || user.username, role: user.role || 'user' } });
+  // mei-allin 统一身份：本应用不再拥有独立用户体系，登录统一走门户。
+  // 保留端点仅为给旧前端一个明确提示，避免静默失败。
+  return res.status(403).json({ error: '已接入门户统一身份，请从门户登录' });
 });
 
 app.post('/api/auth/change-password', authenticateToken, async (req, res) => {

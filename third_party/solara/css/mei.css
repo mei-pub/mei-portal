@@ -485,3 +485,17 @@ img { display: block; }
   .mei-playerbar .b-time, .mei-playerbar .b-list-tag { display: none; }
   .mei-brand .name { font-size: 28px; }
 }
+
+/* 收藏浏览页 */
+.mei-fav-page { max-width: 800px; margin: 0 auto; padding: 4vh 0 20px; }
+.mei-fav-head { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; padding: 0 4px; }
+.mei-fav-title { font-size: 20px; font-weight: 700; display: flex; align-items: center; gap: 8px; }
+.mei-fav-title svg { width: 20px; height: 20px; color: var(--primary); }
+.mei-fav-count { font-size: 12px; color: var(--faint); }
+.mei-fav-actions { margin-left: auto; display: flex; gap: 8px; }
+.mei-fav-actions .mei-btn-ghost { font-size: 12px; padding: 5px 12px; }
+.mei-fav-list { background: var(--surface); border-radius: 14px; border: 1px solid var(--border); overflow: hidden; }
+.mei-fav-list .mei-song-row { border-radius: 0; border-bottom: 1px solid rgba(23,32,56,0.04); }
+.mei-fav-list .mei-song-row:last-child { border-bottom: none; }
+.mei-fav-list .mei-song-row .r-ops { opacity: 1; }
+@media (max-width: 760px) { .mei-fav-page { padding: 2vh 0 20px; } .mei-fav-actions .mei-btn-ghost { padding: 4px 10px; } }

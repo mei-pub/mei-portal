@@ -25,9 +25,9 @@ interface VirtualGridProps<T> {
 export default function VirtualGrid<T>({
   items,
   renderItem,
-  estimateRowHeight = 320,
-  rowGapClass = 'pb-14 sm:pb-20',
-  overscan = 3,
+ estimateRowHeight = 320,
+ rowGapClass = 'pb-6 sm:pb-8',
+ overscan = 3,
   className = '',
 }: VirtualGridProps<T>) {
   const parentRef = useRef<HTMLDivElement>(null);

@@ -13,7 +13,7 @@ function getDoubanImageProxyConfig(): {
   let doubanImageProxyType =
     localStorage.getItem('doubanImageProxyType') ||
     (window as any).RUNTIME_CONFIG?.DOUBAN_IMAGE_PROXY_TYPE ||
-    'cmliussss-cdn-tencent';
+    'server';
   // 兼容历史数据：直连和豆瓣官方精品 CDN 统一使用服务器代理
   if (doubanImageProxyType === 'direct' || doubanImageProxyType === 'img3') {
     doubanImageProxyType = 'server';
@@ -29,20 +29,38 @@ function getDoubanImageProxyConfig(): {
 }
 
 /**
+ * 把目标图 URL 编成 base64url 作为代理参数。
+ * 背景（2026-09-08）：外网经 frp 隧道（VPS 境外节点）访问是明文 HTTP，
+ * 请求行里出现「://lain.bgm.tv」「://api.bgm.tv」等被墙主机名会被链路上的
+ * URL 过滤直接双向 RST（浏览器 ERR_CONNECTION_RESET、nginx 侧 499），
+ * 与请求快慢无关、必现。裸 bgm.tv 与路径位置的关键字均放行——过滤匹配的是
+ * URL 中的完整上游主机名。编码后请求行不含任何上游主机名，彻底规避。
+ */
+function toProxiedParam(originalUrl: string): string {
+  // encodeURIComponent → 纯 ASCII，btoa 安全；再转 base64url（无 +/=，query 安全）
+  return btoa(encodeURIComponent(originalUrl))
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=+$/, '');
+}
+
+/**
  * 处理图片 URL，如果设置了图片代理则使用代理
  */
 export function processImageUrl(originalUrl: string): string {
   if (!originalUrl) return originalUrl;
 
-  // 仅处理豆瓣图片代理
-  if (!originalUrl.includes('doubanio.com')) {
+  // 仅处理豆瓣图片与 Bangumi 图床（lain.bgm.tv 同样被 DNS 污染阻断，须经服务端代理）
+  if (!originalUrl.includes('doubanio.com') && !originalUrl.includes('lain.bgm.tv')) {
     return originalUrl;
   }
 
   const { proxyType, proxyUrl } = getDoubanImageProxyConfig();
   switch (proxyType) {
     case 'server':
-      return `/api/image-proxy?url=${encodeURIComponent(originalUrl)}`;
+      // 注意：返回值用于 <img src>，不经过 layout 的 window.fetch basePath 改写，
+      // 必须自带 /tv 前缀（lunatv 固定 basePath=/tv），否则在门户 iframe 里打到门户 /api 而 404
+      return `/tv/api/image-proxy?u=${toProxiedParam(originalUrl)}`;
     case 'cmliussss-cdn-tencent':
       return originalUrl.replace(
         /img\d+\.doubanio\.com/g,
@@ -56,7 +74,7 @@ export function processImageUrl(originalUrl: string): string {
     case 'custom':
       return `${proxyUrl}${encodeURIComponent(originalUrl)}`;
     default:
-      return `/api/image-proxy?url=${encodeURIComponent(originalUrl)}`;
+      return `/api/image-proxy?u=${toProxiedParam(originalUrl)}`;
   }
 }
 

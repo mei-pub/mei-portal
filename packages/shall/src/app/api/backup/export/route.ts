@@ -29,7 +29,7 @@ export async function POST(request: Request) {
     return new NextResponse(new Uint8Array(buf), {
       headers: {
         'content-type': 'application/zip',
-        'content-disposition': `attachment; filename="mei-allin-backup-${date}.zip"`,
+        'content-disposition': `attachment; filename="mei-portal-backup-${date}.zip"`,
       },
     });
   } catch (error) {

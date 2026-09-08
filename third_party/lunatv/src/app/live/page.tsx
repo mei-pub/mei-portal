@@ -49,7 +49,7 @@ interface LiveSource {
   disabled?: boolean;
 }
 
-function LivePageClient() {
+function LivePageClient({ pathSource, pathId }: { pathSource?: string; pathId?: string } = {}) {
   // -----------------------------------------------------------------------------
   // 状态变量（State）
   // -----------------------------------------------------------------------------
@@ -78,8 +78,8 @@ function LivePageClient() {
     currentChannelRef.current = currentChannel;
   }, [currentChannel]);
 
-  const [needLoadSource] = useState(searchParams.get('source'));
-  const [needLoadChannel] = useState(searchParams.get('id'));
+  const [needLoadSource] = useState(pathSource ?? searchParams.get('source'));
+  const [needLoadChannel] = useState(pathId ?? searchParams.get('id'));
 
   // 播放器相关
   const [videoUrl, setVideoUrl] = useState('');
@@ -668,7 +668,7 @@ function LivePageClient() {
             title: currentChannelRef.current.name,
             source_name: currentSourceRef.current.name,
             year: '',
-            cover: `/api/proxy/logo?url=${encodeURIComponent(currentChannelRef.current.logo)}&source=${currentSourceRef.current.key}`,
+            cover: `/tv/api/proxy/logo?url=${encodeURIComponent(currentChannelRef.current.logo)}&source=${currentSourceRef.current.key}`,
             total_episodes: 1,
             save_time: Date.now(),
             search_title: '',
@@ -1424,7 +1424,7 @@ function LivePageClient() {
                                 <div className='w-10 h-10 bg-gray-300 dark:bg-gray-700 rounded-lg flex items-center justify-center flex-shrink-0 overflow-hidden'>
                                   {channel.logo ? (
                                     <img
-                                      src={`/api/proxy/logo?url=${encodeURIComponent(channel.logo)}&source=${currentSource?.key || ''}`}
+                                      src={`/tv/api/proxy/logo?url=${encodeURIComponent(channel.logo)}&source=${currentSource?.key || ''}`}
                                       alt={channel.name}
                                       className='w-full h-full rounded object-contain'
                                       loading="lazy"
@@ -1532,7 +1532,7 @@ function LivePageClient() {
                   <div className='w-20 h-20 bg-gray-300 dark:bg-gray-700 rounded-lg flex items-center justify-center flex-shrink-0 overflow-hidden'>
                     {currentChannel.logo ? (
                       <img
-                        src={`/api/proxy/logo?url=${encodeURIComponent(currentChannel.logo)}&source=${currentSource?.key || ''}`}
+                        src={`/tv/api/proxy/logo?url=${encodeURIComponent(currentChannel.logo)}&source=${currentSource?.key || ''}`}
                         alt={currentChannel.name}
                         className='w-full h-full rounded object-contain'
                         loading="lazy"
@@ -1611,7 +1611,7 @@ export default function LivePage() {
   );
 }
 
-function LivePageGuard() {
+export function LivePageGuard({ pathSource, pathId }: { pathSource?: string; pathId?: string } = {}) {
   const [enabled, setEnabled] = useState<boolean | null>(null);
 
   useEffect(() => {
@@ -1639,5 +1639,5 @@ function LivePageGuard() {
     );
   }
 
-  return <LivePageClient />;
+  return <LivePageClient pathSource={pathSource} pathId={pathId} />;
 }

@@ -266,7 +266,8 @@ func main() {
 	confStore := handler.WrapConfStore[AppStore](appStore)
 	execPath, _ := os.Executable()
 	server := api.NewServer(queue, taskLogs, database, confStore, api.ServerOptions{
-		EnableAuth: cfg.EnableAuth,
+		// mei-allin 统一身份：门户会话校验常开（不再有独立账户体系，enable_auth 配置不再生效）
+		EnableAuth: true,
 		StaticDir:  cfg.StaticDir,
 		FFmpegBin:  getFFmpegBin(cfg),
 		VideoRoot:  cfg.LocalDir,

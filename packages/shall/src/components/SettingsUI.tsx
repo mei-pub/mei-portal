@@ -95,14 +95,17 @@ export function SettingsField({
   hint,
   children,
   span,
+  highlight,
 }: {
   label: string;
   hint?: string;
   children: ReactNode;
   span?: boolean;
+  /** 引导高亮：由深链 ?highlight=serverAddr,serverPort 触发，与 mei-link 弹层字段名对齐 */
+  highlight?: boolean;
 }) {
   return (
-    <label className={`mei-field${span ? ' span' : ''}`}>
+    <label className={`mei-field${span ? ' span' : ''}${highlight ? ' mei-field-focus' : ''}`}>
       <span>{label}</span>
       {children}
       {hint ? <small>{hint}</small> : null}
@@ -208,6 +211,8 @@ export const settingsUiStyles = `
 .mei-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px;}
 .mei-grid.cols-3{grid-template-columns:repeat(3,minmax(0,1fr));}
 .mei-field{display:flex;flex-direction:column;gap:8px;min-width:0;}
+.mei-field-focus{border-radius:14px;box-shadow:0 0 0 2px rgba(99,102,241,.55);background:rgba(99,102,241,.08);padding:10px;animation:mei-field-pulse 1.2s ease-in-out 2;}
+@keyframes mei-field-pulse{0%,100%{box-shadow:0 0 0 2px rgba(99,102,241,.55);}50%{box-shadow:0 0 0 5px rgba(99,102,241,.35);}}
 .mei-field.span{grid-column:1/-1;}
 .mei-field>span{font-size:12px;font-weight:750;color:var(--mei-text-muted);}
 .mei-field small{font-size:11px;color:var(--mei-text-faint);line-height:1.5;}
