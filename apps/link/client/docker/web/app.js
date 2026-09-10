@@ -60,7 +60,6 @@ const apiPath = path => {
 };
 // 门户级接口（穿透重登）永远挂在站点根，不带 /link 前缀。
 // 拼接书写同样是为了避开 sub_filter 的 "/api/ 规则。
-const PORTAL_REPENETRATE_URL = "/api" + "/auth/repenetrate";
 for (const target of document.querySelectorAll("[data-icon]")) target.innerHTML = icons[target.dataset.icon] || "";
 const api = async (path, options = {}) => {
   const response = await fetch(apiPath(path), { credentials: "include", ...options, headers: { "content-type": "application/json", ...(options.headers || {}) } });
@@ -72,19 +71,6 @@ const api = async (path, options = {}) => {
     throw error;
   }
   return payload;
-};
-// 登录态失效时自动走门户穿透重登（门户已登录前提下无感恢复会话）
-const repenetrate = async () => {
-  try {
-    const response = await fetch(PORTAL_REPENETRATE_URL, {
-      method: "POST",
-      credentials: "include",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ app: "mei-link" }),
-    });
-    const payload = await response.json().catch(() => ({}));
-    return Boolean(payload && payload.ok);
-  } catch (error) { return false; }
 };
 const field = (form, name) => form.elements.namedItem(name);
 const formValue = (form, name) => new FormData(form).get(name)?.toString().trim() || "";
@@ -458,20 +444,14 @@ $("#panelToggle").addEventListener("click", async event => {
   await controlAction(connected ? "stop" : "start", event);
 });
 $("#panelRestart").addEventListener("click", async event => { await controlAction("restart", event, "隧道管理器已重启"); });
-// 刷新登录态：登录态失效时手动触发门户穿透重登（替代原退出按钮）
+// 刷新登录态：统一身份下即校验当前门户 mei-auth 会话是否有效
 $("#panelRelogin").addEventListener("click", async event => {
   setBusy(event.currentTarget, true);
   try {
-    const response = await fetch(PORTAL_REPENETRATE_URL, {
-      method: "POST",
-      credentials: "include",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ app: "mei-link" }),
-    });
-    const payload = await response.json().catch(() => ({}));
-    if (payload && payload.ok) { notify("登录态已刷新"); await load(); }
-    else notify((payload && payload.error) || "刷新失败，请先登录门户", true);
-  } catch (error) { notify(error.message, true); }
+    const status = await api("/api/status");
+    if (status && !status.unauthorized) { notify("登录态有效，已刷新"); await load(); }
+    else notify("门户会话已过期，请重新登录门户", true);
+  } catch (error) { notify("门户会话已过期，请重新登录门户", true); }
   finally { setBusy(event.currentTarget, false); }
 });
 // 面板收展（localStorage 记忆）
@@ -499,13 +479,10 @@ $("#clearLogsButton").addEventListener("click", async () => { if (!events.length
   try {
     status = await api("/api/status");
   } catch (error) {
-    // 会话失效：尝试门户穿透重登后重试一次
-    if (!(await repenetrate())) return;
-    try { status = await api("/api/status"); } catch (e) { return; }
+    // 统一身份：门户 mei-auth 会话即登录态；401 = 门户未登录/已过期，展示登录表单
+    return;
   }
-  if (status && status.unauthorized && await repenetrate()) {
-    try { status = await api("/api/status"); } catch (e) { return; }
-  }
+  if (status && status.unauthorized) return;
   if (status && !status.unauthorized) {
     $("#loginView").classList.add("hidden");
     $("#appView").classList.remove("hidden");

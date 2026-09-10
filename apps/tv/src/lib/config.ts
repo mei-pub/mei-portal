@@ -327,7 +327,8 @@ async function getInitConfig(configFile: string, subConfig: {
   // 补充用户信息
   let userNames: string[] = [];
   try {
-    userNames = await db.getAllUsers();
+    // localstorage 模式服务端存储实例为 null（用户数据在浏览器端），无服务端用户列表可查
+    userNames = db ? await db.getAllUsers() : [];
   } catch (e) {
     console.error('获取用户列表失败:', e);
   }
