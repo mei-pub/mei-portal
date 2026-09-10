@@ -108,8 +108,9 @@ mei-portal/
 ├── apps/                   # 各应用——全部为一等公民本地代码（目录名 = URL 子路径）
 │   ├── tv/                 #   影视门户（Next.js，原 LunaTV 魔改演进）
 │   ├── music/              #   音乐播放（原生 JS + Node 服务，原 Solara）
-│   ├── disks/              #   网盘搜索：web/（Vue 前端）+ pansou/（Go 引擎，过渡期，
-│   │                       #   将被本仓库 Node/TS 复刻引擎替换；含定制磁力插件）
+│   ├── disks/              #   网盘搜索：web/（Vue 前端）+ engine/（Node/TS 复刻引擎，
+│   │                       #   API 与 Go 版完全兼容，插件分批移植中）+
+│   │                       #   pansou/（Go 引擎，过渡期，达到插件对齐后移除）
 │   ├── media/              #   流媒体下载（Go core + React UI，原 MediaGo；Go 为过渡期）
 │   ├── draw/               #   AI 绘图（Vite + React + Express，原 ai-draw）
 │   ├── tools/              #   工具箱（Vite + React + MUI，纯静态，原 omni-tools）

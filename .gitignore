@@ -56,3 +56,6 @@ certs/
 # lunatv PWA 构建产物（next build 时生成，不入库）
 apps/tv/public/sw.js
 apps/tv/public/workbox-*.js
+
+# disks TS 引擎本地运行缓存（生产环境走 /data/pansou/cache）
+apps/disks/engine/cache/
