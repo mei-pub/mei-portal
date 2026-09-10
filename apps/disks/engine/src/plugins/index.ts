@@ -27,6 +27,42 @@ import './huban.ts';
 import './susu.ts';
 import './diduan.ts';
 import './zhizhen.ts';
+// 磁力/电驴引擎（续）
+import './thepiratebay.ts';
+// 网盘/影视资源站（续）
+import './dyyjpro.ts';
+import './duoduo.ts';
+import './djgou.ts';
+import './gaoqing888.ts';
+import './haitunsou.ts';
+import './hunhepan.ts';
+import './ikantv.ts';
+import './jutoushe.ts';
+import './kkv.ts';
+import './melost.ts';
+import './meitizy.ts';
+import './ouge.ts';
+import './quarksoo.ts';
+import './ting77.ts';
+import './wanou.ts';
+import './xiaokupan.ts';
+import './xiaozhang.ts';
+import './xiaoyu.ts';
+import './yunso.ts';
+import './yunsou.ts';
+import './erxiao.ts';
+import './labi.ts';
+import './shandian.ts';
+import './clxiong.ts';
+import './jsnoteclub.ts';
+import './dyyj.ts';
+import './jupansou.ts';
+// 账号型插件（含 Web 管理路由：/gying /qqpd /weibo /panlian）
+import './gying.ts';
+import './weibo.ts';
+import './qqpd.ts';
+import './panlian.ts';
+
 
 /** 全部已注册插件 */
 export function allPluginDefs(): SearchPlugin[] {

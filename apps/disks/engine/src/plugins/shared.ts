@@ -1,7 +1,7 @@
 // 插件公共助手 —— Go plugin.FilterResultsByKeyword 与插件定义工厂
 
-import type { SearchPlugin, SearchResult } from '../types.ts';
-import { registerPlugin } from './registry.ts';
+import type { SearchPlugin, SearchResult, WebRoute } from '../types.ts';
+import { registerPlugin, registerWebRoutes } from './registry.ts';
 
 /** 按关键词过滤结果（多关键词按空格分割，AND 关系，匹配标题或内容）（Go FilterResultsByKeyword） */
 export function filterResultsByKeyword(results: SearchResult[], keyword: string): SearchResult[] {
@@ -21,6 +21,8 @@ export interface PluginDefinition {
   /** 磁力类宽泛结果插件设 true：跳过 Service 层关键词过滤 */
   skipServiceFilter?: boolean;
   search(keyword: string, ext: Record<string, unknown>): Promise<SearchResult[]>;
+  /** 可选：插件自注册 Web 路由（账号管理页等，Go PluginWithWebHandler） */
+  webRoutes?: WebRoute[];
 }
 
 /** 定义并注册插件（对应 Go 的 init() + RegisterGlobalPlugin） */
@@ -32,5 +34,6 @@ export function definePlugin(def: PluginDefinition): SearchPlugin {
     search: def.search,
   };
   registerPlugin(plugin);
+  if (def.webRoutes && def.webRoutes.length > 0) registerWebRoutes(def.webRoutes);
   return plugin;
 }

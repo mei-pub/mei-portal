@@ -1,12 +1,21 @@
 // 插件注册表 —— Go plugin 包全局注册表的 TS 对应物
 // 差异：Go 用 init() 空导入自注册；这里用显式 import + registerPlugin（apps/disks/engine/src/plugins/index.ts）
 
-import type { SearchPlugin } from '../types.ts';
+import type { SearchPlugin, WebRoute } from '../types.ts';
 
 const registry = new Map<string, SearchPlugin>();
+const webRoutes: WebRoute[] = [];
 
 export function registerPlugin(plugin: SearchPlugin): void {
   registry.set(plugin.name, plugin);
+}
+
+export function registerWebRoutes(routes: WebRoute[]): void {
+  webRoutes.push(...routes);
+}
+
+export function getWebRoutes(): WebRoute[] {
+  return webRoutes;
 }
 
 export function getPluginByName(name: string): SearchPlugin | undefined {

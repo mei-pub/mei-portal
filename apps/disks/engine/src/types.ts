@@ -121,3 +121,15 @@ export interface SearchPlugin {
   /** 纯搜索实现：抓取并解析（框架负责超时/缓存/后台补全） */
   search(keyword: string, ext: Record<string, unknown>): Promise<SearchResult[]>;
 }
+
+/** 插件 Web 路由 —— Go PluginWithWebHandler.RegisterWebRoutes 的对应物（账号管理页等） */
+export interface WebRoute {
+  method: 'GET' | 'POST' | 'PUT' | 'DELETE';
+  /** 路径模板，支持 :param 段，如 '/gying/:param' */
+  path: string;
+  handler(
+    req: import('node:http').IncomingMessage,
+    res: import('node:http').ServerResponse,
+    params: Record<string, string>,
+  ): Promise<void> | void;
+}

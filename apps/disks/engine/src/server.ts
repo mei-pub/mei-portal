@@ -7,7 +7,7 @@ import { authenticate, checkCredentials, issueToken, verifyToken } from './auth.
 import { cache } from './cache.ts';
 import { search } from './service/search.ts';
 import { checkLinks } from './service/check.ts';
-import { filterEnabledPlugins, getPlugins } from './plugins/registry.ts';
+import { filterEnabledPlugins, getPlugins, getWebRoutes } from './plugins/registry.ts';
 import { enabledPluginDefs } from './plugins/index.ts';
 import { newErrorResponse, newSuccessResponse, type CheckItem, type CheckRequest, type SearchRequest } from './types.ts';
 
@@ -252,7 +252,41 @@ async function route(req: IncomingMessage, res: ServerResponse): Promise<void> {
     return;
   }
 
+  // 插件自注册 Web 路由（/gying/:param 等账号管理页，Go PluginWithWebHandler）
+  for (const route of getWebRoutes()) {
+    if (route.method !== req.method && !(route.method === 'GET' && req.method === 'HEAD')) continue;
+    const params = matchWebRoute(route.path, path);
+    if (params) {
+      try {
+        await route.handler(req, res, params);
+      } catch (err) {
+        console.error(`[server] 插件路由 ${route.path} 错误: ${err instanceof Error ? err.stack : err}`);
+        if (!res.headersSent) sendJSON(res, 500, newErrorResponse(500, '内部错误'));
+        else res.end();
+      }
+      return;
+    }
+  }
+
   sendJSON(res, 404, newErrorResponse(404, '接口不存在'));
+}
+
+/** 匹配路径模板（:param 段捕获任意非空段），返回参数或 null */
+function matchWebRoute(pattern: string, pathname: string): Record<string, string> | null {
+  const patternParts = pattern.split('/').filter((p) => p !== '');
+  const pathParts = pathname.split('/').filter((p) => p !== '');
+  if (patternParts.length !== pathParts.length) return null;
+  const params: Record<string, string> = {};
+  for (let i = 0; i < patternParts.length; i++) {
+    const pt = patternParts[i]!;
+    if (pt.startsWith(':')) {
+      if (pathParts[i] === '') return null;
+      params[pt.slice(1)] = decodeURIComponent(pathParts[i]!);
+    } else if (pt !== pathParts[i]) {
+      return null;
+    }
+  }
+  return params;
 }
 
 export function startServer(): void {
