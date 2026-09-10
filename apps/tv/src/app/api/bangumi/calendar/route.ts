@@ -29,10 +29,10 @@ export const dynamic = 'force-dynamic';
  */
 
 const MEMORY_TTL_MS = 6 * 60 * 60 * 1000;
-// lunatv 无独立 DATA_DIR（容器内主卷为 /data），缓存固定落 /data/tv/cache；
+// 缓存跟应用的 DATA_DIR 走（部署内 DATA_DIR=/data/tv，即 /data/tv/cache），
 // 本地开发无该路径时 saveToDisk 静默降级（仅丢失重启兜底），可用 LUNATV_CACHE_DIR 覆盖
 const CACHE_FILE = path.join(
-  process.env.LUNATV_CACHE_DIR || '/data/tv/cache',
+  process.env.LUNATV_CACHE_DIR || path.join(process.env.DATA_DIR || '/data/tv', 'cache'),
   'bangumi-calendar.json'
 );
 

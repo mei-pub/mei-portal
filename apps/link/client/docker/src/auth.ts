@@ -76,11 +76,12 @@ export class AuthService {
         if (decodeURIComponent(portal) === (await this.portalSessionToken())) return true;
       } catch { /* 非法编码按未登录处理 */ }
     }
-    const token = /(?:^|; )meilink_session=([^;]+)/.exec(cookie)?.[1];
+    // 分隔符统一容忍任意空白：不同客户端拼 cookie 时 ";" 后可能没有空格
+    const token = /(?:^|;\s*)meilink_session=([^;]+)/.exec(cookie)?.[1];
     return !!token && (this.sessions.get(token) || 0) > Date.now();
   }
   async logout(cookie = "") {
-    const token = /(?:^|; )meilink_session=([^;]+)/.exec(cookie)?.[1];
+    const token = /(?:^|;\s*)meilink_session=([^;]+)/.exec(cookie)?.[1];
     if (token) { this.sessions.delete(token); await this.persistSessions(); }
   }
 }

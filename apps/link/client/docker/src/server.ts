@@ -30,8 +30,11 @@ async function body(request: IncomingMessage): Promise<Record<string, unknown>> 
 }
 
 async function sendFile(response: ServerResponse, webDir: string, file: string, type: string) {
+  // 先读后写头：writeHead 之后再读失败会让外层 catch 二次 writeHead，
+  // 触发 ERR_HTTP_HEADERS_SENT 的未捕获异常，连接挂起
+  const body = await readFile(join(webDir, file));
   response.writeHead(200, { "content-type": type });
-  response.end(await readFile(join(webDir, file)));
+  response.end(body);
 }
 
 /** 代理请求服务端管理页。失败返回 {error}，成功透传管理页 JSON。 */
@@ -173,6 +176,8 @@ export async function createMeilinkServer(options: MeilinkServerOptions = {}): P
       }
       return json(response, 404, { error: "not found" });
     } catch (error) {
+      // 响应头已发出（如 sendFile 中途失败）时不能再写状态行，只能断开连接
+      if (response.headersSent) { response.destroy(); return; }
       return json(response, 400, errorPayload(error instanceof Error ? error.message : "请求失败"));
     }
   });

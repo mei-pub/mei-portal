@@ -326,11 +326,18 @@ async function getInitConfig(configFile: string, subConfig: {
 
   // 补充用户信息
   let userNames: string[] = [];
-  try {
-    // localstorage 模式服务端存储实例为 null（用户数据在浏览器端），无服务端用户列表可查
-    userNames = db ? await db.getAllUsers() : [];
-  } catch (e) {
-    console.error('获取用户列表失败:', e);
+  // localstorage 模式：用户数据在浏览器端，服务端无用户列表可查。
+  // 注意不能写 `db ? ... : []`——db 是 DbManager 单例恒为真值，
+  // 那个守卫是死代码，真正区分模式的是存储类型（db 内部会按 storage null 降级为 []）。
+  if (MEI_STORAGE_TYPE === 'localstorage') {
+    userNames = [];
+  } else {
+    try {
+      userNames = await db.getAllUsers();
+    } catch (e) {
+      console.error('获取用户列表失败:', e);
+      userNames = [];
+    }
   }
   const allUsers = userNames.filter((u) => u !== process.env.USERNAME).map((u) => ({
     username: u,

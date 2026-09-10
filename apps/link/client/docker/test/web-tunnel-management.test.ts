@@ -65,6 +65,10 @@ test("web UI resolves API paths at runtime instead of relying on nginx sub_filte
   assert.match(script, /const API_BASE = /);
   assert.match(script, /const apiPath = /);
   assert.match(script, /await fetch\(apiPath\(path\)/);
-  // 门户级重登接口挂在站点根，必须用拼接写法避开 sub_filter
-  assert.match(script, /"\/api" \+ "\/auth\/repenetrate"/);
+  // 视图路由同样必须从 API_BASE 推导，不能写死 /link 前缀（独立部署下会 404）
+  assert.match(script, /const VIEW_PATH = view => `\$\{API_BASE\}\/\$\{view\}`/);
+  // repenetrate 链路已移除：「刷新登录态」改为校验门户会话（/api/status 401 判定），
+  // 不得再出现对已删函数或门户级重登接口的引用
+  assert.doesNotMatch(script, /repenetrate/);
+  assert.match(script, /#panelRelogin/);
 });

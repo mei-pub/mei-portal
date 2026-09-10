@@ -3,8 +3,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 
 import { getAuthInfoFromCookie } from '@/lib/auth';
-import { getConfig } from '@/lib/config';
-import { db } from '@/lib/db';
+import { getConfig, persistAdminConfig } from '@/lib/config';
 import { deleteCachedLiveChannels, refreshLiveChannels } from '@/lib/live';
 
 export const runtime = 'nodejs';
@@ -161,7 +160,7 @@ export async function POST(request: NextRequest) {
     }
 
     // 保存配置
-    await db.saveAdminConfig(config);
+    await persistAdminConfig(config);
 
     return NextResponse.json({ success: true });
   } catch (error) {

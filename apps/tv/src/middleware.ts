@@ -136,8 +136,11 @@ function handleAuthFailure(
 
   // 统一身份：页面请求一律跳回门户登录页（根路径 /login 由 Shell 提供）
   const loginUrl = new URL('/login', request.url);
-  // 保留完整的URL，包括查询参数
-  const fullUrl = `${pathname}${request.nextUrl.search}`;
+  // 保留完整的URL，包括查询参数。
+  // middleware 中 pathname 已被剥掉 basePath（/tv），直接传出去登录后回跳
+  // 会落到门户根下的同一路径（404）——必须补回 /tv 前缀才是有效的门户应用路径
+  const basePath = process.env.NEXT_PUBLIC_BASE_PATH || '/tv';
+  const fullUrl = `${basePath}${pathname}${request.nextUrl.search}`;
   loginUrl.searchParams.set('redirect', fullUrl);
   return NextResponse.redirect(loginUrl);
 }

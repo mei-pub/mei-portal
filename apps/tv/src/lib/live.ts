@@ -1,7 +1,6 @@
 /* eslint-disable no-constant-condition */
 
-import { getConfig } from "@/lib/config";
-import { db } from "@/lib/db";
+import { getConfig, persistAdminConfig } from "@/lib/config";
 
 const defaultUA = 'AptvPlayer/1.4.10'
 
@@ -43,7 +42,9 @@ export async function getCachedLiveChannels(key: string): Promise<LiveChannels |
       return null;
     }
     liveInfo.channelNumber = channelNum;
-    await db.saveAdminConfig(config);
+    // mei-portal：走 persistAdminConfig（localstorage 模式写文件，其余写 db），
+    // 直接 db.saveAdminConfig 在 localstorage 模式下不会持久化（storage 为 null 惰性降级）
+    await persistAdminConfig(config);
   }
   return cachedLiveChannels[key] || null;
 }

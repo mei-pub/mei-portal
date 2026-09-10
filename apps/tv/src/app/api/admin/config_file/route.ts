@@ -3,8 +3,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 
 import { getAuthInfoFromCookie } from '@/lib/auth';
-import { getConfig, refineConfig } from '@/lib/config';
-import { db } from '@/lib/db';
+import { getConfig, persistAdminConfig, refineConfig } from '@/lib/config';
 
 export const runtime = 'nodejs';
 
@@ -78,7 +77,7 @@ export async function POST(request: NextRequest) {
 
     adminConfig = refineConfig(adminConfig);
     // 更新配置文件
-    await db.saveAdminConfig(adminConfig);
+    await persistAdminConfig(adminConfig);
     return NextResponse.json({
       success: true,
       message: '配置文件更新成功',

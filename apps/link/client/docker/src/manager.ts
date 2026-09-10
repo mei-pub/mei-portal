@@ -410,7 +410,7 @@ export class TunnelManager {
   private async waitForAdmin() {
     let lastError: unknown;
     for (let attempt = 0; attempt < 30; attempt++) {
-      try { if ((await fetch(`http://127.0.0.1:${this.config!.adminPort}/healthz`)).ok) return; } catch (error) { lastError = error; }
+      try { if ((await fetch(`http://127.0.0.1:${this.config!.adminPort}/healthz`, { signal: AbortSignal.timeout(1_000) })).ok) return; } catch (error) { lastError = error; }
       await new Promise(resolve => setTimeout(resolve, 250));
     }
     throw new Error(`Admin API 未就绪: ${lastError instanceof Error ? lastError.message : "timeout"}`);

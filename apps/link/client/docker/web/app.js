@@ -14,7 +14,6 @@ const icons = {
   refresh: '<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12a9 9 0 0 1 15.5-6.2L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-15.5 6.2L3 16"/><path d="M3 21v-5h5"/></svg>',
   // 刷新登录态：语义是「重新认证」，不能复用 refresh（会与「重启」按钮撞图标）
   key: '<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="8" cy="15" r="4"/><path d="m10.8 12.2 8.2-8.2"/><path d="m17 4 3 3"/><path d="m14.5 6.5 3 3"/></svg>',
-  logout: '<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5"/><path d="M21 12H9"/></svg>',
   collapseLeft: '<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg>',
   collapseRight: '<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg>',
   alert: '<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 2.5 20h19L12 3Z"/><path d="M12 9v5"/><path d="M12 17.4v.2"/></svg>',
@@ -66,6 +65,8 @@ const api = async (path, options = {}) => {
   const payload = await response.json().catch(() => ({}));
   if (!response.ok) {
     const error = new Error(payload.error || "请求失败");
+    // 带上状态码：401 表示会话失效，调用方据此切回登录视图而不是静默吞掉
+    error.status = response.status;
     // 服务端设置类故障：把结构化引导挂到 error 上，由调用方转成弹层而不是干巴巴的 toast
     if (payload.setup) error.setup = payload.setup;
     throw error;
@@ -138,7 +139,11 @@ $("#setupGoto").addEventListener("click", () => {
   // 字段名作为 highlight 参数带给设置页高亮；独立访问时才切本应用内设置面板。
   if (window.parent !== window.self) {
     const query = fields && fields.length ? `?highlight=${encodeURIComponent(fields.join(","))}` : "";
-    try { window.parent.postMessage({ source: "mei-iframe", type: "navigate", path: `/settings/link-server${query}` }, window.location.origin); } catch (e) {}
+    // 跨域 iframe（gateway 子域名模式）下 window.location.origin 是本应用而非门户，
+    // 拿不到父窗口 origin 时用 "*" 兜底（载荷只是导航意图，无敏感信息）
+    let targetOrigin = "*";
+    try { targetOrigin = window.parent.location.origin; } catch (e) {}
+    try { window.parent.postMessage({ source: "mei-iframe", type: "navigate", path: `/settings/link-server${query}` }, targetOrigin); } catch (e) {}
     return;
   }
   setView("settings");
@@ -267,10 +272,31 @@ function fillReconnect(settings) {
   field(form, "reconnectEnabled").checked = enabled;
   setSwitch(form.querySelector('[data-switch="reconnectEnabled"]'), enabled);
 }
-function beginPolling() { clearInterval(polling); polling = setInterval(() => load().catch(() => {}), 3000); }
+function beginPolling() {
+  clearInterval(polling);
+  polling = setInterval(() => {
+    load().catch(error => {
+      // 会话失效（门户 mei-auth 过期）：停掉轮询并切回登录视图，
+      // 否则页面静默停更，用户面对的是一份陈旧的假状态
+      if (error && error.status === 401) sessionExpired();
+    });
+  }, 3000);
+}
+/** 会话失效的统一处理：停止轮询，露出登录视图 */
+function sessionExpired() {
+  clearInterval(polling);
+  $("#appView").classList.add("hidden");
+  $("#loginView").classList.remove("hidden");
+}
 const LINK_VIEWS = new Set(["tunnels", "settings", "logs"]);
+// 视图基址与 API 基址同源推导：门户子路径部署为 "/link"，独立部署为 ""。
+// 不能写死 /link —— 独立部署（docker-compose.client.yml 直连 17420）时
+// pushState 会写出不存在的路径，刷新/后退即 404。
+const VIEW_PATH = view => `${API_BASE}/${view}`;
 function viewFromLocation() {
-  const suffix = location.pathname.replace(/^\/link\/?/, "").replace(/\/+$/, "");
+  let suffix = location.pathname;
+  if (API_BASE && (suffix === API_BASE || suffix.startsWith(`${API_BASE}/`))) suffix = suffix.slice(API_BASE.length);
+  suffix = suffix.replace(/^\/+/, "").replace(/\/+$/, "");
   if (LINK_VIEWS.has(suffix)) return suffix;
   const legacyView = new URLSearchParams(location.search).get("meiView");
   return LINK_VIEWS.has(legacyView) ? legacyView : "tunnels";
@@ -279,7 +305,7 @@ function setView(view, { updateUrl = true } = {}) {
   activeView = view;
   document.querySelectorAll("[data-view]").forEach(item => item.classList.toggle("active", item.dataset.view === view));
   document.querySelectorAll("[data-panel]").forEach(panel => panel.classList.toggle("hidden", panel.dataset.panel !== view));
-  if (updateUrl) window.history.pushState(null, "", `/link/${view}`);
+  if (updateUrl) window.history.pushState(null, "", VIEW_PATH(view));
 }
 function formForTunnel(tunnel = {}) {
   const form = $("#tunnelForm"); form.reset();
@@ -373,14 +399,14 @@ async function saveConfig(connectAfterSave = false) {
 async function copyText(value, success) { if (!value) throw new Error("没有可复制的内容"); if (navigator.clipboard?.writeText) await navigator.clipboard.writeText(value); else { const area = document.createElement("textarea"); area.value = value; document.body.append(area); area.select(); document.execCommand("copy"); area.remove(); } notify(success); }
 
 $("#loginForm").addEventListener("submit", async event => { event.preventDefault(); $("#loginError").textContent = ""; try { await api("/api/login", { method: "POST", body: JSON.stringify({ user: formValue(event.target, "user"), password: formValue(event.target, "password") }) }); $("#loginView").classList.add("hidden"); $("#appView").classList.remove("hidden"); await load(); beginPolling(); } catch (error) { $("#loginError").textContent = error.message; } });
-// mei-portal 集成：资源路径 /link/{tunnels|settings|logs}，兼容旧 ?meiView 深链。
+// mei-portal 集成：资源路径 {tunnels|settings|logs}，兼容旧 ?meiView 深链。
 setView(viewFromLocation(), { updateUrl: false });
-if (location.pathname.replace(/\/+$/, "") !== `/link/${activeView}`) {
-  window.history.replaceState(null, "", `/link/${activeView}`);
+if (location.pathname.replace(/\/+$/, "") !== VIEW_PATH(activeView)) {
+  window.history.replaceState(null, "", VIEW_PATH(activeView));
 }
 window.addEventListener("popstate", () => setView(viewFromLocation(), { updateUrl: false }));
 $("#configForm").addEventListener("submit", async event => { event.preventDefault(); const button = event.submitter; setBusy(button, true); try { await saveConfig(); } catch (error) { reportError(error); } finally { setBusy(button, false); } });
-$("#saveAndConnectButton").addEventListener("click", async event => { setBusy(event.currentTarget, true); try { await saveConfig(true); } catch (error) { reportError(error); } finally { setBusy(event.currentTarget, false); } });
+$("#saveAndConnectButton").addEventListener("click", async event => { const button = event.currentTarget; setBusy(button, true); try { await saveConfig(true); } catch (error) { reportError(error); } finally { setBusy(button, false); } });
 // 自动重连设置独立保存，不牵动服务器凭据字段
 $("#reconnectForm").addEventListener("submit", async event => {
   event.preventDefault();
@@ -400,7 +426,7 @@ $("#reconnectForm").addEventListener("submit", async event => {
   finally { setBusy(button, false); }
 });
 $("#fetchBootstrapButton").addEventListener("click", async event => {
-  const result = $("#bootstrapResult"); setBusy(event.currentTarget, true);
+  const result = $("#bootstrapResult"); const button = event.currentTarget; setBusy(button, true);
   result.textContent = "正在拉取配置…"; result.className = "test-result";
   try {
     const info = await api("/api/bootstrap");
@@ -422,9 +448,9 @@ $("#fetchBootstrapButton").addEventListener("click", async event => {
     // 设置类根因（管理页地址/Token 未配或不对）直接引导，而不是只留一行红字
     if (error.setup) reportError(error);
   }
-  finally { setBusy(event.currentTarget, false); }
+  finally { setBusy(button, false); }
 });
-$("#testConnectionButton").addEventListener("click", async event => { const result = $("#connectionTestResult"); setBusy(event.currentTarget, true); result.textContent = "正在测试连接…"; result.className = "test-result"; try { const form = $("#configForm"); const outcome = await api("/api/test-connection", { method: "POST", body: JSON.stringify({ addr: formValue(form, "serverAddr"), port: Number(formValue(form, "serverPort")) }) }); result.textContent = outcome.ok ? "服务器端口可连接" : `连接失败：${outcome.err || "未知错误"}`; result.className = `test-result ${outcome.ok ? "ok" : "error"}`; } catch (error) { result.textContent = `测试失败：${error.message}`; result.className = "test-result error"; reportError(error); } finally { setBusy(event.currentTarget, false); } });
+$("#testConnectionButton").addEventListener("click", async event => { const result = $("#connectionTestResult"); const button = event.currentTarget; setBusy(button, true); result.textContent = "正在测试连接…"; result.className = "test-result"; try { const form = $("#configForm"); const outcome = await api("/api/test-connection", { method: "POST", body: JSON.stringify({ addr: formValue(form, "serverAddr"), port: Number(formValue(form, "serverPort")) }) }); result.textContent = outcome.ok ? "服务器端口可连接" : `连接失败：${outcome.err || "未知错误"}`; result.className = `test-result ${outcome.ok ? "ok" : "error"}`; } catch (error) { result.textContent = `测试失败：${error.message}`; result.className = "test-result error"; reportError(error); } finally { setBusy(button, false); } });
 $("#newTunnelButton").addEventListener("click", () => openTunnelDialog()); $("#closeTunnelDialog").addEventListener("click", closeTunnelDialog); $("#cancelTunnelButton").addEventListener("click", closeTunnelDialog);
 document.querySelectorAll('input[name="type"]').forEach(input => input.addEventListener("change", typeFields));
 $("#tunnelForm").addEventListener("submit", async event => { event.preventDefault(); const form = event.target; const button = $("#saveTunnelButton"); setBusy(button, true); try { const payload = tunnelPayload(form); const id = field(form, "id").value; await api(id ? `/api/tunnels/${encodeURIComponent(id)}` : "/api/tunnels", { method: id ? "PUT" : "POST", body: JSON.stringify(payload) }); closeTunnelDialog(); notify(id ? "隧道已更新" : "隧道已创建"); await load(); } catch (error) { if (error.setup) closeTunnelDialog(); reportError(error); } finally { setBusy(button, false); } });
@@ -432,10 +458,12 @@ $("#tunnelList").addEventListener("click", async event => { const action = event
 // 左侧窄面板行动点（req：添加隧道 / 连接或断开 / 重启 / 退出 全部收敛到面板）
 let lastStatus = { connected: false, running: false, configured: false };
 async function controlAction(action, event, okMessage) {
-  setBusy(event.currentTarget, true);
+  // event.currentTarget 在 await 返回后即置空，必须先进局部变量，否则按钮永远停在禁用态
+  const button = event.currentTarget;
+  setBusy(button, true);
   try { await api(`/api/control/${action}`, { method: "POST" }); if (okMessage) notify(okMessage); await load(); }
   catch (error) { reportError(error); await load().catch(() => {}); }
-  finally { setBusy(event.currentTarget, false); }
+  finally { setBusy(button, false); }
 }
 $("#panelAddTunnel").addEventListener("click", () => openTunnelDialog());
 $("#panelToggle").addEventListener("click", async event => {
@@ -446,13 +474,18 @@ $("#panelToggle").addEventListener("click", async event => {
 $("#panelRestart").addEventListener("click", async event => { await controlAction("restart", event, "隧道管理器已重启"); });
 // 刷新登录态：统一身份下即校验当前门户 mei-auth 会话是否有效
 $("#panelRelogin").addEventListener("click", async event => {
-  setBusy(event.currentTarget, true);
+  const button = event.currentTarget;
+  setBusy(button, true);
   try {
-    const status = await api("/api/status");
-    if (status && !status.unauthorized) { notify("登录态有效，已刷新"); await load(); }
-    else notify("门户会话已过期，请重新登录门户", true);
-  } catch (error) { notify("门户会话已过期，请重新登录门户", true); }
-  finally { setBusy(event.currentTarget, false); }
+    // 会话无效时服务端直接回 401（api 抛错），无需死字段判断
+    await api("/api/status");
+    notify("登录态有效，已刷新");
+    await load();
+  } catch (error) {
+    if (error && error.status === 401) sessionExpired();
+    notify("门户会话已过期，请重新登录门户", true);
+  }
+  finally { setBusy(button, false); }
 });
 // 面板收展（localStorage 记忆）
 (function initPanelToggle() {
@@ -475,17 +508,14 @@ $("#exportLogsButton").addEventListener("click", () => { const blob = new Blob([
 $("#clearLogsButton").addEventListener("click", async () => { if (!events.length || !confirm("确定清空当前运行日志吗？")) return; try { await api("/api/events", { method: "DELETE" }); notify("运行日志已清空"); await load(); } catch (error) { notify(error.message, true); } });
 
 (async function restoreSession() {
-  let status = null;
   try {
-    status = await api("/api/status");
+    // 统一身份：门户 mei-auth 会话即登录态；401（api 抛错）= 门户未登录/已过期，
+    // 保持默认的登录表单不动
+    await api("/api/status");
   } catch (error) {
-    // 统一身份：门户 mei-auth 会话即登录态；401 = 门户未登录/已过期，展示登录表单
     return;
   }
-  if (status && status.unauthorized) return;
-  if (status && !status.unauthorized) {
-    $("#loginView").classList.add("hidden");
-    $("#appView").classList.remove("hidden");
-    await load(); beginPolling();
-  }
+  $("#loginView").classList.add("hidden");
+  $("#appView").classList.remove("hidden");
+  await load(); beginPolling();
 })();
