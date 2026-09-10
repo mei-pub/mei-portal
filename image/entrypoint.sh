@@ -35,9 +35,9 @@ if [ ! -f "$DATA_DIR/shell/user.json" ]; then
 fi
 
 # ---- tutorial 字体（首启预下载，后台进行不阻塞）----
-if [ ! -d "$DATA_DIR/tutorial/fonts/css" ] && [ -f /app/apps/tutorial/scripts/download-fonts.mjs ]; then
+if [ ! -d "$DATA_DIR/tutorial/fonts/css" ] && [ -f /app/apps/novels/scripts/download-fonts.mjs ]; then
   echo "[mei-allin] tutorial 字体首次下载（后台）..."
-  (cd /app/apps/tutorial && DATA_DIR="$DATA_DIR/tutorial" node scripts/download-fonts.mjs || echo "[mei-allin] 字体下载完成/跳过") &
+  (cd /app/apps/novels && DATA_DIR="$DATA_DIR/tutorial" node scripts/download-fonts.mjs || echo "[mei-allin] 字体下载完成/跳过") &
 fi
 
 # ---- mediago 端口修正 + 自动 setup ----

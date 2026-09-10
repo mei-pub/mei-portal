@@ -31,7 +31,7 @@ dist/
 /volumes/
 
 # tutorial 字体为运行时首启从 Google Fonts 下载，不入库
-third_party/tutorial/data/fonts/
+apps/novels/data/fonts/
 
 # Generated theme assets —— 提交到 git（Docker 构建依赖）
 # 修改 plugins/*/theme.css 或 tokens.css 后运行 npm run build:theme 重新生成
@@ -54,5 +54,5 @@ certs/
 .myflicker/
 
 # lunatv PWA 构建产物（next build 时生成，不入库）
-third_party/lunatv/public/sw.js
-third_party/lunatv/public/workbox-*.js
+apps/tv/public/sw.js
+apps/tv/public/workbox-*.js

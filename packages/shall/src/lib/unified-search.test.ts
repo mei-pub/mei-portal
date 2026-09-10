@@ -240,7 +240,7 @@ test('DisksProvider applies the cloud-type whitelist to results and facets', asy
 
 test('disk type channel filters results while keeping global facets', async () => {
   _bindGetSessionTokens(() => ({ 'ai-draw': 'test-token' }));
-  const toolsDir = path.resolve('third_party/omni-tools/public/locales/zh');
+  const toolsDir = path.resolve('apps/tools/public/locales/zh');
   const fetchImpl = makeFetchImpl({ toolsDir });
   const groups = await searchServerGroups({
     query: 'abc',
@@ -310,7 +310,7 @@ function makeFetchImpl(opts: {
 
 test('searches all providers in parallel and isolates failures', async () => {
   // Point ToolsProvider at the repo's omni-tools locale files
-  const toolsDir = path.resolve('third_party/omni-tools/public/locales/zh');
+  const toolsDir = path.resolve('apps/tools/public/locales/zh');
   _setOmniToolsLocalesDir(toolsDir);
   // Inject a fake token getter for DrawProvider
   _bindGetSessionTokens(() => ({ 'ai-draw': 'test-token' }));
@@ -404,7 +404,7 @@ test('DrawProvider degrades to empty when the portal session is missing or rejec
 });
 
 test('ToolsProvider searches tool names from locale files', async () => {
-  const toolsDir = path.resolve('third_party/omni-tools/public/locales/zh');
+  const toolsDir = path.resolve('apps/tools/public/locales/zh');
   if (!fs.existsSync(toolsDir)) {
     // Skip in environments without the repo checkout
     return;
@@ -429,7 +429,7 @@ test('ToolsProvider searches tool names from locale files', async () => {
 });
 
 test('tools manifest maps camelCase locale keys to real kebab-case routes', async () => {
-  const toolsDir = path.resolve('third_party/omni-tools/public/locales/zh');
+  const toolsDir = path.resolve('apps/tools/public/locales/zh');
   if (!fs.existsSync(toolsDir)) return; // skip without repo checkout
   _setOmniToolsLocalesDir(toolsDir);
   _bindGetSessionTokens(() => ({}));

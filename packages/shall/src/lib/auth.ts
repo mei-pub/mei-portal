@@ -140,7 +140,7 @@ export function isInitialized(): boolean {
   return loadUser() !== null;
 }
 
-// ---- Token 类应用的凭证存储（sun-panel 等用 token header + localStorage）----
+// ---- Token 类应用的凭证存储（mediago/ai-draw 等用 token header + localStorage）----
 const TOKENS_FILE = path.join(DATA_DIR, 'shell', 'app-tokens.json');
 
 export function setSessionTokens(tokens: Record<string, string>): void {

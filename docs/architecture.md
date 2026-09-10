@@ -30,10 +30,10 @@
         ┌──────────┴───────────┐
         ▼                      ▼
 ┌──────────────┐      ┌────────────────────┐
-│ L2 Shell     │      │ 内部应用容器         │
-│ (packages/   │      │ (官方镜像,不动源码)  │
-│  shall)      │      │ sun-panel/ai-draw/  │
-· 门户首页     │      │ mediago/lunatv/...  │
+│ L2 Shell     │      │ 内部应用进程         │
+│ (packages/   │      │ (apps/ 本地源码,     │
+│  shall)      │      │  ai-draw/lunatv/    │
+· 门户首页     │      │  mediago/...        │
 │ · iframe宿主 │      └────────────────────┘
 │ · 主题控制台 │               ▲
 │ · 托管主题   │               │ loader 在此运行

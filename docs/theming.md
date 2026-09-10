@@ -85,7 +85,6 @@ docker compose build shall && docker compose up -d shall
 | ai-draw | Radix 自研 + Tailwind4 | 低 | 标准 CSS 变量体系 |
 | mediago | shadcn/ui (Radix) | 低 | shadcn 标准变量，直接覆盖 |
 | lunatv | Next + Headless UI + Tailwind3 | 中 | primary 是 Tailwind 色阶，需近似覆盖 |
-| sun-panel | Vue + Naive UI | 中 | 主题色由 JS 注入，纯 CSS 有限；可借其后台自定义 CSS |
 | omni-tools | React + MUI + Emotion | 高 | Emotion inline 样式，仅配色近似，需 `!important` 堆叠 |
 
 ## 注意事项

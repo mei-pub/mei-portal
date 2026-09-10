@@ -1,36 +1,24 @@
 # =============================================================================
-# docker-compose 覆盖示例
+# docker-compose 覆盖示例（单镜像架构）
 # 复制为 docker-compose.override.yml 后按需启用。docker compose 会自动合并。
-# 常见用途：暴露调试端口、挂载源码热改、临时禁用某服务。
+# 常见用途：调整端口映射、挂载宿主字体、注入环境变量。
 # =============================================================================
 
-# 示例 1：暴露各应用原始端口，便于直连调试（绕过网关）
+# 示例 1：换端口映射（宿主 8080 → 容器 7777）
 # services:
-#   lunatv:
-#     ports: ["3001:3000"]
-#   ai-draw:
-#     ports: ["3010:3000"]
-#   mediago:
-#     ports: ["8899:8899"]
-#   sun-panel:
-#     ports: ["3002:3002"]
+#   mei-allin:
+#     ports: ["8080:7777"]
 
-# 示例 2：开发时让 Shell 挂载本地源码 + 启用 dev（需 next dev）
+# 示例 2：为小说站挂载宿主字体目录（免容器内后台下载 Google Fonts）
 # services:
-#   shall:
-#     build:
-#       target: builder
-#     command: ["npm", "run", "dev"]
+#   mei-allin:
 #     volumes:
-#       - ./packages/shall:/app
-#       - /app/node_modules
-#       - /app/.next
+#       - mei-data:/data
+#       - ./my-fonts:/data/tutorial/fonts/files:ro
+
+# 示例 3：覆盖管理员凭据（仅首次初始化 /data/shell/user.json 时生效）
+# services:
+#   mei-allin:
 #     environment:
-#       NODE_ENV: development
-
-# 示例 3：为教程站挂载宿主字体目录
-# services:
-#   tutorial:
-#     volumes:
-#       - ${DATA_ROOT:-./data}/tutorial:/app/data
-#       - ./my-fonts:/app/data/fonts/files:ro
+#       MEI_ADMIN_USER: admin
+#       MEI_ADMIN_PASSWORD: "your-password"

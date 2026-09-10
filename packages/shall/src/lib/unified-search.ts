@@ -425,9 +425,9 @@ const NAMESPACE_CATEGORY_MAP: Record<string, string> = {
   converters: 'converters',
 };
 
-// Container: /app/apps/omni-tools/locales/zh ; dev fallback: third_party/omni-tools/public/locales/zh
+// Container: /app/apps/tools/locales/zh ; dev fallback: apps/tools/public/locales/zh
 const OMNI_TOOLS_LOCALES_DIR =
-  process.env.OMNI_TOOLS_LOCALES_DIR || '/app/apps/omni-tools/locales/zh';
+  process.env.OMNI_TOOLS_LOCALES_DIR || '/app/apps/tools/locales/zh';
 
 async function fetchJson(
   url: string,

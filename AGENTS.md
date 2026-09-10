@@ -5,9 +5,10 @@ Cursor、Claude Code、Copilot 等）在本仓库内工作时必须遵守。
 
 ## 顶栏与左侧面板组件化强约束
 
-mei-allin 是多应用聚合门户：`packages/shall` 为门户外壳，`third_party/*` 为各子应用
-（不同技术栈：React / Vue / 原生 JS / 静态页）。顶栏与左侧面板是全应用共享的门户级
-组件，**不允许任何子应用自行重写一套样式**。
+mei-allin 是多应用聚合门户：`packages/shall` 为门户外壳，`apps/*` 为各子应用（全部为
+一等公民本地代码，不同技术栈：React / Vue / 原生 JS / 静态页；目录名与 URL 子路径
+对齐：novels/tv/music/link/draw/tools/disks/media）。顶栏与左侧面板是全应用共享的
+门户级组件，**不允许任何子应用自行重写一套样式**。
 
 ### 1. 顶部导航栏
 
@@ -55,7 +56,7 @@ mei-allin 是多应用聚合门户：`packages/shall` 为门户外壳，`third_p
 }
 ```
 
-标准视觉规格（各实现必须对齐，参考 `third_party/tutorial/src/components/SitePanel.tsx`）：
+标准视觉规格（各实现必须对齐，参考 `apps/novels/src/components/SitePanel.tsx`）：
 
 - 展开态：`fixed left-2 top-1/2 -translate-y-1/2 z-40`，窄胶囊
   `gap-1 rounded-2xl border border-black/10 bg-white/75 p-1 shadow-lg backdrop-blur-xl`
@@ -75,10 +76,10 @@ mei-allin 是多应用聚合门户：`packages/shall` 为门户外壳，`third_p
 
 | 技术栈 | 参考实现 |
 |---|---|
-| React | `third_party/tutorial/src/components/SitePanel.tsx`、`third_party/mediago/apps/ui/src/layout/mediago-sidebar.tsx` |
-| React (Tailwind) | `third_party/lunatv/src/components/FloatingNav.tsx`、`third_party/ai-draw/src/components/layout/AppSidebar.tsx` |
-| Vue | `third_party/pansou-web/src/components/MeiPanel.vue` |
-| 原生 JS | `third_party/solara/js/mei/main.js`（mountPanel）、`third_party/mei-link/client/docker/web/index.html`（#meiPanel） |
+| React | `apps/novels/src/components/SitePanel.tsx`、`apps/media/apps/ui/src/layout/mediago-sidebar.tsx` |
+| React (Tailwind) | `apps/tv/src/components/FloatingNav.tsx`、`apps/draw/src/components/layout/AppSidebar.tsx` |
+| Vue | `apps/disks/web/src/components/MeiPanel.vue` |
+| 原生 JS | `apps/music/js/mei/main.js`（mountPanel）、`apps/link/client/docker/web/index.html`（#meiPanel） |
 
 ### 3. 违规判定
 
@@ -98,7 +99,7 @@ mei-allin 是多应用聚合门户：`packages/shall` 为门户外壳，`third_p
 
 | | 播放组件（Dock） | 播放页 |
 |---|---|---|
-| 实现 | `packages/shall/src/components/MusicDock.tsx` | `third_party/solara/js/mei/views.js` 的 `renderPlayer` |
+| 实现 | `packages/shall/src/components/MusicDock.tsx` | `apps/music/js/mei/views.js` 的 `renderPlayer` |
 | 归属 | 门户外壳，跨应用常驻 | 音乐应用内页 `#/player` |
 | 定位 | 后台播放 + 最小控制，只渲染少量信息 | 整体垂直居中的大组件，局部完整能力 |
 | 形态 | 完整 / 缩小 / 隐藏 三态（`ui.dockMode`） | 唱片 / 歌词 双形态（`#ppViewToggle`） |

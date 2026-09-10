@@ -7,7 +7,7 @@
 
 ## 核心特性
 
-- **单镜像单端口**：nginx + 门户外壳 + 8 个应用全部 vendored 源码本地构建，打进一个镜像，只暴露 `7777`，`docker run` 即用，零外部镜像依赖。
+- **单镜像单端口**：nginx + 门户外壳 + 8 个应用全部本地源码构建，打进一个镜像，只暴露 `7777`，`docker run` 即用，零外部镜像依赖。
 - **统一登录**：单账户门禁，登录一次全应用通行；子应用不再各自维护登录（音乐、下载、搜索等内部应用共用门户会话）。
 - **应用秒切**：访问过的应用 iframe 保活驻留、顶栏悬停即预热、静态资源长缓存——切应用不重载，音乐跨应用不断播。
 - **网盘搜索**：内置 pansou 聚合引擎，50+ 网页插件（剧透社/盘搜/小酷盘等）+ 113 个 TG 资源频道 + 19 个磁力/电驴引擎（电影天堂/磁力狗/磁力帝/磁力猫等 DHT 引擎），夸克/阿里/百度/迅雷/UC/115 等网盘链接与 magnet/ed2k 聚合检索、跨源去重、按类型筛选。
@@ -92,7 +92,7 @@ nginx（唯一入口，sub_filter 注入顶栏脚本）
   └─ bgutil PO Token 服务（:4416，音乐 YouTube 源加速）
 ```
 
-- **单镜像**：`image/Dockerfile` 多阶段构建，8 个应用全部 vendored 源码编译，运行时 supervisord 编排（`image/supervisord.conf`）。
+- **单镜像**：`image/Dockerfile` 多阶段构建，8 个应用全部本地源码编译，运行时 supervisord 编排（`image/supervisord.conf`）。
 - **路由分发**：同一 URL 下 nginx 用 `Sec-Fetch-Dest`（含头缺失时的 Accept 兜底）区分「顶级文档」与「iframe 内嵌」：前者跳 Shell 壳（有顶栏、可导航），后者直进应用原生页面——应用既可独立访问又无缝嵌入门户。
 - **应用切换**：承载页客户端路由（`packages/shall/src/components/AppFrame.tsx`），iframe 保活 + LRU 淘汰 + 顶栏预热 + nginx 静态缓存策略，切换已访问应用零重载。
 - **顶栏避让**：悬浮玻璃胶囊设计，应用在自身文档内部用 `--mei-topbar-space` 让位，背景自然延伸到胶囊下方（详见 `AGENTS.md` 顶部空间契约）。
@@ -105,10 +105,16 @@ mei-portal/
 │   └── shall/              # 门户外壳（Next.js）：登录、顶栏、iframe 宿主、
 │                           #   综合搜索（含网盘/磁力源注册表 disk-sources.ts）、
 │                           #   MusicDock 音乐引擎 music-engine.ts
-├── third_party/            # 各应用 vendored 源码（随上游同步 + 本地定制）
-│   ├── pansou/             #   网盘搜索 Go 后端（含 ciligou/dygod/cldi 等定制磁力插件）
-│   ├── pansou-web/          #   网盘搜索 Web 前端
-│   ├── lunatv/  solara/  mediago/  ai-draw/  omni-tools/  tutorial/  mei-link/  sun-panel/
+├── apps/                   # 各应用——全部为一等公民本地代码（目录名 = URL 子路径）
+│   ├── tv/                 #   影视门户（Next.js，原 LunaTV 魔改演进）
+│   ├── music/              #   音乐播放（原生 JS + Node 服务，原 Solara）
+│   ├── disks/              #   网盘搜索：web/（Vue 前端）+ pansou/（Go 引擎，过渡期，
+│   │                       #   将被本仓库 Node/TS 复刻引擎替换；含定制磁力插件）
+│   ├── media/              #   流媒体下载（Go core + React UI，原 MediaGo；Go 为过渡期）
+│   ├── draw/               #   AI 绘图（Vite + React + Express，原 ai-draw）
+│   ├── tools/              #   工具箱（Vite + React + MUI，纯静态，原 omni-tools）
+│   ├── link/               #   内网穿透（Node + TS + frp 客户端管理）
+│   └── novels/             #   小说阅读（Next.js + SQLite，自研）
 ├── image/                  # 单镜像定义
 │   ├── Dockerfile          #   多阶段构建（10+ 构建器 → 单运行时）
 │   ├── supervisord.conf    #   进程编排（nginx/shell/各应用，含插件与频道清单）
@@ -136,9 +142,9 @@ git tag v0.1.0 && git push origin v0.1.0
 ## 开发
 
 - **本地验证**：`docker compose up -d --build` 后访问 `http://127.0.0.1:7777`；单服务调试可 `docker exec mei-allin supervisorctl status`。
-- **Go 插件**（pansou）：`third_party/pansou/plugin/`，遵循上游开发规范（`docs/pansou-plugin-developer-SKILL.md` 模式）；注意本仓库需用 Go 1.25 构建（sonic 依赖与更新版 Go 不兼容）。
+- **Go 插件**（pansou）：`apps/disks/pansou/plugin/`，遵循上游开发规范（`docs/pansou-plugin-developer-SKILL.md` 模式）；注意本仓库需用 Go 1.25 构建（sonic 依赖与更新版 Go 不兼容）。
 - **智能体协作**：任何 AI 辅助改动请先读 `AGENTS.md`——顶栏/左侧面板组件化、顶部空间契约、播放组件与播放页职责分离、mei-link 故障引导、iframe 保活与缓存策略、nginx 路由判别等强约束均在其中，违规判定标准也写明。
 
 ## 许可
 
-整合层代码 Apache-2.0。`third_party/` 下各应用虽经大量魔改，仍保留其原始许可文件，使用时请一并遵守，勿用于盈利目的。
+整合层代码 Apache-2.0。`apps/` 下 tv / music / media / draw / tools / disks 等应用源自开源项目并经大量魔改演进为本地一等公民代码，仓库内仍保留其原始许可文件，使用时请一并遵守，勿用于盈利目的。
