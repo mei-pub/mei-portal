@@ -23,19 +23,23 @@ fi
 echo "[mei-portal] 数据目录: $DATA_DIR  管理员: $MEI_ADMIN_USER  模式: single"
 
 # ---- 初始化各应用数据目录 ----
-mkdir -p "$DATA_DIR/novels" "$DATA_DIR/link" "$DATA_DIR/shell" "$DATA_DIR/media/logs" "$DATA_DIR/media/downloads" "$DATA_DIR/media" "$DATA_DIR/disks/cache" "$DATA_DIR/disks/logs"
+# tv/draw/music 应用自身启动时也会自建，这里预先创建保证卷属主正确
+mkdir -p "$DATA_DIR/novels" "$DATA_DIR/link" "$DATA_DIR/shell" "$DATA_DIR/tv" "$DATA_DIR/draw" "$DATA_DIR/music" "$DATA_DIR/media" "$DATA_DIR/media/logs" "$DATA_DIR/media/downloads" "$DATA_DIR/disks" "$DATA_DIR/disks/cache" "$DATA_DIR/disks/logs"
 
 # ---- Shell 配置 ----
-export PORT="${PORT:-3000}"
-export HOSTNAME="${HOSTNAME:-0.0.0.0}"
+# 注意：不要在这里 export PORT——media core-ts 的 env PORT 优先级高于 --port 命令行参数，
+# 全局导出会覆盖 media 的 --port=3000。Shell 的端口（3010）由 supervisord 的
+# [program:shell] environment 显式设置，无需入口导出。
 
 # 单一用户凭据（未初始化则用默认值，首次进入门户时设置）
 if [ ! -f "$DATA_DIR/shell/user.json" ]; then
   echo "[mei-portal] 首次启动，初始化默认账户 admin（请在门户修改密码）"
 fi
 
-# ---- tutorial 字体（首启预下载，后台进行不阻塞）----
-if [ ! -d "$DATA_DIR/tutorial/fonts/css" ] && [ -f /app/apps/novels/scripts/download-fonts.mjs ]; then
+# ---- novels 字体（首启预下载，后台进行不阻塞）----
+# 下载脚本写入 $DATA_DIR/novels/fonts（DATA_DIR 参数指向 novels 子目录），
+# 幂等检查必须用同一路径——此前误查旧名 $DATA_DIR/tutorial，导致每次启动都重新下载
+if [ ! -d "$DATA_DIR/novels/fonts/css" ] && [ -f /app/apps/novels/scripts/download-fonts.mjs ]; then
   echo "[mei-portal] novels 字体首次下载（后台）..."
   (cd /app/apps/novels && DATA_DIR="$DATA_DIR/novels" node scripts/download-fonts.mjs || echo "[mei-portal] 字体下载完成/跳过") &
 fi

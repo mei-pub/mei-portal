@@ -1,3 +1,4 @@
+# ===== 根级非构建输入（Dockerfile 只 COPY packages/ apps/ image/）=====
 node_modules
 **/node_modules
 .git
@@ -5,5 +6,33 @@ node_modules
 /data
 .env
 *.log
+**/*.log
 .next
 **/.next
+docs
+certs
+gateway
+plugins
+scripts
+.github
+.vscode
+.idea
+.DS_Store
+*.md
+docker-compose*.yml
+docker-compose.override.yml.example
+
+# ===== 测试目录不进镜像 =====
+# music/link/disks 等应用的 test 会被整目录 COPY 进运行时镜像（link 是
+# COPY client/docker/、music 是 COPY /build、disks 是 COPY engine/），白占体积
+**/test
+**/tests
+**/__tests__
+
+# ===== 本地运行/构建产物（容器内重新构建，避免陈旧产物混入镜像）=====
+apps/novels/data
+apps/tools/dist
+apps/draw/dist
+apps/disks/web/dist
+apps/media/apps/ui/build
+apps/media/apps/player-ui/dist

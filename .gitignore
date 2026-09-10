@@ -26,12 +26,19 @@ dist/
 
 # Docker volumes (local data)
 # 锚定根目录：无锚点的 data/、volumes/ 会递归吞掉子应用源码里的
-# data/ 目录（omni-tools 数据表、tutorial volumes API 路由均曾被吞）
+# data/ 目录（omni-tools 数据表、novels volumes API 路由均曾被吞）
 /data/
 /volumes/
 
-# tutorial 字体为运行时首启从 Google Fonts 下载，不入库
+# novels 字体为运行时首启从 Google Fonts 下载，不入库
 apps/novels/data/fonts/
+
+# 本地运行产生的 SQLite 数据库（draw 本地跑生成 data/aidraw/database.sqlite 等）
+*.db
+*.sqlite
+*.sqlite-journal
+*.sqlite-wal
+*.sqlite-shm
 
 # Generated theme assets —— 提交到 git（Docker 构建依赖）
 # 修改 plugins/*/theme.css 或 tokens.css 后运行 npm run build:theme 重新生成
@@ -47,15 +54,11 @@ certs/
 .codeflicker/
 .reasonix/
 .zcode/
-
-# Submodule build contexts (git submodules)
-# 不忽略 packages/tutorial 与 packages/mei-link —— 需追踪其 .gitlink
-# submodule 内部文件由各自仓库管理
 .myflicker/
 
-# lunatv PWA 构建产物（next build 时生成，不入库）
+# tv PWA 构建产物（next build 时生成，不入库）
 apps/tv/public/sw.js
 apps/tv/public/workbox-*.js
 
-# disks TS 引擎本地运行缓存（生产环境走 /data/pansou/cache）
+# disks TS 引擎本地运行缓存（生产环境走 /data/disks/cache）
 apps/disks/engine/cache/

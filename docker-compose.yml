@@ -12,10 +12,21 @@ services:
     image: mei-portal:latest
     container_name: mei-portal
     restart: unless-stopped
+    # 优雅停机：supervisord 需按程序逐个走 SIGTERM（disks 缓存落盘 / media 杀下载子进程
+    # 各留了 stopwaitsecs=20），默认 10s 宽限期会被 docker 直接 SIGKILL 截断
+    stop_grace_period: 60s
     ports:
       - "7777:7777"
     volumes:
       - mei-data:/data
+    # /healthy 经 nginx 反代到 media core（白名单端点）：同时覆盖 nginx 存活与 core 就绪，
+    # 不用 Shell 的 /api/health（它会并发探活全部应用，不适合做容器级心跳）
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "-o", "/dev/null", "http://127.0.0.1:7777/healthy"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 90s
     environment:
       # 统一管理员凭据（单用户，首次启动后可在门户修改密码）
       MEI_ADMIN_USER: ${MEI_ADMIN_USER:-admin}

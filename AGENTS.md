@@ -226,7 +226,7 @@ mei-portal 是多应用聚合门户：`packages/shall` 为门户外壳，`apps/*
 - map 的 `default` 不能设 `no-store`：会打到 `/music/proxy` 音频代理流上，干扰 range
   请求与播放缓冲
 - 含 `{n,}` 量词的 map 正则必须整体加引号，否则 nginx 把 `{` 当块起始，直接拒绝启动
-- `alias` 静态 location（`/tools/`、`/draw/`、`/search/`）由 nginx 自己发头，没有上游
+- `alias` 静态 location（`/tools/`、`/draw/`、`/disks/`）由 nginx 自己发头，没有上游
   头可隐藏，直接 `add_header Cache-Control $mei_cache_control` 即可
 
 违规判定：切回访问过的应用仍出现完整重载（白屏 + 应用重启）；切换应用时装载出上一个

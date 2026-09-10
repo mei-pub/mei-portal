@@ -6,9 +6,8 @@
   "type": "module",
   "scripts": {
     "build:theme": "node scripts/build-theme.mjs",
-    "gen:nginx": "node scripts/gen-nginx.mjs",
     "validate": "node scripts/validate-manifests.mjs",
-    "build": "npm run validate && npm run build:theme && npm run gen:nginx"
+    "build": "npm run validate && npm run build:theme"
   },
   "dependencies": {
     "ajv": "8.17.1",
