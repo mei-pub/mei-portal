@@ -11,20 +11,27 @@ export default function LoginClient() {
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
+    if (loading) return;
     setErr('');
     setLoading(true);
-    const res = await fetch('/api/auth/login', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ username, password }),
-    });
-    setLoading(false);
-    if (res.ok) {
-      router.push('/');
-      router.refresh();
-    } else {
+    try {
+      const res = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, password }),
+      });
+      if (res.ok) {
+        router.push('/');
+        router.refresh();
+        return;
+      }
       const d = await res.json().catch(() => ({}));
       setErr(d.error || '登录失败');
+    } catch {
+      // 网络异常必须复位并提示，否则按钮永久停在「登录中…」
+      setErr('网络异常，请稍后重试');
+    } finally {
+      setLoading(false);
     }
   }
 

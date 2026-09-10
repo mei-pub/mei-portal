@@ -10,7 +10,6 @@ import { appendSearchGroupPage } from '@/lib/search-pagination';
 import {
   type SearchFacet,
   type SearchGroup,
-  type SearchProviderApp,
   type SearchScope,
   type UnifiedSearchResult,
 } from '@/lib/unified-search';
@@ -31,6 +30,9 @@ const SCOPES: Array<{ id: SearchScope; label: string; appId: string | null; icon
 const CONTENT_TABS = SCOPES.filter((s) => s.appId !== null) as Array<
   { id: SearchScope; label: string; appId: string; icon: string }
 >;
+
+/** Provider appId (lunatv/solara/…) -> SearchScope (tv/music/…) for page requests. */
+const SCOPE_BY_APP = new Map(CONTENT_TABS.map((t) => [t.appId, t.id]));
 
 const PAGE_SIZE = 20;
 
@@ -379,7 +381,11 @@ function DiskResults({
     return [
       { key: 'all', label: '全部', count: results.length },
       ...Array.from(counts.entries())
-        .map(([key, count]) => ({ key, label: key === 'unknown' ? '其他' : key, count }))
+        .map(([key, count]) => ({
+          key,
+          label: key === 'unknown' || key === 'others' ? '其他' : key,
+          count,
+        }))
         .sort((a, b) => b.count - a.count),
     ];
   }, [results, facets]);
@@ -850,7 +856,9 @@ export default function SearchClient() {
     try {
       const params = new URLSearchParams({
         q: query,
-        scope: group.appId as SearchProviderApp,
+        // appId（如 lunatv）不是 SearchScope（tv），直接传会被服务端回落成 all、
+        // 导致分页请求扇出全部 provider；先映射成该 provider 的 scope。
+        scope: SCOPE_BY_APP.get(group.appId) || 'all',
         limit: String(PAGE_SIZE),
         offset: String(offset),
       });

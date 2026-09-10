@@ -29,7 +29,8 @@ interface Health {
 const DISK_TYPES: Array<[string, string]> = [
   ['baidu', '百度网盘'], ['aliyun', '阿里云盘'], ['quark', '夸克网盘'], ['guangya', '光鸭网盘'],
   ['tianyi', '天翼云盘'], ['115', '115 网盘'], ['xunlei', '迅雷云盘'], ['uc', 'UC 网盘'],
-  ['mobile', '移动云盘'], ['pikpak', 'PikPak'], ['123', '123 网盘'], ['magnet', '磁力链接'], ['ed2k', '电驴链接'],
+  ['mobile', '移动云盘'], ['pikpak', 'PikPak'], ['123', '123 网盘'],
+  ['others', '其他网盘'], ['magnet', '磁力链接'], ['ed2k', '电驴链接'],
 ];
 
 function SelectAllCheck({ all, onToggle }: { all: boolean; onToggle: () => void }) {

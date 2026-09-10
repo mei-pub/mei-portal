@@ -47,6 +47,7 @@ export const DISK_PLUGINS: DiskPluginMeta[] = [
   { id: 'duoduo', name: '多多盘', category: 'cloud' },
   { id: 'dyyj', name: '电影驿站', category: 'cloud' },
   { id: 'dyyjpro', name: '电影驿站 Pro', category: 'cloud' },
+  { id: 'diduan', name: '低端影视', category: 'cloud' },
   { id: 'kkv', name: 'KKV 盘', category: 'cloud' },
   { id: 'xiaozhang', name: '小张资源', category: 'cloud' },
   { id: 'mizixing', name: '觅字星', category: 'cloud' },

@@ -6,6 +6,7 @@ import { test } from 'node:test';
 import { DatabaseSync } from 'node:sqlite';
 
 import { buildBackupZip, restoreBackupZip } from './data-backup.ts';
+import AdmZip from 'adm-zip';
 
 function tempData(): string {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'mei-backup-test-'));
@@ -133,4 +134,32 @@ test('merge restore keeps tunnel arrays as arrays', () => {
     id: string;
   }>;
   assert.deepEqual(tunnels.map((t) => t.id), ['t1', 't3', 't2']);
+});
+
+test('restores legacy zips written with pre-rename directory prefixes', () => {
+  const root = tempData();
+  // 大一统改造前的备份包：顶层目录沿用旧 scope 名（lunatv/solara/tutorial/…）
+  const zip = new AdmZip();
+  zip.addFile('meta.json', Buffer.from(JSON.stringify({
+    app: 'mei-portal',
+    version: 1,
+    exportedAt: new Date().toISOString(),
+    scopes: ['lunatv', 'solara', 'tutorial', 'mei-link'],
+    accounts: [],
+  })));
+  zip.addFile('lunatv/admin-config.json', Buffer.from('{}'));
+  zip.addFile('solara/music/state.json', Buffer.from('{"revision":1}'));
+  zip.addFile('tutorial/novels.db', Buffer.from('legacy'));
+  zip.addFile('mei-link/config.json', Buffer.from('{"server":"a"}'));
+  const result = restoreBackupZip(zip.toBuffer(), 'replace');
+  assert.equal(result.ok, true);
+  // 旧前缀被归一到新数据路径，而不是静默落空
+  assert.equal(fs.readFileSync(path.join(root, 'tv', 'admin-config.json'), 'utf8'), '{}');
+  assert.equal(
+    fs.readFileSync(path.join(root, 'shell', 'music', 'state.json'), 'utf8'),
+    '{"revision":1}',
+  );
+  assert.equal(fs.readFileSync(path.join(root, 'novels', 'novels.db'), 'utf8'), 'legacy');
+  assert.equal(fs.readFileSync(path.join(root, 'link', 'config.json'), 'utf8'), '{"server":"a"}');
+  assert.deepEqual(result.restored.tutorial, { files: 1 });
 });

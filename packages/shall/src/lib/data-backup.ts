@@ -784,12 +784,30 @@ export function buildBackupZip(opts: { scopes: BackupScope[]; browserData?: Brow
   return zip.toBuffer();
 }
 
+// 大一统改造前的旧备份包目录名 → 新目录名。
+// 旧包顶层目录沿用 scope id（lunatv/solara/...），改名后 mapRestorePath 匹配不上，
+// 恢复会「成功但 0 文件落地」；这里在解析时统一归一成新前缀。
+const LEGACY_ZIP_DIR: Record<string, string> = {
+  lunatv: 'tv',
+  solara: 'music',
+  mediago: 'media',
+  'ai-draw': 'draw',
+  tutorial: 'novels',
+  'mei-link': 'link',
+};
+
+export function normalizeBackupZipPath(zipPath: string): string {
+  const top = zipPath.split('/', 1)[0];
+  const renamed = LEGACY_ZIP_DIR[top];
+  return renamed ? `${renamed}${zipPath.slice(top.length)}` : zipPath;
+}
+
 export function parseBackupZip(buf: Buffer): { meta: BackupMeta; entries: Map<string, Buffer> } {
   const zip = new AdmZip(buf);
   const entries = new Map<string, Buffer>();
   for (const entry of zip.getEntries()) {
     if (entry.isDirectory) continue;
-    entries.set(entry.entryName.replace(/\\/g, '/'), entry.getData());
+    entries.set(normalizeBackupZipPath(entry.entryName.replace(/\\/g, '/')), entry.getData());
   }
   const metaRaw = entries.get('meta.json');
   if (!metaRaw) throw new Error('备份包缺少 meta.json');

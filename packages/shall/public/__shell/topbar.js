@@ -160,6 +160,8 @@
   }
   window.__meiBroadcastTopbarSpace = broadcastSpace;
   window.addEventListener('message', function (ev) {
+    // 同源校验：跨源 iframe 不得伪造 ready/space-request 触发外壳广播
+    if (ev.origin !== window.location.origin) return;
     var d = (ev && ev.data) || {};
     if (d.source === 'mei-iframe' && (d.type === 'topbar-space-request' || d.type === 'ready')) broadcastSpace();
   });
@@ -168,6 +170,8 @@
   // 与 body class 语义一致，直接复用 mei-topbar-collapsed / mei-topbar-off。
   if (EMBED) {
     window.addEventListener('message', function (ev) {
+      // 同源校验：收起/展开态只接受同源外壳的广播
+      if (ev.origin !== window.location.origin) return;
       var d = (ev && ev.data) || {};
       if (d.source !== 'mei-shell' || d.type !== 'topbar-space') return;
       if (!document.body) return;

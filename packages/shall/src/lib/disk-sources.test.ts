@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
 import {
+  DISK_PLUGIN_BY_ID,
   MAGNET_DISK_CHANNELS,
   categorizeDiskPlugins,
   diskPluginCategory,
@@ -9,6 +10,27 @@ import {
   diskResultDedupeKey,
   isMagnetChannel,
 } from './disk-sources.ts';
+
+// image/supervisord.conf 中 disks 引擎的 ENABLED_PLUGINS 快照（51 个）。
+// 引擎启用清单变更时必须同步 disk-sources.ts 注册表，否则设置页显示裸 id。
+const SUPERVISORD_ENABLED_PLUGINS = [
+  'dyyjpro', 'duoduo', 'djgou', 'gaoqing888', 'hdmoli', 'haitunsou', 'hunhepan',
+  'ikantv', 'jutoushe', 'kkv', 'dy4k', 'melost', 'meitizy', 'ouge', 'pansearch',
+  'quarksoo', 'ting77', 'wanou', 'xb6v', 'xiaokupan', 'xiaozhang', 'xiaoyu',
+  'yunso', 'yunsou', 'diduan', 'erxiao', 'huban', 'labi', 'shandian', 'zhizhen',
+  'clxiong', 'jsnoteclub', 'ciligou', 'dyyj', 'jupansou', 'clmao', 'susu',
+  'u3c3', '5266ys', 'dygang', 'leso', 'gying', 'weibo', 'qqpd', 'panlian',
+  'thepiratebay', 'nyaa', 'quarkres', 'btbtlb', 'dygod', 'cldi',
+];
+
+test('every supervisord-enabled plugin is registered with a readable name', () => {
+  const missing = SUPERVISORD_ENABLED_PLUGINS.filter((id) => !DISK_PLUGIN_BY_ID[id]);
+  assert.deepEqual(missing, [], '设置页会把缺失项显示成裸 id');
+  for (const id of SUPERVISORD_ENABLED_PLUGINS) {
+    assert.notEqual(DISK_PLUGIN_BY_ID[id].name, id, `${id} 应有中文名`);
+    assert.ok(DISK_PLUGIN_BY_ID[id].category === 'cloud' || DISK_PLUGIN_BY_ID[id].category === 'magnet');
+  }
+});
 
 test('categorizes plugins by registry, falling back to cloud for unknown ids', () => {
   const { cloud, magnet, needsAccount } = categorizeDiskPlugins([

@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 
 import { initUserIfNeeded, isLoggedIn } from '@/lib/auth';
 
-const MUSIC_SOURCES = new Set(['netease', 'qq', 'kugou', 'kuwo', 'migu', 'joox', 'youtube']);
+// 与 music-engine ALL_SOURCES 对齐（含 bilibili），否则启用该源的歌曲封面被 400 拒掉
+const MUSIC_SOURCES = new Set(['netease', 'qq', 'kugou', 'kuwo', 'migu', 'joox', 'bilibili', 'youtube']);
 
 export const dynamic = 'force-dynamic';
 

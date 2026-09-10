@@ -273,6 +273,21 @@ test('builds disk facet tabs with canonical order, short labels and unknown last
   assert.deepEqual(buildDiskFacets({}), []);
 });
 
+test('engine-native bucket keys (guangya/pikpak/others) get readable labels and tail order', () => {
+  const facets = buildDiskFacets({ guangya: 5, pikpak: 1, others: 9, baidu: 2, unknown: 3 });
+  assert.deepEqual(
+    facets.map((f) => `${f.key}:${f.label}:${f.count}`),
+    ['baidu:百度:2', 'guangya:光鸭:5', 'pikpak:PikPak:1', 'others:其他:9', 'unknown:其他:3'],
+  );
+  // 结果卡上的类型徽标同样不再回落成裸 key / 泛化文案
+  const guangya = normalizeDiskResult({ url: 'https://guangyapan.com/s/abc', note: 'G', source: 'plugin:x' }, 'guangya');
+  assert.equal(guangya.meta?.linkTypeLabel, '光鸭网盘');
+  const pikpak = normalizeDiskResult({ url: 'https://mypikpak.com/s/abc', note: 'P', source: 'plugin:x' }, 'pikpak');
+  assert.equal(pikpak.meta?.linkTypeLabel, 'PikPak');
+  const others = normalizeDiskResult({ url: 'https://example.com/s/a', note: 'O', source: 'plugin:x' }, 'others');
+  assert.equal(others.meta?.linkTypeLabel, '其他网盘');
+});
+
 // Build a fake fetch that returns canned JSON per URL pattern.
 function makeFetchImpl(opts: {
   aidrawToken?: string;

@@ -181,6 +181,8 @@ const DISK_TYPE_NAMES: Record<string, string> = {
   ali: '阿里云盘',
   tianyi: '天翼云盘',
   cloud189: '天翼云盘',
+  guangya: '光鸭网盘',
+  pikpak: 'PikPak',
   xunlei: '迅雷云盘',
   mobile: '移动云盘',
   caiyun: '移动云盘',
@@ -192,6 +194,7 @@ const DISK_TYPE_NAMES: Record<string, string> = {
   lanzou: '蓝奏云',
   magnet: '磁力链接',
   ed2k: '电驴链接',
+  others: '其他网盘',
 };
 
 /** Deterministic URL host -> brand, only consulted when the backend type key is missing. */
@@ -223,8 +226,10 @@ function diskSourceName(raw: string): string {
 /** Short tab labels for cloud types, mirroring the pansou app's filter tabs. */
 const DISK_TYPE_TAB_ORDER = [
   'baidu', 'magnet', 'quark', 'aliyun', 'tianyi', 'uc', 'xunlei',
-  'mobile', '115', '123', 'weiyun', 'lanzou', 'ed2k',
+  'mobile', '115', '123', 'weiyun', 'lanzou', 'guangya', 'pikpak', 'ed2k',
 ];
+/** Tail buckets that always sort last (engine fallback buckets). */
+const DISK_TYPE_TAIL = ['others', 'unknown'];
 const DISK_TYPE_TAB_LABELS: Record<string, string> = {
   baidu: '百度',
   quark: '夸克',
@@ -243,8 +248,11 @@ const DISK_TYPE_TAB_LABELS: Record<string, string> = {
   '123pan': '123',
   weiyun: '微云',
   lanzou: '蓝奏',
+  guangya: '光鸭',
+  pikpak: 'PikPak',
   magnet: '磁力',
   ed2k: '电驴',
+  others: '其他',
 };
 
 /** Order and label per-type counts into facet tabs; unknown types go last. */
@@ -253,9 +261,9 @@ export function buildDiskFacets(counts: Record<string, number>): SearchFacet[] {
   const ordered = [
     ...DISK_TYPE_TAB_ORDER.filter((key) => keys.includes(key)),
     ...keys
-      .filter((key) => !DISK_TYPE_TAB_ORDER.includes(key) && key !== 'unknown')
+      .filter((key) => !DISK_TYPE_TAB_ORDER.includes(key) && !DISK_TYPE_TAIL.includes(key))
       .sort(),
-    ...(keys.includes('unknown') ? ['unknown'] : []),
+    ...DISK_TYPE_TAIL.filter((key) => keys.includes(key)),
   ];
   return ordered.map((key) => ({
     key,

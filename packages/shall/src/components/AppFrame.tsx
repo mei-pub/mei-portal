@@ -51,7 +51,16 @@ export default function AppFrame() {
   const parsedRoute = parseAppRoute(currentPath, plugins);
   const appId = parsedRoute?.appId || '';
   const plugin = plugins.find((p) => p.id === appId) || null;
-  const targetPath = activePath || plugin?.url || '';
+  // src 依据必须与「当前要挂载的应用」同源：应用切换后的第一轮渲染里
+  // activePath 还是上一个应用的路径（setActivePath 的 effect 尚未落地），
+  // 直接拿它当 targetPath 会把新挂的 iframe 装进上一个应用（切到 B 却加载出 A）。
+  // 只有 activePath 仍属于当前应用时才优先用它（它比 URL 派生值更新，跟随子应用内部导航）。
+  const activeParsed = activePath ? parseAppRoute(activePath, plugins) : null;
+  const targetPath =
+    (activeParsed && activeParsed.appId === appId ? activePath : '') ||
+    parsedRoute?.path ||
+    plugin?.url ||
+    '';
   // src 直接由当前 URL 推导，不经过 state：
   // 走 state 的话，同一轮渲染里保活列表读到的还是上一个应用的 src，
   // 新挂的 iframe 会装错应用（表现为切到 B 却加载出 A）。

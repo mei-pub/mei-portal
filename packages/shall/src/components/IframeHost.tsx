@@ -29,9 +29,11 @@ export default function IframeHost({ url, name, appId }: { url: string; name: st
     return () => clearTimeout(t);
   }, [url, reloadTick]);
 
-  // 监听 iframe 上报 ready
+  // 监听 iframe 上报 ready（保活模式下页面里有多个 iframe，
+  // 必须校验消息来自自己的 iframe，否则任一后台应用 ready 都会清掉本 host 的加载态）
   useEffect(() => {
     function onMsg(ev: MessageEvent) {
+      if (ev.source !== ref.current?.contentWindow) return;
       const d = ev.data || {};
       if (d.source === 'mei-iframe' && d.type === 'ready') {
         loadedRef.current = true;
