@@ -109,6 +109,8 @@ export interface CheckResult {
   checked_at: number;
   expires_at: number;
   summary?: string;
+  /** 判定来源：'api:<网盘类型>'（私有接口精确判定）或 'page'（降级页面探测） */
+  checked_via?: string;
 }
 
 /** 插件接口 —— Go AsyncSearchPlugin 的 TS 对应物 */
