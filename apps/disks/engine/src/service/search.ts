@@ -205,7 +205,11 @@ export function mergeResultsByType(
       };
 
       const existing = uniqueLinks.get(link.url);
-      if (!existing || new Date(mergedLink.datetime).getTime() > new Date(existing.datetime).getTime()) {
+      // Go：Datetime.After() 严格大于才替换。无效/缺失时间必须折算为 0（Go 的 time.Time 零值），
+      // 否则 new Date('') → NaN，NaN 参与比较恒为 false，带有效时间的链接永远无法替换空时间旧链接
+      const newTime = new Date(mergedLink.datetime).getTime() || 0;
+      const existTime = new Date(existing?.datetime).getTime() || 0;
+      if (!existing || newTime > existTime) {
         uniqueLinks.set(link.url, mergedLink);
       }
     }

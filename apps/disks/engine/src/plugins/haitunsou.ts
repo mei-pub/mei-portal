@@ -332,7 +332,7 @@ export const haitunsou = definePlugin({
     for (const item of items) {
       const result = convertItem(item);
       if (result === null) continue;
-      const key = `${result.links[0].url} ${result.links[0].password}`;
+      const key = `${result.links[0].url}\x00${result.links[0].password}`;
       if (seen.has(key)) continue;
       seen.add(key);
       results.push(result);

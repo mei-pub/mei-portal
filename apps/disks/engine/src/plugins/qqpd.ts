@@ -1556,7 +1556,9 @@ async function handleTestSearchWithData(
 // ============ 定期清理（Go startCleanupTask：time.Ticker 协程 → setInterval+unref） ============
 
 function startCleanupTask(): void {
-  const timer = setInterval(() => void cleanupOnce(), 24 * 3600 * 1000);
+  const timer = setInterval(() => void cleanupOnce().catch((err) => {
+    console.error(`[QQPD] 清理任务失败: ${err instanceof Error ? err.message : err}`);
+  }), 24 * 3600 * 1000);
   timer.unref();
 }
 

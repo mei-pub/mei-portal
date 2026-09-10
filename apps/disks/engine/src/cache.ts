@@ -39,6 +39,7 @@ interface MemoryEntry {
 
 // ---- 磁盘层 + 批量写 ----
 
+/** 两级缓存（导出类仅为单测可构造独立实例；运行态统一使用下方单例） */
 export class TwoLevelCache {
   private memory = new Map<string, MemoryEntry>();
   private pending = new Map<string, { key: string; json: string; ttlMs: number }>();
@@ -75,7 +76,12 @@ export class TwoLevelCache {
     if (!this.enabled) return null;
     const { data, meta } = this.diskPaths(key);
     try {
-      if (!existsSync(data) || !existsSync(meta)) return null;
+      if (!existsSync(meta)) return null;
+      if (!existsSync(data)) {
+        // meta 孤立：清掉以免每次读都空跑
+        unlinkSync(meta);
+        return null;
+      }
       const metaJson = JSON.parse(readFileSync(meta, 'utf8')) as { key: string; expiry: number };
       if (metaJson.expiry <= now) {
         unlinkSync(data);
@@ -83,9 +89,17 @@ export class TwoLevelCache {
         return null;
       }
       const json = readFileSync(data, 'utf8');
+      const parsed = JSON.parse(json) as SearchResult[];
       this.memory.set(key, { data: json, expiry: metaJson.expiry });
-      return JSON.parse(json);
+      return parsed;
     } catch {
+      // 损坏的缓存对（半写/损坏 JSON）直接清除，避免每次读都反复解析失败
+      try {
+        unlinkSync(data);
+      } catch { /* 忽略 */ }
+      try {
+        unlinkSync(meta);
+      } catch { /* 忽略 */ }
       return null;
     }
   }
@@ -153,7 +167,7 @@ export class TwoLevelCache {
     }
   }
 
-  /** 磁盘缓存总量控制（默认 100MB，超限按最旧删除） */
+  /** 磁盘缓存总量控制（默认 100MB，超限按最旧删除；容量统计包含 .json 数据文件本体） */
   private enforceMaxSize(): void {
     try {
       const files = readdirSync(this.dir).filter((f) => f.endsWith('.meta'));
@@ -165,6 +179,12 @@ export class TwoLevelCache {
             const meta = JSON.parse(readFileSync(p, 'utf8')) as { key: string; expiry: number };
             const st = statSync(p);
             total += st.size;
+            // 数据文件才是缓存体积的大头，必须一并计入
+            try {
+              total += statSync(p.replace(/\.meta$/, '.json')).size;
+            } catch {
+              /* meta 孤立（data 已被删）只计自身大小 */
+            }
             return { p, meta, mtime: st.mtimeMs };
           } catch {
             return null;
@@ -178,13 +198,13 @@ export class TwoLevelCache {
         if (total <= limit) break;
         try {
           const dataPath = item.p.replace(/\.meta$/, '.json');
-          total -= statSync(item.p).size;
           try {
             total -= statSync(dataPath).size;
             unlinkSync(dataPath);
           } catch {
             /* 数据文件可能已不存在 */
           }
+          total -= statSync(item.p).size;
           unlinkSync(item.p);
         } catch {
           /* 忽略单文件删除失败 */
@@ -192,6 +212,22 @@ export class TwoLevelCache {
       }
     } catch {
       /* 目录不可读时跳过清理 */
+    }
+    // 清理孤儿数据文件（flush 先写 data 后写 meta，中途崩溃会留下无 meta 的 .json；它们不可读、也不参与容量统计）
+    try {
+      for (const f of readdirSync(this.dir)) {
+        if (!f.endsWith('.json')) continue;
+        const metaPath = join(this.dir, f.replace(/\.json$/, '.meta'));
+        if (!existsSync(metaPath)) {
+          try {
+            unlinkSync(join(this.dir, f));
+          } catch {
+            /* 忽略单文件删除失败 */
+          }
+        }
+      }
+    } catch {
+      /* 忽略 */
     }
   }
 

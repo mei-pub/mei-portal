@@ -281,7 +281,7 @@ async function getLinks(postID: string): Promise<Link[]> {
     if (s.status !== 'fulfilled') continue;
     const link = s.value;
     if (link.url === '') continue;
-    const key = `${link.type} ${link.url} ${link.password}`;
+    const key = `${link.type}\x00${link.url}\x00${link.password}`;
     if (seen.has(key)) continue;
     seen.add(key);
     links.push(link);

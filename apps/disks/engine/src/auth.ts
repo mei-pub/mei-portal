@@ -34,6 +34,8 @@ export function verifyToken(token: string): string | null {
   if (given.length !== expected.length || !timingSafeEqual(given, expected)) return null;
   try {
     const payload = JSON.parse(Buffer.from(parts[1], 'base64url').toString('utf8')) as { sub: string; exp: number };
+    // exp 缺失/非数值时 NaN < now 恒为 false，会被误判为有效，必须显式拒绝
+    if (typeof payload.exp !== 'number' || !Number.isFinite(payload.exp)) return null;
     if (payload.exp * 1000 < Date.now()) return null;
     return payload.sub;
   } catch {

@@ -348,7 +348,8 @@ export function extractNetDiskLinks(text: string): string[] {
   ];
   for (const m of matchAll(text, ALL_PAN_LINKS_PATTERN)) {
     if (handled.some((d) => m.includes(d))) continue;
-    push(m);
+    // Go 兜底分支去重允许包含匹配（同一分享的带参/无参变体），仅 exact 会把变体重复入列
+    push(m, 'contains');
   }
   return links;
 }

@@ -59,9 +59,14 @@ export async function runPluginSearch(
   const searchPromise = runSearch();
 
   // 4s 快速响应窗口
-  const fastWindow = new Promise<'timeout'>((resolve) => setTimeout(() => resolve('timeout'), config.asyncResponseTimeoutSeconds * 1000));
+  let fastTimer: NodeJS.Timeout | undefined;
+  const fastWindow = new Promise<'timeout'>((resolve) => {
+    fastTimer = setTimeout(() => resolve('timeout'), config.asyncResponseTimeoutSeconds * 1000);
+  });
 
   const winner = await Promise.race([searchPromise.then((r) => r as SearchResult[] | 'timeout'), fastWindow]);
+  // race 定局即清理快窗口定时器（悬挂定时器会拖延进程退出并积压垃圾）
+  if (fastTimer) clearTimeout(fastTimer);
 
   if (winner !== 'timeout') {
     const results = winner;
@@ -98,12 +103,21 @@ export async function runPluginSearch(
 
   return [];
 
-  /** 后台刷新缓存（缓存接近过期/已过期时） */
+  /** 后台刷新缓存（缓存接近过期/已过期时；Go refreshCacheInBackground 语义） */
   async function refreshInBackground(): Promise<void> {
     try {
       const results = await runSearch();
-      pluginCache.set(cacheKey, { results, timestamp: Date.now(), complete: true });
-      cache.updateMerged(mainCacheKey, results, config.cacheTTLMinutes * 60 * 1000, mergeSearchResults);
+      // Go：搜索失败或空结果直接 return——保留旧缓存，避免源站瞬时抖动把关键词污染为「有效但为空」直到 TTL
+      if (results.length === 0) return;
+      // Go：新结果优先 + 旧结果中不重复的项追加（unique_id 去重）
+      const old = pluginCache.get(cacheKey);
+      let merged = results;
+      if (old && old.results.length > 0) {
+        const existingIDs = new Set(results.map((r) => r.unique_id));
+        merged = [...results, ...old.results.filter((r) => !existingIDs.has(r.unique_id))];
+      }
+      pluginCache.set(cacheKey, { results: merged, timestamp: Date.now(), complete: true });
+      cache.updateMerged(mainCacheKey, merged, config.cacheTTLMinutes * 60 * 1000, mergeSearchResults);
     } catch (err) {
       console.error(`[plugin:${plugin.name}] 后台刷新失败: ${err instanceof Error ? err.message : err}`);
     }

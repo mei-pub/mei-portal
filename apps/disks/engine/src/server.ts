@@ -9,7 +9,55 @@ import { search } from './service/search.ts';
 import { checkLinks } from './service/check.ts';
 import { filterEnabledPlugins, getPlugins, getWebRoutes } from './plugins/registry.ts';
 import { enabledPluginDefs } from './plugins/index.ts';
-import { newErrorResponse, newSuccessResponse, type CheckItem, type CheckRequest, type SearchRequest } from './types.ts';
+import { newErrorResponse, newSuccessResponse, type CheckItem, type CheckRequest, type FilterConfig, type SearchRequest, type SearchResponse, type SearchResult } from './types.ts';
+
+/**
+ * 应用结果过滤器（Go api/filter.go applyResultFilter 的对应物）：
+ * - exclude 任一命中即排除；include 非空时至少须命中一个；关键词与文本均小写匹配
+ * - merged_by_type / all：按 note 过滤各分组并剔除空分组
+ * - all / results：按 title 过滤结果，链接按 work_title（缺省回退 title）过滤，无链接的结果剔除
+ * - total 按过滤后结果重算
+ */
+export function applyResultFilter(response: SearchResponse, filter: FilterConfig, resultType: string): SearchResponse {
+  if ((filter.include?.length ?? 0) === 0 && (filter.exclude?.length ?? 0) === 0) return response;
+
+  const includeKeywords = (filter.include ?? []).map((kw) => kw.toLowerCase());
+  const excludeKeywords = (filter.exclude ?? []).map((kw) => kw.toLowerCase());
+  const matchFilter = (text: string): boolean => {
+    const lower = text.toLowerCase();
+    if (excludeKeywords.some((kw) => lower.includes(kw))) return false;
+    if (includeKeywords.length > 0 && !includeKeywords.some((kw) => lower.includes(kw))) return false;
+    return true;
+  };
+  const filterMerged = (merged: SearchResponse['merged_by_type']): SearchResponse['merged_by_type'] =>
+    merged
+      ? Object.fromEntries(
+          Object.entries(merged)
+            .map(([type, links]) => [type, links.filter((l) => matchFilter(l.note))] as const)
+            .filter(([, links]) => links.length > 0),
+        )
+      : undefined;
+
+  if (resultType === 'merged_by_type') {
+    const merged = filterMerged(response.merged_by_type);
+    return {
+      total: Object.values(merged ?? {}).reduce((sum, links) => sum + links.length, 0),
+      merged_by_type: merged,
+    };
+  }
+  // all / results
+  const results = (response.results ?? [])
+    .filter((r) => matchFilter(r.title))
+    .map((r) => {
+      const links = r.links.filter((l) => matchFilter(l.work_title && l.work_title !== '' ? l.work_title : r.title));
+      return links.length > 0 ? { ...r, links } : null;
+    })
+    .filter((r): r is SearchResult => r !== null);
+  if (resultType === 'all') {
+    return { total: results.length, results, merged_by_type: filterMerged(response.merged_by_type) };
+  }
+  return { total: results.length, results };
+}
 
 function sendJSON(res: ServerResponse, status: number, body: unknown): void {
   const json = JSON.stringify(body);
@@ -25,12 +73,25 @@ function sendJSON(res: ServerResponse, status: number, body: unknown): void {
 function readBody(req: IncomingMessage): Promise<string> {
   return new Promise((resolve, reject) => {
     let data = '';
+    let rejected = false;
     req.on('data', (chunk) => {
+      // 超限时立即拒绝并暂停接收：停止内存累积（攻击面），同时让错误响应能正常送达客户端
+      if (rejected || data.length > 10 * 1024 * 1024) {
+        if (!rejected) {
+          rejected = true;
+          reject(new Error('body too large'));
+          req.pause();
+        }
+        return;
+      }
       data += chunk;
-      if (data.length > 10 * 1024 * 1024) reject(new Error('body too large'));
     });
-    req.on('end', () => resolve(data));
-    req.on('error', reject);
+    req.on('end', () => {
+      if (!rejected) resolve(data);
+    });
+    req.on('error', (err) => {
+      if (!rejected) reject(err);
+    });
   });
 }
 
@@ -122,8 +183,11 @@ async function handleSearch(req: IncomingMessage, res: ServerResponse): Promise<
   if (sourceType === '') sourceType = 'all';
   let plugins = request.plugins ?? null;
   if (sourceType === 'tg') plugins = null;
-  else if (sourceType === 'plugin') channels = [];
-  else plugins = normalizePlugins(plugins);
+  else if (sourceType === 'plugin') {
+    channels = [];
+    // Go 对 all 与 plugin 都做「全量列表 → null」归一（共享缓存键）；漏掉 plugin 会造成缓存分裂
+    plugins = normalizePlugins(plugins);
+  } else plugins = normalizePlugins(plugins);
 
   try {
     const result = await search({
@@ -137,30 +201,8 @@ async function handleSearch(req: IncomingMessage, res: ServerResponse): Promise<
       cloudTypes: request.cloud_types ?? null,
       ext: request.ext ?? {},
     });
-    // 过滤器（filter.go：include OR / exclude AND）
-    let filtered = result;
-    const filter = request.filter;
-    if (filter) {
-      const applyText = (text: string): boolean => {
-        const inc = filter.include ?? [];
-        const exc = filter.exclude ?? [];
-        if (inc.length > 0 && !inc.some((kw) => text.includes(kw))) return false;
-        if (exc.length > 0 && exc.every((kw) => text.includes(kw))) return false;
-        return true;
-      };
-      filtered = {
-        total: result.total,
-        results: result.results?.filter((r) => applyText(`${r.title} ${r.content}`)),
-        merged_by_type: result.merged_by_type
-          ? Object.fromEntries(
-              Object.entries(result.merged_by_type).map(([type, links]) => [
-                type,
-                links.filter((l) => applyText(`${l.note} ${l.url}`)),
-              ]),
-            )
-          : undefined,
-      };
-    }
+    // 过滤器（filter.go 语义）
+    const filtered = request.filter ? applyResultFilter(result, request.filter, resultType) : result;
     sendJSON(res, 200, newSuccessResponse(filtered));
   } catch (err) {
     sendJSON(res, 500, newErrorResponse(500, `搜索失败: ${err instanceof Error ? err.message : err}`));
@@ -281,7 +323,12 @@ function matchWebRoute(pattern: string, pathname: string): Record<string, string
     const pt = patternParts[i]!;
     if (pt.startsWith(':')) {
       if (pathParts[i] === '') return null;
-      params[pt.slice(1)] = decodeURIComponent(pathParts[i]!);
+      // 恶意/畸形百分号编码会抛 URIError，应视为不匹配（404）而非 500
+      try {
+        params[pt.slice(1)] = decodeURIComponent(pathParts[i]!);
+      } catch {
+        return null;
+      }
     } else if (pt !== pathParts[i]) {
       return null;
     }
@@ -315,5 +362,7 @@ export function startServer(): void {
   process.on('SIGINT', () => void shutdown('SIGINT'));
 }
 
-// 入口：直接运行时启动
-startServer();
+// 入口：直接运行（node src/server.ts）时启动；被测试/其他模块 import 时不启动
+import { pathToFileURL } from 'node:url';
+const isDirectRun = process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href;
+if (isDirectRun) startServer();

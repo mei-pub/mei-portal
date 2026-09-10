@@ -256,9 +256,14 @@ function extractPublishTime(htmlContent: string): string {
     if (!m) continue;
     const timeStr = m[1].trim();
     // RFC3339 / +00:00 / Z / "2006-01-02 15:04:05" / "2006-01-02"
-    if (/^\d{4}-\d{2}-\d{2}$/.test(timeStr)) return new Date(`${timeStr}T00:00:00Z`).toISOString();
+    // Go time.Parse 失败 → 继续尝试下一个正则；语义非法日期（如 2024-13-45）需校验后跳过
+    if (/^\d{4}-\d{2}-\d{2}$/.test(timeStr)) {
+      const t = new Date(`${timeStr}T00:00:00Z`);
+      if (!Number.isNaN(t.getTime())) return t.toISOString();
+    }
     if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(timeStr)) {
-      return new Date(timeStr.replace(' ', 'T') + 'Z').toISOString();
+      const t = new Date(timeStr.replace(' ', 'T') + 'Z');
+      if (!Number.isNaN(t.getTime())) return t.toISOString();
     }
     const t = new Date(timeStr);
     if (!Number.isNaN(t.getTime())) return t.toISOString();

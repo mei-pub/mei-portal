@@ -1371,8 +1371,15 @@ function parseLinkTime(value: string): string {
   if (value === '') return '';
 
   const dt = value.match(/^(\d{4}-\d{2}-\d{2}) (\d{2}:\d{2}:\d{2})$/);
-  if (dt) return new Date(`${dt[1]}T${dt[2]}Z`).toISOString();
-  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return new Date(`${value}T00:00:00Z`).toISOString();
+  if (dt) {
+    // Go time.Parse 失败 → 尝试下一布局；语义非法日期需校验后继续
+    const t = new Date(`${dt[1]}T${dt[2]}Z`);
+    if (!Number.isNaN(t.getTime())) return t.toISOString();
+  }
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    const t = new Date(`${value}T00:00:00Z`);
+    if (!Number.isNaN(t.getTime())) return t.toISOString();
+  }
   const t = new Date(value); // RFC3339 带时区
   return Number.isNaN(t.getTime()) ? '' : t.toISOString();
 }

@@ -19,6 +19,8 @@ export interface FetchOptions {
   redirect?: RequestRedirect;
   method?: string;
   body?: string;
+  /** 响应体最多读取的字节数（超出即取消下载），0/未设置 = 不限制 */
+  maxBodyBytes?: number;
 }
 
 /** 抓取文本（HTML/JSON），带超时 */
@@ -39,6 +41,27 @@ export async function fetchText(url: string, opts: FetchOptions = {}): Promise<s
   }
 }
 
+/** 有限读取响应体：达到 maxBodyBytes 即取消下载（链接检查等只需页头片段的场景） */
+async function readBodyCapped(resp: Response, maxBodyBytes: number): Promise<string> {
+  if (!(maxBodyBytes > 0)) return resp.text();
+  const reader = resp.body?.getReader();
+  if (!reader) return resp.text();
+  const decoder = new TextDecoder();
+  let out = '';
+  let received = 0;
+  try {
+    while (received < maxBodyBytes) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      received += value.byteLength;
+      out += decoder.decode(value, { stream: true });
+    }
+  } finally {
+    if (received >= maxBodyBytes) reader.cancel().catch(() => {});
+  }
+  return out;
+}
+
 /** 抓取并返回状态码与重定向后的最终 URL（链接检查用） */
 export async function fetchProbe(
   url: string,
@@ -54,8 +77,8 @@ export async function fetchProbe(
       body: opts.body,
       signal: controller.signal,
     });
-    // 链接检查只需要开头片段判断跳转目标，避免整页下载
-    const text = await resp.text();
+    // 链接检查只需要开头片段判断失效特征，避免整页下载
+    const text = await readBodyCapped(resp, opts.maxBodyBytes ?? 0);
     return { status: resp.status, finalUrl: resp.url, body: text };
   } finally {
     clearTimeout(timer);

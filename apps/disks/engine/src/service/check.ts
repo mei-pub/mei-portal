@@ -60,6 +60,8 @@ async function probeOne(item: CheckItem): Promise<CheckResult> {
     const { status, finalUrl, body } = await fetchProbe(item.url, {
       timeoutMs: 10_000,
       headers: { Referer: referer },
+      // 失效特征判定只看前几千字符，限制下载避免整页拉取大响应
+      maxBodyBytes: 64 * 1024,
     });
     const text = (finalUrl + ' ' + body.slice(0, 4000)).toLowerCase();
 

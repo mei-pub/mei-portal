@@ -65,7 +65,11 @@ function parseTime(timeStr: string): string {
   const s = timeStr.trim();
 
   let m = s.match(/^(\d{4})-(\d{2})-(\d{2})$/);
-  if (m) return new Date(`${s}T00:00:00Z`).toISOString();
+  if (m) {
+    // Go time.Parse 失败（如 2024-99-99）→ 继续尝试后续格式；需校验有效性
+    const parsed = new Date(`${s}T00:00:00Z`);
+    if (!Number.isNaN(parsed.getTime())) return parsed.toISOString();
+  }
   m = s.match(/^(\d{2})-(\d{2})$/);
   if (m) {
     const parsed = new Date(new Date().getFullYear(), Number(m[1]) - 1, Number(m[2]));

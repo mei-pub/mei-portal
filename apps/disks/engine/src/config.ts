@@ -96,7 +96,8 @@ export function loadConfig(): Config {
   const defaultConcurrency = defaultChannels.length + 7 + 10;
 
   return {
-    port: envInt('PORT', 8888) || envInt('PANSOU_PORT', 8888),
+    // PORT 优先，未设置时回退 PANSOU_PORT（start.sh 依赖 PANSOU_PORT；此前写法 fallback 恒真值导致 PANSOU_PORT 永远失效）
+    port: envInt('PORT', envInt('PANSOU_PORT', 8888)),
     host: envStr('PANSOU_HOST', '127.0.0.1'),
     proxyURL: envStr('PROXY') || envStr('HTTP_PROXY') || envStr('HTTPS_PROXY'),
     defaultChannels,

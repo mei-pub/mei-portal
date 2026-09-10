@@ -8,6 +8,9 @@ import { generatePluginCacheKey, generateTGCacheKey } from '../src/cache.ts';
 import { mergeSearchResults, sortResultsByTimeAndKeywords, calculateTimeScore, getKeywordPriority } from '../src/merge.ts';
 import { mergeResultsByType } from '../src/service/search.ts';
 import { filterResultsByKeyword } from '../src/plugins/shared.ts';
+import { issueToken, verifyToken } from '../src/auth.ts';
+import { config } from '../src/config.ts';
+import { createHmac } from 'node:crypto';
 import type { SearchResult } from '../src/types.ts';
 
 test('extractNetDiskLinks 提取多网盘链接并去重', () => {
@@ -181,4 +184,64 @@ test('filterResultsByKeyword 多词 AND 匹配', () => {
 
 test('normalizeUrl 解码中文用于去重', () => {
   assert.equal(normalizeUrl('https://x/%E4%B8%AD%E6%96%87'), 'https://x/中文');
+});
+
+test('mergeResultsByType：带有效时间的链接可替换空时间旧链接（NaN 折算为 Go 零值）', () => {
+  // 先到的插件结果无时间（datetime=''），后到的 TG 结果带 2026 时间且同 URL：
+  // Go 语义 time.After(零值) = true 应替换；旧实现 new Date('') → NaN，NaN>x 恒 false 永不替换
+  const noTime: SearchResult = {
+    message_id: '',
+    unique_id: 'pansearch-1',
+    channel: '',
+    datetime: '',
+    title: '阿凡达',
+    content: '阿凡达',
+    links: [{ type: 'quark', url: 'https://pan.quark.cn/s/same', password: '' }],
+  };
+  const withTime: SearchResult = {
+    message_id: '9',
+    unique_id: 'yunpanx_9',
+    channel: 'yunpanx',
+    datetime: '2026-06-01T00:00:00Z',
+    title: '阿凡达',
+    content: '阿凡达',
+    links: [{ type: 'quark', url: 'https://pan.quark.cn/s/same', password: '' }],
+  };
+  const merged = mergeResultsByType([noTime, withTime], '阿凡达', null);
+  assert.equal(merged['quark']?.length, 1);
+  assert.equal(merged['quark']![0]!.datetime, '2026-06-01T00:00:00Z', '有效时间应替换空时间旧链接');
+  assert.equal(merged['quark']![0]!.source, 'tg:yunpanx');
+});
+
+test('mergeResultsByType：相同时间不替换（Go After 严格大于语义）', () => {
+  const mk = (uid: string): SearchResult => ({
+    message_id: '1',
+    unique_id: uid,
+    channel: '',
+    datetime: '2026-01-01T00:00:00Z',
+    title: '阿凡达',
+    content: '阿凡达',
+    links: [{ type: 'quark', url: 'https://pan.quark.cn/s/same', password: '' }],
+  });
+  const merged = mergeResultsByType([mk('a-1'), mk('b-1')], '阿凡达', null);
+  assert.equal(merged['quark']![0]!.source, 'plugin:a', '时间相等应保留先到结果');
+});
+
+test('verifyToken：exp 缺失/非法的 token 被拒绝（NaN 比较恒 false 硬化）', () => {
+  // 正常签发 + 校验
+  const token = issueToken('tester');
+  assert.equal(verifyToken(token), 'tester');
+  // 篡改 payload（伪造无 exp 的 token，用相同密钥手工签名模拟"合法签名但缺 exp"）
+  const b64url = (s: string) => Buffer.from(s).toString('base64url');
+  const header = b64url(JSON.stringify({ alg: 'HS256', typ: 'JWT' }));
+  const body = b64url(JSON.stringify({ sub: 'attacker' })); // 无 exp
+  const sig = createHmac('sha256', config.authJWTSecret).update(`${header}.${body}`).digest('base64url');
+  const forged = `${header}.${body}.${sig}`;
+  assert.equal(verifyToken(forged), null, '缺 exp 的 token 应被拒绝');
+  // 非数值 exp
+  const body2 = b64url(JSON.stringify({ sub: 'attacker', exp: 'never' }));
+  const sig2 = createHmac('sha256', config.authJWTSecret).update(`${header}.${body2}`).digest('base64url');
+  assert.equal(verifyToken(`${header}.${body2}.${sig2}`), null, '非数值 exp 应被拒绝');
+  // 签名不符
+  assert.equal(verifyToken(`${header}.${body}.${sig}x`), null);
 });

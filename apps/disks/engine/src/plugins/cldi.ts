@@ -252,7 +252,11 @@ function extractNewResults($: cheerio.CheerioAPI): SearchResult[] {
 
     let datetime = new Date().toISOString();
     const dm = content.match(ADD_TIME_REGEX);
-    if (dm) datetime = new Date(`${dm[1]}T00:00:00`).toISOString();
+    if (dm) {
+      // Go time.ParseInLocation 失败 → 保持默认时间；正则只保证形状，语义非法日期需校验
+      const parsed = new Date(`${dm[1]}T00:00:00`);
+      if (!Number.isNaN(parsed.getTime())) datetime = parsed.toISOString();
+    }
 
     const id = match[1].toLowerCase();
     results.push({

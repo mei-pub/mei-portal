@@ -79,9 +79,13 @@ function parseResults(html: string): SearchResult[] {
     if (hotness !== '') contentParts.push(`热度: ${hotness}`);
 
     // 无创建时间时 Go 为零值时间，这里以空字符串表示
+    // Go time.Parse 失败 → datetime 保持零值；正则只保证形状，"2024-99-99" 仍需校验
     let datetime = '';
     const dateMatch = infoText.match(DATE_REGEX);
-    if (dateMatch) datetime = new Date(`${dateMatch[1]}T00:00:00`).toISOString();
+    if (dateMatch) {
+      const parsed = new Date(`${dateMatch[1]}T00:00:00Z`);
+      if (!Number.isNaN(parsed.getTime())) datetime = parsed.toISOString();
+    }
 
     items.push({
       message_id: '',

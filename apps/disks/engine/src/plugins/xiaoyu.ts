@@ -206,7 +206,7 @@ function parseItem(item: cheerio.Cheerio<never>): SearchResult | null {
   if (id === '') {
     // sha256(title + \0 + url) 前 8 字节十六进制（Go hash[:8] → 16 个 hex 字符）
     id = createHash('sha256')
-      .update(`${title} ${link.url}`)
+      .update(`${title}\x00${link.url}`)
       .digest('hex')
       .slice(0, 16);
   }
@@ -270,7 +270,7 @@ export const xiaoyu = definePlugin({
     for (const page of pages) {
       for (const result of page ?? []) {
         if (result.links.length === 0) continue;
-        const key = `${result.links[0].url} ${result.links[0].password}`;
+        const key = `${result.links[0].url}\x00${result.links[0].password}`;
         if (seen.has(key)) continue;
         seen.add(key);
         results.push(result);

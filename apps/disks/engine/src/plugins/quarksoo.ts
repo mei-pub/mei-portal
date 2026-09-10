@@ -11,6 +11,7 @@ import { definePlugin, filterResultsByKeyword } from './shared.ts';
 
 const BASE_URL = 'https://quarksoo.cc/search.php';
 const MAX_RETRIES = 2; // 额外重试次数（Go 循环 0..retries，共 3 次尝试）
+const REQUEST_TIMEOUT_MS = 30_000; // Go defaultPluginTimeout（后台客户端 30s）
 
 // 常用 UA 列表（Go userAgents）
 const USER_AGENTS = [
@@ -127,10 +128,13 @@ export const quarksoo = definePlugin({
   async search(keyword: string, _ext: Record<string, unknown>): Promise<SearchResult[]> {
     const searchURL = `${BASE_URL}?q=${encodeURIComponent(keyword)}`;
 
-    // 网络错误 / 非 200 均按 500ms 固定间隔重试（Go doSearch 重试循环）
+    // 网络错误 / 非 200 均按 500ms 固定间隔重试（Go doSearch 重试循环）。
+    // 超时：Go http.Client.Timeout（defaultPluginTimeout=30s）按请求生效 → 每次尝试独立 AbortController
     let lastErr: unknown = null;
     let html = '';
     for (let i = 0; i <= MAX_RETRIES; i++) {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
       try {
         const resp = await fetch(searchURL, {
           headers: {
@@ -140,6 +144,7 @@ export const quarksoo = definePlugin({
             Connection: 'keep-alive',
             Referer: 'https://quarksoo.cc/',
           },
+          signal: controller.signal,
         });
         if (resp.status === 200) {
           html = await resp.text();
@@ -149,6 +154,8 @@ export const quarksoo = definePlugin({
         lastErr = new Error(`API返回非200状态码: ${resp.status}`);
       } catch (err) {
         lastErr = err;
+      } finally {
+        clearTimeout(timer);
       }
       if (i === MAX_RETRIES) break;
       await new Promise((r) => setTimeout(r, 500));
