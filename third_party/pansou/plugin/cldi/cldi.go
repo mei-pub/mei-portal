@@ -1,3 +1,21 @@
+// Package cldi 磁力帝（DHT 磁力搜索）插件。
+//
+// 磁力帝是轮换域名的 DHT 磁力引擎（zsky 模板），入口域名不定期失效，
+// 官方提供「御选入口」落地页发布当前有效地址：
+//
+//   - 落地页 https://cldcld.cc/（长期入口；旧入口 cm7jll1f.1122137.xyz
+//     失效时返回 410 并 meta-refresh 指向当前落地页，可作回退）
+//   - 落地页内嵌 JS：CONFIG={domains:[...], intervalMinutes:30, codeLength:8,
+//     salt:"..."}，当前入口由确定性算法生成（每 30 分钟轮换）：
+//     slot = unix毫秒 / (intervalMinutes*60000)
+//     seed = salt + "|" + host + "|" + slot + "|" + index
+//     code = xorshift32(FNV-1a(seed)) 逐字符映射 [a-z0-9]
+//     入口 = https://<code>.<host>
+//
+// 搜索接口（2026-09-08 实测）：
+//   - GET /search-<keyword>-0-<sort>-<page>.html（sort 0=相关 2=时间）
+//   - 结果卡 <article class="resource"> 内 <h2><a href="/hash/<40位hash>.html">
+//   - href 中的 hash 即 btih，直接构造 magnet 链接，无需请求详情页
 package cldi
 
 import (
@@ -7,11 +25,13 @@ import (
 	"net/http"
 	"net/url"
 	"regexp"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/PuerkitoBio/goquery"
+
 	"pansou/model"
 	"pansou/plugin"
 )
@@ -38,9 +58,47 @@ var (
 	// 各种数字提取正则
 	numberRegex   = regexp.MustCompile(`\d+`)
 	hashPathRegex = regexp.MustCompile(`(?i)/hash/([a-f0-9]{40})\.html`)
+
+	// 落地页 CONFIG 解析
+	configRegex = regexp.MustCompile(`CONFIG=\{domains:\[([^\]]*)\],intervalMinutes:(\d+),codeLength:(\d+),salt:"([^"]*)"\}`)
+	// 旧入口 410 页的 meta refresh 跳转目标
+	metaRefreshRegex = regexp.MustCompile(`(?i)url=(https?://[^"'>\s]+)`)
 )
 
-const baseURL = "https://cm7jll1f.1122137.xyz"
+// 落地页（御选入口）。cldcld.cc 为当前长期落地页；1122137.xyz 根域在入口
+// 失效后会 410 并 meta-refresh 到新落地页，作为第二引导源。
+var landingPages = []string{
+	"https://cldcld.cc/",
+	"https://cm7jll1f.1122137.xyz/",
+}
+
+// defaultConfig 落地页不可用时的兜底（2026-09-08 实测值）。
+var defaultConfig = rotationConfig{
+	Domains:         []string{"1122137.xyz", "1122138.xyz", "cld142.buzz"},
+	IntervalMinutes: 30,
+	CodeLength:      8,
+	Salt:            "address-page-2026",
+}
+
+// resolvedEntries 缓存的当前入口候选列表。
+type resolvedEntries struct {
+	bases   []string
+	expires time.Time
+}
+
+var (
+	entryMu       sync.Mutex
+	cachedEntries *resolvedEntries
+	lastReResolve time.Time // 上次强制重解析时间（限频）
+)
+
+// rotationConfig 落地页内嵌的轮换配置。
+type rotationConfig struct {
+	Domains         []string
+	IntervalMinutes int64
+	CodeLength      int
+	Salt            string
+}
 
 func init() {
 	p := &CldiPlugin{
@@ -63,68 +121,267 @@ func (p *CldiPlugin) SearchWithResult(keyword string, ext map[string]interface{}
 	return p.AsyncSearchWithResult(keyword, p.searchImpl, p.MainCacheKey, ext)
 }
 
-// searchImpl 实际的搜索实现
-func (p *CldiPlugin) searchImpl(client *http.Client, keyword string, ext map[string]interface{}) ([]model.SearchResult, error) {
-	// 1. 首先搜索第一页
-	firstPageResults, err := p.searchPage(client, keyword, 1)
-	if err != nil {
-		return nil, fmt.Errorf("[%s] 搜索第一页失败: %w", p.Name(), err)
+// currentBases 返回当前候选入口列表（带缓存与轮换解析）。
+// 候选按落地页顺序排列，同 slot 内域名可用性不同，由调用方逐个尝试。
+func currentBases(client *http.Client) ([]string, error) {
+	entryMu.Lock()
+	cached := cachedEntries
+	entryMu.Unlock()
+	if cached != nil && time.Now().Before(cached.expires) {
+		return cached.bases, nil
 	}
 
-	// 存储所有结果
-	var allResults []model.SearchResult
-	allResults = append(allResults, firstPageResults...)
-
-	// 2. 并发搜索其他页面（第2页到第5页）
-	if MaxPages > 1 {
-		var wg sync.WaitGroup
-		var mu sync.Mutex
-
-		// 使用信号量控制并发数
-		semaphore := make(chan struct{}, MaxConcurrency)
-
-		// 存储每页结果
-		pageResults := make(map[int][]model.SearchResult)
-
-		for page := 2; page <= MaxPages; page++ {
-			wg.Add(1)
-			go func(pageNum int) {
-				defer wg.Done()
-
-				// 获取信号量
-				semaphore <- struct{}{}
-				defer func() { <-semaphore }()
-
-				// 添加小延迟避免过于频繁的请求
-				time.Sleep(time.Duration(pageNum%3) * 100 * time.Millisecond)
-
-				currentPageResults, err := p.searchPage(client, keyword, pageNum)
-				if err == nil && len(currentPageResults) > 0 {
-					mu.Lock()
-					pageResults[pageNum] = currentPageResults
-					mu.Unlock()
-				}
-			}(page)
+	bases := resolveBases(client)
+	if len(bases) == 0 {
+		if cached != nil {
+			// 解析失败时沿用旧候选碰运气（可能只是落地页抖动）
+			return cached.bases, nil
 		}
+		return nil, fmt.Errorf("[cldi] 无法解析入口域名")
+	}
 
-		wg.Wait()
+	entryMu.Lock()
+	cachedEntries = &resolvedEntries{bases: bases, expires: time.Now().Add(20 * time.Minute)}
+	entryMu.Unlock()
+	return bases, nil
+}
 
-		// 按页码顺序合并所有页面的结果
-		for page := 2; page <= MaxPages; page++ {
-			if results, exists := pageResults[page]; exists {
-				allResults = append(allResults, results...)
+// invalidateEntries 入口请求失败时清除缓存，允许下次搜索立刻重解析。
+func invalidateEntries() {
+	entryMu.Lock()
+	cachedEntries = nil
+	entryMu.Unlock()
+}
+
+// resolveBases 从落地页解析当前候选入口；落地页全挂时用兜底配置计算。
+func resolveBases(client *http.Client) []string {
+	cfg := defaultConfig
+	for _, landing := range landingPages {
+		cfgBytes, err := fetchLanding(client, landing)
+		if err != nil {
+			continue
+		}
+		if parsed, ok := parseConfig(string(cfgBytes)); ok {
+			cfg = parsed
+			break
+		}
+	}
+	return computeEntries(cfg)
+}
+
+// computeEntries 按落地页算法生成全部候选入口（顺序即优先级）。
+func computeEntries(cfg rotationConfig) []string {
+	if cfg.IntervalMinutes <= 0 {
+		cfg.IntervalMinutes = 30
+	}
+	if cfg.CodeLength <= 0 {
+		cfg.CodeLength = 8
+	}
+	slot := time.Now().UnixMilli() / (cfg.IntervalMinutes * 60000)
+	entries := make([]string, 0, len(cfg.Domains))
+	for i, host := range cfg.Domains {
+		host = strings.Trim(strings.TrimSpace(host), "./")
+		if host == "" {
+			continue
+		}
+		seed := fmt.Sprintf("%s|%s|%d|%d", cfg.Salt, host, slot, i)
+		code := seededCode(seed, cfg.CodeLength)
+		entries = append(entries, "https://"+code+"."+host)
+	}
+	return entries
+}
+
+const codeAlphabet = "abcdefghijklmnopqrstuvwxyz0123456789"
+
+// hash32 FNV-1a 32 位哈希（与落地页 JS 的 hash32 一致，种子全 ASCII）。
+func hash32(text string) uint32 {
+	var hash uint32 = 2166136261
+	for i := 0; i < len(text); i++ {
+		hash ^= uint32(text[i])
+		hash *= 16777619
+	}
+	return hash
+}
+
+// seededCode xorshift32 伪随机序列生成入口前缀（与落地页 JS 一致）。
+func seededCode(seedText string, length int) string {
+	state := hash32(seedText)
+	if state == 0 {
+		state = 1
+	}
+	var b strings.Builder
+	for i := 0; i < length; i++ {
+		state ^= state << 13
+		state ^= state >> 17
+		state ^= state << 5
+		b.WriteByte(codeAlphabet[state%uint32(len(codeAlphabet))])
+	}
+	return b.String()
+}
+
+// fetchLanding 抓取落地页（跟随旧入口的 meta refresh）。
+func fetchLanding(client *http.Client, landing string) ([]byte, error) {
+	body, err := simpleGet(client, landing)
+	if err != nil {
+		return nil, err
+	}
+	return body, nil
+}
+
+// parseConfig 解析落地页内嵌的 CONFIG。
+func parseConfig(page string) (rotationConfig, bool) {
+	m := configRegex.FindStringSubmatch(page)
+	if len(m) != 5 {
+		return rotationConfig{}, false
+	}
+	interval, err1 := strconv.ParseInt(m[2], 10, 64)
+	codeLen, err2 := strconv.Atoi(m[3])
+	if err1 != nil || err2 != nil || codeLen <= 0 || interval <= 0 {
+		return rotationConfig{}, false
+	}
+	var domains []string
+	for _, d := range strings.Split(m[1], ",") {
+		d = strings.Trim(strings.TrimSpace(d), `"`)
+		if d != "" {
+			domains = append(domains, d)
+		}
+	}
+	if len(domains) == 0 {
+		return rotationConfig{}, false
+	}
+	return rotationConfig{Domains: domains, IntervalMinutes: interval, CodeLength: codeLen, Salt: m[4]}, true
+}
+
+// simpleGet 最小化 GET（不重试，调用方容错）。
+func simpleGet(client *http.Client, target string) ([]byte, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, target, nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36")
+	req.Header.Set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
+	req.Header.Set("Accept-Language", "zh-CN,zh;q=0.9")
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("HTTP %d", resp.StatusCode)
+	}
+	body, err := io.ReadAll(io.LimitReader(resp.Body, 4<<20))
+	if err != nil {
+		return nil, err
+	}
+	// 旧入口 410 页面通过 meta refresh 指向新落地页，跟进一层
+	page := string(body)
+	if m := metaRefreshRegex.FindStringSubmatch(page); len(m) == 2 && strings.Contains(page, "http-equiv=refresh") {
+		if next, err2 := simpleGet(client, m[1]); err2 == nil {
+			return next, nil
+		}
+	}
+	return body, nil
+}
+
+// searchImpl 实际的搜索实现
+func (p *CldiPlugin) searchImpl(client *http.Client, keyword string, ext map[string]interface{}) ([]model.SearchResult, error) {
+	bases, err := currentBases(client)
+	if err != nil {
+		return nil, err
+	}
+
+	results := p.searchAllPages(client, bases, keyword)
+	if len(results) > 0 {
+		return plugin.FilterResultsByKeyword(results, keyword), nil
+	}
+
+	// 无结果可能是入口刚好轮换（30 分钟周期），限频强制重解析一次
+	entryMu.Lock()
+	recent := time.Since(lastReResolve) < time.Minute
+	entryMu.Unlock()
+	if !recent {
+		entryMu.Lock()
+		lastReResolve = time.Now()
+		entryMu.Unlock()
+		invalidateEntries()
+		if newBases, err2 := currentBases(client); err2 == nil {
+			if retry := p.searchAllPages(client, newBases, keyword); len(retry) > 0 {
+				return plugin.FilterResultsByKeyword(retry, keyword), nil
 			}
 		}
 	}
+	return nil, nil
+}
 
-	// 3. 关键词过滤
-	return plugin.FilterResultsByKeyword(allResults, keyword), nil
+// searchAllPages 依次尝试候选入口，首个成功者完成全部页码搜索并合并。
+func (p *CldiPlugin) searchAllPages(client *http.Client, bases []string, keyword string) []model.SearchResult {
+	for _, base := range bases {
+		// 1. 首先搜索第一页（入口探活：请求成功或拿到结果都算可用）
+		firstPageResults, err := p.searchPage(client, base, keyword, 1)
+		if err != nil {
+			continue // 换下一个候选入口
+		}
+		if len(firstPageResults) == 0 {
+			return nil // 入口可用但无结果，无需换域名
+		}
+
+		// 存储所有结果
+		var allResults []model.SearchResult
+		allResults = append(allResults, firstPageResults...)
+
+		// 2. 并发搜索其他页面（第2页到第5页）
+		if MaxPages > 1 {
+			var wg sync.WaitGroup
+			var mu sync.Mutex
+
+			// 使用信号量控制并发数
+			semaphore := make(chan struct{}, MaxConcurrency)
+
+			// 存储每页结果
+			pageResults := make(map[int][]model.SearchResult)
+
+			for page := 2; page <= MaxPages; page++ {
+				wg.Add(1)
+				go func(pageNum int) {
+					defer wg.Done()
+
+					// 获取信号量
+					semaphore <- struct{}{}
+					defer func() { <-semaphore }()
+
+					// 添加小延迟避免过于频繁的请求
+					time.Sleep(time.Duration(pageNum%3) * 100 * time.Millisecond)
+
+					currentPageResults, err := p.searchPage(client, base, keyword, pageNum)
+					if err == nil && len(currentPageResults) > 0 {
+						mu.Lock()
+						pageResults[pageNum] = currentPageResults
+						mu.Unlock()
+					}
+				}(page)
+			}
+
+			wg.Wait()
+
+			// 按页码顺序合并所有页面的结果
+			for page := 2; page <= MaxPages; page++ {
+				if results, exists := pageResults[page]; exists {
+					allResults = append(allResults, results...)
+				}
+			}
+		}
+
+		return allResults
+	}
+	return nil
 }
 
 // searchPage 搜索指定页面
-func (p *CldiPlugin) searchPage(client *http.Client, keyword string, page int) ([]model.SearchResult, error) {
+func (p *CldiPlugin) searchPage(client *http.Client, base string, keyword string, page int) ([]model.SearchResult, error) {
 	// 构建搜索URL (分类=0全部, 排序=2按添加时间)
-	searchURL := fmt.Sprintf("%s/search-%s-0-2-%d.html", baseURL, url.QueryEscape(keyword), page)
+	searchURL := fmt.Sprintf("%s/search-%s-0-2-%d.html", base, url.QueryEscape(keyword), page)
 
 	// 创建带超时的上下文
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
@@ -137,30 +394,30 @@ func (p *CldiPlugin) searchPage(client *http.Client, keyword string, page int) (
 	}
 
 	// 设置请求头
-	p.setRequestHeaders(req)
+	p.setRequestHeaders(req, base)
 
 	// 发送请求
 	resp, err := p.doRequestWithRetry(req, client)
 	if err != nil {
-		return nil, fmt.Errorf("[%s] 搜索请求失败: %w", p.Name(), err)
+		return nil, fmt.Errorf("[cldi] 搜索请求失败: %w", err)
 	}
 	defer resp.Body.Close()
 
 	// 检查状态码
 	if resp.StatusCode != 200 {
-		return nil, fmt.Errorf("[%s] 请求返回状态码: %d", p.Name(), resp.StatusCode)
+		return nil, fmt.Errorf("[cldi] 请求返回状态码: %d", resp.StatusCode)
 	}
 
 	// 读取响应
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, fmt.Errorf("[%s] 读取响应失败: %w", p.Name(), err)
+		return nil, fmt.Errorf("[cldi] 读取响应失败: %w", err)
 	}
 
-	// 解析HTML
+	// 解析HTML（模板为 UTF-8）
 	doc, err := goquery.NewDocumentFromReader(strings.NewReader(string(body)))
 	if err != nil {
-		return nil, fmt.Errorf("[%s] HTML解析失败: %w", p.Name(), err)
+		return nil, fmt.Errorf("[cldi] HTML解析失败: %w", err)
 	}
 
 	// 提取搜索结果
@@ -168,14 +425,14 @@ func (p *CldiPlugin) searchPage(client *http.Client, keyword string, page int) (
 }
 
 // setRequestHeaders 设置请求头
-func (p *CldiPlugin) setRequestHeaders(req *http.Request) {
+func (p *CldiPlugin) setRequestHeaders(req *http.Request, base string) {
 	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36")
 	req.Header.Set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8")
 	req.Header.Set("Accept-Language", "zh-CN,zh;q=0.9,en;q=0.8")
 	req.Header.Set("Connection", "keep-alive")
 	req.Header.Set("Cache-Control", "no-cache")
 	req.Header.Set("Pragma", "no-cache")
-	req.Header.Set("Referer", baseURL+"/")
+	req.Header.Set("Referer", base+"/")
 }
 
 // doRequestWithRetry 带重试机制的HTTP请求

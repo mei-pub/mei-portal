@@ -23,6 +23,9 @@ test('registry exposes readable names and categories', () => {
   assert.equal(diskPluginName('clmao'), '磁力猫');
   assert.equal(diskPluginName('never-registered'), 'never-registered');
   assert.equal(diskPluginCategory('clxiong'), 'magnet');
+  assert.equal(diskPluginCategory('dygod'), 'magnet');
+  assert.equal(diskPluginCategory('cldi'), 'magnet');
+  assert.equal(diskPluginCategory('btbtlb'), 'magnet');
   assert.equal(diskPluginCategory('pansearch'), 'cloud');
   assert.equal(diskPluginCategory('not-here'), 'unknown');
 });

@@ -77,8 +77,11 @@ export const DISK_PLUGINS: DiskPluginMeta[] = [
   { id: 'ciligou', name: '磁力狗', category: 'magnet', note: '聚合磁力狗+磁力猫双 DHT 引擎' },
   { id: 'clmao', name: '磁力猫', category: 'magnet' },
   { id: 'clxiong', name: '磁力熊', category: 'magnet' },
-  { id: 'thepiratebay', name: '海盗湾', category: 'magnet' },
-  { id: 'nyaa', name: 'Nyaa 番剧', category: 'magnet' },
+  { id: 'cldi', name: '磁力帝', category: 'magnet', note: '轮换域名 DHT 引擎，自动解析御选入口' },
+  { id: 'dygod', name: '电影天堂', category: 'magnet' },
+  { id: 'btbtlb', name: 'BT影视', category: 'magnet' },
+  { id: 'thepiratebay', name: '海盗湾', category: 'magnet', note: '境外源，无代理时无结果' },
+  { id: 'nyaa', name: 'Nyaa 番剧', category: 'magnet', note: '境外源，无代理时无结果' },
   { id: 'melost', name: 'Melost', category: 'magnet' },
   { id: 'erxiao', name: '二小磁力', category: 'magnet' },
   { id: 'dy4k', name: '4K 电影', category: 'magnet' },
@@ -90,8 +93,6 @@ export const DISK_PLUGINS: DiskPluginMeta[] = [
   { id: 'labi', name: '辣比磁力', category: 'magnet' },
   { id: 'shandian', name: '闪电磁力', category: 'magnet' },
   { id: 'zhizhen', name: '指针磁力', category: 'magnet' },
-  { id: 'pianku', name: '片库磁力', category: 'magnet' },
-  { id: 'sdso', name: '闪电下载', category: 'magnet' },
 ];
 
 /** id -> 元数据 */

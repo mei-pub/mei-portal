@@ -165,7 +165,9 @@ const DISK_SOURCE_NAMES: Record<string, string> = {
   muou: '木偶',
   yunsou: '云搜',
   xdpan: '兄弟盘',
-  pianku: '片库',
+  dygod: '电影天堂',
+  cldi: '磁力帝',
+  btbtlb: 'BT影视',
   pansearch: '盘搜',
 };
 
