@@ -94,22 +94,19 @@ RUN echo "3545ac7ffc0869498755cb3b4760a72fa2f176689d0890a6f5b898d163012ba2  /tmp
     && npx tsc \
     && npm prune --omit=dev
 
-# ---- disks 网盘搜索（Go 后端 + Vue 前端；Go 为过渡期引擎，将被 Node/TS 复刻版替换）----
-FROM golang:1.25-bookworm AS disks-go-builder
+# ---- disks 网盘搜索（Node/TS 复刻引擎 + Vue 前端；Go 引擎已退役）----
+FROM node:22-bookworm-slim AS disks-engine-builder
 WORKDIR /build
-# Go 模块代理：默认官方源（CI 海外 runner 直连最快）；国内本地构建经
-# docker-compose 传 goproxy.cn。写死单代理曾致 CI 绕道国内 TLS 握手超时。
-ARG GOPROXY=https://proxy.golang.org,direct
-ENV GOPROXY=${GOPROXY}
-COPY apps/disks/pansou/ ./
-RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/pansou .
+COPY apps/disks/engine/package.json apps/disks/engine/package-lock.json* ./
+RUN npm ci --no-audit --no-fund || npm install --no-audit --no-fund
+COPY apps/disks/engine/ ./
 FROM node:22-bookworm-slim AS disks-web-builder
 WORKDIR /build
 COPY apps/disks/web/ ./
 RUN npm ci --no-audit --no-fund || npm install --no-audit --no-fund
 RUN npm run build
 
-# ---- media 流媒体下载（Go core + React UI + 外部下载工具；Go 为过渡期，将被 Node/TS 复刻版替换）----
+# ---- media 流媒体下载（core-ts Node 引擎 + React UI + 外部下载工具；Go core 已退役）----
 # 全部从本地源码构建
 FROM node:22-bookworm-slim AS media-node-builder
 WORKDIR /src
@@ -196,8 +193,8 @@ COPY --from=bgutil-builder /build/build ./apps/bgutil/build
 COPY --from=bgutil-builder /build/node_modules ./apps/bgutil/node_modules
 COPY --from=bgutil-builder /build/package.json ./apps/bgutil/package.json
 
-# ---- disks（本地编译 Go 二进制 + Vue 前端 dist）----
-COPY --from=disks-go-builder /out/pansou ./apps/disks/pansou
+# ---- disks（TS 引擎 + Vue 前端 dist）----
+COPY --from=disks-engine-builder /build ./apps/disks/engine
 COPY --from=disks-web-builder /build/dist ./apps/disks/frontend/dist
 
 # ---- media（TS core + 前端静态 + 播放页 + 下载工具）----

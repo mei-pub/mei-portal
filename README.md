@@ -10,7 +10,7 @@
 - **单镜像单端口**：nginx + 门户外壳 + 8 个应用全部本地源码构建，打进一个镜像，只暴露 `7777`，`docker run` 即用，零外部镜像依赖。
 - **统一登录**：单账户门禁，登录一次全应用通行；子应用不再各自维护登录（音乐、下载、搜索等内部应用共用门户会话）。
 - **应用秒切**：访问过的应用 iframe 保活驻留、顶栏悬停即预热、静态资源长缓存——切应用不重载，音乐跨应用不断播。
-- **网盘搜索**：内置 pansou 聚合引擎，50+ 网页插件（剧透社/盘搜/小酷盘等）+ 113 个 TG 资源频道 + 19 个磁力/电驴引擎（电影天堂/磁力狗/磁力帝/磁力猫等 DHT 引擎），夸克/阿里/百度/迅雷/UC/115 等网盘链接与 magnet/ed2k 聚合检索、跨源去重、按类型筛选。
+- **网盘搜索**：自研聚合引擎（Node/TS，51 个网页/磁力插件全量对齐：剧透社/盘搜/小酷盘等网盘源 + 电影天堂/磁力狗/磁力帝等磁力引擎）+ 113 个 TG 资源频道，夸克/阿里/百度/迅雷/UC/115 等网盘链接与 magnet/ed2k 聚合检索、跨源去重、按类型筛选，夸克/阿里/百度/迅雷/UC/115 等网盘链接与 magnet/ed2k 聚合检索、跨源去重、按类型筛选。
 - **音乐常驻**：MusicDock 悬浮播放条跨应用常驻，切到影视/工具页背景不断播；音乐应用内有完整播放页。
 - **内网穿透**：mei-link（frp 客户端）Web 管理，故障引导弹层 + 自动重连/重启两段式策略。
 - **视觉统一**：悬浮玻璃顶栏与应用内标准左侧导航面板由门户统一注入，各应用（React/Vue/原生 JS/静态页）保持一套观感。
@@ -53,7 +53,7 @@ docker run -d --name mei-portal --restart unless-stopped \
 ```bash
 git clone https://github.com/mei-pub/mei-portal.git
 cd mei-portal
-docker compose up -d --build    # 国内构建自动走 goproxy.cn
+docker compose up -d --build
 ```
 
 ### 环境变量
@@ -83,8 +83,8 @@ nginx（唯一入口，sub_filter 注入顶栏脚本）
   ├─ /            Shell 门户（Next.js，:3010）── 统一登录 / iframe 承载页 / 搜索中心
   ├─ /tv         LunaTV        (:3003)   ┐
   ├─ /music      Solara        (:3005)   │
-  ├─ /disks      pansou Go API (:3008)   │ 各应用独立进程，supervisord 守护
-  ├─ /media      media core-ts (:3000)   │ 顶栏/左面板由门户注入
+  ├─ /disks      disks engine (:3008)      │ 各应用独立进程，supervisord 守护
+  ├─ /media      media core-ts (:3000)    │ 顶栏/左面板由门户注入
   ├─ /draw       ai-draw       (:3004)   │
   ├─ /tools      omni-tools    （静态）  │
   ├─ /link       mei-link      (:3002)   │
@@ -108,9 +108,9 @@ mei-portal/
 ├── apps/                   # 各应用——全部为一等公民本地代码（目录名 = URL 子路径）
 │   ├── tv/                 #   影视门户（Next.js，原 LunaTV 魔改演进）
 │   ├── music/              #   音乐播放（原生 JS + Node 服务，原 Solara）
-│   ├── disks/              #   网盘搜索：web/（Vue 前端）+ engine/（Node/TS 复刻引擎，
-│   │                       #   API 与 Go 版完全兼容，插件分批移植中）+
-│   │                       #   pansou/（Go 引擎，过渡期，达到插件对齐后移除）
+│   ├── disks/              #   网盘搜索：web/（Vue 前端）+ engine/（Node/TS 引擎，
+│   │                       #   51 个启用插件全量移植，含 gying/qqpd/weibo/panlian
+│   │                       #   四个账号型源的管理页 Web 路由）
 │   ├── media/              #   流媒体下载（core-ts/ Node 复刻引擎 + React UI；
 │   │                       #   鉴权统一走门户会话，无独立 setup/signin）
 │   ├── draw/               #   AI 绘图（Vite + React + Express，原 ai-draw）
@@ -144,7 +144,7 @@ git tag v0.1.0 && git push origin v0.1.0
 ## 开发
 
 - **本地验证**：`docker compose up -d --build` 后访问 `http://127.0.0.1:7777`；单服务调试可 `docker exec mei-portal supervisorctl status`。
-- **Go 插件**（pansou）：`apps/disks/pansou/plugin/`，遵循上游开发规范（`docs/pansou-plugin-developer-SKILL.md` 模式）；注意本仓库需用 Go 1.25 构建（sonic 依赖与更新版 Go 不兼容）。
+- **搜索插件**（disks 引擎）：`apps/disks/engine/src/plugins/<name>.ts`，用 `definePlugin({ name, priority, skipServiceFilter, search })` 注册后在 `plugins/index.ts` 导入即可；账号型源可用 `webRoutes` 注册管理页路由（见 gying/qqpd/weibo/panlian）。运行：`cd apps/disks/engine && npm install && npm start`；单测 `npm test`。
 - **智能体协作**：任何 AI 辅助改动请先读 `AGENTS.md`——顶栏/左侧面板组件化、顶部空间契约、播放组件与播放页职责分离、mei-link 故障引导、iframe 保活与缓存策略、nginx 路由判别等强约束均在其中，违规判定标准也写明。
 
 ## 许可
