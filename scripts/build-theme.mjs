@@ -58,11 +58,8 @@ for (const dir of dirs) {
   const manifestFile = join(PLUGINS_DIR, dir, 'manifest.yml');
   if (!existsSync(manifestFile)) continue;
   const manifest = yaml.load(readFileSync(manifestFile, 'utf8'));
-  if (manifest.ingress?.mode !== 'subdomain') continue;
-  // 推导子域名前缀：从 host 的 ${SUBDOMAIN_X} 占位或回退到 id
-  let subdomainPrefix = manifest.id;
-  const m = (manifest.ingress.host || '').match(/\$\{SUBDOMAIN_([A-Z0-9_]+)\}/);
-  if (m) subdomainPrefix = m[1].toLowerCase();
+  // URL 子路径前缀：取 manifest.path（如 /tv → tv），回退到 id
+  const subdomainPrefix = (manifest.path || manifest.id).replace(/^\//, '');
   allPlugins.push({
     id: manifest.id,
     name: manifest.name,

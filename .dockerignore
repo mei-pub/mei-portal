@@ -11,7 +11,6 @@ node_modules
 **/.next
 docs
 certs
-gateway
 plugins
 scripts
 .github

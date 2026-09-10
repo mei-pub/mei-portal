@@ -3,197 +3,138 @@
 ## 前置要求
 
 - Docker 20.10+ 与 Docker Compose v2
-- 宿主机 80 端口可用（或自行改 compose 映射）
-- 首次需联网拉取镜像
+- 宿主机 7777 端口可用（或自行改 compose 映射）
+- 从源码构建需联网拉取 npm 依赖
 
 ## 标准部署
 
+### 直接用发布镜像（推荐）
+
 ```bash
-git clone --recurse-submodules <repo-url> mei-portal
+docker run -d --name mei-portal --restart unless-stopped \
+  -p 7777:7777 -v mei-portal-data:/data \
+  ghcr.io/mei-pub/mei-portal:latest
+```
+
+### 从源码构建（docker compose）
+
+```bash
+git clone https://github.com/mei-pub/mei-portal.git
 cd mei-portal
-cp .env.example .env
-bash scripts/setup-ip.sh      # 自动检测 IP，写入 ROOT_DOMAIN (nip.io)
-npm install && npm run build   # 校验清单 + 构建主题资产 + 生成 nginx 配置
-docker compose up -d
+docker compose up -d --build
 ```
 
-访问 `http://<ROOT_DOMAIN>`（见 `.env`），用 `SHELL_PASSWORD` 登录。
-
-> 若 clone 时漏了 `--recurse-submodules`，补一步即可：
-> `git submodule update --init`
-
-## 自定义域名（不用 nip.io）
-
-1. 编辑 `.env`：`ROOT_DOMAIN=你的域名`
-2. 配置 DNS：为根域名和各子域名前缀（panel/draw/media/tv/music/tools/link/novels）添加 A 记录指向宿主机 IP；或配置泛解析 `*.你的域名`
-3. 若用 hosts 文件（仅本机测试），需为每个子域名各加一行
-
-## HTTPS（可选）
-
-内网默认 HTTP。如需 HTTPS：
-
-```bash
-# 用 mkcert 生成本地信任的证书
-brew install mkcert  # macOS; Linux 见 mkcert 官方安装说明
-mkcert -install
-bash scripts/setup-certs.sh   # 待补充：生成证书到 certs/
-```
-
-然后在 `.env` 设 `USE_TLS=true`，compose 会挂载证书并启用 443。
+浏览器打开 `http://<服务器IP>:7777`，默认账户 `admin` / `mei-portal`（首次登录后请在门户设置里改密码）。
 
 ## 常见问题
 
-### Q: tutorial / mei-link 容器构建失败或缺目录
+### Q: 忘记管理员密码
 
-这两个应用是 git submodule，必须先初始化：
-
-```bash
-git submodule update --init
-ls packages/tutorial/Dockerfile            # 应存在
-ls packages/mei-link/client/docker/Dockerfile  # 应存在
-```
-
-构建：
-```bash
-docker compose build tutorial mei-link
-```
-
-### Q: HTTPS 访问报证书错误
-
-`setup-certs.sh` 用 mkcert 生成证书，根 CA 需被信任：
+凭据只在 `/data/shell/user.json` 不存在时初始化。忘记密码时：
 
 ```bash
-mkcert -install             # 在本机安装根 CA（一次性）
-bash scripts/setup-certs.sh # 重新生成证书
-docker compose restart gateway
+docker exec mei-portal rm /data/shell/user.json
+docker restart mei-portal
+# 账户回到环境变量/默认值重新初始化
+# 注意：账户级数据按 uid 归档，重置后旧 uid 关联的数据（如音乐进度）会失联
 ```
 
-手机/其他设备需导入 mkcert 的根 CA（路径：`mkcert -CAROOT` 输出的 `rootCA.pem`）。
-若不想用 HTTPS，设 `.env` 的 `USE_TLS=false` 并重启网关。
+### Q: 7777 端口被占用 / 想换端口
 
-### Q: 80 端口被占用 / 想换端口
+改 `docker-compose.yml` 的 `ports`，如 `"7788:7777"`，然后 `docker compose up -d`。
 
-改 `docker-compose.yml` 的 gateway.ports，如 `"8080:80"`，然后 `http://<ROOT_DOMAIN>:8080`。
-注意子域名解析仍指向宿主机 IP，端口变化浏览器需显式带上。
-
-### Q: tutorial 容器首次启动很慢 / 一直 502
-
-tutorial（小说站）的 entrypoint 首次启动会下载约 100MB 的中文字体（Noto Serif SC / Noto Sans SC / LXGW WenKai 等 10 种）到 `/app/data/fonts/`，需要外网访问 `fonts.googleapis.com`。下载期间应用未启动，网关会返回 502（**但 sub_filter 仍正常注入 loader**，可在 502 页面源码看到 `data-app="tutorial"`）。
+### Q: 容器一直 unhealthy
 
 ```bash
-# 查看下载进度
-docker compose logs tutorial -f
-# 等待出现 "=== 下载完成 ===" 后再等几秒应用启动
+# healthcheck 打 /healthy（nginx → media core 白名单端点）
+curl -fsS http://127.0.0.1:7777/healthy
+
+# 看各进程状态（10 个进程应全部 RUNNING）
+docker exec mei-portal supervisorctl status
+
+# 看具体进程日志
+docker exec mei-portal supervisorctl tail -2000 stderr <name>
+# <name> ∈ nginx/shell/novels/link/tv/draw/music/bgutil/media/disks
 ```
 
-字体缓存在 volume `${DATA_ROOT}/tutorial/fonts/`，**仅首次下载**，后续重启秒启。
-若下载失败（无外网），可预先在能联网的机器下载后挂载到该目录。
+首次启动 `start_period` 为 90s，期间 healthcheck 失败是正常的（novels 字体下载、依赖初始化都在这窗口内）。
 
-> 已知问题：上游 `download-fonts.mjs` 在某些情况下下载完成后进程不退出，导致后续 `node server.js` 不执行。若遇到此情况，重启容器 `docker compose restart tutorial` 通常可恢复（字体已缓存，跳过下载）。此为上游行为，不影响 mei-portal 整合层。
+### Q: 某应用 iframe 内空白 / 顶栏不出现
 
-### Q: 访问门户白屏 / 502
+最常见原因：**外网域名经过的中间反向代理剥离了 `Sec-Fetch-Dest` 头**，nginx 无法区分顶级文档与 iframe 请求，document 请求被直接代理到子应用，门户壳不再渲染。
 
 ```bash
-# 1. 检查容器状态
-docker compose ps
+# 模拟头缺失场景（不传 Sec-Fetch-Dest）：
+curl -s -o /dev/null -w '%{http_code}\n' -H 'Accept: text/html' http://<外网域名>/tv
+# 若返回的是子应用内容而非门户壳，说明中间代理层有问题
 
-# 2. 看 Shell 日志
-docker compose logs shall --tail 50
-
-# 3. 看网关日志
-docker compose logs gateway --tail 50
-
-# 4. 确认主题资产已构建（public/__theme/tokens.css 必须存在）
-ls packages/shall/public/__theme/
-# 若缺失，在宿主机运行 npm run build 后重新 docker compose build shall
+# 浏览器 F12 看页面标题：应为门户标题而非子应用名称
+# 确认 document.getElementById('mei-shell-slot') 不为 null
 ```
 
-### Q: 某应用 iframe 内显示空白 / 拒绝连接
+判别规则与 fallback 机制见 `AGENTS.md`「nginx 路由分发」节。**本地验证通过不等于部署达标**——基于请求头的路由判断必须用外网域名验证。
 
-最常见原因：浏览器拦截跨域 iframe，或网关未剥离安全头。
+### Q: novels（小说阅读）首次启动很慢
+
+首启会后台下载约 100MB 中文字体到 `/data/novels/fonts/`，需要外网访问。下载在后台进行不阻塞启动；失败时可预先在能联网的机器下载后挂载到该目录。仅首次下载，后续重启秒启。
+
+### Q: 主题不生效 / 应用界面没变成暗色
 
 ```bash
-# 1. 确认应用容器正常
-docker compose logs <service> --tail 50
-curl -I http://<prefix>.<ROOT_DOMAIN>/   # 应返回 200，且无 X-Frame-Options 头
+# 1. 确认顶栏脚本被注入：浏览器 F12 看 HTML <head> 是否有
+#    <script src="/__shell/topbar.js" data-app="..."></script>
 
-# 2. 确认 nginx 配置已重新生成（改过 manifest 后）
-npm run gen:nginx
-docker compose restart gateway
+# 2. 确认 tokens.css 能 200 加载（Network 面板）
+curl -I http://127.0.0.1:7777/__shell/tokens.css
 
-# 3. 浏览器控制台看具体报错（F12）
-#    若是 CSP frame-ancestors，确认 gen-nginx 生成的 server 块含 proxy_hide_header Content-Security-Policy
+# 3. 改过 plugins/<id>/theme.css 或 tokens.css 后，必须重新构建镜像
+npm run build:theme          # 先在宿主机验证聚合产物
+docker compose up -d --build # 单镜像：主题资产打进镜像，无独立服务可单独重启
+
+# 4. 浏览器硬刷新该应用 iframe（顶栏刷新按钮或 Ctrl+Shift+R）
 ```
 
-### Q: 应用界面没变成暗色 / 主题不生效
-
-```bash
-# 1. 确认 loader 被注入：浏览器打开该应用子域名，F12 看 HTML <head> 是否有
-#    <script src=".../loader.js" data-app="..."></script>
-
-# 2. 若无，网关 sub_filter 未生效。检查 gateway/nginx/conf.d/00-apps.conf
-#    确认该应用有对应 server 块且含 sub_filter 指令
-
-# 3. 确认协调 CSS 已生成
-ls packages/shall/public/__theme/<app>.css
-# 缺失则 plugins/<app>/manifest.yml 的 theme.has_skin 是否为 true，
-# 且 plugins/<app>/theme.css 是否存在，然后 npm run build:theme
-
-# 4. 浏览器 Network 面板确认 tokens.css 和 <app>.css 能 200 加载
-```
-
-### Q: 子域名打不开 / DNS 解析失败
-
-```bash
-# nip.io 方案：确认 ROOT_DOMAIN 格式正确
-# 应为 allin.192-168-1-10.nip.io （IP 用连字符）
-nslookup <prefix>.<ROOT_DOMAIN>
-# 若失败，检查本机能否访问公网 DNS（nip.io 是公网服务）
-
-# 自建 DNS / hosts 方案：确认每个子域名都有记录
-```
+协调 CSS 的写法与各应用难度参考见 `docs/theming.md`。
 
 ### Q: 主题切换后 iframe 内没变化
 
-跨子域 postMessage 受同源策略约束，loader 只接受来自 Shell origin 的消息。
+主题切换经 `postMessage` 广播给各 iframe，加载器只接受来自门户 origin 的消息。
 
 ```js
-// 在 iframe 内 F12 控制台执行，确认 loader 已加载
+// 在 iframe 内 F12 控制台执行，确认加载器已加载
 window.__meiThemeLoader  // 应为 true
-
-// 确认 loader 推断的 SHELL_ORIGIN 正确
-// loader.js 从 <script src> 推断 origin，若子域结构特殊可能推断错误
-// 检查注入的 script 标签 src 是否指向 shall
 ```
 
 ### Q: 健康徽标一直显示离线
 
-```bash
-# /api/health 从 Shell 容器内访问各应用内部 endpoint（如 http://lunatv:3000）
-# 确认：
-# 1. 目标容器在 mei-net 网络（compose 已配置）
-# 2. endpoint 在 manifest.yml 正确（http://<service>:<port>）
-# 3. 应用启动需要时间，首次启动后等 1-2 分钟
+`/api/health` 由 Shell 并发探活各应用（运行时清单 `image/plugins.json` 中 endpoint 为同源、healthPath 为子路径）。
 
-docker compose exec shall wget -qO- http://lunatv:3000/ | head
+```bash
+# 确认目标子路径可通（例：影视）
+curl -fsS -o /dev/null http://127.0.0.1:7777/tv
+
+# 确认进程正常
+docker exec mei-portal supervisorctl status tv
 ```
 
-### Q: docker compose build shall 失败
+应用启动需要时间，首次启动后等 1-2 分钟再看徽标。
 
-Shell 的 Docker 构建依赖主题资产（`public/__theme/*`）已存在于源码树。这些是构建产物，需在宿主机先生成：
+### Q: 想单独重启某个应用
 
 ```bash
-npm run build:theme     # 生成主题资产
-docker compose build shall
+docker exec mei-portal supervisorctl restart <name>
+# 或看实时日志
+docker exec mei-portal supervisorctl tail -f <name>
 ```
 
-若改动过 `plugins/*/theme.css` 或 `tokens.css`，必须重新 `npm run build:theme` 再 build 镜像。
+不需要重启整个容器；nginx/shell 与各应用进程相互独立。
 
-## 重置
+### Q: 数据重置
 
 ```bash
-docker compose down -v        # 停止并删除卷（⚠️ 会清空应用数据）
-rm -rf data/                  # 清空本地数据
-# 保留 .env，重新 up
+docker compose down -v        # 停止并删除卷（⚠️ 会清空全部应用数据）
+# 保留卷只重启：docker compose restart
 docker compose up -d
 ```
+
+全部状态都在 `/data`（账户、音乐进度、书架、下载内容、搜索缓存、穿透配置），备份该卷即备份一切。

@@ -4,12 +4,8 @@ description: 隐私优先的本地工具集合（图片/PDF/文本等）
 icon: lucide:wrench
 category: utility
 weight: 60
+path: /tools
 endpoint: http://omni-tools:80
-ingress:
-  mode: subdomain
-  host: ${SUBDOMAIN_TOOLS}.${ROOT_DOMAIN}
-auth:
-  strategy: independent
 embed:
   iframe: true
   strip_headers: [X-Frame-Options, Content-Security-Policy]
@@ -19,6 +15,3 @@ theme:
 health:
   path: /
   expect: 200
-upgrade:
-  image: iib0011/omni-tools:latest
-  repo: https://github.com/iib0011/omni-tools

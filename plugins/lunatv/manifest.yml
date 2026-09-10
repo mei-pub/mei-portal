@@ -4,12 +4,8 @@ description: 豆瓣式影视聚合与播放
 icon: lucide:tv
 category: media
 weight: 10
+path: /tv
 endpoint: http://lunatv:3000
-ingress:
-  mode: subdomain
-  host: ${SUBDOMAIN_TV}.${ROOT_DOMAIN}
-auth:
-  strategy: independent
 embed:
   iframe: true
   strip_headers: [X-Frame-Options, Content-Security-Policy]
@@ -19,6 +15,3 @@ theme:
 health:
   path: /
   expect: 200
-upgrade:
-  image: ghcr.io/moontechlab/lunatv:latest
-  repo: https://github.com/MoonTechLab/LunaTV

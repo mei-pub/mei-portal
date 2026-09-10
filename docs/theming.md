@@ -37,8 +37,8 @@ tokens.css          ← 全局设计令牌（所有应用共享）
 亮色板在 `:root[data-mei-theme="light"]` 下覆盖。改完运行：
 
 ```bash
-npm run build:theme
-docker compose build shall && docker compose up -d shall
+npm run build:theme              # 聚合到 packages/shall/public/__theme/
+docker compose up -d --build    # 单镜像：主题资产打进镜像（无独立 shall 服务）
 ```
 
 ## 运行时切换
@@ -54,12 +54,12 @@ docker compose build shall && docker compose up -d shall
 ### 工作流
 
 ```bash
-# 1. 启动后打开该应用（如 http://tv.<ROOT_DOMAIN>）
+# 1. 启动后打开该应用（如 http://<host>:7777/tv）
 # 2. F12 开发者工具，用元素选择器定位要改的组件，记下其 class/选择器
 # 3. 编辑 plugins/<id>/theme.css，用 !important 覆盖（上游样式优先级高）
 # 4. 重新构建并重启
 npm run build:theme
-docker compose build shall && docker compose up -d shall
+docker compose up -d --build
 # 5. 浏览器硬刷新该应用 iframe（顶栏刷新按钮或 Ctrl+Shift+R）
 ```
 

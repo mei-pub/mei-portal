@@ -10,7 +10,6 @@ WORKDIR /build
 COPY packages/shall/package.json packages/shall/package-lock.json* ./
 RUN npm install --no-audit --no-fund
 COPY packages/shall/ ./
-ENV NEXT_PUBLIC_MEI_MODE=single
 RUN npm run build
 
 # ---- novels 小说阅读（Next.js，basePath=/novels）----

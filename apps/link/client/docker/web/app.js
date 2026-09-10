@@ -139,8 +139,8 @@ $("#setupGoto").addEventListener("click", () => {
   // 字段名作为 highlight 参数带给设置页高亮；独立访问时才切本应用内设置面板。
   if (window.parent !== window.self) {
     const query = fields && fields.length ? `?highlight=${encodeURIComponent(fields.join(","))}` : "";
-    // 跨域 iframe（gateway 子域名模式）下 window.location.origin 是本应用而非门户，
-    // 拿不到父窗口 origin 时用 "*" 兜底（载荷只是导航意图，无敏感信息）
+    // 跨源 iframe（门户经子路径同源代理正常拿得到父窗口 origin；异常时用 "*" 兜底，
+    // 载荷只是导航意图，无敏感信息）
     let targetOrigin = "*";
     try { targetOrigin = window.parent.location.origin; } catch (e) {}
     try { window.parent.postMessage({ source: "mei-iframe", type: "navigate", path: `/settings/link-server${query}` }, targetOrigin); } catch (e) {}

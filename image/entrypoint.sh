@@ -11,9 +11,6 @@ mkdir -p "$DATA_DIR"
 export MEI_ADMIN_USER="${MEI_ADMIN_USER:-admin}"
 export MEI_ADMIN_PASSWORD="${MEI_ADMIN_PASSWORD:-mei-portal}"
 
-# 单镜像模式标记（Shell 据此返回子路径 url）
-export MEI_MODE="single"
-
 # 用单镜像专属插件清单覆盖（只含已接入应用）
 if [ -f /etc/mei-plugins.json ]; then
   mkdir -p /app/public/__theme
