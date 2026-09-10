@@ -3,11 +3,10 @@ import { test } from 'node:test';
 
 import {
   appendEmbedParam,
-  buildAppHref,
+  appCarrierHref,
   isAppPath,
-  legacyAppHostPath,
-  normalizeAppPath,
   parseAppRoute,
+  parseCarrierRoute,
   sameAppPath,
 } from './app-routes.ts';
 
@@ -33,30 +32,30 @@ test('parses canonical app routes while preserving query and hash', () => {
   assert.equal(parseAppRoute('/tvx/search?q=1', plugins), null);
 });
 
-test('builds canonical hrefs without wrapping them in /app', () => {
-  assert.equal(
-    buildAppHref('/music/search?q=abc', plugins),
-    '/music/search?q=abc'
-  );
-  assert.equal(buildAppHref('/disks?view=config', plugins), '/disks?view=config');
-  assert.equal(buildAppHref('/unknown?q=1', plugins), null);
+test('appCarrierHref：应用路径包成 /app 承载地址', () => {
+  const href = appCarrierHref('/music/search?q=abc#frag', plugins);
+  assert.ok(href && href.startsWith('/app?'));
+  const params = new URLSearchParams(href.slice(5));
+  assert.equal(params.get('app'), 'solara');
+  assert.equal(params.get('path'), '/music/search?q=abc#frag');
+  // 应用根路径同样包裹
+  assert.equal(appCarrierHref('/tv', plugins), '/app?app=lunatv&path=%2Ftv');
+  // 非应用路径 / 外链 / 空路径 → null（调用方按原样跳转）
+  assert.equal(appCarrierHref('/search?q=1', plugins), null);
+  assert.equal(appCarrierHref('/settings', plugins), null);
+  assert.equal(appCarrierHref('https://example.com/x', plugins), null);
+  assert.equal(appCarrierHref('', plugins), null);
 });
 
-test('normalizes app roots but preserves meaningful trailing slashes', () => {
-  assert.equal(normalizeAppPath('/tv/'), '/tv');
-  assert.equal(normalizeAppPath('/tv/search/'), '/tv/search/');
-});
-
-test('converts the legacy /app host URL to a canonical path', () => {
-  assert.equal(
-    legacyAppHostPath('/app?app=lunatv&path=%2Ftv%2Fsearch%3Fq%3Dabc'),
-    '/tv/search?q=abc'
-  );
-  assert.equal(
-    legacyAppHostPath('/app?app=solara&path=%2Fmusic%23%2Fplayer'),
-    '/music#/player'
-  );
-  assert.equal(legacyAppHostPath('/app?app=unknown&path=%2Funknown'), null);
+test('parseCarrierRoute：承载地址还原为应用路由（往返一致）', () => {
+  const href = appCarrierHref('/tv/search?q=abc', plugins);
+  const parsed = parseCarrierRoute('/app', href!.slice(5), plugins);
+  assert.deepEqual(parsed, { appId: 'lunatv', path: '/tv/search?q=abc' });
+  // 非承载路径 / 未知应用 / path 与 app 不匹配 / 缺参 → null
+  assert.equal(parseCarrierRoute('/tv', '', plugins), null);
+  assert.equal(parseCarrierRoute('/app', 'app=unknown&path=%2Ftv', plugins), null);
+  assert.equal(parseCarrierRoute('/app', 'app=solara&path=%2Ftv%2Fx', plugins), null);
+  assert.equal(parseCarrierRoute('/app', '', plugins), null);
 });
 
 test('appends meiEmbed while preserving query and hash', () => {

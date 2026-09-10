@@ -7,7 +7,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import IframeHost from './IframeHost';
-import { appendEmbedParam, parseAppRoute, sameAppPath } from '@/lib/app-routes';
+import { appCarrierHref, appendEmbedParam, parseAppRoute, parseCarrierRoute, sameAppPath } from '@/lib/app-routes';
 import { pickEvictionVictim } from '@/lib/keepalive';
 import { syncAppTokens } from '@/lib/token-sync';
 
@@ -49,7 +49,10 @@ export default function AppFrame() {
   // 上一次「路由级」导航目标，用于区分真实跳转与 URL 回写
   const navKeyRef = useRef('');
 
-  const parsedRoute = parseAppRoute(currentPath, plugins);
+  // 承载页优先：/app?app=<id>&path=<应用内路径>（客户端导航的统一入口），
+  // 其余按顶层应用资源路径解析（直接整页访问 /tv 等规范路径）。
+  const carrierParsed = parseCarrierRoute(pathname, search, plugins);
+  const parsedRoute = carrierParsed ?? parseAppRoute(currentPath, plugins);
   const appId = parsedRoute?.appId || '';
   const plugin = plugins.find((p) => p.id === appId) || null;
   // src 依据必须与「当前要挂载的应用」同源：应用切换后的第一轮渲染里
@@ -149,7 +152,11 @@ export default function AppFrame() {
       // 子应用请求外壳导航（如内网穿透引导弹层跳设置中心的隧道服务器设置页）
       if (d.source === 'mei-iframe' && d.type === 'navigate') {
         const path = String(d.path || '');
-        if (path.startsWith('/') && !path.startsWith('//')) router.push(path);
+        if (path.startsWith('/') && !path.startsWith('//')) {
+          // 应用路径走承载页，避免 RSC fetch 被 nginx 分流打回整页加载
+          const carrier = appCarrierHref(path, pluginsRef.current);
+          router.push(carrier || path);
+        }
         return;
       }
       if (d.source !== 'mei-topbar' || d.type !== 'prefetch-app') return;

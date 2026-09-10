@@ -68,38 +68,39 @@ export function parseAppRoute(
   return { appId: plugin.id, path: `${pathname}${search}${hash}` };
 }
 
-export function normalizeAppPath(path: string, plugins?: HostPluginRef[]): string {
-  const { pathname, search, hash } = splitHref(path);
-  const plugin = matchPlugin(pathname, plugins);
-  if (!plugin) return path;
-  const prefix = normalizePrefix(plugin.url);
-  const normalized = pathname === `${prefix}/` ? prefix : pathname;
-  return `${normalized}${search}${hash}`;
-}
-
-export function buildAppHref(
-  path: string,
-  plugins?: HostPluginRef[]
-): string | null {
+/**
+ * 客户端导航承载地址：把应用资源路径包成 /app?app=<id>&path=<enc>。
+ * 为什么必须走 /app 而不能直接 push 应用路径：nginx 以 Sec-Fetch-Dest 把
+ * 应用路径的非 document 请求（Next 客户端路由的 RSC fetch 也算）直通到
+ * 各应用，shell 的 RSC payload 永远拉不到 → Next 回退整页加载 → 常驻
+ * 音乐引擎被销毁（表现为「切应用后音乐停了」）。/app 不是任何应用的
+ * 前缀，全部请求类型都会落到 shell。地址栏仍由 AppFrame 的 URL 回写
+ * effect 保持为规范的应用资源路径。
+ */
+export function appCarrierHref(path: string, plugins?: HostPluginRef[]): string | null {
   if (!path || /^https?:\/\//i.test(path)) return null;
   const parsed = parseAppRoute(path, plugins);
-  return parsed ? normalizeAppPath(path, plugins) : null;
+  if (!parsed) return null;
+  const params = new URLSearchParams({ app: parsed.appId, path });
+  return `/app?${params.toString()}`;
 }
 
-export function legacyAppHostPath(
-  href: string,
+/** 承载页路由解析：/app?app=<id>&path=<应用内路径> → { appId, path } */
+export function parseCarrierRoute(
+  pathname: string,
+  search: string,
   plugins?: HostPluginRef[]
-): string | null {
-  const { pathname, search } = splitHref(href);
+): ParsedAppRoute | null {
   if (pathname !== '/app') return null;
-  const params = new URLSearchParams(search);
+  const params = new URLSearchParams(search.replace(/^\?/, ''));
   const appId = params.get('app') || '';
-  const innerPath = params.get('path') || '';
-  if (!appId || !innerPath) return null;
+  const path = params.get('path') || '';
+  if (!appId || !path) return null;
   const known = internalPlugins(plugins).some((plugin) => plugin.id === appId);
   if (!known) return null;
-  const parsed = parseAppRoute(innerPath, plugins);
-  return parsed ? normalizeAppPath(innerPath, plugins) : null;
+  const inner = parseAppRoute(path, plugins);
+  if (!inner || inner.appId !== appId) return null;
+  return inner;
 }
 
 export function appendEmbedParam(path: string): string {

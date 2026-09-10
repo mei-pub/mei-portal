@@ -171,6 +171,11 @@ mei-portal 是多应用聚合门户：`packages/shall` 为门户外壳，`apps/*
 ## 应用切换性能：iframe 保活、预热与静态缓存
 
 承载页 `/app?app=<id>&path=<路径>` 走客户端路由（外壳不卸载，音乐才能连续播放）。
+**禁止**把 NavBridge / openTarget / iframe 导航消息直接 `router.push` 应用路径
+（如 `/tv`）：nginx 按 Sec-Fetch-Dest 把应用路径的非 document 请求直通到各应用，
+Next 客户端路由的 RSC fetch 拿不到 shell 的路由数据，只会回退整页加载——
+常驻音乐引擎与全部保活 iframe 随之销毁。统一用 `appCarrierHref()`（app-routes.ts）；
+地址栏的规范路径由 AppFrame 的 URL 回写 effect 用 `replaceState` 维持。
 「点了好几秒才打开」的根因有三个，各自的修法都不能退化：
 
 ### 1. iframe 保活（`AppFrame.tsx`）
