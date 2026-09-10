@@ -6,6 +6,7 @@ import { globalInputHeight } from '../../config/uiConfig';
 import ResultFooter from './ResultFooter';
 import { CustomSnackBarContext } from '../../contexts/CustomSnackBarContext';
 import { useTranslation } from 'react-i18next';
+import { triggerBrowserDownload } from '../../utils/file';
 
 export default function ToolFileResult({
   title = 'Result',
@@ -67,14 +68,7 @@ export default function ToolFileResult({
         }
       }
       const blob = new Blob([value], { type: value.type });
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = filename;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      window.URL.revokeObjectURL(url);
+      triggerBrowserDownload(blob, filename);
     }
   };
 

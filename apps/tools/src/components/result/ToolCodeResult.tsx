@@ -6,6 +6,7 @@ import ResultFooter from './ResultFooter';
 import { useTranslation } from 'react-i18next';
 import Editor from '@monaco-editor/react';
 import mime from 'mime';
+import { triggerBrowserDownload } from '@utils/file';
 import {
   globalInputHeight,
   codeInputHeightOffset
@@ -45,14 +46,7 @@ export default function ToolCodeResult({
     const blob = new Blob([value], {
       type: mimeType
     });
-    const url = window.URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = filename;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    window.URL.revokeObjectURL(url);
+    triggerBrowserDownload(blob, filename);
   };
 
   return (

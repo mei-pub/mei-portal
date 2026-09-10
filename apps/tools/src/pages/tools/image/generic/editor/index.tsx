@@ -3,6 +3,7 @@ import { Box } from '@mui/material';
 import ToolImageInput from '@components/input/ToolImageInput';
 import ToolContent from '@components/ToolContent';
 import { ToolComponentProps } from '@tools/defineTool';
+import { triggerBrowserDownload } from '@utils/file';
 
 // Import the image editor with proper typing
 import FilerobotImageEditor, {
@@ -57,17 +58,7 @@ export default function ImageEditor({ title }: ToolComponentProps) {
           type: editedImageObject.mimeType
         }
       );
-      // Create a temporary download link
-      const url = URL.createObjectURL(editedFile);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = editedFile.name; // This will be the name of the downloaded file
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-
-      // Release the blob URL
-      URL.revokeObjectURL(url);
+      triggerBrowserDownload(editedFile, editedFile.name);
     }
   };
 

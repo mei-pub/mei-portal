@@ -12,6 +12,7 @@ import ResultFooter from './ResultFooter';
 import { useTranslation } from 'react-i18next';
 import React, { useContext } from 'react';
 import { CustomSnackBarContext } from '../../contexts/CustomSnackBarContext';
+import { triggerBrowserDownload } from '../../utils/file';
 
 export default function ToolMultiFileResult({
   title = 'Result',
@@ -41,14 +42,7 @@ export default function ToolMultiFileResult({
   };
 
   const handleDownload = (file: File) => {
-    const url = URL.createObjectURL(file);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = file.name;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+    triggerBrowserDownload(file, file.name);
   };
 
   const handleCopy = () => {

@@ -6,6 +6,7 @@ import { CustomSnackBarContext } from '../../contexts/CustomSnackBarContext';
 import { globalInputHeight } from '../../config/uiConfig';
 import { useTranslation } from 'react-i18next';
 import { stripAndDecodeHtml } from 'utils/string';
+import { triggerBrowserDownload } from '../../utils/file';
 import DOMPurify from 'dompurify';
 
 const DOMPURIFY_CONFIG = {
@@ -41,14 +42,10 @@ export default function ToolDiffResult({
   const handleDownload = () => {
     const mimeType = isHtml ? 'text/html' : 'text/plain';
     const blob = new Blob([value], { type: mimeType });
-    const url = window.URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = isHtml ? 'diff-output.html' : 'diff-output.txt';
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    setTimeout(() => window.URL.revokeObjectURL(url), 100);
+    triggerBrowserDownload(
+      blob,
+      isHtml ? 'diff-output.html' : 'diff-output.txt'
+    );
   };
 
   const sharedBoxSx = {
