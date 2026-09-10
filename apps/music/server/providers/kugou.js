@@ -15,6 +15,10 @@ const HAITANG_APIS = [
   'https://musicapi.haitangw.net/kgqq/kg.php',
   'https://music.haitangw.cc/kgqq/kg.php',
 ];
+// 部分链接只有 ~180KB 的提醒语音，直链必须过体积校验才能交给播放器
+const MIN_AUDIO_BYTES = 400 * 1024;
+
+const { probeAudioUrl } = require('./verify');
 
 function fetchJson(url, options = {}) {
   const controller = new AbortController();
@@ -65,7 +69,7 @@ async function search(name, count = 20, page = 1) {
     });
 }
 
-/** 90svip：POST 拿签名地址 → 手动跟随 302 取最终直链 */
+/** 90svip：POST 拿签名中转地址 → 跟随 302 并校验最终直链是真实音频 */
 async function urlBy90svip(hash) {
   const res = await fetch(SVIP90_BASE, {
     method: 'POST',
@@ -84,30 +88,29 @@ async function urlBy90svip(hash) {
   const item = data && Array.isArray(data.data) && data.data[0] ? data.data[0] : null;
   if (!item || !item.url) throw new Error('90svip 无播放地址');
   const signed = new URL(item.url, SVIP90_BASE).toString();
-  // 跟随重定向取真实 mp3 直链（取不到就用签名地址，浏览器可自行跟随 302）
-  try {
-    const probe = await fetch(signed, {
-      method: 'GET',
-      redirect: 'manual',
-      headers: { Referer: SVIP90_BASE, 'User-Agent': UA },
-      signal: AbortSignal.timeout(TIMEOUT),
-    });
-    const location = probe.headers.get('location');
-    if (isHttpUrl(location)) return { url: location, br: '320', size: 0 };
-  } catch {
-    // 回退签名地址
-  }
-  return { url: signed, br: '320', size: 0 };
+  // 签名地址可能是 302 中转（跟随后拿到 fs*.kugou.com 直链），
+  // 也可能直接是死链（200 text/html 提醒页）。两种都必须校验，失败继续走降级链，
+  // 否则浏览器拿到 HTML/死链，audio 报错且本函数已"成功"返回，降级链永远不会触发。
+  const probe = await probeAudioUrl(signed, {
+    referer: SVIP90_BASE,
+    userAgent: UA,
+    minBytes: MIN_AUDIO_BYTES,
+  });
+  if (!probe) throw new Error('90svip 地址校验失败');
+  return { url: probe.url, br: '320', size: probe.total };
 }
 
-/** 尘归归备用 */
+/** 尘归归备用（同样校验后才算成功） */
 async function urlByCenguigui(hash) {
   for (const level of ['lossless', 'exhigh', 'standard']) {
     try {
       const qs = new URLSearchParams({ kg: '', id: hash, type: 'song', format: 'json', level });
       const data = await fetchJson(`${CGG_API}?${qs}`, { headers: SEARCH_HEADERS });
       const playUrl = data && data.data && data.data.url;
-      if (isHttpUrl(playUrl)) return { url: playUrl, br: level, size: 0 };
+      if (isHttpUrl(playUrl)) {
+        const probe = await probeAudioUrl(playUrl, { userAgent: UA, minBytes: MIN_AUDIO_BYTES });
+        if (probe) return { url: playUrl, br: level, size: probe.total };
+      }
     } catch {
       // 下一档
     }
@@ -115,7 +118,7 @@ async function urlByCenguigui(hash) {
   throw new Error('尘归归无播放地址');
 }
 
-/** 海棠备用 */
+/** 海棠备用（同样校验后才算成功） */
 async function urlByHaitang(hash) {
   for (const api of HAITANG_APIS) {
     for (const level of ['hires', 'lossless', 'exhigh']) {
@@ -123,7 +126,10 @@ async function urlByHaitang(hash) {
         const qs = new URLSearchParams({ type: 'json', id: hash, level });
         const data = await fetchJson(`${api}?${qs}`, { headers: SEARCH_HEADERS });
         const playUrl = data && data.data && data.data.url;
-        if (isHttpUrl(playUrl)) return { url: playUrl, br: level, size: 0 };
+        if (isHttpUrl(playUrl)) {
+          const probe = await probeAudioUrl(playUrl, { userAgent: UA, minBytes: MIN_AUDIO_BYTES });
+          if (probe) return { url: playUrl, br: level, size: probe.total };
+        }
       } catch {
         // 下一档
       }

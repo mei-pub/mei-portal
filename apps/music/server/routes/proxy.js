@@ -16,7 +16,10 @@ const { getProvider } = require('../providers');
 
 const API_BASE_URL = process.env.API_BASE_URL || 'https://music-api.gdstudio.xyz/api.php';
 // 允许代理的音频 CDN 域名（各音乐源直链）
-const AUDIO_HOST_PATTERN = /(^|\.)(kuwo\.cn|kugou\.cn|migu\.cn|qq\.com|90svip\.cn|googlevideo\.com)$/i;
+// 注意酷狗直链是 kugou.com（fs*.kugou.com，历史遗留只写了 kugou.cn，
+// 导致 http 直链经代理时 100% 被 400 拒绝）；netease 旧源可能出现 http 的 126.net
+const AUDIO_HOST_PATTERN =
+  /(^|\.)(kuwo\.cn|kuwo\.com|kugou\.cn|kugou\.com|migu\.cn|qq\.com|126\.net|90svip\.cn|googlevideo\.com)$/i;
 
 const SAFE_RESPONSE_HEADERS = [
   'content-type', 'cache-control', 'accept-ranges',
@@ -309,9 +312,12 @@ module.exports = function createProxyRouter() {
       return proxyLocalProvider(provider, types, req, res);
     }
 
-    // 封面直链兜底：pic_id 为完整 URL 时直接 302（适用于本地源封面）
+    // 封面直链兜底：pic_id 为完整 URL 时转发（适用于本地源封面）。
+    // http 封面必须经代理流式转发：https 站点下 <img> 直接 302 到 http 会被混合内容拦截
     if (types === 'pic' && /^https?:\/\//.test(String(req.query.id || ''))) {
-      return res.redirect(String(req.query.id));
+      const picUrl = String(req.query.id);
+      if (/^https:/i.test(picUrl)) return res.redirect(picUrl);
+      return proxyAudioStream(picUrl, req, res);
     }
 
     // 封面统一 302：gdstudio 的 types=pic 返回 JSON {url} 而非图片二进制，

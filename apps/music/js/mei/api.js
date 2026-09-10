@@ -74,7 +74,11 @@ const sig = () => Math.random().toString(36).slice(2, 12);
 
 async function fetchJson(url) {
   const res = await fetch(url, { headers: { Accept: "application/json" } });
-  if (!res.ok) throw new Error(`请求失败（${res.status}）`);
+  if (!res.ok) {
+    const err = new Error(`请求失败（${res.status}）`);
+    err.status = res.status;
+    throw err;
+  }
   const text = await res.text();
   try {
     return JSON.parse(text);
@@ -174,7 +178,12 @@ export async function resolvePlayUrl(song, quality = "320") {
     try {
       const data = await fetchJson(url);
       if (data && typeof data === "object" && data.url) return wrapStreamUrl(data.url, data.headers);
-    } catch { /* 尝试下一档码率 */ }
+    } catch (e) {
+      // 本地源 400 = 该曲无任何可用地址（与码率无关），换码率只会重复失败，
+      // 立刻中断降级链交给跨源兜底
+      if (e && e.status === 400) break;
+      /* 尝试下一档码率 */
+    }
   }
   throw new Error("未获取到播放地址");
 }

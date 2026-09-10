@@ -504,8 +504,9 @@ class MusicEngine {
   }
 
   // ---- 播放地址解析（复用音乐应用服务端源）----
-  private proxyUrl(params: Record<string, string>): string {
+  private proxyUrl(params: Record<string, string>, options: { nocache?: boolean } = {}): string {
     const search = new URLSearchParams({ ...params, s: sig() });
+    if (options.nocache) search.set('nocache', 'true');
     return `${this.musicBase}/proxy?${search.toString()}`;
   }
 
@@ -535,7 +536,11 @@ class MusicEngine {
 
   private async fetchJson(url: string): Promise<unknown> {
     const res = await fetch(url, { credentials: 'include', headers: { Accept: 'application/json' } });
-    if (!res.ok) throw new Error(`请求失败（${res.status}）`);
+    if (!res.ok) {
+      const err = new Error(`请求失败（${res.status}）`) as Error & { status?: number };
+      err.status = res.status;
+      throw err;
+    }
     const text = await res.text();
     try {
       return JSON.parse(text);
@@ -544,24 +549,34 @@ class MusicEngine {
     }
   }
 
-  private async resolvePlayUrl(song: Song, quality = '320'): Promise<string> {
+  /**
+   * 解析单源播放地址。音质降级链 [320→192→128] 只对上游 gdstudio 有意义；
+   * 本地源（qq/kugou/kuwo 服务端直连实现）返回 400 表示该曲无任何可用地址
+   * （与码率无关），此时立刻中断降级链交给跨源兜底，否则同一首歌会把
+   * 服务端降级链白跑三遍。
+   */
+  private async resolvePlayUrl(song: Song, quality = '320', options: { nocache?: boolean } = {}): Promise<string> {
     if (song.source === 'youtube') {
-      return this.proxyUrl({
-        types: 'download',
-        source: 'youtube',
-        id: song.id,
-        br: quality,
-        filename: `${song.name || 'music'} - ${song.artist || 'youtube'}`,
-      });
+      return this.proxyUrl(
+        {
+          types: 'download',
+          source: 'youtube',
+          id: song.id,
+          br: quality,
+          filename: `${song.name || 'music'} - ${song.artist || 'youtube'}`,
+        },
+        options
+      );
     }
     const chain = [quality, '192', '128'].filter((v, i, a) => a.indexOf(v) === i);
     for (const br of chain) {
       try {
         const data = (await this.fetchJson(
-          this.proxyUrl({ types: 'url', id: String(song.id), source: song.source || 'netease', br })
+          this.proxyUrl({ types: 'url', id: String(song.id), source: song.source || 'netease', br }, options)
         )) as { url?: string; headers?: Record<string, string> };
         if (data && typeof data === 'object' && data.url) return this.wrapStream(data.url, data.headers);
-      } catch {
+      } catch (e) {
+        if ((e as { status?: number })?.status === 400) break;
         // 尝试下一档码率
       }
     }
@@ -569,9 +584,13 @@ class MusicEngine {
   }
 
   /** 跨源兜底：本源解析失败时按「歌名 + 歌手」在其他启用源找同名歌 */
-  private async resolveWithFallback(song: Song, quality = '320'): Promise<{ url: string; song: Song }> {
+  private async resolveWithFallback(
+    song: Song,
+    quality = '320',
+    options: { nocache?: boolean } = {}
+  ): Promise<{ url: string; song: Song }> {
     try {
-      return { url: await this.resolvePlayUrl(song, quality), song };
+      return { url: await this.resolvePlayUrl(song, quality, options), song };
     } catch (firstError) {
       const key = songKey(song);
       const keyword = `${song.name} ${song.artist}`;
@@ -602,7 +621,7 @@ class MusicEngine {
       );
       for (const candidate of candidates.filter((s) => songKey(s) !== key).slice(0, 6)) {
         try {
-          return { url: await this.resolvePlayUrl(candidate, quality), song: candidate };
+          return { url: await this.resolvePlayUrl(candidate, quality, options), song: candidate };
         } catch {
           // 下一个候选
         }
@@ -622,11 +641,18 @@ class MusicEngine {
   }
 
   // ---- 播放控制 ----
-  async playIndex(i: number, autoplay = true, startAt = 0): Promise<void> {
+  async playIndex(
+    i: number,
+    autoplay = true,
+    startAt = 0,
+    options: { nocache?: boolean; retry?: boolean } = {}
+  ): Promise<void> {
     const q = this.queue();
     if (i < 0 || i >= q.length) return;
     const playToken = ++this.playToken;
     this.failureHandledToken = 0;
+    // 用户主动（重新）点播时重置重试标记：同一首歌允许在新一轮播放里再重解析一次
+    if (options.retry !== true) this.retriedSongKey = '';
     this.index = i;
     this.error = '';
     this.loading = true;
@@ -647,7 +673,9 @@ class MusicEngine {
     this.emit();
     this.save();
     try {
-      const { url, song: played } = await this.resolveWithFallback(song, '320');
+      const { url, song: played } = await this.resolveWithFallback(song, '320', {
+        nocache: options.nocache === true,
+      });
       if (playToken !== this.playToken || this.current() !== song) return;
       if (played !== song) {
         q[this.index] = played;
@@ -699,10 +727,28 @@ class MusicEngine {
     return res.blob();
   }
 
+  /**
+   * 播放失败处理：丢弃缓存重新解析一次再放弃（短时效直链如酷狗 fs CDN 的
+   * 403/过期单次重解析即可恢复），仍失败才提示并跳下一首。
+   * 每首歌只重试一次（retriedSongKey 守卫），避免循环。
+   */
   private handlePlaybackFailure(song: Song, playToken = this.playToken): void {
     if (!song || playToken !== this.playToken || this.current() !== song) return;
     if (this.failureHandledToken === playToken) return;
     this.failureHandledToken = playToken;
+    const retriedKey = this.retriedSongKey;
+    if (retriedKey !== songKey(song)) {
+      this.retriedSongKey = songKey(song);
+      const audio = this.audio;
+      const wasPlaying = !!audio && !audio.paused;
+      this.error = `「${song.name}」播放异常，正在重新解析播放地址…`;
+      this.emit();
+      void this.playIndex(this.index, wasPlaying, audio ? audio.currentTime || 0 : 0, {
+        nocache: true,
+        retry: true,
+      }).catch(() => {});
+      return;
+    }
     this.error = `「${song.name}」无法播放，已跳过`;
     this.emit();
     const q = this.queue();
@@ -717,6 +763,8 @@ class MusicEngine {
       if (this.current() === song && this.failureHandledToken === playToken) this.next();
     }, 300);
   }
+
+  private retriedSongKey = '';
 
   toggle(): void {
     const audio = this.audio;

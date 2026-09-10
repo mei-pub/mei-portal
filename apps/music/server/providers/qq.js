@@ -1,6 +1,7 @@
 /**
  * QQ 音乐源 —— 移植自 coco-downloader providers/qq.py
- * 接口：api.vkeys.cn（腾讯音乐搜索 + 播放地址）
+ * 搜索：api.vkeys.cn（腾讯音乐搜索）
+ * 播放地址：90svip 全量音质（M800/C200 完整文件）→ vkeys 试听降级链
  */
 
 const SEARCH_HEADERS = {
@@ -12,9 +13,16 @@ const SEARCH_HEADERS = {
     'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36',
 };
 
+const UA =
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36';
+const SVIP90_BASE = 'https://music.90svip.cn/';
+
 const TIMEOUT = 15000;
-// 与 coco 一致的音质尝试顺序（0-10，首个返回有效地址的胜出）
+// 与 coco 一致的音质尝试顺序（0-10，首个返回有效地址的胜出）。
+// vkeys 实测只能给 26-31kbps 试听地址（quality 参数不影响），仅作兜底。
 const QUALITY_PRIORITY = Array.from({ length: 11 }, (_, i) => i);
+
+const { probeAudioUrl } = require('./verify');
 
 function fetchJson(url, options = {}) {
   const controller = new AbortController();
@@ -46,7 +54,41 @@ async function search(name, count = 20, page = 1) {
     }));
 }
 
+/**
+ * 90svip：POST 拿签名中转地址 → 跟随 302 拿最终直链（M800/C200 完整音质文件）。
+ * 签名地址本身是 HTML 中转页，必须跟随重定向并校验后才能交给播放器。
+ */
+async function urlBy90svip(id) {
+  const res = await fetch(SVIP90_BASE, {
+    method: 'POST',
+    headers: {
+      Accept: 'application/json, text/javascript, */*; q=0.01',
+      Referer: SVIP90_BASE,
+      'User-Agent': UA,
+      'X-Requested-With': 'XMLHttpRequest',
+      'Content-Type': 'application/x-www-form-urlencoded',
+    },
+    body: new URLSearchParams({ input: id, filter: 'id', type: 'qq', page: '1' }).toString(),
+    signal: AbortSignal.timeout(TIMEOUT),
+  });
+  if (!res.ok) throw new Error(`90svip HTTP ${res.status}`);
+  const data = await res.json();
+  const item = data && Array.isArray(data.data) && data.data[0] ? data.data[0] : null;
+  if (!item || !item.url) throw new Error('90svip 无播放地址');
+  const signed = new URL(item.url, SVIP90_BASE).toString();
+  const probe = await probeAudioUrl(signed, { referer: SVIP90_BASE, userAgent: UA });
+  if (!probe) throw new Error('90svip 地址校验失败');
+  // 跟随 302 后的最终直链（M800/C200 完整文件）；签名中转页直接交给播放器只会拿到 HTML
+  return { url: probe.url, br: '128', size: probe.total };
+}
+
 async function url(id) {
+  // 主链：90svip 全量音质（实测 M800 128kbps 完整文件，vkeys 只有 28kbps 试听）
+  try {
+    return await urlBy90svip(id);
+  } catch {
+    // 落到 vkeys 试听链
+  }
   for (const quality of QUALITY_PRIORITY) {
     try {
       const data = await fetchJson(
