@@ -1,6 +1,10 @@
 import axios from 'axios';
 import type { SearchResponse, LinkCheckItem, LinkCheckResponse } from '@/types';
 
+// 超时分层（外层必须大于内层，否则外层先杀）：
+//   引擎 TG 单频道 4s abort → TG 整体 5s（部分结果）→ 插件快窗 4s →
+//   引擎请求安全网 7s（降级空响应）→ 本层 axios 10s → shell DisksProvider 8s →
+//   nginx /disks/api proxy_read_timeout 60s。引擎最坏 7s 内必响应，10s 只剩网络余量。
 const api = axios.create({
   baseURL: '/api',
   timeout: 10000

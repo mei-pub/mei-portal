@@ -591,3 +591,39 @@ test('appends a page into one provider channel without touching other channels',
   assert.equal(duplicated.results.length, 2);
   assert.equal(duplicated.hasMore, false);
 });
+
+test('DisksProvider 超时降级不失败：网盘分组标记 timeout，其余分组照常返回', async () => {
+  _setOmniToolsLocalesDir(path.resolve('apps/tools/public/locales/zh'));
+  _bindGetSessionTokens(() => ({ 'ai-draw': 'test-token' }));
+  _bindGetPortalToken(() => 'test-token');
+  // pansou 超时（AbortSignal.timeout 的 TimeoutError），tv 正常
+  const fetchImpl = (async (url: string) => {
+    if (url.includes('127.0.0.1:3008/api/search')) {
+      const err = new Error('The operation was aborted due to timeout');
+      err.name = 'TimeoutError';
+      throw err;
+    }
+    if (url.includes('/tv/api/search')) {
+      return { ok: true, status: 200, json: async () => ({ results: [{ id: 'v1', title: 'abc Movie', source: 's', source_name: 'S' }] }) };
+    }
+    return { ok: true, status: 200, json: async () => ({ results: [] }) };
+  }) as unknown as typeof fetch;
+  const groups = await searchServerGroups({
+    query: 'abc',
+    scope: 'all',
+    limit: 5,
+    cookie: '',
+    fetchImpl,
+  });
+  const byApp = new Map(groups.map((group) => [group.appId, group]));
+  // 综合搜索整体不失败：全部分组正常返回
+  assert.equal(groups.length > 1, true);
+  // 网盘分组降级为 timeout（空结果 + 提示），不是整体 error
+  const disk = byApp.get('pansou');
+  assert.equal(disk?.status, 'timeout');
+  assert.equal(disk?.results.length, 0);
+  assert.match(disk?.error || '', /timeout/i);
+  // 其余分组不受影响
+  assert.equal(byApp.get('lunatv')?.status, 'ok');
+  assert.equal(byApp.get('lunatv')?.results[0]?.title, 'abc Movie');
+});

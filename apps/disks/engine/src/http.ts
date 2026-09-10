@@ -130,3 +130,27 @@ export function createLimiter(concurrency: number) {
     }
   };
 }
+
+/**
+ * 硬 deadline race：deadlineMs 内 promise 未决则返回 onDeadline() 的兜底值。
+ * 用途：所有软超时（fetch abort / 快窗）都靠 setTimeout，事件循环被外发抓取
+ * 风暴压住时会集体迟到；deadline 兜底保证响应时间有硬上界，慢源只损失完整度。
+ * - promise 先决 → 返回其结果（正常路径，零额外等待）
+ * - deadline 先决 → 返回 onDeadline()；promise 继续在后台跑，其 rejection 由
+ *   race 挂接的处理器消化，不会成为 unhandledRejection
+ * - 定时器 unref：不阻塞进程退出
+ */
+export async function withDeadline<T>(promise: Promise<T>, deadlineMs: number, onDeadline: () => T): Promise<T> {
+  let timer: NodeJS.Timeout | undefined;
+  try {
+    const timedOut = new Promise<true>((resolve) => {
+      timer = setTimeout(() => resolve(true), deadlineMs);
+      timer.unref();
+    });
+    const winner = await Promise.race([promise.then(() => false as const), timedOut]);
+    if (winner) return onDeadline();
+    return await promise;
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}

@@ -440,12 +440,13 @@ const OMNI_TOOLS_LOCALES_DIR =
 async function fetchJson(
   url: string,
   cookie: string,
-  fetchImpl: FetchLike
+  fetchImpl: FetchLike,
+  timeoutMs = 10000,
 ): Promise<unknown> {
   const response = await fetchImpl(url, {
     headers: { Cookie: cookie, Accept: 'application/json' },
     cache: 'no-store',
-    signal: AbortSignal.timeout(10000),
+    signal: AbortSignal.timeout(timeoutMs),
   });
   if (!response.ok) throw new Error(`upstream ${response.status}`);
   return response.json();
@@ -608,6 +609,13 @@ class MusicProvider implements SearchProvider {
   }
 }
 
+/**
+ * 网盘 provider 超时：引擎侧已有 TG 5s / 请求 7s 两级硬 deadline（软超时被事件
+ * 循环压住时兜底），8s 只作为最外层保险。超时由 guardProvider 降级为该分组
+ * status:'timeout'（空结果 + 提示文案），不影响综合搜索整体返回。
+ */
+const DISKS_PROVIDER_TIMEOUT_MS = 8000;
+
 class DisksProvider implements SearchProvider {
   appId = 'pansou';
   label = '网盘';
@@ -626,7 +634,7 @@ class DisksProvider implements SearchProvider {
     if (sources?.channels !== undefined) {
       params.set('channels', sources.channels.length ? sources.channels.join(',') : '__none__');
     }
-    const payload = (await fetchJson(`${base}/api/search?${params}`, cookie, this.opts.fetchImpl)) as {
+    const payload = (await fetchJson(`${base}/api/search?${params}`, cookie, this.opts.fetchImpl, DISKS_PROVIDER_TIMEOUT_MS)) as {
       data?: { merged_by_type?: Record<string, unknown[]> };
       merged_by_type?: Record<string, unknown[]>;
     };

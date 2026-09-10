@@ -2,7 +2,7 @@
 
 import { config } from '../config.ts';
 import { cache, generatePluginCacheKey, generateTGCacheKey } from '../cache.ts';
-import { buildSearchURL, createLimiter, fetchText } from '../http.ts';
+import { buildSearchURL, createLimiter, fetchText, withDeadline } from '../http.ts';
 import { parseSearchResults, cutTitleByKeywords } from '../parser.ts';
 import {
   getKeywordPriority,
@@ -34,14 +34,36 @@ export interface SearchParams {
   ext: Record<string, unknown>;
 }
 
-/** 搜索单个频道（Go searchChannel） */
+// ---- TG 搜索的并发防护（概率性超时的根因修复）----
+// 放大链：前端一次搜索连发 5 个请求（预热/首查/第二三四查，间隔仅 2~3s）+ shell 综合搜索，
+// 后台插件补全落地前主缓存为空，重复请求全部 miss → 每次都重扫 113 个 TG 频道 +
+// 51 个插件。外发抓取风暴压住事件循环后，所有软超时（setTimeout 的 abort/快窗）集体迟到，
+// 实测 30 并发冷搜 P50 7.6s / max 10.7s，直接吃掉前端 10s 超时。
+// 修复三件事：同键单飞（in-flight 去重）、TG 整体硬 deadline（部分结果返回）、
+// TG 抓取全局在途上限（跨关键词不叠加）。
+
+/** TG 频道抓取的全局在途上限：单请求 113 频道可全量并行；多关键词并发时按此封顶排队 */
+const TG_GLOBAL_CONCURRENCY = 160;
+const tgFetchLimiter = createLimiter(TG_GLOBAL_CONCURRENCY);
+
+/** 搜索单个频道（Go searchChannel）；走全局限流器，跨请求共享在途额度 */
 async function searchChannel(keyword: string, channel: string): Promise<SearchResult[]> {
-  const url = buildSearchURL(channel, keyword, '');
-  const html = await fetchText(url, { timeoutMs: 4000 });
-  return parseSearchResults(html, channel);
+  return tgFetchLimiter(() => {
+    const url = buildSearchURL(channel, keyword, '');
+    return fetchText(url, { timeoutMs: 4000 }).then((html) => parseSearchResults(html, channel));
+  });
 }
 
-/** 搜索 TG 频道（Go searchTG）：缓存 → 并行抓取 → 异步回写缓存 */
+/** 在途 TG 搜索（缓存键 → 本次扫描）；后来者直接搭乘同一轮扫描 */
+interface TGFlight {
+  /** 全量完成（含异步缓存回写）后才 settle */
+  full: Promise<void>;
+  /** 已完成频道的部分结果，任何时刻可读（deadline 命中时返回快照） */
+  collected: SearchResult[];
+}
+const tgInFlight = new Map<string, TGFlight>();
+
+/** 搜索 TG 频道（Go searchTG）：缓存 → 并行抓取 → 硬 deadline 出部分结果 → 异步回写缓存 */
 async function searchTG(keyword: string, channels: string[], forceRefresh: boolean): Promise<SearchResult[]> {
   const cacheKey = generateTGCacheKey(keyword, channels);
   const ttlMs = config.cacheTTLMinutes * 60 * 1000;
@@ -51,20 +73,46 @@ async function searchTG(keyword: string, channels: string[], forceRefresh: boole
     if (cached) return cached;
   }
 
-  const limit = createLimiter(Math.max(channels.length, 1));
-  const settled = await Promise.allSettled(
-    channels.map((channel) => limit(() => searchChannel(keyword, channel))),
-  );
-  const results: SearchResult[] = [];
-  for (const s of settled) {
-    if (s.status === 'fulfilled') results.push(...s.value);
+  // 同键单飞：已有相同关键词+频道列表的扫描在途，直接复用（读已收集的部分结果，
+  // 不再重扫 113 频道）。缓存只会在全量 allSettled 完成后回写，并发请求全部 miss，
+  // 这是此前请求风暴的直接来源。
+  let flight = tgInFlight.get(cacheKey);
+  if (!flight) {
+    const collected: SearchResult[] = [];
+    const limit = createLimiter(Math.max(channels.length, 1));
+    const current: TGFlight = {
+      collected,
+      full: (async () => {
+        await Promise.allSettled(
+          channels.map((channel) =>
+            limit(() => searchChannel(keyword, channel)).then(
+              (results) => {
+                collected.push(...results);
+              },
+              () => {
+                /* 单频道失败不影响整体 */
+              },
+            ),
+          ),
+        );
+        if (config.cacheEnabled) {
+          // 异步缓存（不阻塞返回）；只写全量结果，不写部分结果，避免污染缓存
+          setTimeout(() => cache.set(cacheKey, collected, ttlMs), 0);
+        }
+      })(),
+    };
+    current.full.finally(() => {
+      // 只清理仍指向本次扫描的记录（并发下可能已被新扫描覆盖）
+      if (tgInFlight.get(cacheKey) === current) tgInFlight.delete(cacheKey);
+    });
+    tgInFlight.set(cacheKey, current);
+    flight = current;
   }
 
-  if (config.cacheEnabled) {
-    // 异步缓存（不阻塞返回）
-    setTimeout(() => cache.set(cacheKey, results, ttlMs), 0);
-  }
-  return results;
+  // 硬 deadline：全量未完成也在 tgDeadlineMs 内返回已收集的部分结果。
+  // 扫描本身继续，完成后照常回写缓存（下一次请求命中全量）。
+  await withDeadline(flight.full, config.tgDeadlineMs, () => undefined);
+  return flight.collected.slice();
 }
 
 /** 搜索插件（Go searchPlugins）：缓存 → 并行 → 只留有链接的结果 → 异步回写 */

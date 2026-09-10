@@ -20,6 +20,15 @@ interface PluginCacheEntry {
 /** 插件级内存缓存（Go apiResponseCache：仅内存，不持久化） */
 const pluginCache = new Map<string, PluginCacheEntry>();
 
+/**
+ * 在途插件搜索（name:keyword → 进行中的 Promise）。
+ * 快窗超时会写入 {results:[], complete:false} 的占位缓存，且主缓存要等后台补全
+ * 才落地；前端一次搜索连发 5 个请求（间隔 2~3s），全部落在补全窗口内时每个请求
+ * 都会重新触发 51 个插件的全量抓取（外发风暴的放大器）。同键在途时直接复用
+ * 同一个 Promise，不再重发。
+ */
+const pluginInFlight = new Map<string, Promise<SearchResult[]>>();
+
 function pluginCacheTTL(): number {
   return config.asyncCacheTTLHours * 60 * 60 * 1000;
 }
@@ -56,7 +65,16 @@ export async function runPluginSearch(
     }
   }
 
-  const searchPromise = runSearch();
+  // 同键单飞：在途复用（多请求共享同一次外发抓取，各自带快窗竞速）
+  const searchPromise = (() => {
+    const running = pluginInFlight.get(cacheKey);
+    if (running) return running;
+    const started = runSearch().finally(() => {
+      if (pluginInFlight.get(cacheKey) === started) pluginInFlight.delete(cacheKey);
+    });
+    pluginInFlight.set(cacheKey, started);
+    return started;
+  })();
 
   // 4s 快速响应窗口
   let fastTimer: NodeJS.Timeout | undefined;

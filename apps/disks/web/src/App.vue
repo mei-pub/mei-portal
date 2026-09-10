@@ -62,6 +62,8 @@ const EXPORT_SETTINGS_STORAGE_KEY = 'pansou_export_settings';
 const hasSearched = ref(false);
 // 是否正在进行后台搜索（包括初始搜索和后续更新）
 const isActivelySearching = ref(false);
+// 首次搜索失败/超时的用户可见提示（引擎侧已有硬 deadline，超时已罕见；此为兜底提示）
+const searchNotice = ref('');
 const hasExportableResults = computed(() => {
   return Object.values(searchResults.mergedResults || {}).some(items => Array.isArray(items) && items.length > 0);
 });
@@ -213,6 +215,7 @@ const handleSearch = async (params: SearchParams) => {
   hasSearched.value = true;
   isActivelySearching.value = true;
   loading.value = true;
+  searchNotice.value = '';
 
   // 清空之前的搜索结果
   searchResults.total = 0;
@@ -280,6 +283,11 @@ const handleSearch = async (params: SearchParams) => {
         console.error('第一次搜索出错:', error);
         loading.value = false;
         isActivelySearching.value = false;
+        // 降级提示而非静默失败：超时（引擎 7s 安全网之上的网络余量耗尽）或网络错误
+        const isTimeout = error && (error.code === 'ECONNABORTED' || /timeout/i.test(String(error.message || '')));
+        searchNotice.value = isTimeout
+          ? '搜索超时，结果可能不完整；稍候重试可获取已补全的缓存结果'
+          : '搜索失败，请稍后重试';
       });
     
     // 设置一个超时，确保即使搜索很慢，UI也不会一直处于加载状态
@@ -1237,9 +1245,9 @@ onUnmounted(() => {
         
         <!-- 搜索统计 -->
         <div v-if="hasSearched || loading" class="search-stats-block mb-6">
-          <SearchStats 
-            :total="searchResults.total || 0" 
-            :mergedResults="searchResults.mergedResults || {}" 
+          <SearchStats
+            :total="searchResults.total || 0"
+            :mergedResults="searchResults.mergedResults || {}"
             :loading="loading"
             :searchTime="searchTime"
             :isUpdating="isUpdating"
@@ -1248,6 +1256,11 @@ onUnmounted(() => {
             @export-results="openExportModal"
             @force-refresh="handleForceRefresh"
           />
+        </div>
+
+        <!-- 搜索失败/超时提示（降级不失败：保留已有结果，仅提示） -->
+        <div v-if="searchNotice && !loading" class="mb-6 text-sm text-amber-600 dark:text-amber-400">
+          {{ searchNotice }}
         </div>
         
         <!-- 加载状态 -->

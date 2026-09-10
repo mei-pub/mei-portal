@@ -7,6 +7,7 @@ import { authenticate, checkCredentials, issueToken, verifyToken } from './auth.
 import { cache } from './cache.ts';
 import { search } from './service/search.ts';
 import { checkLinks } from './service/check.ts';
+import { withDeadline } from './http.ts';
 import { filterEnabledPlugins, getPlugins, getWebRoutes } from './plugins/registry.ts';
 import { enabledPluginDefs } from './plugins/index.ts';
 import { newErrorResponse, newSuccessResponse, type CheckItem, type CheckRequest, type FilterConfig, type SearchRequest, type SearchResponse, type SearchResult } from './types.ts';
@@ -190,17 +191,27 @@ async function handleSearch(req: IncomingMessage, res: ServerResponse): Promise<
   } else plugins = normalizePlugins(plugins);
 
   try {
-    const result = await search({
-      keyword: request.kw,
-      channels,
-      concurrency: request.conc ?? 0,
-      forceRefresh: request.refresh === true,
-      resultType,
-      sourceType,
-      plugins,
-      cloudTypes: request.cloud_types ?? null,
-      ext: request.ext ?? {},
-    });
+    // 请求级硬 deadline（安全网）：TG 5s / 插件 4s 软窗口全部依赖 setTimeout，
+    // 事件循环被外发抓取压住时会集体迟到。到点降级为空成功响应（不让请求挂到
+    // 前端 10s / nginx 60s 才死），慢源只损失本轮完整度，下一轮命中补全后的缓存。
+    const result = await withDeadline(
+      search({
+        keyword: request.kw,
+        channels,
+        concurrency: request.conc ?? 0,
+        forceRefresh: request.refresh === true,
+        resultType,
+        sourceType,
+        plugins,
+        cloudTypes: request.cloud_types ?? null,
+        ext: request.ext ?? {},
+      }),
+      config.searchHardDeadlineMs,
+      () => {
+        console.error(`[server] 搜索硬超时 ${config.searchHardDeadlineMs}ms，降级为空响应（kw=${request.kw}）`);
+        return { total: 0, results: [], merged_by_type: {} } as SearchResponse;
+      },
+    );
     // 过滤器（filter.go 语义）
     const filtered = request.filter ? applyResultFilter(result, request.filter, resultType) : result;
     sendJSON(res, 200, newSuccessResponse(filtered));

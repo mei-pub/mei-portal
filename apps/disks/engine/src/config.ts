@@ -68,6 +68,10 @@ export interface Config {
   asyncResponseTimeoutSeconds: number;
   asyncCacheTTLHours: number;
   asyncLogEnabled: boolean;
+  /** TG 频道批量抓取的硬 deadline：到点返回已收集的部分结果（快窗 4s + 1s 余量） */
+  tgDeadlineMs: number;
+  /** 单次搜索请求的硬 deadline：到点降级为空成功响应（软窗口全部失守时的安全网） */
+  searchHardDeadlineMs: number;
   authEnabled: boolean;
   authUsers: Record<string, string>;
   authTokenExpiryHours: number;
@@ -112,6 +116,11 @@ export function loadConfig(): Config {
     asyncResponseTimeoutSeconds: envInt('ASYNC_RESPONSE_TIMEOUT', 4),
     asyncCacheTTLHours: envInt('ASYNC_CACHE_TTL_HOURS', 1),
     asyncLogEnabled: envBool('ASYNC_LOG_ENABLED', false),
+    // 超时分层（由内向外必须递增）：TG 频道单抓 4s abort → TG 整体 deadline →
+    // 插件快窗 4s → 请求安全网 searchHardDeadlineMs → shell DisksProvider 8s →
+    // 前端 axios 10s → nginx /disks/api 60s。任何一层不得小于内层，否则外层先杀。
+    tgDeadlineMs: envInt('TG_DEADLINE_MS', envInt('ASYNC_RESPONSE_TIMEOUT', 4) * 1000 + 1000),
+    searchHardDeadlineMs: envInt('SEARCH_HARD_DEADLINE_MS', 7000),
     authEnabled: envBool('AUTH_ENABLED', false),
     authUsers: authUsers(),
     authTokenExpiryHours: envInt('AUTH_TOKEN_EXPIRY_HOURS', 24),
