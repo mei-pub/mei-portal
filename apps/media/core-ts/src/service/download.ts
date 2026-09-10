@@ -1,7 +1,7 @@
 // service/download —— Go internal/service/download_task.go 的复刻
 
 import path from 'node:path';
-import { sanitizeFilename } from '../core/downloader.ts';
+import { sanitizeFilename, sanitizeFolder } from '../core/downloader.ts';
 import type { TaskQueue } from '../core/queue.ts';
 import type { DownloadParams } from '../core/types.ts';
 import type { TaskLogManager } from '../tasklog.ts';
@@ -58,7 +58,8 @@ export class DownloadTaskService {
         type: input.type,
         url: input.url,
         headers: input.headers ?? null,
-        folder: input.folder ?? null,
+        // folder 为用户可控，且会拼进 localDir：清洗掉 ../ 等穿越段
+        folder: input.folder ? sanitizeFolder(input.folder) : null,
         isLive: false,
         status: 'ready',
       });
@@ -77,7 +78,7 @@ export class DownloadTaskService {
       const withFile: DownloadTaskWithFile = { ...item, exists: false };
       if (item.status === 'success' && localPath !== '') {
         let searchDir = localPath;
-        if (item.folder && item.folder !== '') searchDir = path.join(localPath, item.folder);
+        if (item.folder && item.folder !== '') searchDir = path.join(localPath, sanitizeFolder(item.folder));
         const [exists, file] = checkFileExists(item.name, searchDir);
         withFile.exists = exists;
         if (file !== '') withFile.file = file;
@@ -107,7 +108,8 @@ export class DownloadTaskService {
       type: video.type as DownloadParams['type'],
       url: video.url,
       name: video.name,
-      folder: video.folder ?? '',
+      // 旧记录可能带未清洗的 folder —— 入队前再洗一次（buildArgs 亦有防御）
+      folder: video.folder ? sanitizeFolder(video.folder) : '',
       headers,
     };
 

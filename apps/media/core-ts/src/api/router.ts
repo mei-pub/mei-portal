@@ -9,6 +9,7 @@ import { MSG, tLang } from '../i18n.ts';
 import { checkAuth } from './auth.ts';
 import type { Ctx, Handlers } from './handlers.ts';
 import { serveVideoFile, type VideoService } from './video.ts';
+import type { IncomingMessage } from 'node:http';
 
 export interface RouterOptions {
   handlers: Handlers;
@@ -114,6 +115,10 @@ export function createServer(opts: RouterOptions): Server {
   ];
 
   const server = http.createServer((req, res) => {
+    // 连接级流错误兜底：客户端中途断开时，后续对 req/res 的读写会以
+    // 'error' 事件抛出（ERR_STREAM_DESTROYED 等），无监听器则直接击穿进程。
+    req.on('error', () => {});
+    res.on('error', () => {});
     handleRequest(req, res, routes, opts).catch((err) => {
       if (!res.headersSent) {
         res.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' });
@@ -135,7 +140,12 @@ async function handleRequest(
   opts: RouterOptions,
 ): Promise<void> {
   const url = new URL(req.url ?? '/', 'http://localhost');
-  const pathname = decodeURIComponent(url.pathname);
+  let pathname: string;
+  try {
+    pathname = decodeURIComponent(url.pathname);
+  } catch {
+    pathname = url.pathname; // 非法百分号序列 —— 按原样处理（路由必然 404）
+  }
 
   // CORS（对应 gin-contrib/cors：* 源 + 常用方法/头 + credentials）
   const origin = req.headers.origin;
@@ -146,8 +156,8 @@ async function handleRequest(
     return;
   }
 
-  // 鉴权（白名单外需门户会话）
-  if (!checkAuth(req)) {
+  // 鉴权（白名单外需门户会话；与 Go 一致使用解码后的路径判定）
+  if (!checkAuth(req, pathname)) {
     const lang = resolveLang(url.searchParams.get('lang') ?? undefined, req.headers['accept-language'] as string | undefined, opts.getConfigLang());
     res.writeHead(401, { 'Content-Type': 'application/json; charset=utf-8' });
     res.end(JSON.stringify({ success: false, code: 401, message: tLang(lang, MSG.UNAUTHORIZED) }));
@@ -156,19 +166,27 @@ async function handleRequest(
 
   // ---- 静态资源（白名单路径）----
 
-  // /assets/* → staticDir/assets
+  // /assets/* → staticDir/assets（staticDir 未配置时不得以进程 cwd 充当根目录）
   if (pathname.startsWith('/assets/')) {
-    serveStaticFile(res, path.join(opts.staticDir, 'assets'), pathname.slice('/assets/'.length));
+    if (opts.staticDir === '') {
+      jsonError(res, 404, '404 page not found');
+      return;
+    }
+    serveStaticFile(req, res, path.join(opts.staticDir, 'assets'), pathname.slice('/assets/'.length));
     return;
   }
   if (pathname === '/favicon.ico') {
-    serveStaticFile(res, opts.staticDir, 'favicon.ico');
+    if (opts.staticDir === '') {
+      jsonError(res, 404, '404 page not found');
+      return;
+    }
+    serveStaticFile(req, res, opts.staticDir, 'favicon.ico');
     return;
   }
 
   // /player/* → 播放器 SPA（嵌入 UI 的等价物：目录形式部署，缺失时 404）
   if (pathname === '/player' || pathname.startsWith('/player/')) {
-    serveSPA(res, opts.playerDir, pathname.slice('/player'.length) || '/');
+    serveSPA(req, res, opts.playerDir, pathname.slice('/player'.length) || '/');
     return;
   }
 
@@ -217,7 +235,7 @@ async function handleRequest(
   }
 
   // 其余 → SPA fallback：index.html（无 static-dir 时 404）
-  serveSPA(res, opts.staticDir, pathname);
+  serveSPA(req, res, opts.staticDir, pathname);
 }
 
 function matchParts(pattern: string[], actual: string[]): Record<string, string> | null {
@@ -266,8 +284,8 @@ async function readBody(req: IncomingMessage): Promise<unknown> {
   }
 }
 
-/** 单个静态文件（rootDir 内 + 目录穿越防护） */
-function serveStaticFile(res: ServerResponse, rootDir: string, relPath: string): void {
+/** 单个静态文件（rootDir 内 + 目录穿越防护；HEAD 不回 body） */
+function serveStaticFile(req: IncomingMessage, res: ServerResponse, rootDir: string, relPath: string): void {
   const root = path.resolve(rootDir);
   const resolved = path.resolve(path.join(rootDir, relPath));
   if (resolved !== root && !resolved.startsWith(root + path.sep)) {
@@ -282,15 +300,21 @@ function serveStaticFile(res: ServerResponse, rootDir: string, relPath: string):
     return;
   }
   const type = MIME[path.extname(resolved).toLowerCase()];
-  res.writeHead(200, {
+  const headers = {
     'Content-Type': type ?? 'application/octet-stream',
     'Content-Length': String(data.length),
-  });
+  };
+  if (req.method === 'HEAD') {
+    res.writeHead(200, headers);
+    res.end();
+    return;
+  }
+  res.writeHead(200, headers);
   res.end(data);
 }
 
 /** SPA：精确命中文件 → 文件；否则 fallback 到 index.html */
-function serveSPA(res: ServerResponse, dir: string, urlPath: string): void {
+function serveSPA(req: IncomingMessage, res: ServerResponse, dir: string, urlPath: string): void {
   if (dir === '' || !fs.existsSync(dir)) {
     jsonError(res, 404, '404 page not found');
     return;
@@ -312,8 +336,10 @@ function serveSPA(res: ServerResponse, dir: string, urlPath: string): void {
     }
     target = indexPath;
   }
+  const root = path.resolve(dir);
   const resolved = path.resolve(target);
-  if (!resolved.startsWith(path.resolve(dir))) {
+  // 必须带路径分隔符比较：否则 /player/../playerX 命中同级 playerX 前缀目录（路径逃逸）
+  if (resolved !== root && !resolved.startsWith(root + path.sep)) {
     jsonError(res, 404, '404 page not found');
     return;
   }
@@ -325,9 +351,15 @@ function serveSPA(res: ServerResponse, dir: string, urlPath: string): void {
     return;
   }
   const type = MIME[path.extname(resolved).toLowerCase()];
-  res.writeHead(200, {
+  const headers = {
     'Content-Type': type ?? 'text/html; charset=utf-8',
     'Content-Length': String(data.length),
-  });
+  };
+  if (req.method === 'HEAD') {
+    res.writeHead(200, headers);
+    res.end();
+    return;
+  }
+  res.writeHead(200, headers);
   res.end(data);
 }

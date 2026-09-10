@@ -11,14 +11,22 @@ export class CanceledError extends Error {
   }
 }
 
-/** 逐行读流：按 \n 切分（等价 Go bufio.Scanner ScanLines，行尾 \r 剥离）；流被 destroy 时立即收尾。
- * 以字节级缓存整行后再解码，避免多字节字符跨 chunk 被拆散。 */
+/** 单行字节上限（Go bufio.Scanner 默认 64KB；这里放宽到 1MB，超出部分丢弃，防止无换行输出 OOM） */
+const MAX_LINE_BYTES = 1024 * 1024;
+
+/**
+ * 逐行读流：按 \n 切分（等价 Go bufio.Scanner ScanLines，行尾 \r 剥离）；流被 destroy 时立即收尾。
+ * 以字节级缓存整行后再解码，避免多字节字符跨 chunk 被拆散。超长行（无换行的连续输出）
+ * 只保留前 MAX_LINE_BYTES 字节，其余丢弃直到下一个换行，杜绝内存无限增长。
+ */
 function readLines(
   stream: NodeJS.ReadableStream,
   onLine: (line: string) => void,
 ): Promise<void> {
   return new Promise((resolve) => {
     let chunks: Buffer[] = [];
+    let pending = 0; // 当前行已缓存字节数
+    let overflow = false; // 当前行已超限，丢弃后续直到换行
     let done = false;
     const finish = () => {
       if (done) return;
@@ -35,16 +43,30 @@ function readLines(
       let start = 0;
       for (let i = 0; i < chunk.length; i++) {
         if (chunk[i] === 0x0a) {
-          chunks.push(chunk.subarray(start, i));
-          emit(Buffer.concat(chunks));
+          if (!overflow && pending + (i - start) <= MAX_LINE_BYTES) {
+            chunks.push(chunk.subarray(start, i));
+            emit(Buffer.concat(chunks));
+          }
           chunks = [];
+          pending = 0;
+          overflow = false;
           start = i + 1;
         }
       }
-      if (start < chunk.length) chunks.push(chunk.subarray(start));
+      if (start < chunk.length) {
+        if (!overflow && pending + (chunk.length - start) > MAX_LINE_BYTES) {
+          overflow = true;
+          chunks = [];
+          pending = 0;
+        }
+        if (!overflow) {
+          chunks.push(chunk.subarray(start));
+          pending += chunk.length - start;
+        }
+      }
     });
     stream.on('end', () => {
-      if (chunks.length > 0) emit(Buffer.concat(chunks));
+      if (chunks.length > 0 && !overflow) emit(Buffer.concat(chunks));
       finish();
     });
     stream.on('error', finish);
@@ -126,6 +148,9 @@ export function execRun(
     };
 
     child.on('error', (err) => {
+      // 只记录首个退出信号：spawn 失败时 'error' 与 'exit' 可能都触发，
+      // 后到的 exit（code=null，无 err）不能覆盖真正的 spawn 错误
+      if (exitInfo) return;
       exitInfo = { code: null, err: err as Error };
       child.stdout?.destroy();
       child.stderr?.destroy();
@@ -133,6 +158,7 @@ export function execRun(
     });
 
     child.on('exit', (code) => {
+      if (exitInfo) return;
       exitInfo = { code };
       // 给管道中残余数据一点排空时间，再强制关闭
       setTimeout(() => {

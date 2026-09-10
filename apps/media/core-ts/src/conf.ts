@@ -126,15 +126,28 @@ export class Conf {
 
   async set(key: string, value: unknown): Promise<void> {
     const oldVal = dotGet(this.data, key);
+    const snapshot = this.snapshot();
     dotSet(this.data, key, value);
-    this.write();
+    try {
+      this.write();
+    } catch (err) {
+      // 落盘失败回滚内存，避免内存与磁盘长期分歧
+      this.data = snapshot;
+      throw err;
+    }
     const calls = this.listeners.filter((l) => l.key === key).map((l) => ({ fn: l.fn, newVal: value, oldVal }));
     for (const c of calls) c.fn(c.newVal, c.oldVal);
   }
 
   async delete(key: string): Promise<void> {
+    const snapshot = this.snapshot();
     dotDelete(this.data, key);
-    this.write();
+    try {
+      this.write();
+    } catch (err) {
+      this.data = snapshot;
+      throw err;
+    }
   }
 
   /** 返回整个配置（深拷贝） */
@@ -143,10 +156,16 @@ export class Conf {
   }
 
   async setStore(store: Record<string, unknown>): Promise<void> {
+    const snapshot = this.snapshot();
     const newMap = JSON.parse(JSON.stringify(store)) as ConfData;
     const oldData = this.data;
     this.data = newMap;
-    this.write();
+    try {
+      this.write();
+    } catch (err) {
+      this.data = snapshot;
+      throw err;
+    }
     for (const l of this.listeners) {
       l.fn(dotGet(newMap, l.key), dotGet(oldData, l.key));
     }
@@ -155,6 +174,7 @@ export class Conf {
   /** 合并部分更新（只更新给出的键） */
   async update(partial: Record<string, unknown>): Promise<void> {
     const calls: Array<{ fn: (a: unknown, b: unknown) => void; newVal: unknown; oldVal: unknown }> = [];
+    const snapshot = this.snapshot();
     for (const [key, value] of Object.entries(partial)) {
       const oldVal = dotGet(this.data, key);
       dotSet(this.data, key, value);
@@ -162,7 +182,12 @@ export class Conf {
         if (l.key === key) calls.push({ fn: l.fn, newVal: value, oldVal });
       }
     }
-    this.write();
+    try {
+      this.write();
+    } catch (err) {
+      this.data = snapshot;
+      throw err;
+    }
     for (const c of calls) c.fn(c.newVal, c.oldVal);
   }
 
@@ -178,16 +203,24 @@ export class Conf {
     return this.filePath;
   }
 
-  /** 重读磁盘并触发值有变化的监听器（外部编辑 config.json 后热生效） */
+  private snapshot(): ConfData {
+    return JSON.parse(JSON.stringify(this.data)) as ConfData;
+  }
+
+  /** 重读磁盘并触发值有变化的监听器（外部编辑 config.json 后热生效）。
+   *  与构造器一致地合并默认值：外部编辑器可能只写部分键，
+   *  若直接以文件内容替换内存，缺失键的默认值会被整体丢掉。 */
   async reload(): Promise<void> {
     const raw = fs.readFileSync(this.filePath, 'utf8');
     const fileMap = JSON.parse(raw) as ConfData;
+    const defaultsMap = JSON.parse(JSON.stringify(this.defaults)) as ConfData;
+    const newMap = mergeMaps(defaultsMap, fileMap);
     const oldData = this.data;
-    this.data = fileMap;
+    this.data = newMap;
     const calls: Array<{ fn: (a: unknown, b: unknown) => void; newVal: unknown; oldVal: unknown }> = [];
     for (const l of this.listeners) {
       const oldV = dotGet(oldData, l.key);
-      const newV = dotGet(fileMap, l.key);
+      const newV = dotGet(newMap, l.key);
       if (!deepEqual(oldV, newV)) calls.push({ fn: l.fn, newVal: newV, oldVal: oldV });
     }
     for (const c of calls) c.fn(c.newVal, c.oldVal);

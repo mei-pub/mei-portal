@@ -219,7 +219,9 @@ export class Handlers {
       fail(c, 400, tLang(c.lang, MSG.URL_REQUIRED));
       return;
     }
-    fetchPageTitle(url).then((title) => ok(c, { data: title }));
+    fetchPageTitle(url)
+      .then((title) => ok(c, { data: title }))
+      .catch((err: any) => fail(c, 500, err?.message ?? String(err)));
   }
 
   envPaths(c: Ctx): void {
@@ -242,13 +244,31 @@ export class Handlers {
     });
     res.write(': connected\n\n');
 
+    // 心跳注释行：连接空闲时保活。nginx 侧 proxy_read_timeout 虽有 3600s，
+    // 但中间的反向代理/移动网络设备可能更短，没有心跳会被静默掐断。
+    const heartbeat = setInterval(() => {
+      try {
+        res.write(': keepalive\n\n');
+      } catch {
+        cleanup();
+      }
+    }, 15_000);
+
+    let closed = false;
+    const cleanup = () => {
+      if (closed) return;
+      closed = true;
+      clearInterval(heartbeat);
+      this.hub.unsubscribe(client);
+    };
+
     const client = (evt: { name: string; data: unknown }) => {
       res.write(`event: ${evt.name}\ndata: ${JSON.stringify(evt.data)}\n\n`);
     };
     this.hub.subscribe(client);
-    c.req.on('close', () => {
-      this.hub.unsubscribe(client);
-    });
+    // 客户端断开：清理订阅与心跳，防止连接对象泄漏与对已断 socket 的写入
+    c.req.on('close', cleanup);
+    res.on('error', cleanup);
   }
 
   // ---- Downloads（DB 持久化主通道）----
@@ -469,8 +489,18 @@ export class Handlers {
       fail(c, 400, 'Key: \'UpdateStatusReq\' Error: ids and status are required');
       return;
     }
+    // 与 Go json 绑定 []int64 对齐：非整数 id 直接 400，而不是转成 NaN 打到 better-sqlite3 抛 500
+    const ids: number[] = [];
+    for (const raw of body.ids) {
+      const n = Number(raw);
+      if (!Number.isInteger(n) || n <= 0) {
+        fail(c, 400, 'Key: \'UpdateStatusReq.Ids\' Error: ids must be positive integers');
+        return;
+      }
+      ids.push(n);
+    }
     try {
-      this.downloadSvc.setStatus(body.ids.map((n) => Number(n)), body.status as string);
+      this.downloadSvc.setStatus(ids, body.status as string);
       ok(c, undefined, tLang(c.lang, MSG.STATUS_UPDATED));
     } catch (err: any) {
       fail(c, 500, err?.message ?? String(err));

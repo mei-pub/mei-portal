@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { VideoRepository, Video } from '../db.ts';
+import { sanitizeFolder } from '../core/downloader.ts';
 import { checkFileExists } from '../service/helpers.ts';
 
 export interface PlayableVideo {
@@ -22,6 +23,8 @@ const MIME: Record<string, string> = {
   '.avi': 'video/x-msvideo',
   '.flv': 'video/x-flv',
   '.wmv': 'video/x-ms-wmv',
+  '.mkv': 'video/x-matroska',
+  '.ts': 'video/mp2t',
   '.mpeg': 'video/mpeg',
   '.mpg': 'video/mpeg',
   '.3gp': 'video/3gpp',
@@ -31,8 +34,14 @@ function mimeFromPath(p: string): string {
   return MIME[path.extname(p).toLowerCase()] ?? 'video/mp4';
 }
 
-function isVideoExt(p: string): boolean {
-  return mimeFromPath(p).startsWith('video');
+/**
+ * 是否视频扩展名：只认显式映射（与 Go mime.TypeByExtension + "video/" 前缀判断对齐）。
+ * 不能走 mimeFromPath 的 video/mp4 兜底 —— 否则 .txt/.jpg 等未知扩展也会被判成视频，
+ * findFirstVideoInDir 会把分段目录里的封面图/说明文件当成正片返回。
+ */
+function isVideoExt(p: string): string | null {
+  const t = MIME[path.extname(p).toLowerCase()];
+  return t && t.startsWith('video') ? t : null;
 }
 
 /** 播放器服务：基于下载记录 + 本地文件检查 */
@@ -48,7 +57,8 @@ export class VideoService {
   /** 找到下载记录对应的实际文件；目录形式（分段下载）时取其中第一个视频文件 */
   private resolveFilePath(rec: Video): string | null {
     let searchDir = this.localPath;
-    if (rec.folder && rec.folder !== '') searchDir = path.join(this.localPath, rec.folder);
+    // folder 为用户可控：按段清洗，防止 ../ 逃出 localDir 读任意文件（/videos/:id 免鉴权）
+    if (rec.folder && rec.folder !== '') searchDir = path.join(this.localPath, sanitizeFolder(rec.folder));
     const [exists, filePath] = checkFileExists(rec.name, searchDir);
     if (!exists) return null;
     try {
@@ -124,7 +134,8 @@ export function serveVideoFile(req: IncomingMessage, res: ServerResponse, filePa
 
   if (range) {
     const m = /^bytes=(\d*)-(\d*)$/.exec(range.trim());
-    if (m) {
+    if (m && !(m[1] === '' && m[2] === '')) {
+      // 'bytes=-' 两端皆空为非法 Range（RFC 9110），忽略按完整文件处理
       let start = m[1] === '' ? 0 : parseInt(m[1]!, 10);
       let end = m[2] === '' ? total - 1 : parseInt(m[2]!, 10);
       if (m[1] === '' && m[2] !== '') {

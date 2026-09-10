@@ -3,7 +3,7 @@
 import path from 'node:path';
 import fs from 'node:fs';
 import { logger } from '../logger.ts';
-import { execRun } from './runner.ts';
+import { execRun, CanceledError } from './runner.ts';
 import { LineParser, ProgressTracker, type ParseState } from './parser.ts';
 import { getByType, type Schema, type SchemaList } from './schema.ts';
 import type { Callbacks, DownloadParams, DownloaderConfig, ProgressEvent } from './types.ts';
@@ -35,6 +35,17 @@ export function sanitizeFilename(name: string): string {
   const cleaned = out.join('').replace(/[. ]+$/, '');
   if (cleaned === '') return 'download';
   return cleaned;
+}
+
+/**
+ * 清洗任务子目录（folder）：DB 记录的 folder 是用户可控输入，而它会被拼进
+ * 下载目录（localDir/folder）与视频文件解析路径。这里按路径段过滤，剔除
+ * 空段 / '.' / '..'，并统一使用平台分隔符，杜绝 `../` 逃出 localDir。
+ * 正常的多级目录（如 "番剧/第一季"）不受影响。
+ */
+export function sanitizeFolder(folder: string): string {
+  const parts = folder.split(/[\\/]+/).filter((p) => p !== '' && p !== '.' && p !== '..');
+  return parts.join('/');
 }
 
 /** 从 URL 推断扩展名（与 Go guessExtFromURL 一致） */
@@ -78,7 +89,8 @@ export class DownloaderSvc {
           break;
         case 'localDir': {
           let final = this.cfg.getLocalDir();
-          if (p.folder !== '') final = path.join(final, p.folder);
+          // folder 为用户可控输入：先按段清洗，防御 ../ 逃出 localDir
+          if (p.folder !== '') final = path.join(final, sanitizeFolder(p.folder));
           pushKV(spec.argsName, final);
           break;
         }
@@ -118,6 +130,9 @@ export class DownloaderSvc {
   /** 执行下载任务；signal abort → 抛 CanceledError（对应 Go ctx 取消） */
   async download(p: DownloadParams, cb: Callbacks, signal: AbortSignal): Promise<void> {
     logger.info(`Starting download task id=${p.id} type=${p.type} url=${p.url} name=${p.name}`);
+
+    // 入队后即被取消（start 后立即 stop）—— 不再启动外部进程
+    if (signal.aborted) throw new CanceledError();
 
     const schema = getByType(this.schemas, p.type);
     if (!schema) {

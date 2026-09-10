@@ -417,6 +417,30 @@ async function main(): Promise<void> {
   server.listen(Number.parseInt(cfg.port, 10), cfg.host, () => {
     logger.info(`Starting HTTP server on ${addr}`);
   });
+
+  // unhandledRejection 兜底：Node 默认会击穿进程；对常驻下载服务，记录后继续运行
+  process.on('unhandledRejection', (err) => {
+    logger.error(`unhandledRejection: ${err instanceof Error ? err.stack : String(err)}`);
+  });
+
+  // 服务退出时回收全部在跑的下载子进程（abort → runner 发 SIGKILL），否则
+  // N_m3u8DL-RE/aria2c 等会变成孤儿进程继续下载、占住输出文件
+  let shuttingDown = false;
+  const shutdown = (sig: string) => {
+    if (shuttingDown) return;
+    shuttingDown = true;
+    logger.info(`Received ${sig}, stopping active downloads and shutting down`);
+    try {
+      queue.stopAll();
+    } catch (err: any) {
+      logger.warn(`Failed to stop tasks on shutdown: ${err?.message ?? err}`);
+    }
+    server.close(() => process.exit(0));
+    // 兜底：close 回调因残留连接不触发时强制退出
+    setTimeout(() => process.exit(0), 3_000).unref();
+  };
+  process.on('SIGTERM', () => shutdown('SIGTERM'));
+  process.on('SIGINT', () => shutdown('SIGINT'));
 }
 
 main().catch((err) => {

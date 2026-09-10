@@ -50,8 +50,16 @@ export class TaskQueue {
     this.tryRun();
   }
 
-  /** 入队：有空位立即执行，否则 FIFO 排队 */
+  /** 入队：有空位立即执行，否则 FIFO 排队；进行中/排队中的重复任务直接返回现状态 */
   enqueue(p: DownloadParams): TaskStatus {
+    // 同一任务重复 start：若仍在排队或执行中，直接返回当前状态。
+    // 否则会双开下载进程，且 active map 中后到的 AbortController 会覆盖先到的，
+    // 先启动的那个任务从此无法 stop。
+    const existing = this.tasks.get(p.id);
+    if (existing && (existing.status === 'pending' || existing.status === 'downloading')) {
+      logger.warn(`Task re-enqueued while still active id=${p.id} status=${existing.status}`);
+      return existing.status;
+    }
     this.tasks.set(p.id, {
       id: p.id,
       type: p.type,
@@ -85,6 +93,18 @@ export class TaskQueue {
     }
     logger.info(`Stopping task id=${id}`);
     controller.abort();
+  }
+
+  /** 停止全部活动任务（服务退出时回收子进程，防孤儿） */
+  stopAll(): void {
+    for (const [id, controller] of this.active) {
+      logger.info(`Stopping task id=${id} (shutdown)`);
+      try {
+        controller.abort();
+      } catch (err: any) {
+        logger.warn(`Failed to stop task id=${id} on shutdown: ${err?.message ?? err}`);
+      }
+    }
   }
 
   /** 从队首取一个任务补位（FIFO） */

@@ -95,9 +95,8 @@ export function isWhitelisted(pathname: string): boolean {
   return false;
 }
 
-/** 鉴权中间件：未通过 → 返回 false，调用方写 401 */
-export function checkAuth(req: IncomingMessage): boolean {
-  const pathname = (req.url || '/').split('?')[0]!;
+/** 鉴权中间件：未通过 → 返回 false，调用方写 401（pathname 为已解码路径，与 Go URL.Path 一致） */
+export function checkAuth(req: IncomingMessage, pathname: string): boolean {
   if (isWhitelisted(pathname)) return true;
   if (isPortalSession(req)) return true;
   logger.warn(`Auth: missing or invalid portal session path=${pathname}`);
