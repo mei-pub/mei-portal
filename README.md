@@ -84,7 +84,7 @@ nginx（唯一入口，sub_filter 注入顶栏脚本）
   ├─ /tv         LunaTV        (:3003)   ┐
   ├─ /music      Solara        (:3005)   │
   ├─ /disks      pansou Go API (:3008)   │ 各应用独立进程，supervisord 守护
-  ├─ /media      mediago-core  (:3000)   │ 顶栏/左面板由门户注入
+  ├─ /media      media core-ts (:3000)   │ 顶栏/左面板由门户注入
   ├─ /draw       ai-draw       (:3004)   │
   ├─ /tools      omni-tools    （静态）  │
   ├─ /link       mei-link      (:3002)   │
@@ -111,7 +111,8 @@ mei-portal/
 │   ├── disks/              #   网盘搜索：web/（Vue 前端）+ engine/（Node/TS 复刻引擎，
 │   │                       #   API 与 Go 版完全兼容，插件分批移植中）+
 │   │                       #   pansou/（Go 引擎，过渡期，达到插件对齐后移除）
-│   ├── media/              #   流媒体下载（Go core + React UI，原 MediaGo；Go 为过渡期）
+│   ├── media/              #   流媒体下载（core-ts/ Node 复刻引擎 + React UI；
+│   │                       #   鉴权统一走门户会话，无独立 setup/signin）
 │   ├── draw/               #   AI 绘图（Vite + React + Express，原 ai-draw）
 │   ├── tools/              #   工具箱（Vite + React + MUI，纯静态，原 omni-tools）
 │   ├── link/               #   内网穿透（Node + TS + frp 客户端管理）
@@ -120,7 +121,7 @@ mei-portal/
 │   ├── Dockerfile          #   多阶段构建（10+ 构建器 → 单运行时）
 │   ├── supervisord.conf    #   进程编排（nginx/shell/各应用，含插件与频道清单）
 │   ├── nginx/              #   路由与缓存策略（conf.d/00-main.conf 为核心）
-│   ├── entrypoint.sh       #   首启初始化（数据目录、默认账户、mediago 自动 setup）
+│   ├── entrypoint.sh       #   首启初始化（数据目录、默认账户）
 │   └── plugins.json        #   应用清单（门户首页卡片）
 ├── docs/                   # 架构/排障/主题文档
 ├── scripts/                # 构建辅助

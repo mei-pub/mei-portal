@@ -123,8 +123,9 @@ RUN if [ "$TARGETARCH" = "amd64" ]; then \
       echo "linux-${TARGETARCH}" > /tmp/deps-platform; \
     fi
 COPY apps/media/ ./
+RUN rm -rf core-ts
 RUN pnpm install --frozen-lockfile || pnpm install
-# 构建 player-ui（嵌入 Go core）
+# 构建 player-ui（播放页，目录形式部署到 /app/apps/media/player）
 RUN pnpm --filter @mediago/player-ui run build
 # 构建 web UI（server 模式静态产物）
 ENV APP_TARGET=server
@@ -132,17 +133,15 @@ ENV NODE_ENV=production
 RUN pnpm build:web
 # 下载第三方下载工具（yt-dlp/ffmpeg/N_m3u8DL-RE/BBDown/aria2 等，GitHub Release + in-tree 本地源）
 RUN pnpm deps:download --platform $(cat /tmp/deps-platform)
-FROM golang:1.25-bookworm AS media-go-builder
-WORKDIR /src
-ARG GOPROXY=https://proxy.golang.org,direct
-ENV GOPROXY=${GOPROXY}
-COPY apps/media/apps/core/go.mod apps/media/apps/core/go.sum apps/core/
-RUN cd apps/core && go mod download
-COPY apps/media/apps/core/ apps/core/
-COPY --from=media-node-builder /src/apps/player-ui/dist apps/core/assets/player/
-RUN cd apps/core && go mod download
-RUN cd apps/core && CGO_ENABLED=0 GOOS=linux GOARCH=${TARGETARCH} \
-    go build -trimpath -ldflags="-s -w" -o /out/mediago-core ./cmd/server
+
+# ---- media core（Node/TS 复刻版，Go core 已退役；better-sqlite3 原生依赖）----
+FROM node:22-bookworm-slim AS media-engine-builder
+WORKDIR /build
+RUN apt-get update && apt-get install -y --no-install-recommends python3 make g++ \
+    && rm -rf /var/lib/apt/lists/*
+COPY apps/media/core-ts/package.json apps/media/core-ts/package-lock.json* ./
+RUN npm ci --no-audit --no-fund || npm install --no-audit --no-fund
+COPY apps/media/core-ts/ ./
 
 
 # ---- 运行时（必须最后一个 FROM）----
@@ -201,10 +200,10 @@ COPY --from=bgutil-builder /build/package.json ./apps/bgutil/package.json
 COPY --from=disks-go-builder /out/pansou ./apps/disks/pansou
 COPY --from=disks-web-builder /build/dist ./apps/disks/frontend/dist
 
-# ---- media（本地编译 core + 前端静态 + 下载工具）----
-COPY --from=media-go-builder /out/mediago-core ./apps/media/mediago-core
-
+# ---- media（TS core + 前端静态 + 播放页 + 下载工具）----
+COPY --from=media-engine-builder /build ./apps/media/core-ts
 COPY --from=media-node-builder /src/apps/ui/build/server ./apps/media/static
+COPY --from=media-node-builder /src/apps/player-ui/dist ./apps/media/player
 ARG TARGETARCH
 COPY --from=media-node-builder /src/.deps/linux-* /app/deps-tmp/
 RUN mkdir -p /app/apps/media/deps && \
