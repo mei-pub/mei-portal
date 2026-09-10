@@ -9,6 +9,24 @@ import { filterEnabledPlugins, getPlugins } from './registry.ts';
 import './quarkres.ts';
 import './nyaa.ts';
 import './dygod.ts';
+// 磁力/电驴引擎
+import './ciligou.ts';
+import './cldi.ts';
+import './btbtlb.ts';
+import './clmao.ts';
+import './u3c3.ts';
+import './ys5266.ts';
+import './dygang.ts';
+import './leso.ts';
+// 网盘/影视资源站
+import './pansearch.ts';
+import './dy4k.ts';
+import './xb6v.ts';
+import './hdmoli.ts';
+import './huban.ts';
+import './susu.ts';
+import './diduan.ts';
+import './zhizhen.ts';
 
 /** 全部已注册插件 */
 export function allPluginDefs(): SearchPlugin[] {

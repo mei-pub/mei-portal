@@ -1,0 +1,16 @@
+{
+  "name": "@mei/mediago-core-ts",
+  "version": "0.1.0",
+  "private": true,
+  "description": "MediaGo Go core 的 TypeScript 复刻：node:http 原生路由 + better-sqlite3，API 与 Go 版 1:1；鉴权统一走门户会话（无独立密码）",
+  "type": "module",
+  "scripts": {
+    "start": "node --experimental-strip-types src/server.ts"
+  },
+  "engines": {
+    "node": ">=22.6"
+  },
+  "dependencies": {
+    "better-sqlite3": "^12.2.0"
+  }
+}
