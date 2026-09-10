@@ -1,4 +1,4 @@
-# mei-allin
+# mei-portal
 
 > 把多个异构开源 Web 应用，整合为一个统一门户的 docker-compose 项目。
 > **不动任何上游源码**，只做交互层「皮」的协调与统一，保留各应用完整功能。
@@ -18,19 +18,6 @@
 | 安全头剥离 | ✅ 8 应用 X-Frame-Options / CSP 全部剥离 |
 | 主题切换广播 | ✅ Shell 切换 → iframe 同步（postMessage） |
 
-## 整合的应用
-
-| 应用 | 说明 | 上游 |
-|---|---|---|
-| 🏠 Shell 门户 | 统一入口、导航、主题控制（自研） | — |
-| 🖼 AI 绘图 | ai-draw | github.com/stone-yu/ai-draw |
-| ⬇️ 流媒体下载 | mediago | github.com/mediago-dev/mediago |
-| 📺 影视门户 | LunaTV | github.com/MoonTechLab/LunaTV |
-| 🎵 音乐播放 | Solara | github.com/akudamatata/Solara |
-| 🧰 工具箱 | omni-tools | github.com/iib0011/omni-tools |
-| 🔗 内网穿透 | mei-link（仅 Docker 客户端） | github.com/tomtrije/mei-link |
-| 📚 小说站（带纸牌伪装） | tutorial | github.com/tomtrije/tutorial |
-| 🔲 主页面板 | sun-panel（可选启动器） | github.com/hslr-s/sun-panel |
 
 ## 快速开始
 
@@ -80,7 +67,7 @@ docker compose up -d                      # 网关将同时监听 443 并把 80 
 ## 目录结构
 
 ```
-mei-allin/
+mei-portal/
 ├── packages/
 │   ├── shall/            # Next.js 统一外壳（自研）
 │   ├── tutorial/         # git submodule —— 小说站，本地构建
@@ -148,7 +135,7 @@ mei-allin/
 - **子域名拓扑**：各应用跑在 `<prefix>.<ROOT_DOMAIN>`，避免破坏 SPA 的 base-path（单域名路径前缀会破坏多数上游路由）。
 - **iframe 嵌入**：网关剥离 `X-Frame-Options`/`CSP`，无需改上游。
 - **认证**：Shell 自管入口门禁，各应用保留自身登录（起步不做跨应用 SSO，避免改源码）。
-- **omni-tools（MUI）**：因 MUI 用 Emotion inline 样式，仅做配色近似协调。
+- **tools（MUI）**：因 MUI 用 Emotion inline 样式，仅做配色近似协调。
 
 ## 许可与致谢
 
