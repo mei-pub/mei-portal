@@ -29,9 +29,9 @@ interface AuthInfo {
 }
 
 interface UserMenuProps {
-  /** mei-allin 集成：挂载后自动打开设置面板（设置集成页 iframe 使用） */
+  /** mei-portal 集成：挂载后自动打开设置面板（设置集成页 iframe 使用） */
   autoOpenSettings?: boolean;
-  /** mei-allin 集成：隐藏头像触发按钮（仅作为设置面板宿主） */
+  /** mei-portal 集成：隐藏头像触发按钮（仅作为设置面板宿主） */
   hideTrigger?: boolean;
 }
 
@@ -48,7 +48,7 @@ export const UserMenu: React.FC<UserMenuProps> = ({
   const [storageType, setStorageType] = useState<string>('localstorage');
   const [mounted, setMounted] = useState(false);
 
-  // mei-allin 集成：autoOpenSettings 时挂载完成后直接打开设置面板
+  // mei-portal 集成：autoOpenSettings 时挂载完成后直接打开设置面板
   useEffect(() => {
     if (autoOpenSettings && mounted) {
       setIsSettingsOpen(true);

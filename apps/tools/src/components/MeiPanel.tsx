@@ -1,4 +1,4 @@
-// mei-allin：左侧窄浮动面板（全应用统一：Logo + 纵向名称 + 图标入口）
+// mei-portal：左侧窄浮动面板（全应用统一：Logo + 纵向名称 + 图标入口）
 // 工具箱：入口为各大工具分类；折叠态为左缘小把手；localStorage 记忆
 import { useEffect, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';

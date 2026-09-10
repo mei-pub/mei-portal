@@ -219,8 +219,8 @@ COPY image/nginx/conf.d/ /etc/nginx/conf.d/
 COPY image/nginx/snippets/ /etc/nginx/snippets/
 RUN rm -rf /etc/nginx/sites-enabled
 COPY image/plugins.json /etc/mei-plugins.json
-COPY image/supervisord.conf /etc/supervisor/conf.d/mei-allin.conf
-RUN mkdir -p /etc/supervisor && ln -sf /etc/supervisor/conf.d/mei-allin.conf /etc/supervisor/supervisord.conf
+COPY image/supervisord.conf /etc/supervisor/conf.d/mei-portal.conf
+RUN mkdir -p /etc/supervisor && ln -sf /etc/supervisor/conf.d/mei-portal.conf /etc/supervisor/supervisord.conf
 COPY image/entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
@@ -228,4 +228,4 @@ VOLUME ["/data"]
 ENV NODE_ENV=production TZ=Asia/Shanghai
 EXPOSE 7777
 ENTRYPOINT ["/entrypoint.sh"]
-CMD ["supervisord", "-n", "-c", "/etc/supervisor/conf.d/mei-allin.conf"]
+CMD ["supervisord", "-n", "-c", "/etc/supervisor/conf.d/mei-portal.conf"]

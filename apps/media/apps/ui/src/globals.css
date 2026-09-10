@@ -9,7 +9,7 @@ body {
   width: 100vw;
 }
 
-/* mei-allin：应用底色提到 body 层。门户顶栏是悬浮胶囊，iframe 全屏铺满，
+/* mei-portal：应用底色提到 body 层。门户顶栏是悬浮胶囊，iframe 全屏铺满，
    胶囊背后露出的必须是本应用底色，否则会拼出一条门户底色的色带。 */
 body {
   background-color: #f4f7fa;
@@ -21,7 +21,7 @@ body {
   }
 }
 
-/* mei-allin：门户胶囊顶栏占用 --mei-topbar-space（topbar.js 注入 body padding-top，
+/* mei-portal：门户胶囊顶栏占用 --mei-topbar-space（topbar.js 注入 body padding-top，
    独立部署缺省 0）。此处按剩余高度撑满，避免内缩后整页溢出。 */
 #root {
   height: calc(100vh - var(--mei-topbar-space, 0px));

@@ -1,7 +1,7 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "$id": "https://mei-allin.local/manifest.schema.json",
-  "title": "mei-allin 插件清单",
+  "$id": "https://mei-portal.local/manifest.schema.json",
+  "title": "mei-portal 插件清单",
   "description": "描述一个被整合的上游应用。Shell 构建期扫描 plugins/*/manifest.yml 聚合。",
   "type": "object",
   "required": ["id", "name", "icon", "category", "endpoint", "ingress"],

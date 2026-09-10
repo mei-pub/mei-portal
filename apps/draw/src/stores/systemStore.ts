@@ -310,7 +310,7 @@ export const useSystemStore = create<SystemState>((set) => ({
   defaultEngine: (localStorage.getItem('defaultEngine') as EngineType) || (window as any)._ENV_?.DEFAULT_ENGINE || 'drawio',
   defaultModelPrompt: (window as any)._ENV_?.DEFAULT_MODEL_PROMPT || '使用服务端配置的模型，此信息管理员可以在系统设置-基础设置里面进行自定义',
   logoColor: (window as any)._ENV_?.LOGO_COLOR || '#000000', // Default to black
-  // mei-allin 集成：语言锁死中文（忽略旧 localStorage 与环境配置）
+  // mei-portal 集成：语言锁死中文（忽略旧 localStorage 与环境配置）
   language: 'zh' as Locale,
   drawioConfig: {
     useLocalDrawio: false,

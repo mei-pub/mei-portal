@@ -3,7 +3,7 @@ import {Button, DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMen
 import {useSystemStore} from '@/stores/systemStore'
 import {ENGINES} from '@/constants'
 
-// mei-allin：绘图引擎选择（自 AppHeader 顶栏迁入编辑器输入区，位于模型选择右侧、发送按钮之前）
+// mei-portal：绘图引擎选择（自 AppHeader 顶栏迁入编辑器输入区，位于模型选择右侧、发送按钮之前）
 export function EngineSelector() {
   const defaultEngine = useSystemStore((state) => state.defaultEngine)
   const setDefaultEngine = useSystemStore((state) => state.setDefaultEngine)

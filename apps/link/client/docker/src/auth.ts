@@ -8,7 +8,7 @@ export class AuthService {
   private dataDir: string;
   constructor(dataDir: string) { this.dataDir = dataDir; }
   private file() { return join(this.dataDir, "auth.json"); }
-  // mei-allin：会话持久化 —— 此前存内存，容器重启即全部失效（登录态"又失效了"的根因）
+  // mei-portal：会话持久化 —— 此前存内存，容器重启即全部失效（登录态"又失效了"的根因）
   private sessionsFile() { return join(this.dataDir, "sessions.json"); }
   private async persistSessions() {
     try {
@@ -46,13 +46,13 @@ export class AuthService {
     const hash = scryptSync(password, stored.salt, 32);
     if (user !== stored.user || !timingSafeEqual(hash, Buffer.from(stored.hash, "hex"))) return null;
     const token = randomBytes(32).toString("base64url");
-    // mei-allin：会话 30 天，与门户 mei-auth cookie 生命周期对齐
+    // mei-portal：会话 30 天，与门户 mei-auth cookie 生命周期对齐
     // （此前 24h：浏览器 cookie 还有效但服务端会话已过期 → 打开管理页又要二次登录）
     this.sessions.set(token, Date.now() + 30 * 86400000);
     await this.persistSessions();
     return token;
   }
-  // mei-allin 统一身份：主应用会话令牌（mei-auth cookie 值）即视为已登录
+  // mei-portal 统一身份：主应用会话令牌（mei-auth cookie 值）即视为已登录
   private portalTokenCache: { value: string; exp: number } | null = null;
   private async portalSessionToken(): Promise<string> {
     const now = Date.now();

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-// mei-allin 统一身份：lunatv 不再有独立用户体系。
+// mei-portal 统一身份：lunatv 不再有独立用户体系。
 // 鉴权 = 校验主应用会话（mei-auth cookie / Bearer），由门户 /api/auth/verify 裁决。
 // 会话有效时把 lunatv 自己的 auth cookie 注入请求头，下游 API 路由的旧校验逻辑无需改动。
 

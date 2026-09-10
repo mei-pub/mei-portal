@@ -1,4 +1,4 @@
-// mei-allin 标准左侧面板（数据驱动）：应用信息（Logo + 纵向名称）+ 行动入口
+// mei-portal 标准左侧面板（数据驱动）：应用信息（Logo + 纵向名称）+ 行动入口
 // 组件契约见仓库根 AGENTS.md「顶栏与左侧面板组件化强约束」
 // 媒体下载入口：新建（弹层）/ 下载中（列表）/ 已完成
 import { type FC, useEffect, useRef, useState } from "react";

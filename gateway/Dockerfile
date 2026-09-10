@@ -1,4 +1,4 @@
-# mei-allin 网关 —— nginx + envsubst
+# mei-portal 网关 —— nginx + envsubst
 FROM nginx:1.27-alpine
 
 # gettext 提供 envsubst
@@ -14,7 +14,7 @@ COPY nginx/nginx.conf /etc/nginx/nginx.conf
 COPY nginx/conf.d/ /etc/nginx/conf.d/
 
 # 入口脚本：envsubst 替换 + 可选 TLS 注入后启动
-COPY docker-entrypoint.sh /docker-entrypoint.d/40-mei-allin.sh
-RUN chmod +x /docker-entrypoint.d/40-mei-allin.sh
+COPY docker-entrypoint.sh /docker-entrypoint.d/40-mei-portal.sh
+RUN chmod +x /docker-entrypoint.d/40-mei-portal.sh
 
 # 注意：不覆盖官方 ENTRYPOINT，借助官方 docker-entrypoint.d 机制

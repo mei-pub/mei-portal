@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// mei-allin：左侧窄浮动面板（全应用统一：Logo + 纵向名称 + 图标入口）
+// mei-portal：左侧窄浮动面板（全应用统一：Logo + 纵向名称 + 图标入口）
 // 网盘搜索：入口仅「搜索」一项；折叠态为左缘小把手；localStorage 记忆
 import { ref, onMounted } from 'vue';
 

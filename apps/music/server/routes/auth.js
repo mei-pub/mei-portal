@@ -31,7 +31,7 @@ function isPublicPath(pathname) {
   );
 }
 
-// mei-allin 统一身份：主应用会话校验（带短 TTL 缓存，避免每个请求都回调门户）
+// mei-portal 统一身份：主应用会话校验（带短 TTL 缓存，避免每个请求都回调门户）
 const SHELL_URL = process.env.MEI_SHELL_URL || 'http://127.0.0.1:3010';
 const verifyCache = new Map();
 const CACHE_TTL = 30 * 1000;
@@ -66,7 +66,7 @@ module.exports = function createAuthMiddleware(password) {
     // 公开路径直接放行
     if (isPublicPath(req.path)) return next();
 
-    // mei-allin 统一身份：校验主应用会话（mei-auth），由门户 /api/auth/verify 裁决。
+    // mei-portal 统一身份：校验主应用会话（mei-auth），由门户 /api/auth/verify 裁决。
     // 会话有效 → 放行；无效 → 跳门户登录页（根路径 /login 即 Shell 登录页）。
     const portalCredential =
       (req.cookies && req.cookies['mei-auth']) ||

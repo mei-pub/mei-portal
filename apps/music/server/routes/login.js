@@ -5,7 +5,7 @@
 
 const { Router } = require('express');
 
-// mei-allin：30 天，与门户 mei-auth cookie 对齐（原 48h，过期后 /music 会被 302 踢回登录页）
+// mei-portal：30 天，与门户 mei-auth cookie 对齐（原 48h，过期后 /music 会被 302 踢回登录页）
 const MAX_AGE_SECONDS = 30 * 24 * 60 * 60;
 
 /**
@@ -29,7 +29,7 @@ module.exports = function createLoginRouter(password) {
       const isHttps = req.secure || req.headers['x-forwarded-proto'] === 'https';
 
       const cookieParts = [
-        // mei-allin：原名 auth 与 lunatv 同源同名冲突，改为 solara-auth
+        // mei-portal：原名 auth 与 lunatv 同源同名冲突，改为 solara-auth
         `solara-auth=${encoded}`,
         `Max-Age=${MAX_AGE_SECONDS}`,
         'Path=/',

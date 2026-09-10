@@ -61,7 +61,7 @@ let cachedConfig: AdminConfig;
 
 const MEI_STORAGE_TYPE = process.env.NEXT_PUBLIC_STORAGE_TYPE || 'localstorage';
 
-// mei-allin：内置热门影视源（苹果CMS 采集 API 格式，api + ?ac=videolist 即可点播）
+// mei-portal：内置热门影视源（苹果CMS 采集 API 格式，api + ?ac=videolist 即可点播）
 // 2026-08 实测可用性筛选：索尼/天涯（拒绝搜索）、卧龙（WAF）、无尽（CF 盾）已剔除，
 // 换入百度云/新浪/豪华/金鹰。detail 一律留空——非空会走脆弱的 HTML 详情页正则解析，
 // JSON 详情（?ac=videolist&ids=）才是稳定路径。
@@ -117,7 +117,7 @@ function mergeDefaultSources(config: AdminConfig): AdminConfig {
 // ---- localstorage 模式的文件持久化（服务端无 db，管理配置落盘到 DATA_DIR）----
 const LOCAL_ADMIN_FILE = path.join(
   process.env.DATA_DIR || '/data',
-  'lunatv',
+  'tv',
   'admin-config.json'
 );
 

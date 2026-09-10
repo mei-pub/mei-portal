@@ -25,7 +25,7 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(warningUrl);
   }
 
-  // mei-allin 统一身份：主应用会话有效即放行，并注入下游路由所需的旧 auth cookie。
+  // mei-portal 统一身份：主应用会话有效即放行，并注入下游路由所需的旧 auth cookie。
   // 会话无效时：API 返回 401，页面统一跳回门户登录页（lunatv 自身登录页已废弃）。
   if (await isPortalSession(request)) {
     const headers = injectLegacyAuthCookie(request, new Headers(request.headers));

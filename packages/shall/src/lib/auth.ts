@@ -51,7 +51,7 @@ function saveUser(u: UserRecord): void {
 export function initUserIfNeeded(): void {
   if (loadUser()) return;
   const username = process.env.MEI_ADMIN_USER || 'admin';
-  const password = process.env.MEI_ADMIN_PASSWORD || 'mei-allin';
+  const password = process.env.MEI_ADMIN_PASSWORD || 'mei-portal';
   const salt = crypto.randomBytes(16).toString('hex');
   saveUser({
     uid: crypto.randomBytes(8).toString('hex'),

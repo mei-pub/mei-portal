@@ -387,7 +387,7 @@ async function saveConfig(connectAfterSave = false) {
 async function copyText(value, success) { if (!value) throw new Error("没有可复制的内容"); if (navigator.clipboard?.writeText) await navigator.clipboard.writeText(value); else { const area = document.createElement("textarea"); area.value = value; document.body.append(area); area.select(); document.execCommand("copy"); area.remove(); } notify(success); }
 
 $("#loginForm").addEventListener("submit", async event => { event.preventDefault(); $("#loginError").textContent = ""; try { await api("/api/login", { method: "POST", body: JSON.stringify({ user: formValue(event.target, "user"), password: formValue(event.target, "password") }) }); $("#loginView").classList.add("hidden"); $("#appView").classList.remove("hidden"); await load(); beginPolling(); } catch (error) { $("#loginError").textContent = error.message; } });
-// mei-allin 集成：资源路径 /link/{tunnels|settings|logs}，兼容旧 ?meiView 深链。
+// mei-portal 集成：资源路径 /link/{tunnels|settings|logs}，兼容旧 ?meiView 深链。
 setView(viewFromLocation(), { updateUrl: false });
 if (location.pathname.replace(/\/+$/, "") !== `/link/${activeView}`) {
   window.history.replaceState(null, "", `/link/${activeView}`);

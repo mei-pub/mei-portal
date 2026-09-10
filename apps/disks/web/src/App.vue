@@ -1329,7 +1329,7 @@ onUnmounted(() => {
       </div>
     </main>
     
-    <!-- 页脚（mei-allin：外部链接已移除，保留版权；移动端布局依赖该锚点） -->
+    <!-- 页脚（mei-portal：外部链接已移除，保留版权；移动端布局依赖该锚点） -->
     <footer ref="footerRef" class="footer-shell border-t border-border bg-background/50 backdrop-blur-sm mt-auto">
       <div class="container mx-auto px-4 py-4">
         <div class="flex items-center justify-center gap-4 text-sm text-muted-foreground">

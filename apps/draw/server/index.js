@@ -245,7 +245,7 @@ async function initializeAdmin() {
 }
 
 // --- Middleware ---
-// mei-allin 统一身份：不再有独立用户体系/JWT。
+// mei-portal 统一身份：不再有独立用户体系/JWT。
 // 鉴权 = 校验主应用会话（Bearer 令牌或 mei-auth cookie），由门户 /api/auth/verify 裁决；
 // 会话有效时以门户 admin 账户作为 req.user（数据仍按该账户隔离）。
 const SHELL_URL = process.env.MEI_SHELL_URL || 'http://127.0.0.1:3010';
@@ -857,7 +857,7 @@ app.post('/api/auth/register', async (req, res) => {
 });
 
 app.post('/api/auth/login', async (req, res) => {
-  // mei-allin 统一身份：本应用不再拥有独立用户体系，登录统一走门户。
+  // mei-portal 统一身份：本应用不再拥有独立用户体系，登录统一走门户。
   // 保留端点仅为给旧前端一个明确提示，避免静默失败。
   return res.status(403).json({ error: '已接入门户统一身份，请从门户登录' });
 });

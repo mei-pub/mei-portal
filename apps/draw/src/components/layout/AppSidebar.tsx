@@ -9,7 +9,7 @@ interface AppSidebarProps {
 
 const STORE_KEY = 'mei-float-aidraw'
 
-// mei-allin 集成：左侧中段浮动操作面板（首页 / 新建 / 文件管理弹层）
+// mei-portal 集成：左侧中段浮动操作面板（首页 / 新建 / 文件管理弹层）
 // 默认展开 + localStorage 记忆；编辑页（/editor/*）默认收起（对话区顶到左边）
 export function AppSidebar({ onCreateProject }: AppSidebarProps) {
   const navigate = useNavigate()

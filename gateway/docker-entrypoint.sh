@@ -19,7 +19,7 @@
 : "${SUBDOMAIN_LINK:=link}"
 : "${SUBDOMAIN_NOVELS:=novels}"
 
-echo "[mei-allin] ROOT_DOMAIN=$ROOT_DOMAIN  SHELL_ORIGIN=$SHELL_ORIGIN  SHELL_INTERNAL=$SHELL_INTERNAL  USE_TLS=$USE_TLS"
+echo "[mei-portal] ROOT_DOMAIN=$ROOT_DOMAIN  SHELL_ORIGIN=$SHELL_ORIGIN  SHELL_INTERNAL=$SHELL_INTERNAL  USE_TLS=$USE_TLS"
 
 # 0. 等待 Shell 就绪（用内部地址探测；避免网关先起来反代到未就绪的 Shell）
 #    仅在真正启动时执行；nginx -t / -T 等检测模式跳过（官方 entrypoint 不向脚本
@@ -33,14 +33,14 @@ if [ "$IS_TEST" = "0" ] && [ -n "$SHELL_INTERNAL" ]; then
   SHELL_HOST=$(echo "$SHELL_INTERNAL" | sed -E 's|^https?://||; s|[:/].*$||')
   SHELL_PORT=$(echo "$SHELL_INTERNAL" | sed -E 's|^https?://||; s|^[^:/]+:||; s|/.*$||')
   SHELL_PORT="${SHELL_PORT:-80}"
-  echo "[mei-allin] 等待 Shell 就绪：$SHELL_HOST:$SHELL_PORT"
+  echo "[mei-portal] 等待 Shell 就绪：$SHELL_HOST:$SHELL_PORT"
   for i in $(seq 1 60); do
     if wget -qO- "http://$SHELL_HOST:$SHELL_PORT/" >/dev/null 2>&1; then
-      echo "[mei-allin] Shell 已就绪（${i}s）"
+      echo "[mei-portal] Shell 已就绪（${i}s）"
       break
     fi
     sleep 1
-    [ "$i" = "60" ] && echo "[mei-allin] ⚠ Shell 60s 未就绪，网关仍将启动（反代可能暂时 502）"
+    [ "$i" = "60" ] && echo "[mei-portal] ⚠ Shell 60s 未就绪，网关仍将启动（反代可能暂时 502）"
   done
 fi
 
@@ -53,7 +53,7 @@ done
 
 # 2. TLS：若启用且证书就绪，把 listen 80 改为同时监听 80 + 443 ssl，并注入证书
 if [ "$USE_TLS" = "true" ] && [ -f /etc/nginx/certs/cert.pem ] && [ -f /etc/nginx/certs/key.pem ]; then
-  echo "[mei-allin] 启用 HTTPS（443）"
+  echo "[mei-portal] 启用 HTTPS（443）"
   # 在 http 块注入 ssl 参数（通过独立 conf 文件，nginx.conf 的 http 块会 include conf.d）
   cat > /etc/nginx/conf.d/01-ssl.conf <<'EOF'
 ssl_certificate     /etc/nginx/certs/cert.pem;
@@ -77,7 +77,7 @@ server {
 }
 EOF
 else
-  echo "[mei-allin] HTTP 模式（80）"
+  echo "[mei-portal] HTTP 模式（80）"
 fi
 
-echo "[mei-allin] 网关配置就绪"
+echo "[mei-portal] 网关配置就绪"

@@ -1,8 +1,8 @@
 {
-  "name": "mei-allin",
+  "name": "mei-portal",
   "version": "0.1.0",
   "private": true,
-  "description": "把多个异构开源 Web 应用整合为统一门户的 docker-compose 项目",
+  "description": "多应用聚合门户：全部应用为一等公民本地代码",
   "type": "module",
   "scripts": {
     "build:theme": "node scripts/build-theme.mjs",

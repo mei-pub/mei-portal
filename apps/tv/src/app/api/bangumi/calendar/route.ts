@@ -24,15 +24,15 @@ export const dynamic = 'force-dynamic';
  *   3. fastly.jsdelivr 的 bangumi-data（unpkg 兜底）
  * 并配两层缓存：
  *   - 进程内存（6 小时，同参并发去重）
- *   - 磁盘持久化（/data/lunatv/cache/bangumi-calendar.json）：
+ *   - 磁盘持久化（/data/tv/cache/bangumi-calendar.json）：
  *     重启不丢数据；全部上游失败时回退到最后一次成功数据（放送表一天一变，陈旧数据远好于空白）
  */
 
 const MEMORY_TTL_MS = 6 * 60 * 60 * 1000;
-// lunatv 无独立 DATA_DIR（容器内主卷为 /data），缓存固定落 /data/lunatv/cache；
+// lunatv 无独立 DATA_DIR（容器内主卷为 /data），缓存固定落 /data/tv/cache；
 // 本地开发无该路径时 saveToDisk 静默降级（仅丢失重启兜底），可用 LUNATV_CACHE_DIR 覆盖
 const CACHE_FILE = path.join(
-  process.env.LUNATV_CACHE_DIR || '/data/lunatv/cache',
+  process.env.LUNATV_CACHE_DIR || '/data/tv/cache',
   'bangumi-calendar.json'
 );
 

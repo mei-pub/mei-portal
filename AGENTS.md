@@ -1,11 +1,11 @@
 # AGENTS.md
 
-本文件是 mei-allin 仓库的智能体（Agent）协作强约束。所有智能体（OpenAI Codex、
+本文件是 mei-portal 仓库的智能体（Agent）协作强约束。所有智能体（OpenAI Codex、
 Cursor、Claude Code、Copilot 等）在本仓库内工作时必须遵守。
 
 ## 顶栏与左侧面板组件化强约束
 
-mei-allin 是多应用聚合门户：`packages/shall` 为门户外壳，`apps/*` 为各子应用（全部为
+mei-portal 是多应用聚合门户：`packages/shall` 为门户外壳，`apps/*` 为各子应用（全部为
 一等公民本地代码，不同技术栈：React / Vue / 原生 JS / 静态页；目录名与 URL 子路径
 对齐：novels/tv/music/link/draw/tools/disks/media）。顶栏与左侧面板是全应用共享的
 门户级组件，**不允许任何子应用自行重写一套样式**。

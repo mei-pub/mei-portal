@@ -126,7 +126,7 @@ export default function Hero() {
 
   return (
     <Box width={{ xs: '90%', md: '80%', lg: '60%' }}>
-      {/* mei-allin：Mei Tools 品牌主题渲染（替换原 title/description 文案） */}
+      {/* mei-portal：Mei Tools 品牌主题渲染（替换原 title/description 文案） */}
       <Stack
         mb={2}
         direction={'row'}

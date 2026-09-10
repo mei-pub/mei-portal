@@ -38,7 +38,7 @@ import {ENGINES} from '@/constants'
 import type {EngineType} from '@/types'
 import {UsageStatistics} from './AdminUsageStatsPage'
 
-// mei-allin 集成：用户管理入口已移除（管理后台仅保留系统级设置），默认打开基础设置
+// mei-portal 集成：用户管理入口已移除（管理后台仅保留系统级设置），默认打开基础设置
 export function AdminPage() {
   const [activeTab, setActiveTab] = useState(() => {
     const stored = localStorage.getItem('admin_active_tab')

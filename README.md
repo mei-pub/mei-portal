@@ -46,7 +46,7 @@ docker run -d --name mei-portal --restart unless-stopped \
 
 | 用户名 | 密码 |
 |---|---|
-| `admin` | `mei-allin` |
+| `admin` | `mei-portal` |
 
 ### 从源码构建（docker compose）
 
@@ -61,7 +61,7 @@ docker compose up -d --build    # 国内构建自动走 goproxy.cn
 | 变量 | 默认值 | 说明 |
 |---|---|---|
 | `MEI_ADMIN_USER` | `admin` | 管理员用户名（仅首次初始化生效） |
-| `MEI_ADMIN_PASSWORD` | `mei-allin` | 管理员密码（仅首次初始化生效） |
+| `MEI_ADMIN_PASSWORD` | `mei-portal` | 管理员密码（仅首次初始化生效） |
 | `YOUTUBE_PO_TOKEN` | 空 | bgutil PO Token 服务异常时手工覆盖（音乐 YouTube 源） |
 | `YOUTUBE_VISITOR_DATA` | 空 | 同上 |
 | `TZ` | `Asia/Shanghai` | 时区 |
@@ -70,7 +70,7 @@ docker compose up -d --build    # 国内构建自动走 goproxy.cn
 
 ### 数据持久化
 
-全部状态落在 `/data`（`shell/` 账户与音乐状态、`pansou/` 搜索缓存、`mediago/` 下载与配置、`tutorial/` 书架、`mei-link/` 穿透配置、各应用自有数据）。**备份该卷即备份一切。**
+全部状态落在 `/data`（`shell/` 账户与音乐状态、`disks/` 搜索缓存、`media/` 下载与配置、`novels/` 书架、`link/` 穿透配置、`tv/` 影视配置、`music/` `draw/` 各应用自有数据，目录名与 apps/ 一致）。**备份该卷即备份一切。**
 
 ## 架构
 
@@ -142,7 +142,7 @@ git tag v0.1.0 && git push origin v0.1.0
 
 ## 开发
 
-- **本地验证**：`docker compose up -d --build` 后访问 `http://127.0.0.1:7777`；单服务调试可 `docker exec mei-allin supervisorctl status`。
+- **本地验证**：`docker compose up -d --build` 后访问 `http://127.0.0.1:7777`；单服务调试可 `docker exec mei-portal supervisorctl status`。
 - **Go 插件**（pansou）：`apps/disks/pansou/plugin/`，遵循上游开发规范（`docs/pansou-plugin-developer-SKILL.md` 模式）；注意本仓库需用 Go 1.25 构建（sonic 依赖与更新版 Go 不兼容）。
 - **智能体协作**：任何 AI 辅助改动请先读 `AGENTS.md`——顶栏/左侧面板组件化、顶部空间契约、播放组件与播放页职责分离、mei-link 故障引导、iframe 保活与缓存策略、nginx 路由判别等强约束均在其中，违规判定标准也写明。
 

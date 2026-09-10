@@ -101,7 +101,7 @@ export default async function RootLayout({
           content='width=device-width, initial-scale=1.0, viewport-fit=cover'
         />
         <link rel='apple-touch-icon' href='/icons/icon-192x192.png' />
-        {/* mei-allin：basePath=/tv 部署下，前端根相对 /api/* 请求会打到门户 Shell（404）。
+        {/* mei-portal：basePath=/tv 部署下，前端根相对 /api/* 请求会打到门户 Shell（404）。
             在应用代码执行前包裹 fetch / EventSource，把根相对 /api/* 重写为 /tv/api/*；
             已带 /tv/ 前缀或绝对 http(s) URL 不处理。
             白名单：/api/auth、/api/plugins、/api/panel、/api/health、/api/system、/api/novels 属于门户 Shell

@@ -1,6 +1,6 @@
 'use client';
 
-// mei-allin：左侧中段浮动导航面板 —— 替代原固定侧栏
+// mei-portal：左侧中段浮动导航面板 —— 替代原固定侧栏
 // 默认展开；收起态为紧贴左缘的渐变小把手（›）；状态经 localStorage 记忆
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';

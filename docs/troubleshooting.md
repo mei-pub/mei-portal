@@ -9,8 +9,8 @@
 ## 标准部署
 
 ```bash
-git clone --recurse-submodules <repo-url> mei-allin
-cd mei-allin
+git clone --recurse-submodules <repo-url> mei-portal
+cd mei-portal
 cp .env.example .env
 bash scripts/setup-ip.sh      # 自动检测 IP，写入 ROOT_DOMAIN (nip.io)
 npm install && npm run build   # 校验清单 + 构建主题资产 + 生成 nginx 配置
@@ -89,7 +89,7 @@ docker compose logs tutorial -f
 字体缓存在 volume `${DATA_ROOT}/tutorial/fonts/`，**仅首次下载**，后续重启秒启。
 若下载失败（无外网），可预先在能联网的机器下载后挂载到该目录。
 
-> 已知问题：上游 `download-fonts.mjs` 在某些情况下下载完成后进程不退出，导致后续 `node server.js` 不执行。若遇到此情况，重启容器 `docker compose restart tutorial` 通常可恢复（字体已缓存，跳过下载）。此为上游行为，不影响 mei-allin 整合层。
+> 已知问题：上游 `download-fonts.mjs` 在某些情况下下载完成后进程不退出，导致后续 `node server.js` 不执行。若遇到此情况，重启容器 `docker compose restart tutorial` 通常可恢复（字体已缓存，跳过下载）。此为上游行为，不影响 mei-portal 整合层。
 
 ### Q: 访问门户白屏 / 502
 

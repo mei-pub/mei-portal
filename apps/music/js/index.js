@@ -6413,7 +6413,7 @@ function initSettings() {
         });
     }
 
-    // mei-allin 集成：设置入口迁移到门户设置集成页，URL 带 ?meiSettings=1 时自动打开设置弹窗
+    // mei-portal 集成：设置入口迁移到门户设置集成页，URL 带 ?meiSettings=1 时自动打开设置弹窗
     try {
         if (new URLSearchParams(window.location.search).get("meiSettings") === "1") {
             openSettingsModal();

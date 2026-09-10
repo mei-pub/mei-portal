@@ -188,7 +188,7 @@ const App: FC = () => {
       componentSize={isWeb ? undefined : "small"}
       theme={{
         algorithm: getAlgorithm(theme),
-        // mei-allin：门户主应用风格令牌（主色/圆角/背景对齐 shell）
+        // mei-portal：门户主应用风格令牌（主色/圆角/背景对齐 shell）
         token: {
           colorPrimary: "#6366f1",
           colorLink: "#4f46e5",

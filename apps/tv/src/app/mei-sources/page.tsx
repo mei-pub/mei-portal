@@ -1,6 +1,6 @@
 'use client';
 
-// mei-allin 集成：影视源管理页（门户设置集成页 iframe 深链入口）
+// mei-portal 集成：影视源管理页（门户设置集成页 iframe 深链入口）
 // localstorage 模式下原 admin 页的配置功能不可用（服务端无 db），
 // 本页通过 /tv/api/admin/source（已适配单密码模式 + 文件持久化）管理采集源：
 // 列表 / 启用停用 / 新增 / 删除自定义源 / 单源可用性检测 / 恢复内置热门源

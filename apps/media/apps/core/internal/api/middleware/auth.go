@@ -18,7 +18,7 @@ import (
 	"go.uber.org/zap"
 )
 
-// mei-allin 统一身份：本应用不再有独立账户体系。
+// mei-portal 统一身份：本应用不再有独立账户体系。
 // 鉴权 = 校验主应用会话令牌（门户 mei-auth cookie / Bearer / X-API-Key 均可携带）。
 // 令牌即主应用 user.json 的 sha256(username:hash)，本地重算校验（单镜像同文件系统），
 // 并带 30s 缓存避免每次读文件。门户改密后令牌立即轮换，全部子应用同步失效。

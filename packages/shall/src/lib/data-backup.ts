@@ -42,12 +42,12 @@ export interface RestoreResult {
 }
 
 const PROGRAM_BY_SCOPE: Partial<Record<BackupScope, string>> = {
-  lunatv: 'lunatv',
-  solara: 'solara',
-  mediago: 'mediago',
-  'ai-draw': 'ai-draw',
-  tutorial: 'tutorial',
-  'mei-link': 'mei-link',
+  lunatv: 'tv',
+  solara: 'music',
+  mediago: 'media',
+  'ai-draw': 'draw',
+  tutorial: 'novels',
+  'mei-link': 'link',
 };
 
 const SQLITE_TABLES: Record<string, { table: string; pk: string }[]> = {
@@ -353,7 +353,7 @@ function mergeSqliteByKey(
 
 function mergeSolaraDb(srcBuf: Buffer): { added: number; updated: number } {
   const srcTmp = writeTempDb(srcBuf);
-  const dst = new DatabaseSync(dataPath('solara/solara.db'));
+  const dst = new DatabaseSync(dataPath('music/solara.db'));
   const src = new DatabaseSync(srcTmp, { readOnly: true });
   let added = 0;
   let updated = 0;
@@ -417,7 +417,7 @@ function slugifySite(name: string, fallbackId?: number): string {
 function mergeTutorialDb(srcBuf: Buffer): ScopeCounts {
   const srcTmp = writeTempDb(srcBuf);
   const src = new DatabaseSync(srcTmp, { readOnly: true });
-  const dst = new DatabaseSync(dataPath('tutorial/novels.db'));
+  const dst = new DatabaseSync(dataPath('novels/novels.db'));
   const counts: ScopeCounts = { sites: 0, novels: 0, volumes: 0, chapters: 0, skipped: 0 };
   try {
     const libCols = new Set(tableColumns(src, 'libraries'));
@@ -568,7 +568,7 @@ function mergeTutorialDb(srcBuf: Buffer): ScopeCounts {
 function mergeMusicFiles(entries: Map<string, Buffer>): ScopeCounts {
   let files = 0;
   for (const [zipPath, buf] of entries) {
-    if (!zipPath.startsWith('solara/music/')) continue;
+    if (!zipPath.startsWith('music/music/')) continue;
     const name = path.basename(zipPath);
     if (!name.endsWith('.json')) continue;
     const rel = `shell/music/${name}`;
@@ -579,9 +579,20 @@ function mergeMusicFiles(entries: Map<string, Buffer>): ScopeCounts {
   return { files };
 }
 
+// scope（应用 id，沿用门户插件清单）→ 备份包内目录名（与 apps/ 新命名对齐）
+const DIR_BY_SCOPE: Partial<Record<BackupScope, string>> = {
+  panel: 'panel',
+  lunatv: 'tv',
+  solara: 'music',
+  mediago: 'media',
+  'ai-draw': 'draw',
+  tutorial: 'novels',
+  'mei-link': 'link',
+};
+
 function scopeDir(scope: BackupScope): string | null {
-  if (scope === 'pansou') return null;
-  return `${scope}/`;
+  const dir = DIR_BY_SCOPE[scope];
+  return dir ? `${dir}/` : null;
 }
 
 function mapRestorePath(zipPath: string): { rel: string; sqlite: boolean } | null {
@@ -590,34 +601,34 @@ function mapRestorePath(zipPath: string): { rel: string; sqlite: boolean } | nul
     const rel = zipPath.slice('panel/'.length);
     return allowed(rel, ['panel.json']) ? { rel: `shell/${rel}`, sqlite: false } : null;
   }
-  if (zipPath.startsWith('lunatv/')) {
-    const rel = zipPath.slice('lunatv/'.length);
-    return allowed(rel, ['admin-config.json']) ? { rel: `lunatv/${rel}`, sqlite: false } : null;
+  if (zipPath.startsWith('tv/')) {
+    const rel = zipPath.slice('tv/'.length);
+    return allowed(rel, ['admin-config.json']) ? { rel: `tv/${rel}`, sqlite: false } : null;
   }
-  if (zipPath.startsWith('mediago/')) {
-    const rel = zipPath.slice('mediago/'.length);
-    return allowed(rel, ['config.json', 'mediago.db']) ? { rel: `mediago/${rel}`, sqlite: rel.endsWith('.db') } : null;
+  if (zipPath.startsWith('media/')) {
+    const rel = zipPath.slice('media/'.length);
+    return allowed(rel, ['config.json', 'mediago.db']) ? { rel: `media/${rel}`, sqlite: rel.endsWith('.db') } : null;
   }
-  if (zipPath.startsWith('solara/')) {
-    const rel = zipPath.slice('solara/'.length);
-    if (rel === 'solara.db') return { rel: 'solara/solara.db', sqlite: true };
+  if (zipPath.startsWith('music/')) {
+    const rel = zipPath.slice('music/'.length);
+    if (rel === 'solara.db') return { rel: 'music/solara.db', sqlite: true };
     if (rel.startsWith('music/') && rel.endsWith('.json')) {
       return { rel: `shell/music/${path.basename(rel)}`, sqlite: false };
     }
     return null;
   }
-  if (zipPath.startsWith('ai-draw/')) {
-    const rel = zipPath.slice('ai-draw/'.length);
-    return allowed(rel, ['database.sqlite']) ? { rel: `ai-draw/${rel}`, sqlite: true } : null;
+  if (zipPath.startsWith('draw/')) {
+    const rel = zipPath.slice('draw/'.length);
+    return allowed(rel, ['database.sqlite']) ? { rel: `draw/${rel}`, sqlite: true } : null;
   }
-  if (zipPath.startsWith('tutorial/')) {
-    const rel = zipPath.slice('tutorial/'.length);
-    return allowed(rel, ['novels.db']) ? { rel: `tutorial/${rel}`, sqlite: true } : null;
+  if (zipPath.startsWith('novels/')) {
+    const rel = zipPath.slice('novels/'.length);
+    return allowed(rel, ['novels.db']) ? { rel: `novels/${rel}`, sqlite: true } : null;
   }
-  if (zipPath.startsWith('mei-link/')) {
-    const rel = zipPath.slice('mei-link/'.length);
+  if (zipPath.startsWith('link/')) {
+    const rel = zipPath.slice('link/'.length);
     return allowed(rel, ['config.json', 'reconnect.json', 'tunnels.json', 'frpc.toml'])
-      ? { rel: `mei-link/${rel}`, sqlite: false }
+      ? { rel: `link/${rel}`, sqlite: false }
       : null;
   }
   return null;
@@ -631,7 +642,7 @@ function isServerFileForScope(zipPath: string, scope: BackupScope): boolean {
 function mergeJsonFile(rel: string, zipPath: string, entries: Map<string, Buffer>): void {
   const buf = entries.get(zipPath);
   if (!buf) return;
-  if (zipPath === 'mei-link/tunnels.json') {
+  if (zipPath === 'link/tunnels.json') {
     const merged = mergeById(
       asArray(parseJsonAny(readIfExists(rel))),
       asArray(parseJsonAny(buf)),
@@ -644,7 +655,7 @@ function mergeJsonFile(rel: string, zipPath: string, entries: Map<string, Buffer
   const current = safeJson(readIfExists(rel));
   let merged: unknown = { ...current, ...incoming };
   if (zipPath === 'panel/panel.json') merged = mergePanel(current, incoming);
-  if (zipPath === 'lunatv/admin-config.json') merged = mergeLunatvAdmin(current, incoming);
+  if (zipPath === 'tv/admin-config.json') merged = mergeLunatvAdmin(current, incoming);
   writeAtomic(rel, Buffer.from(JSON.stringify(merged, null, 2)));
 }
 
@@ -653,7 +664,7 @@ function mergeScope(scope: BackupScope, entries: Map<string, Buffer>): ScopeCoun
   const files: Array<{ rel: string; zipPath: string; sqlite: boolean }> = [];
   for (const zipPath of entries.keys()) {
     if (!isServerFileForScope(zipPath, scope)) continue;
-    if (scope === 'solara' && zipPath.startsWith('solara/music/')) continue;
+    if (scope === 'solara' && zipPath.startsWith('music/music/')) continue;
     const mapped = mapRestorePath(zipPath);
     if (mapped) files.push({ rel: mapped.rel, zipPath, sqlite: mapped.sqlite });
   }
@@ -667,26 +678,26 @@ function mergeScope(scope: BackupScope, entries: Map<string, Buffer>): ScopeCoun
       continue;
     }
     if (file.sqlite) {
-      if (file.zipPath === 'solara/solara.db') {
+      if (file.zipPath === 'music/solara.db') {
         const result = mergeSolaraDb(buf);
         counts.added = (counts.added || 0) + result.added;
         counts.updated = (counts.updated || 0) + result.updated;
-      } else if (file.zipPath === 'tutorial/novels.db') {
+      } else if (file.zipPath === 'novels/novels.db') {
         const result = mergeTutorialDb(buf);
         Object.assign(counts, result);
-      } else if (file.zipPath === 'mediago/mediago.db') {
-        const result = mergeSqliteByKey('mediago/mediago.db', buf, 'video', ['name'], true, ['id']);
+      } else if (file.zipPath === 'media/mediago.db') {
+        const result = mergeSqliteByKey('media/mediago.db', buf, 'video', ['name'], true, ['id']);
         counts.added = (counts.added || 0) + result.added;
         counts.updated = (counts.updated || 0) + result.updated;
-        const fav = mergeSqliteByKey('mediago/mediago.db', buf, 'favorite', ['url'], true, ['id']);
+        const fav = mergeSqliteByKey('media/mediago.db', buf, 'favorite', ['url'], true, ['id']);
         counts.added = (counts.added || 0) + fav.added;
         counts.updated = (counts.updated || 0) + fav.updated;
-        const conv = mergeSqliteByKey('mediago/mediago.db', buf, 'conversion', ['path', 'outputFormat'], true, ['id']);
+        const conv = mergeSqliteByKey('media/mediago.db', buf, 'conversion', ['path', 'outputFormat'], true, ['id']);
         counts.added = (counts.added || 0) + conv.added;
         counts.updated = (counts.updated || 0) + conv.updated;
-      } else if (file.zipPath.startsWith('ai-draw/')) {
+      } else if (file.zipPath.startsWith('draw/')) {
         for (const item of SQLITE_TABLES['ai-draw'] || []) {
-          const result = mergeSqliteByKey('ai-draw/database.sqlite', buf, item.table, [item.pk], false);
+          const result = mergeSqliteByKey('draw/database.sqlite', buf, item.table, [item.pk], false);
           counts.added = (counts.added || 0) + result.added;
           counts.skipped = (counts.skipped || 0) + result.skipped;
         }
@@ -717,27 +728,27 @@ function collectScopeFiles(scope: BackupScope): Array<{ zipPath: string; buffer:
   if (scope === 'panel') {
     push('panel/panel.json', 'shell/panel.json');
   } else if (scope === 'lunatv') {
-    push('lunatv/admin-config.json', 'lunatv/admin-config.json');
+    push('tv/admin-config.json', 'tv/admin-config.json');
   } else if (scope === 'solara') {
-    pushSqlite('solara/solara.db', 'solara/solara.db');
+    pushSqlite('music/solara.db', 'music/solara.db');
     const dir = dataPath('shell/music');
     if (fs.existsSync(dir)) {
       for (const name of fs.readdirSync(dir)) {
         if (!name.endsWith('.json')) continue;
         const buf = readIfExists(`shell/music/${name}`);
-        if (buf) out.push({ zipPath: `solara/music/${name}`, buffer: buf });
+        if (buf) out.push({ zipPath: `music/music/${name}`, buffer: buf });
       }
     }
   } else if (scope === 'mediago') {
-    push('mediago/config.json', 'mediago/config.json');
-    pushSqlite('mediago/mediago.db', 'mediago/mediago.db');
+    push('media/config.json', 'media/config.json');
+    pushSqlite('media/mediago.db', 'media/mediago.db');
   } else if (scope === 'ai-draw') {
-    pushSqlite('ai-draw/database.sqlite', 'ai-draw/database.sqlite');
+    pushSqlite('draw/database.sqlite', 'draw/database.sqlite');
   } else if (scope === 'tutorial') {
-    pushSqlite('tutorial/novels.db', 'tutorial/novels.db');
+    pushSqlite('novels/novels.db', 'novels/novels.db');
   } else if (scope === 'mei-link') {
     for (const name of ['config.json', 'reconnect.json', 'tunnels.json', 'frpc.toml']) {
-      push(`mei-link/${name}`, `mei-link/${name}`);
+      push(`link/${name}`, `link/${name}`);
     }
   }
   return out;
@@ -756,7 +767,7 @@ export function buildBackupZip(opts: { scopes: BackupScope[]; browserData?: Brow
   const scopes = BACKUP_SCOPES.filter((s) => opts.scopes.includes(s));
   const zip = new AdmZip();
   const meta: BackupMeta = {
-    app: 'mei-allin',
+    app: 'mei-portal',
     version: 1,
     exportedAt: new Date().toISOString(),
     scopes,
@@ -788,7 +799,7 @@ export function parseBackupZip(buf: Buffer): { meta: BackupMeta; entries: Map<st
   } catch {
     throw new Error('备份包 meta.json 无效');
   }
-  if (meta.app !== 'mei-allin' || meta.version !== 1) throw new Error('不支持的备份包版本');
+  if ((meta.app !== 'mei-portal' && meta.app !== 'mei-allin') || meta.version !== 1) throw new Error('不支持的备份包版本');
   if (!Array.isArray(meta.scopes)) throw new Error('备份包缺少范围信息');
   return { meta, entries };
 }
