@@ -181,6 +181,8 @@ export function withTransientProgress(
 export class LocalSourceStore {
   private readonly filePath: string;
   private cache: Map<string, LocalSourceRecord> | null = null;
+  /** cache 建立时的文件 mtime（ms）：文件被其他模块实例改写后按此失效重读 */
+  private cacheAt = 0;
 
   constructor(filePath?: string) {
     this.filePath =
@@ -193,7 +195,17 @@ export class LocalSourceStore {
   }
 
   private async load(): Promise<Map<string, LocalSourceRecord>> {
-    if (this.cache) return this.cache;
+    if (this.cache) {
+      try {
+        const st = await fsp.stat(this.filePath);
+        // Next 进程内 route chunk 可能各自打包本模块（单例不跨 chunk 共享）：
+        // 另一实例 persist 后本实例 cache 必须按 mtime 失效，否则记录
+        // 「写得进文件、列表永远看不见」
+        if (st.mtimeMs <= this.cacheAt) return this.cache;
+      } catch {
+        return this.cache; // 文件暂不可见（挂载抖动）：用 cache 兜底
+      }
+    }
     let raw: string;
     try {
       raw = await fsp.readFile(this.filePath, 'utf8');
@@ -211,6 +223,11 @@ export class LocalSourceStore {
         }
       }
       this.cache = map;
+      try {
+        this.cacheAt = (await fsp.stat(this.filePath)).mtimeMs;
+      } catch {
+        this.cacheAt = 0;
+      }
       return map;
     } catch (err) {
       // 损坏容错：改名隔离坏文件（保留现场），以空库继续，不让整条下载链路瘫痪
