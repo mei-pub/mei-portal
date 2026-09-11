@@ -286,4 +286,14 @@ document 与 iframe 请求，所有请求都直接代理到子应用，Shell 不
 - **server-local 播放体系**（music）：已下载条目 `id='file:<相对路径>'`、
   `source='server-local'`，`resolvePlayUrl` 首分支零网络直出 serve URL；iframe 宿主
   模式经 `/music/proxy?types=url&source=server-local` 分支——两条路径都必须保活
+- **播放操作契约**（下载中心已完成条目「去播放」）：音乐走
+  `{source:'mei-music-guest', type:'play-now', song:{id:'file:<path>',name,artist,source:'server-local'}}`
+  ——外壳引擎 `playNow()` 进临时队列立即播（不打扰播放列表/收藏，MusicDock 常驻）；
+  影视优先 postMessage navigate `playRoute`（tv 播放页本地源自动优先），旧记录降级
+  `/media/player?id=<videoId>`（从 localUrl `/videos/<id>` 提取）；媒体任务按
+  `/api/v1/videos` 的 title 匹配后开 player
+- **本地优先播放**：engine（music-engine.ts tryLocalFile）与 api.js
+  （matchLocalDownload）双侧在走网络源之前先查已下载曲库
+  （`/music/api/download/library`，60s 缓存、失败静默降级），同名+同歌手命中即用
+  serve 流——播放列表/收藏里播放已下载过的歌不再拉网络流
 

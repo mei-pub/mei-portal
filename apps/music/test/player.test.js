@@ -107,6 +107,10 @@ test('YouTube audio is buffered into a local object URL before playback', async 
   const fetchCalls = [];
   globalThis.fetch = async (url, options) => {
     fetchCalls.push({ url: String(url), options });
+    if (String(url).includes('/api/download/library')) {
+      // 本地已下载曲库预检（本地优先播放）：空库，不干扰 youtube 流程
+      return { ok: true, json: async () => ({ tasks: [], files: [] }) };
+    }
     if (String(url).includes('types=url')) {
       return {
         ok: true,
@@ -142,12 +146,14 @@ test('YouTube audio is buffered into a local object URL before playback', async 
   await player.playIndex(0);
 
   assert.equal(player.audio.src, 'blob:mei-audio-1');
-  assert.equal(fetchCalls.length, 1);
-  assert.ok(fetchCalls[0].url.includes('types=download'));
-  assert.ok(fetchCalls[0].url.includes('nocache='));
-  assert.ok(fetchCalls[0].url.includes('source=youtube'));
-  assert.ok(fetchCalls[0].url.includes('id=yt'));
-  assert.equal(fetchCalls[0].options.headers.Range, 'bytes=0-');
+  // 本地库预检一次 + youtube 流一次；对下载流的断言只针对 types=download 那次
+  const dlCalls = fetchCalls.filter((c) => !String(c.url).includes('api/download/library'));
+  assert.equal(dlCalls.length, 1);
+  assert.ok(dlCalls[0].url.includes('types=download'));
+  assert.ok(dlCalls[0].url.includes('nocache='));
+  assert.ok(dlCalls[0].url.includes('source=youtube'));
+  assert.ok(dlCalls[0].url.includes('id=yt'));
+  assert.equal(dlCalls[0].options.headers.Range, 'bytes=0-');
   assert.equal(objectUrls[0].blob.type, 'audio/mp4');
 });
 

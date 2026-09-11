@@ -216,6 +216,29 @@ export async function fetchDownloadLibrary() {
   };
 }
 
+// 本地已下载曲库的名称索引（60s 缓存）：resolvePlayUrl 用它做「本地优先」匹配。
+// 失败也记时间戳——服务不可用期间每分钟至多重试一次，绝不阻塞播放。
+let dlIndexAt = 0;
+let dlIndexFiles = [];
+export async function matchLocalDownload(song) {
+  const now = Date.now();
+  if (!dlIndexFiles.length || now - dlIndexAt > 60000) {
+    try {
+      const lib = await fetchDownloadLibrary();
+      dlIndexFiles = lib.files || [];
+    } catch (e) {
+      dlIndexFiles = [];
+    }
+    dlIndexAt = now;
+  }
+  const norm = (s) => String(s || "").trim().toLowerCase().replace(/\s+/g, " ");
+  const name = norm(song.name);
+  if (!name) return null;
+  const artist = norm(song.artist);
+  const hit = dlIndexFiles.find((f) => f.path && norm(f.name) === name && (!artist || norm(f.artist) === artist));
+  return hit ? `${DOWNLOAD_SERVE_API}?path=${encodeURIComponent(hit.path)}` : null;
+}
+
 // 删除已下载文件（相对路径；服务端做防穿越校验）
 export async function deleteDownloadFile(relPath) {
   const res = await fetch(`${DOWNLOAD_LIBRARY_API}?path=${encodeURIComponent(relPath)}`, { method: "DELETE" });
@@ -255,6 +278,10 @@ export function openMediaDownloads() {
 export async function resolvePlayUrl(song, quality = "320") {
   // 本地服务器已下载文件：不走 providers 链，直接返回 serve 流地址
   if (song.source === "server-local") return serverLocalServeUrl(song);
+  // 本地优先：播放列表/收藏里的歌若已下载过（同名同歌手），直接用本地文件，
+  // 不挑码率、不碰网络源，也不受上游接口抖动影响
+  const localUrl = await matchLocalDownload(song);
+  if (localUrl) return localUrl;
   if (song.source === "youtube") {
     const params = new URLSearchParams({
       types: "download",

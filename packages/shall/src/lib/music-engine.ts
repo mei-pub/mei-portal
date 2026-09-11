@@ -401,6 +401,14 @@ class MusicEngine {
     this.emit();
   }
 
+  /** 立即播放单曲（下载中心等外部应用的 play-now 协议）：进临时队列，
+   *  不打扰已有播放列表/收藏；外壳引擎播放、MusicDock 常驻，跨应用不断播 */
+  playNow(song: Song): void {
+    this.temp = [song];
+    this.setQueue('temp', 0);
+    void this.playIndex(0);
+  }
+
   /** 整体替换数据（音乐应用内的增删改都走这里，外壳是唯一持久化出口） */
   replaceData(data: {
     playlists?: Playlist[];
@@ -549,6 +557,43 @@ class MusicEngine {
     }
   }
 
+  // ---- 本地服务器已下载曲库（「本地优先」：同曲已有本地文件就不再走网络源）----
+  private localLibraryAt = 0;
+  private localLibraryFiles: Array<{ name: string; artist: string; path: string }> = [];
+
+  /** 刷新已下载曲库索引（60s 缓存；失败静默——库不可用绝不阻塞播放） */
+  private async refreshLocalLibrary(): Promise<void> {
+    const now = Date.now();
+    if (this.localLibraryFiles.length > 0 && now - this.localLibraryAt < 60_000) return;
+    try {
+      const data = (await this.fetchJson(`${this.musicBase}/api/download/library`)) as {
+        files?: Array<Record<string, unknown>>;
+      };
+      if (data && typeof data === 'object' && Array.isArray(data.files)) {
+        this.localLibraryFiles = data.files
+          .map((f) => ({ name: String(f.name || ''), artist: String(f.artist || ''), path: String(f.path || '') }))
+          .filter((f) => f.path !== '');
+        this.localLibraryAt = now;
+      }
+    } catch {
+      this.localLibraryAt = now; // 失败也记时间：不可用期间每分钟至多重试一次
+    }
+  }
+
+  /** 命中本地已下载文件（同名+同歌手，忽略大小写与空白差异）则返回 serve 流地址 */
+  private async tryLocalFile(song: Song): Promise<string | null> {
+    await this.refreshLocalLibrary();
+    const norm = (s: string) => s.trim().toLowerCase().replace(/\s+/g, ' ');
+    const name = norm(song.name || '');
+    if (!name) return null;
+    const artist = norm(song.artist || '');
+    const hit = this.localLibraryFiles.find(
+      (f) => norm(f.name) === name && (!artist || norm(f.artist) === artist)
+    );
+    if (!hit) return null;
+    return `${this.musicBase}/api/download/serve?path=${encodeURIComponent(hit.path)}`;
+  }
+
   /**
    * 解析单源播放地址。音质降级链 [320→192→128] 只对上游 gdstudio 有意义；
    * 本地源（qq/kugou/kuwo 服务端直连实现）返回 400 表示该曲无任何可用地址
@@ -590,6 +635,9 @@ class MusicEngine {
     options: { nocache?: boolean } = {}
   ): Promise<{ url: string; song: Song }> {
     try {
+      // 本地服务器优先：播放列表/收藏/搜索播放的全部路径，已下载的同名曲直接用本地文件
+      const localUrl = await this.tryLocalFile(song);
+      if (localUrl) return { url: localUrl, song };
       return { url: await this.resolvePlayUrl(song, quality, options), song };
     } catch (firstError) {
       const key = songKey(song);

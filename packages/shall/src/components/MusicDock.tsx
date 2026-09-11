@@ -71,6 +71,20 @@ export default function MusicDock() {
         case 'play-index':
           void eng.playIndex(Number(data.index));
           break;
+        case 'play-now': {
+          // 下载中心等外部应用触发：立即播单曲进临时队列（playNow 不动播放列表/收藏）
+          const s = (data.song || {}) as Record<string, unknown>;
+          eng.playNow({
+            id: String(s.id || ''),
+            name: String(s.name || ''),
+            artist: String(s.artist || ''),
+            album: String(s.album || ''),
+            pic_id: String(s.pic_id || ''),
+            lyric_id: String(s.lyric_id || ''),
+            source: String(s.source || ''),
+          });
+          break;
+        }
         case 'toggle':
           eng.toggle();
           break;
