@@ -36,7 +36,8 @@ import {
 import type { DownloadTaskDetails } from "@/hooks/use-tasks";
 import { appStoreSelector, useAppStore } from "@/store/app";
 import { getMediaVideosKey, listMediaVideos } from "@/api/download-center";
-import { matchMediaVideo, openMediaVideo } from "@/utils/play-actions";
+import { matchMediaVideo, mediaVideoTarget } from "@/utils/play-actions";
+import { useInlinePlayer } from "@/pages/downloads-page/components/inline-player";
 import { cn, fromatDateTime, isWeb, tdApp } from "@/utils";
 import { TerminalDialog } from "./terminal-dialog";
 import { usePlatform } from "@/hooks/use-platform";
@@ -80,6 +81,7 @@ export const DownloadTaskItem = memo(function DownloadTaskItem({
   // 按 title（= 任务 name）匹配后新开 media 自带播放器页。SWR 统一 key 缓存，
   // 列表内多个 done 任务共享一次请求；桌面模式 / 非 done 任务不发起请求。
   const webPlay = isWeb && task.status === DownloadStatus.Success;
+  const inlinePlayer = useInlinePlayer();
   const { data: videoList, isLoading: videoListLoading } = useSWR(
     webPlay ? getMediaVideosKey : null,
     listMediaVideos,
@@ -93,7 +95,8 @@ export const DownloadTaskItem = memo(function DownloadTaskItem({
   const handleWebPlay = useMemoizedFn(() => {
     tdApp.onEvent(PLAY_VIDEO);
     if (playableVideo) {
-      openMediaVideo(playableVideo);
+      // 就地弹层播放（下载中心内）；无 Provider 场景回退新标签直开裸流
+      inlinePlayer.play(mediaVideoTarget(playableVideo));
     }
   });
 

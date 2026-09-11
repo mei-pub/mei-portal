@@ -18,7 +18,8 @@ import {
   type MovieSourceRecord,
   listMovieSources,
 } from "@/api/download-center";
-import { playMovieRecord } from "@/utils/play-actions";
+import { movieFallbackVideo, playMovieRecord } from "@/utils/play-actions";
+import { useInlinePlayer } from "./inline-player";
 import { cn } from "@/utils";
 import { InlineNotice } from "./inline-notice";
 import { SectionHeader } from "./section-header";
@@ -69,6 +70,8 @@ const isDownloading = (record: MovieSourceRecord) =>
   record.status === "downloading";
 
 const MoviePanel: FC<Props> = ({ embedded = false, onEnter }) => {
+  // 就地播放：无 playRoute 的旧记录弹层播 /videos/:id 直播流，关闭即回列表
+  const inlinePlayer = useInlinePlayer();
   const { message } = App.useApp();
   const { t } = useTranslation();
   const { data, error, isLoading, mutate } = useSWR(
@@ -197,11 +200,18 @@ const MoviePanel: FC<Props> = ({ embedded = false, onEnter }) => {
           )}
         </div>
         {statusTag(record)}
-        {record.status === "done" && (
+        {record.status === "done" && (record.playRoute || movieFallbackVideo(record)) && (
           <IconButton
             title={t("playVideo")}
             icon={<PlayCircleOutlined />}
-            onClick={() => playMovieRecord(record)}
+            onClick={() => {
+              if (record.playRoute) {
+                playMovieRecord(record);
+                return;
+              }
+              const target = movieFallbackVideo(record);
+              if (target) inlinePlayer.play(target);
+            }}
           />
         )}
         <IconButton
