@@ -143,8 +143,12 @@ COPY apps/media/core-ts/ ./
 # ---- 运行时（必须最后一个 FROM）----
 # =============================================================================
 FROM node:22-bookworm-slim AS runtime
+# libicu72：N_m3u8DL-RE（.NET AOT，m3u8 下载主路径）运行时必需，
+# 缺失时报 "Couldn't find a valid ICU package"，且 schema 的 --ui-language zh-CN
+# 在 invariant 模式下也会被拒
 RUN apt-get update && apt-get install -y \
         nginx gettext-base ca-certificates curl python3 python3-pip python3-venv \
+        libicu72 \
     && rm -rf /var/lib/apt/lists/* /etc/nginx/sites-enabled/default \
     && python3 -m pip install --no-cache-dir --break-system-packages \
         supervisor \

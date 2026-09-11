@@ -70,7 +70,14 @@ docker compose up -d --build
 
 ### 数据持久化
 
-全部状态落在 `/data`（`shell/` 账户与音乐状态、`disks/` 搜索缓存、`media/` 下载与配置、`novels/` 书架、`link/` 穿透配置、`tv/` 影视配置、`music/` `draw/` 各应用自有数据，目录名与 apps/ 一致）。**备份该卷即备份一切。**
+全部状态落在 `/data`（`shell/` 账户与音乐状态、`disks/` 搜索缓存、`media/` 配置、`novels/` 书架、`link/` 穿透配置、`tv/` 影视配置与本地源记录、`music/` `draw/` 各应用自有数据，目录名与 apps/ 一致）。**备份该卷即备份一切。**
+
+### 本地服务器下载库（/downloads 卷）
+
+「下载到本地服务器」的保存目录（compose 强要求卷，默认映射宿主 `./downloads`，可用 `MEI_DOWNLOADS_DIR` 指向 NAS/移动硬盘）：
+
+- `/downloads/music/<歌手>/` —— 音乐应用「下载方式」设为服务器/两者时的落盘（`MUSIC_DOWNLOAD_DIR` 可调）
+- `/downloads/movie/<分类>/<剧名>/` —— 影视播放页「下载到服务器」按 电影/电视/动漫/综艺 分目录（media 下载引擎，`--local-dir`）；已下载的集在详情页置顶出现「本地服务器」源并**自动优先播放**
 
 ## 架构
 

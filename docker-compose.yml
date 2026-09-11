@@ -19,6 +19,10 @@ services:
       - "7777:7777"
     volumes:
       - mei-data:/data
+      # 本地服务器下载库（强要求配置）：音乐/影视「下载到本地服务器」的保存目录。
+      # 默认落在本仓库 ./downloads（首次 up 自动创建）；指向 NAS/移动硬盘时改
+      # MEI_DOWNLOADS_DIR 即可。容器内布局：/downloads/music/<歌手>/、/downloads/movie/<分类>/<剧名>/
+      - ${MEI_DOWNLOADS_DIR:-./downloads}:/downloads
     # /healthy 经 nginx 反代到 media core（白名单端点）：同时覆盖 nginx 存活与 core 就绪，
     # 不用 Shell 的 /api/health（它会并发探活全部应用，不适合做容器级心跳）
     healthcheck:

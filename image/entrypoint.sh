@@ -21,7 +21,11 @@ echo "[mei-portal] 数据目录: $DATA_DIR  管理员: $MEI_ADMIN_USER  模式: 
 
 # ---- 初始化各应用数据目录 ----
 # tv/draw/music 应用自身启动时也会自建，这里预先创建保证卷属主正确
-mkdir -p "$DATA_DIR/novels" "$DATA_DIR/link" "$DATA_DIR/shell" "$DATA_DIR/tv" "$DATA_DIR/draw" "$DATA_DIR/music" "$DATA_DIR/media" "$DATA_DIR/media/logs" "$DATA_DIR/media/downloads" "$DATA_DIR/disks" "$DATA_DIR/disks/cache" "$DATA_DIR/disks/logs"
+mkdir -p "$DATA_DIR/novels" "$DATA_DIR/link" "$DATA_DIR/shell" "$DATA_DIR/tv" "$DATA_DIR/draw" "$DATA_DIR/music" "$DATA_DIR/media" "$DATA_DIR/media/logs" "$DATA_DIR/disks" "$DATA_DIR/disks/cache" "$DATA_DIR/disks/logs"
+
+# ---- 本地服务器下载库（强要求，宿主经 compose 卷映射到 /downloads）----
+# music 服务器下载 → /downloads/music/<歌手>/；media（影视）下载 localDir → /downloads/movie/<分类>/<剧名>/
+mkdir -p /downloads/music /downloads/movie
 
 # ---- Shell 配置 ----
 # 注意：不要在这里 export PORT——media core-ts 的 env PORT 优先级高于 --port 命令行参数，
