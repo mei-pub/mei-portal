@@ -8,6 +8,10 @@ const STORAGE = "/api/storage";
 // 服务端下载任务接口（双引号字面量，由 nginx sub_filter 改写为 /music 前缀）
 const SERVER_DOWNLOAD_API = "/api/download/server";
 const SERVER_DOWNLOAD_STATUS_API = "/api/download/server/status";
+// 已下载资源管理接口（同上，双引号字面量由 sub_filter 改写；模板字符串不会被改写，
+// 因此路径常量必须以双引号字面量单独声明，运行时再拼接）
+const DOWNLOAD_LIBRARY_API = "/api/download/library";
+const DOWNLOAD_SERVE_API = "/api/download/serve";
 
 export const ALL_SOURCES = [
   { value: "netease", label: "网易云音乐" },
@@ -46,6 +50,8 @@ export function enabledSources() {
 }
 
 export function sourceLabel(value) {
+  // 本地服务器已下载文件（已下载资源管理）：非上游音乐源
+  if (value === "server-local") return "已下载";
   const found = ALL_SOURCES.find((o) => o.value === value);
   return found ? found.label : value || "未知源";
 }
@@ -163,9 +169,92 @@ export async function radarPlaylist(playlistId = "3778678", limit = 200) {
   }));
 }
 
+// 本地服务器已下载文件（已下载资源管理）：id 形如 "file:<相对 MUSIC_DOWNLOAD_DIR 的路径>"
+// serve 直链构造（纯函数，不发请求；路径已在下载根目录内消毒过）
+export function serverLocalServeUrl(song) {
+  const rel = String((song && song.id) || "").replace(/^file:/, "");
+  return `${DOWNLOAD_SERVE_API}?path=${encodeURIComponent(rel)}`;
+}
+
+// 已下载条目 → 歌曲：走现有 store 体系（收藏/播放列表/临时列表照常存取），
+// id 用 file:<路径> 天然唯一；source 固定 server-local，播放时由
+// resolvePlayUrl 的 server-local 分支直出 serve 地址。
+// name 缺失时从 fileName / 路径末段解析（与服务端 parseAudioFileName 同构）
+export function serverLocalSong(file) {
+  const rel = String((file && file.path) || "");
+  let name = (file && file.name) || "";
+  if (!name) {
+    const base = String((file && file.fileName) || rel.split("/").pop() || "").replace(/\.[a-z0-9]+$/i, "");
+    const idx = base.lastIndexOf(" - ");
+    name = idx > 0 ? base.slice(0, idx) : base;
+  }
+  return {
+    id: `file:${rel}`,
+    name: name || "未知歌曲",
+    artist: (file && file.artist) || "未知歌手",
+    album: "",
+    pic_id: "",
+    url_id: "",
+    lyric_id: "",
+    source: "server-local",
+  };
+}
+
+// 已下载曲库：任务表（进行中/近期）+ 磁盘文件
+export async function fetchDownloadLibrary() {
+  const res = await fetch(DOWNLOAD_LIBRARY_API, { headers: { Accept: "application/json" } });
+  if (!res.ok) {
+    const err = new Error(`已下载列表加载失败（${res.status}）`);
+    err.status = res.status;
+    throw err;
+  }
+  const data = await res.json().catch(() => null);
+  if (!data || typeof data !== "object") throw new Error("已下载列表格式错误");
+  return {
+    tasks: Array.isArray(data.tasks) ? data.tasks : [],
+    files: Array.isArray(data.files) ? data.files : [],
+  };
+}
+
+// 删除已下载文件（相对路径；服务端做防穿越校验）
+export async function deleteDownloadFile(relPath) {
+  const res = await fetch(`${DOWNLOAD_LIBRARY_API}?path=${encodeURIComponent(relPath)}`, { method: "DELETE" });
+  if (!res.ok) {
+    let message = `HTTP ${res.status}`;
+    try {
+      const data = await res.json();
+      if (data && data.error) message = data.error;
+    } catch { /* 非 JSON 错误体，保留状态码信息 */ }
+    const err = new Error(`删除失败：${message}`);
+    err.status = res.status;
+    throw err;
+  }
+  return true;
+}
+
+// 跳转 media 下载中心（音乐分区）。门户外壳 iframe 内走 postMessage 客户端路由，
+// 禁止直接改 location（整页加载会销毁常驻音乐引擎与保活 iframe）；
+// 独立访问模式（parent===self）降级 location.assign
+const MEDIA_DOWNLOADS_PATH = "/media/downloads?type=music";
+export function openMediaDownloads() {
+  const parent = (typeof window !== "undefined" && window.parent) || null;
+  if (parent && parent !== window) {
+    try {
+      parent.postMessage(
+        { source: "mei-iframe", type: "navigate", path: MEDIA_DOWNLOADS_PATH },
+        window.location.origin
+      );
+      return;
+    } catch { /* 跨域父窗口：降级直接跳转 */ }
+  }
+  location.assign(MEDIA_DOWNLOADS_PATH);
+}
+
 // 播放地址：返回可播放 URL（types=url 返回 JSON {url, br, size...}）
 // 音质降级链：320 → 192 → 128（部分歌曲高码率无资源时自动降级）
 export async function resolvePlayUrl(song, quality = "320") {
+  // 本地服务器已下载文件：不走 providers 链，直接返回 serve 流地址
+  if (song.source === "server-local") return serverLocalServeUrl(song);
   if (song.source === "youtube") {
     const params = new URLSearchParams({
       types: "download",
@@ -306,9 +395,13 @@ async function downloadToServer(song, quality = "320") {
   await trackServerDownload(task.id, song);
 }
 
-// 轮询服务器下载进度：常驻进度 toast 更新，完成/失败后转普通 toast
+// 轮询服务器下载进度：常驻进度 toast 更新，完成/失败后转普通 toast。
+// server 模式下载中 toast 可点击 → 跳 media 下载中心（音乐分区）管理任务
 async function trackServerDownload(id, song) {
-  const progress = progressToast(`正在下载到服务器：${song.name}`);
+  const progress = progressToast(`正在下载到服务器：${song.name}`, {
+    hint: "点击管理 →",
+    onClick: openMediaDownloads,
+  });
   const deadline = Date.now() + 15 * 60 * 1000; // 15 分钟兜底，防任务永久挂起
   try {
     while (Date.now() < deadline) {

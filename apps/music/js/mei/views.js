@@ -9,6 +9,9 @@ import {
   downloadSong,
   sourceLabel,
   enabledSources,
+  fetchDownloadLibrary,
+  deleteDownloadFile,
+  serverLocalSong,
 } from "./api.js";
 import { store, songKey, on, emit } from "./store.js";
 import { player, PLAYER_ICONS as PI, MODE_LABELS, fmtTime } from "./player.js";
@@ -899,6 +902,208 @@ export function renderFavorites(root) {
       renderFavorites(root);
     };
   });
+}
+
+// ============ 已下载管理（/downloads，server 模式下载的磁盘曲库）============
+// 数据：GET /api/download/library → tasks（进行中/近期任务，置顶轮询）+ files（磁盘扫描）
+// 播放：serverLocalSong(file) 构造 source=server-local 条目交给现有 store/player 体系，
+//       resolvePlayUrl 的 server-local 分支直出 /api/download/serve 流地址
+let dlState = { loading: true, error: "", tasks: [], files: [] };
+let dlViewToken = 0; // 视图令牌：路由离开后使在途回调全部失效
+let dlPollTimer = 0;
+
+/** 停止轮询（main.js 在路由切走时调用） */
+export function stopDownloadsPolling() {
+  dlViewToken += 1;
+  clearTimeout(dlPollTimer);
+}
+
+function fmtBytes(n) {
+  const size = Number(n) || 0;
+  if (size >= 1024 ** 3) return `${(size / 1024 ** 3).toFixed(2)} GB`;
+  if (size >= 1024 ** 2) return `${(size / 1024 ** 2).toFixed(1)} MB`;
+  if (size >= 1024) return `${Math.round(size / 1024)} KB`;
+  return `${size} B`;
+}
+
+function dlTaskHtml(task) {
+  const running = task.status === "running";
+  const badge = running
+    ? (task.phase === "resolving" ? "解析中" : `${task.percent || 0}%`)
+    : task.status === "done" ? "已完成" : "失败";
+  const sub = running
+    ? [
+        task.phase === "resolving" ? "正在解析播放地址…" : `已下载 ${fmtBytes(task.received)}${task.total > 0 ? ` / ${fmtBytes(task.total)}` : ""}`,
+        task.speed > 0 ? `${fmtBytes(task.speed)}/s` : "",
+      ].filter(Boolean).join(" · ")
+    : task.status === "done"
+      ? `已保存：${task.path}`
+      : (task.error || "下载失败");
+  const percent = running && task.phase === "downloading" ? Math.max(2, task.percent || 0) : (task.status === "done" ? 100 : 0);
+  return `
+    <div class="mei-dl-task ${task.status === "error" ? "error" : ""}">
+      <div class="t-head">
+        <span class="t-badge">${badge}</span>
+        <span class="t-name">${escapeHtml(task.song && task.song.name || "未知歌曲")}</span>
+        <span class="t-sub">${escapeHtml(task.song && task.song.artist || "")} · ${escapeHtml(sourceLabel(task.song && task.song.source))}</span>
+      </div>
+      ${running || task.status === "done" ? `<div class="mei-dl-bar"><i style="width:${percent}%"></i></div>` : ""}
+      <div class="t-sub">${escapeHtml(sub)}</div>
+    </div>
+  `;
+}
+
+function dlFileRowHtml(file, i) {
+  const song = serverLocalSong(file);
+  const faved = store.isFavorite(song);
+  return `
+    <div class="mei-song-row" data-idx="${i}">
+      <span class="r-idx">${i + 1}</span>
+      <span class="r-cover" style="display:flex;align-items:center;justify-content:center;color:var(--primary)" title="已下载到服务器">${I.disc}</span>
+      <div class="r-meta">
+        <div class="r-name" title="${escapeHtml(file.name)}">${escapeHtml(file.name)}</div>
+        <div class="r-sub" title="${escapeHtml(file.fileName)}">${escapeHtml(file.fileName)} · ${fmtBytes(file.size)}</div>
+      </div>
+      <span class="r-src">已下载</span>
+      <div class="r-ops">
+        <button class="mei-icon-btn" data-act="play" title="播放">${I.play}</button>
+        <button class="mei-icon-btn" data-act="add" title="添加到播放列表">${I.plus}</button>
+        <button class="mei-icon-btn ${faved ? "faved" : ""}" data-act="fav" title="${faved ? "取消收藏" : "收藏"}">${faved ? I.heartFill : I.heart}</button>
+        <button class="mei-icon-btn danger" data-act="del" title="删除文件">${I.trash}</button>
+      </div>
+    </div>
+  `;
+}
+
+export function renderDownloads(root) {
+  const token = ++dlViewToken;
+  clearTimeout(dlPollTimer);
+
+  const load = async () => {
+    if (token !== dlViewToken) return;
+    try {
+      const data = await fetchDownloadLibrary();
+      if (token !== dlViewToken) return;
+      dlState = { loading: false, error: "", tasks: data.tasks, files: data.files };
+    } catch (e) {
+      if (token !== dlViewToken) return;
+      dlState = { loading: false, error: (e && e.message) || "加载失败", tasks: [], files: [] };
+    }
+    draw();
+    schedulePoll();
+  };
+
+  // 有进行中任务时轮询刷新（1.5s），无任务即停
+  const schedulePoll = () => {
+    clearTimeout(dlPollTimer);
+    if (token !== dlViewToken) return;
+    if (dlState.tasks.some((t) => t.status === "running")) {
+      dlPollTimer = setTimeout(load, 1500);
+    }
+  };
+
+  const draw = () => {
+    if (token !== dlViewToken) return;
+    if (dlState.loading) {
+      root.innerHTML = `<div class="mei-loading"><span class="mei-spin"></span>正在加载已下载列表…</div>`;
+      return;
+    }
+    if (dlState.error) {
+      root.innerHTML = `
+        <div class="mei-empty" style="padding-top:14vh">
+          <div class="e-icon">${I.folder}</div>
+          <div>${escapeHtml(dlState.error)}</div>
+          <button class="mei-btn" id="dlRetry">重试</button>
+        </div>
+      `;
+      root.querySelector("#dlRetry").onclick = () => { dlState.loading = true; draw(); load(); };
+      return;
+    }
+
+    const totalSize = dlState.files.reduce((sum, f) => sum + (Number(f.size) || 0), 0);
+    const runningTasks = dlState.tasks.filter((t) => t.status === "running");
+    const recentTasks = dlState.tasks.filter((t) => t.status !== "running" && t.finishedAt && Date.now() - t.finishedAt < 10 * 60 * 1000);
+
+    // 按歌手分组（服务端已保证两层结构：目录名=歌手）
+    const groups = new Map();
+    for (const f of dlState.files) {
+      if (!groups.has(f.artist)) groups.set(f.artist, []);
+      groups.get(f.artist).push(f);
+    }
+    const globalIdx = (file) => dlState.files.indexOf(file);
+
+    root.innerHTML = `
+      <div class="mei-pagehead">
+        <div>
+          <h2>已下载</h2>
+          <div class="sub">本地服务器下载的歌曲 · ${dlState.files.length} 首${totalSize > 0 ? ` · ${fmtBytes(totalSize)}` : ""}</div>
+        </div>
+        <div class="ops">
+          <button class="mei-btn-ghost mei-btn-sm" id="dlRefresh" title="刷新列表">${I.up} 刷新</button>
+        </div>
+      </div>
+      ${runningTasks.length + recentTasks.length > 0 ? `
+        <div class="mei-dl-tasks">
+          ${runningTasks.map(dlTaskHtml).join("")}
+          ${recentTasks.map(dlTaskHtml).join("")}
+        </div>
+      ` : ""}
+      ${dlState.files.length === 0 ? `
+        <div class="mei-empty" style="padding-top:10vh">
+          <div class="e-icon">${I.folder}</div>
+          <div>还没有已下载的歌曲</div>
+          <div style="margin:6px 0 18px;font-size:12px;color:var(--faint)">下载方式设为本地服务器后，下载的歌曲会保存在这里</div>
+          <button class="mei-btn" id="dlGoSearch">${I.search} 去搜索下载</button>
+        </div>
+      ` : ""}
+      ${[...groups.entries()].map(([artist, files]) => `
+        <div class="mei-dl-group">
+          <div class="mei-dl-group-head">${I.folder} ${escapeHtml(artist)} <span class="cnt">${files.length} 首</span></div>
+          <div class="mei-fav-list mei-dl-list">
+            ${files.map((f) => dlFileRowHtml(f, globalIdx(f))).join("")}
+          </div>
+        </div>
+      `).join("")}
+    `;
+
+    root.querySelector("#dlRefresh").onclick = () => { dlState.loading = true; draw(); load(); };
+    const goSearch = root.querySelector("#dlGoSearch");
+    if (goSearch) goSearch.onclick = () => pushRoute("/search");
+
+    // 已下载文件操作：播放 / 加列表 / 收藏 / 删除（二次确认）
+    root.querySelectorAll(".mei-dl-list .mei-song-row").forEach((row) => {
+      const file = dlState.files[parseInt(row.dataset.idx, 10)];
+      if (!file) return;
+      const song = serverLocalSong(file);
+      row.querySelector('[data-act="play"]').onclick = () => playSingle(song);
+      row.querySelector('[data-act="add"]').onclick = (e) => openAddToListMenu(e.currentTarget, song);
+      row.querySelector('[data-act="fav"]').onclick = (e) => {
+        const faved = store.toggleFavorite(song);
+        e.currentTarget.classList.toggle("faved", faved);
+        e.currentTarget.innerHTML = faved ? I.heartFill : I.heart;
+        e.currentTarget.title = faved ? "取消收藏" : "收藏";
+        toast(faved ? "已加入收藏" : "已取消收藏");
+      };
+      row.querySelector('[data-act="del"]').onclick = async () => {
+        const ok = await confirmDialog(
+          `删除已下载文件「${file.name} - ${file.artist}」？文件将从服务器磁盘移除，收藏与播放列表中的条目不受影响。`,
+          { danger: true, okText: "删除" }
+        );
+        if (!ok) return;
+        try {
+          await deleteDownloadFile(file.path);
+          toast("文件已删除");
+          load();
+        } catch (e) {
+          toast((e && e.message) || "删除失败，请稍后重试");
+        }
+      };
+    });
+  };
+
+  dlState.loading = true;
+  draw();
+  load();
 }
 
 function escapeHtml(value) {

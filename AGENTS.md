@@ -264,3 +264,24 @@ document 与 iframe 请求，所有请求都直接代理到子应用，Shell 不
 
 违规判定：外网域名下访问应用路径时页面标题是子应用名称而非门户名称；MusicDock 播放栏
 或顶栏不出现；`document.getElementById('mei-shell-slot')` 返回 null。
+
+## 统一下载中心：跨应用契约（/downloads 卷）
+
+「下载到本地服务器」的落盘与管理的跨应用契约，三端字段/路由不得漂移：
+
+- **落盘布局**：`/downloads/music/<歌手>/<歌名> - <源>.mp3`（music 服务端，
+  `MUSIC_DOWNLOAD_DIR`）；`/downloads/movie/<电影|电视|动漫|综艺>/<剧名>/`（media
+  下载引擎，`--local-dir`；tv 按 `分类/剧名` 组 folder）
+- **media 下载中心**（统一下载管理 UI）：`/media/downloads?type=media|movie|music`
+  是唯一对外路由格式——影视/音乐应用里的「下载中」引导跳转一律 postMessage
+  `{source:'mei-iframe',type:'navigate',path:'/media/downloads?type=…'}`（走外壳
+  承载路由，禁止直接改 location）；三个面板分别消费：
+  `GET /tv/api/local-sources/list`、`GET /music/api/download/library`、media 自身任务
+  （SSE）。删除分别走各自 DELETE
+- **防穿越**：music 的 serve/DELETE/library 三口共享 resolveWithin（realpath +
+  path.relative 双校验）；tv 的删除段消毒 + resolve 后必须位于 `/downloads/movie`
+  内——任何新增的文件下发/删除端点必须同款双保险
+- **server-local 播放体系**（music）：已下载条目 `id='file:<相对路径>'`、
+  `source='server-local'`，`resolvePlayUrl` 首分支零网络直出 serve URL；iframe 宿主
+  模式经 `/music/proxy?types=url&source=server-local` 分支——两条路径都必须保活
+

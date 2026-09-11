@@ -36,18 +36,31 @@ export function toast(message) {
 }
 
 // 常驻进度 toast：独立元素，不与普通 toast 抢占；返回 { update, close }
-export function progressToast(message) {
+// options.onClick 提供时整条可点击（cursor + hint 下划线提示），用于
+// 「服务器下载中 → 点击管理」这类引导跳转
+export function progressToast(message, { onClick = null, hint = "" } = {}) {
   let el = document.getElementById("meiToastProgress");
   if (!el) {
     el = document.createElement("div");
     el.id = "meiToastProgress";
-    el.className = "mei-toast mei-toast-prog";
     document.body.appendChild(el);
   }
-  el.textContent = message;
+  el.className = `mei-toast mei-toast-prog${onClick ? " clickable" : ""}`;
+  el.textContent = "";
+  const msg = document.createElement("span");
+  msg.className = "t-msg";
+  msg.textContent = message;
+  el.appendChild(msg);
+  if (onClick && hint) {
+    const h = document.createElement("span");
+    h.className = "t-hint";
+    h.textContent = hint;
+    el.appendChild(h);
+  }
+  el.onclick = onClick;
   el.classList.add("show");
   return {
-    update(msg) { el.textContent = msg; el.classList.add("show"); },
+    update(text) { msg.textContent = text; el.classList.add("show"); },
     close() { el.classList.remove("show"); },
   };
 }

@@ -2,7 +2,7 @@
 import { store, on } from "./store.js";
 import { player } from "./player.js";
 import { hostBridge } from "./hostbridge.js";
-import { renderSearch, renderPlaylists, renderPlayer, renderRandom, renderFavorites, loadLyric } from "./views.js";
+import { renderSearch, renderPlaylists, renderPlayer, renderRandom, renderFavorites, renderDownloads, stopDownloadsPolling, loadLyric } from "./views.js";
 import { I, toast } from "./ui.js";
 import { migrateLegacyHashRoute, pushRoute, resolveRoute } from "./router.js";
 
@@ -14,6 +14,7 @@ const NAV_ITEMS = [
   { path: "/player", title: "正在播放", icon: I.play },
   { path: "/random", title: "随便听听", icon: I.shuffle },
   { path: "/favorites", title: "我的收藏", icon: I.heart },
+  { path: "/downloads", title: "已下载管理", icon: I.folder },
 ];
 
 function currentRoute() {
@@ -97,7 +98,9 @@ function route() {
   const root = document.getElementById("view");
   if (!root) return;
  // 播放列表管理页与播放页加宽（左右布局需要更多横向空间）
-  root.classList.toggle("wide", path === "/search" || path === "/playlists" || path === "/player" || path === "/favorites");
+  root.classList.toggle("wide", path === "/search" || path === "/playlists" || path === "/player" || path === "/favorites" || path === "/downloads");
+ // 离开已下载视图时停掉任务轮询（令牌失效，在途回调不再落地）
+ if (path !== "/downloads") stopDownloadsPolling();
  switch (path) {
     case "/search":
       renderSearch(root, params);
@@ -113,6 +116,9 @@ function route() {
       break;
     case "/favorites":
       renderFavorites(root);
+      break;
+    case "/downloads":
+      renderDownloads(root);
       break;
     default:
       pushRoute("/search");

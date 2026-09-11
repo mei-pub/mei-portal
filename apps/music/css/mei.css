@@ -463,12 +463,47 @@ img { display: block; }
   opacity: 0; transition: opacity .25s; pointer-events: none;
 }
 .mei-toast.show { opacity: 1; }
-/* 服务器下载进度 toast：与普通 toast 同样式，位置上移错开，路径过长时省略 */
+/* 服务器下载进度 toast：与普通 toast 同样式，位置上移错开。
+   flex 两段结构：消息段超长省略，hint 段（点击管理）永不压缩 */
 .mei-toast-prog {
   bottom: calc(var(--playerbar-h) + 78px);
   max-width: min(86vw, 480px);
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  display: flex; align-items: center; gap: 10px;
+  white-space: nowrap;
 }
+.mei-toast-prog .t-msg { overflow: hidden; text-overflow: ellipsis; }
+.mei-toast-prog .t-hint { flex-shrink: 0; }
+/* 可点击引导（下载中 → 点击管理跳下载中心）：恢复点击并给视觉提示 */
+.mei-toast.clickable { pointer-events: auto; cursor: pointer; }
+.mei-toast.clickable:active { filter: brightness(1.25); }
+.mei-toast-prog .t-hint {
+  text-decoration: underline; text-underline-offset: 3px;
+  text-decoration-color: rgba(255,255,255,0.7); opacity: 0.95; font-size: 12.5px;
+}
+
+/* ============ 已下载管理（/downloads）============ */
+.mei-dl-tasks { display: flex; flex-direction: column; gap: 10px; margin-bottom: 18px; }
+.mei-dl-task {
+  display: flex; flex-direction: column; gap: 7px; padding: 12px 16px;
+  border: 1px solid var(--border); border-radius: 16px; background: rgba(255,255,255,0.72);
+}
+.mei-dl-task .t-head { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
+.mei-dl-task .t-name { font-size: 13.5px; font-weight: 650; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mei-dl-task .t-sub { font-size: 11.5px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mei-dl-task .t-badge {
+  flex-shrink: 0; padding: 1px 8px; border-radius: 999px; font-size: 10px; font-weight: 700;
+  background: var(--gradient-soft); color: var(--primary);
+}
+.mei-dl-task.error .t-badge { background: rgba(220,38,38,0.10); color: var(--danger); }
+.mei-dl-bar { height: 6px; border-radius: 999px; background: rgba(99,102,241,0.16); overflow: hidden; }
+.mei-dl-bar > i { display: block; height: 100%; border-radius: 999px; background: var(--primary); transition: width .4s ease; }
+.mei-dl-group { margin-bottom: 18px; }
+.mei-dl-group-head {
+  display: flex; align-items: center; gap: 8px; margin: 0 0 4px;
+  font-size: 13px; font-weight: 700; color: var(--fg);
+}
+.mei-dl-group-head .cnt { font-size: 11px; font-weight: 500; color: var(--faint); }
+.mei-dl-list .mei-song-row .r-ops { opacity: 1; }
 .mei-empty { padding: 60px 20px; text-align: center; color: var(--muted); font-size: 13px; }
 .mei-empty .mei-btn, .mei-empty .mei-btn-ghost { min-width: 170px; justify-content: center; white-space: nowrap; }
 .mei-empty .e-icon { width: 54px; height: 54px; margin: 0 auto 14px; border-radius: 16px; background: var(--gradient-soft); color: var(--primary); display: flex; align-items: center; justify-content: center; }

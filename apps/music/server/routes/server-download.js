@@ -113,7 +113,7 @@ function createTaskManager(maxTasks = MAX_TASKS) {
         status: 'running', phase: 'resolving',
         received: 0, total: 0, percent: 0, size: 0,
         path: '', error: '', existed: false,
-        createdAt: Date.now(), finishedAt: 0,
+        createdAt: Date.now(), finishedAt: 0, downloadStartedAt: 0,
       };
       tasks.set(task.id, task);
       prune();
@@ -132,6 +132,10 @@ function createTaskManager(maxTasks = MAX_TASKS) {
         }
       }
       return null;
+    },
+    /** 全量任务视图（新建在前；已下载曲库 GET /library 用，含 running + 近期） */
+    list() {
+      return [...tasks.values()].sort((a, b) => b.createdAt - a.createdAt);
     },
     count() {
       return tasks.size;
@@ -246,7 +250,7 @@ async function runDownloadTask(task, ctx = {}) {
   const ext = pickExt(info, probeResult);
   const targetPath = buildTargetPath(root, task.song, ext);
   const total = (probeResult && probeResult.total) || Number(info.size) || 0;
-  update({ phase: 'downloading', path: targetPath, total });
+  update({ phase: 'downloading', path: targetPath, total, downloadStartedAt: Date.now() });
 
   // 3) 已存在且大小一致 → 直接复用
   try {

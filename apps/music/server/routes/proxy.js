@@ -288,9 +288,20 @@ module.exports = function createProxyRouter() {
       return proxyAudioStream(target, req, res);
     }
 
-    // ── 本地音乐源（gdstudio 已下线的源在这里直连实现）──────────────────────
     const source = req.query.source;
     const types = req.query.types;
+
+    // ── 本地已下载文件（已下载资源管理）─────────────────────────────────────
+    // id 形如 file:<相对 MUSIC_DOWNLOAD_DIR 的路径>。门户外壳的常驻音乐引擎
+    // （packages/shall music-engine）通过本接口解析播放地址，与 SPA 本地的
+    // resolvePlayUrl server-local 分支语义一致：不走 providers 链，直接给
+    // serve 流地址。返回 /music 前缀的绝对路径（引擎 wrapStream 对非
+    // http(s) URL 原样保留，audio.src 相对文档解析即落在音乐应用子路径）。
+    if (source === 'server-local' && types === 'url') {
+      return proxyServerLocalUrl(req, res);
+    }
+
+    // ── 本地音乐源（gdstudio 已下线的源在这里直连实现）──────────────────────
     const provider = source ? getProvider(source) : null;
     if (provider && types === 'download' && provider.url) {
       try {
@@ -333,6 +344,36 @@ module.exports = function createProxyRouter() {
 
   return router;
 };
+
+/** server-local 已下载文件的播放地址解析：file:<相对路径> → serve 流直链 */
+async function proxyServerLocalUrl(req, res) {
+  const publicPrefix = (process.env.MUSIC_PUBLIC_PREFIX || '/music').replace(/\/+$/, '') || '';
+  const id = String(req.query.id || '');
+  if (!id.startsWith('file:')) {
+    return res.status(400).json({ error: 'id 必须为 file:<相对路径>' });
+  }
+  const rel = id.slice('file:'.length);
+  const { resolveWithin } = require('./download-library');
+  const root = process.env.MUSIC_DOWNLOAD_DIR || '/downloads/music';
+  const abs = resolveWithin(root, rel);
+  if (!abs) {
+    return res.status(400).json({ error: '非法路径' });
+  }
+  const stat = await require('node:fs/promises').stat(abs).catch(() => null);
+  if (!stat || !stat.isFile()) {
+    return res.status(404).json({ error: '文件不存在（可能已被删除）' });
+  }
+  res.setHeader('Content-Type', 'application/json; charset=utf-8');
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Cache-Control', 'no-store');
+  return res.send(
+    JSON.stringify({
+      url: `${publicPrefix}/api/download/serve?path=${encodeURIComponent(rel)}`,
+      br: '320',
+      size: stat.size,
+    })
+  );
+}
 
 /** gdstudio 封面解析重定向：JSON {url} → 302 真实图片地址 */
 async function proxyPicRedirect(req, res) {
