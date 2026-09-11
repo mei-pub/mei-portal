@@ -908,7 +908,7 @@ export function renderFavorites(root) {
 // 数据：GET /api/download/library → tasks（进行中/近期任务，置顶轮询）+ files（磁盘扫描）
 // 播放：serverLocalSong(file) 构造 source=server-local 条目交给现有 store/player 体系，
 //       resolvePlayUrl 的 server-local 分支直出 /api/download/serve 流地址
-let dlState = { loading: true, error: "", tasks: [], files: [] };
+let dlState = { loading: true, error: "", tasks: [], files: [], tab: "all", artist: "" }; // tab: all|artist；artist=分歌手视图选中的歌手
 let dlViewToken = 0; // 视图令牌：路由离开后使在途回调全部失效
 let dlPollTimer = 0;
 
@@ -953,16 +953,21 @@ function dlTaskHtml(task) {
   `;
 }
 
-function dlFileRowHtml(file, i) {
+function dlFileRowHtml(file, i, showArtist = false) {
   const song = serverLocalSong(file);
   const faved = store.isFavorite(song);
+  const subParts = [
+    showArtist ? escapeHtml(file.artist || "-") : "",
+    escapeHtml(sourceLabel(file.source) || "未知源"),
+    fmtBytes(file.size),
+  ].filter(Boolean).join(" · ");
   return `
     <div class="mei-song-row" data-idx="${i}">
       <span class="r-idx">${i + 1}</span>
       <span class="r-cover" style="display:flex;align-items:center;justify-content:center;color:var(--primary)" title="已下载到服务器">${I.disc}</span>
       <div class="r-meta">
         <div class="r-name" title="${escapeHtml(file.name)}">${escapeHtml(file.name)}</div>
-        <div class="r-sub" title="${escapeHtml(file.fileName)}">${escapeHtml(sourceLabel(file.source) || "未知源")} · ${fmtBytes(file.size)}</div>
+        <div class="r-sub" title="${escapeHtml(file.fileName)}">${subParts}</div>
       </div>
       <span class="r-src">已下载</span>
       <div class="r-ops">
@@ -978,6 +983,8 @@ function dlFileRowHtml(file, i) {
 export function renderDownloads(root) {
   const token = ++dlViewToken;
   clearTimeout(dlPollTimer);
+  dlState.tab = "all"; // 进入页面默认「全部」；tab 交互期间由 draw 内部保留
+  dlState.artist = "";
 
   const load = async () => {
     if (token !== dlViewToken) return;
@@ -1024,13 +1031,23 @@ export function renderDownloads(root) {
     const runningTasks = dlState.tasks.filter((t) => t.status === "running");
     const recentTasks = dlState.tasks.filter((t) => t.status !== "running" && t.finishedAt && Date.now() - t.finishedAt < 10 * 60 * 1000);
 
-    // 按歌手分组（服务端已保证两层结构：目录名=歌手）
+    // 歌手元数据：目录名=歌手（服务端保证两层结构）；歌曲数降序、同数按名字
     const groups = new Map();
     for (const f of dlState.files) {
       if (!groups.has(f.artist)) groups.set(f.artist, []);
       groups.get(f.artist).push(f);
     }
+    const artistIndex = [...groups.entries()]
+      .map(([artist, files]) => ({
+        artist,
+        files,
+        totalSize: files.reduce((sum, f) => sum + (Number(f.size) || 0), 0),
+      }))
+      .sort((a, b) => b.files.length - a.files.length || a.artist.localeCompare(b.artist, "zh"));
     const globalIdx = (file) => dlState.files.indexOf(file);
+    const activeArtist = dlState.tab === "artist"
+      ? artistIndex.find((g) => g.artist === dlState.artist) || null
+      : null;
 
     root.innerHTML = `
       <div class="mei-pagehead">
@@ -1042,12 +1059,6 @@ export function renderDownloads(root) {
           <button class="mei-btn-ghost mei-btn-sm" id="dlRefresh" title="刷新列表">${I.up} 刷新</button>
         </div>
       </div>
-      ${runningTasks.length + recentTasks.length > 0 ? `
-        <div class="mei-dl-tasks">
-          ${runningTasks.map(dlTaskHtml).join("")}
-          ${recentTasks.map(dlTaskHtml).join("")}
-        </div>
-      ` : ""}
       ${dlState.files.length === 0 ? `
         <div class="mei-empty" style="padding-top:10vh">
           <div class="e-icon">${I.folder}</div>
@@ -1055,22 +1066,62 @@ export function renderDownloads(root) {
           <div style="margin:6px 0 18px;font-size:12px;color:var(--faint)">下载方式设为本地服务器后，下载的歌曲会保存在这里</div>
           <button class="mei-btn" id="dlGoSearch">${I.search} 去搜索下载</button>
         </div>
-      ` : ""}
-      ${[...groups.entries()].map(([artist, files]) => {
-        const groupSize = files.reduce((sum, f) => sum + (Number(f.size) || 0), 0);
-        return `
-        <div class="mei-dl-group">
-          <div class="mei-dl-group-head">${I.folder} ${escapeHtml(artist)} <span class="cnt">${files.length} 首${groupSize > 0 ? ` · ${fmtBytes(groupSize)}` : ""}</span></div>
-          <div class="mei-fav-list mei-dl-list">
-            ${files.map((f) => dlFileRowHtml(f, globalIdx(f))).join("")}
-          </div>
+      ` : `
+      <div class="mei-dl-tabs">
+        <button class="mei-dl-tab${dlState.tab === "all" ? " on" : ""}" data-tab="all">全部 · ${dlState.files.length}</button>
+        <button class="mei-dl-tab${dlState.tab === "artist" ? " on" : ""}" data-tab="artist">分歌手 · ${artistIndex.length}</button>
+      </div>
+      ${dlState.tab === "all" && runningTasks.length + recentTasks.length > 0 ? `
+        <div class="mei-dl-tasks">
+          ${runningTasks.map(dlTaskHtml).join("")}
+          ${recentTasks.map(dlTaskHtml).join("")}
         </div>
-      `; }).join("")}
+      ` : ""}
+      ${dlState.tab === "all" ? `
+        <div class="mei-fav-list mei-dl-list">
+          ${dlState.files.map((f) => dlFileRowHtml(f, globalIdx(f), true)).join("")}
+        </div>
+      ` : activeArtist ? `
+        <div class="mei-dl-artist-head">
+          <button class="mei-dl-back" id="dlArtistBack" title="返回歌手列表">‹ 全部歌手</button>
+          <span class="title">${escapeHtml(activeArtist.artist)}</span>
+          <span class="cnt">${activeArtist.files.length} 首${activeArtist.totalSize > 0 ? ` · ${fmtBytes(activeArtist.totalSize)}` : ""}</span>
+        </div>
+        <div class="mei-fav-list mei-dl-list">
+          ${activeArtist.files.map((f) => dlFileRowHtml(f, globalIdx(f), false)).join("")}
+        </div>
+      ` : `
+        <div class="mei-dl-artists">
+          ${artistIndex.map((g) => `
+            <button class="mei-dl-artist-card" data-artist="${escapeHtml(g.artist)}" title="查看 ${escapeHtml(g.artist)} 的已下载歌曲">
+              <span class="a-icon">${I.folder}</span>
+              <span class="a-name">${escapeHtml(g.artist)}</span>
+              <span class="a-cnt">${g.files.length} 首${g.totalSize > 0 ? ` · ${fmtBytes(g.totalSize)}` : ""}</span>
+              <span class="a-go">›</span>
+            </button>
+          `).join("")}
+        </div>
+      `}`}
     `;
 
     root.querySelector("#dlRefresh").onclick = () => { dlState.loading = true; draw(); load(); };
     const goSearch = root.querySelector("#dlGoSearch");
     if (goSearch) goSearch.onclick = () => pushRoute("/search");
+
+    // tab 交互：全部（扁平）↔ 分歌手（先选歌手再看歌）
+    root.querySelectorAll(".mei-dl-tab").forEach((btn) => {
+      btn.onclick = () => {
+        if (dlState.tab === btn.dataset.tab) return;
+        dlState.tab = btn.dataset.tab;
+        dlState.artist = ""; // 切 tab 回到歌手选择
+        draw();
+      };
+    });
+    root.querySelectorAll(".mei-dl-artist-card").forEach((card) => {
+      card.onclick = () => { dlState.artist = card.dataset.artist; draw(); };
+    });
+    const artistBack = root.querySelector("#dlArtistBack");
+    if (artistBack) artistBack.onclick = () => { dlState.artist = ""; draw(); };
 
     // 已下载文件操作：播放 / 加列表 / 收藏 / 删除（二次确认）
     root.querySelectorAll(".mei-dl-list .mei-song-row").forEach((row) => {
