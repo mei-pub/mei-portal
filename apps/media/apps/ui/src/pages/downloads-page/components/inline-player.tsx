@@ -7,7 +7,15 @@
 // 在没有 Provider 的场景（home-page 复用 DownloadList）回退 window.open
 // 直开 /videos/N 裸流（浏览器原生播放器自带返回）。
 import { Modal } from "antd";
-import { createContext, useCallback, useContext, useState, type FC, type ReactNode } from "react";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useRef,
+  useState,
+  type FC,
+  type ReactNode,
+} from "react";
 
 export interface InlineVideoTarget {
   title: string;
@@ -31,7 +39,14 @@ export const useInlinePlayer = (): InlinePlayerApi => useContext(InlinePlayerCon
 
 export const InlineVideoPlayer: FC<{ children: ReactNode }> = ({ children }) => {
   const [target, setTarget] = useState<InlineVideoTarget | null>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
   const play = useCallback((t: InlineVideoTarget) => setTarget(t), []);
+  // Modal 关闭只是隐藏（display:none 不会自动暂停媒体），必须显式 pause，
+  // 否则弹层关了声音还在播（实测踩过）
+  const close = useCallback(() => {
+    videoRef.current?.pause();
+    setTarget(null);
+  }, []);
 
   return (
     <InlinePlayerContext.Provider value={{ play }}>
@@ -41,13 +56,14 @@ export const InlineVideoPlayer: FC<{ children: ReactNode }> = ({ children }) => 
         title={target?.title || "播放"}
         footer={null}
         width="auto"
+        destroyOnHidden
         styles={{ body: { padding: 0, background: "#000" } }}
-        onCancel={() => setTarget(null)}
+        onCancel={close}
       >
-        {/* target 置 null 时视频立即卸载，关闭弹层即停止播放 */}
         {target && (
           <video
             key={target.url}
+            ref={videoRef}
             controls
             autoPlay
             src={target.url}
