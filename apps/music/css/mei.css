@@ -502,6 +502,8 @@ img { display: block; }
   display: flex; align-items: center; gap: 8px; margin: 0 0 4px;
   font-size: 13px; font-weight: 700; color: var(--fg);
 }
+/* 图标 SVG 无 width/height 属性：不约束会按默认替换尺寸（300×150）铺满整行 */
+.mei-dl-group-head svg { width: 15px; height: 15px; flex-shrink: 0; }
 .mei-dl-group-head .cnt { font-size: 11px; font-weight: 500; color: var(--faint); }
 .mei-dl-list .mei-song-row .r-ops { opacity: 1; }
 .mei-empty { padding: 60px 20px; text-align: center; color: var(--muted); font-size: 13px; }
