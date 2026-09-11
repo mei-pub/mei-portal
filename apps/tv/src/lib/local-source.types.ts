@@ -27,6 +27,9 @@ export interface LocalSourceRecord {
   status: LocalSourceStatus;
   /** done 后可播放的本地流地址（门户根路径 /videos/<id>，nginx 直通 media） */
   localUrl: string | null;
+  /** 发起下载时的播放页路由（usePathname()+search，如 /play/liangzi/48245?source=xx）。
+   *  done 记录管理页据此跳回完整播放器；旧记录缺省为 null（兜底内嵌 video 轻量播放）。 */
+  playRoute: string | null;
   createdAt: number;
   updatedAt: number;
 }

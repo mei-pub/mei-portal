@@ -27,6 +27,20 @@ export async function fetchLocalSources(
   return data.records ?? [];
 }
 
+/** 查询全部本地源记录（已下载资源管理页；含在途瞬时进度与 done 记录的 sizeBytes） */
+export async function fetchAllLocalSources(): Promise<
+  Array<LocalSourceWithProgress & { sizeBytes?: number | null }>
+> {
+  const res = await fetch('/api/local-sources/list', { cache: 'no-store' });
+  if (!res.ok) {
+    throw new Error(`查询本地源列表失败 (${res.status})`);
+  }
+  const data = (await res.json()) as {
+    records: Array<LocalSourceWithProgress & { sizeBytes?: number | null }>;
+  };
+  return data.records ?? [];
+}
+
 export interface CreateLocalDownloadInput {
   title: string;
   year?: string;
@@ -35,6 +49,7 @@ export interface CreateLocalDownloadInput {
   url: string; // 当前集的播放直链（当前选中源）
   className?: string; // CMS 分类（detail.vod_class）
   doubanType?: string; // 豆瓣 type（movie/tv/anime/show）
+  playRoute?: string; // 播放页当前路由（usePathname()+search），done 后管理页据此跳回播放器
 }
 
 /** 发起「下载到本地服务器」：服务端创建 media 任务并记录本地源 */
@@ -56,12 +71,14 @@ export async function createLocalDownload(
   };
 }
 
-/** 删除单条本地源记录 */
-export async function deleteLocalSource(key: string): Promise<void> {
+/** 删除单条本地源记录（服务端同时清理落盘文件与空剧目录） */
+export async function deleteLocalSource(key: string): Promise<boolean> {
   const res = await fetch(`/api/local-sources?key=${encodeURIComponent(key)}`, {
     method: 'DELETE',
   });
   if (!res.ok) {
     throw new Error(`删除本地源失败 (${res.status})`);
   }
+  const data = (await res.json().catch(() => ({}))) as { removed?: boolean };
+  return !!data.removed;
 }

@@ -10,6 +10,7 @@ import test from 'node:test';
 
 import type { LocalSourceRecord } from './local-source.types.ts';
 import {
+  applyMediaState,
   downloadNameOf,
   LocalSourceStore,
   mapCategory,
@@ -17,6 +18,8 @@ import {
   mediaTaskTypeOf,
   normalizeTitle,
   recordKeyOf,
+  sanitizePlayRoute,
+  withTransientProgress,
 } from './local-sources.ts';
 
 // ---------------------------------------------------------------------------
@@ -91,6 +94,64 @@ test('mediaTaskTypeOf：m3u8 链接走 N_m3u8DL-RE，其余走 aria2c', () => {
 });
 
 // ---------------------------------------------------------------------------
+// 播放路由清洗 / 状态机映射 / 瞬时进度装饰（list API 的纯逻辑单元）
+// ---------------------------------------------------------------------------
+
+test('sanitizePlayRoute：只收应用内绝对路径', () => {
+  assert.equal(sanitizePlayRoute('/play/liangzi/48245'), '/play/liangzi/48245');
+  assert.equal(
+    sanitizePlayRoute('/play/liangzi/48245?source=xx&id=1'),
+    '/play/liangzi/48245?source=xx&id=1'
+  );
+  // 外链 / 协议相对 / 相对路径 / 非字符串一律拒绝
+  assert.equal(sanitizePlayRoute('http://evil.com/x'), null);
+  assert.equal(sanitizePlayRoute('//evil.com/x'), null);
+  assert.equal(sanitizePlayRoute('tv/play'), null);
+  assert.equal(sanitizePlayRoute(''), null);
+  assert.equal(sanitizePlayRoute(null), null);
+  assert.equal(sanitizePlayRoute(123), null);
+  assert.equal(sanitizePlayRoute(`/${'a'.repeat(600)}`), null); // 超长拒绝
+});
+
+test('applyMediaState：media 终态回写（done 带 localUrl，未变/未知返回 null）', () => {
+  const rec = makeRecord({ status: 'downloading', mediaTaskId: 88 });
+  const done = applyMediaState(rec, 'success');
+  assert.equal(done?.status, 'done');
+  assert.equal(done?.localUrl, '/videos/88');
+  assert.equal(applyMediaState(rec, 'failed')?.status, 'failed');
+  assert.equal(applyMediaState(rec, 'stopped')?.status, 'failed');
+  assert.equal(applyMediaState(rec, 'downloading'), null); // 状态未变
+  assert.equal(applyMediaState(rec, 'ready'), null); // 未知状态
+  assert.equal(applyMediaState(rec, null), null); // 查不到任务
+});
+
+test('withTransientProgress：在途记录附带瞬时进度，终态/无任务为 0', () => {
+  const active = makeRecord({ status: 'downloading', mediaTaskId: 1 });
+  const decorated = withTransientProgress(active, {
+    status: 'downloading',
+    percent: 37.5,
+    speed: '2.35MBps',
+  });
+  assert.equal(decorated.progress, 37.5);
+  assert.equal(decorated.speed, '2.35MBps');
+  assert.equal(decorated.status, 'downloading');
+
+  // 终态记录即便查到任务也不带进度
+  const finished = makeRecord({ status: 'done', localUrl: '/videos/1' });
+  const doneDecorated = withTransientProgress(finished, {
+    status: 'downloading',
+    percent: 90,
+  });
+  assert.equal(doneDecorated.progress, 0);
+  assert.equal(doneDecorated.speed, '');
+
+  // 在途但内存队列查不到（media 重启后）→ 0 / 空串
+  const noTask = withTransientProgress(active, null);
+  assert.equal(noTask.progress, 0);
+  assert.equal(noTask.speed, '');
+});
+
+// ---------------------------------------------------------------------------
 // 存储：读写 / 标题过滤 / 原子写 / 损坏容错
 // ---------------------------------------------------------------------------
 
@@ -106,6 +167,7 @@ function makeRecord(overrides: Partial<LocalSourceRecord> = {}): LocalSourceReco
     mediaTaskId: 101,
     status: 'downloading',
     localUrl: null,
+    playRoute: null,
     createdAt: 1,
     updatedAt: 1,
   };
@@ -208,6 +270,28 @@ test('LocalSourceStore：不同实例（模拟进程重启）重新从盘加载'
     const rec = await second.get(makeRecord().key);
     assert.equal(rec?.status, 'done');
     assert.equal(rec?.localUrl, '/videos/101');
+  } finally {
+    rmSync(path.dirname(filePath), { recursive: true, force: true });
+  }
+});
+
+test('LocalSourceStore：playRoute 透传持久化，旧记录缺省读为 null', async () => {
+  const filePath = tempStorePath();
+  try {
+    const store = new LocalSourceStore(filePath);
+    const playRoute = '/play/liangzi/48245?source=xx&id=1';
+    await store.upsert(makeRecord({ playRoute }));
+    // 重启语义：新实例读回同一路由
+    const reloaded = await new LocalSourceStore(filePath).get(makeRecord().key);
+    assert.equal(reloaded?.playRoute, playRoute);
+
+    // 旧格式记录（无 playRoute 字段）：读盘补 null，不炸
+    const legacy = makeRecord();
+    const legacyObj = { [legacy.key]: { ...legacy, playRoute: undefined } };
+    writeFileSync(filePath, JSON.stringify(legacyObj), 'utf8');
+    const legacyStore = new LocalSourceStore(filePath);
+    const legacyRec = await legacyStore.get(legacy.key);
+    assert.equal(legacyRec?.playRoute, null);
   } finally {
     rmSync(path.dirname(filePath), { recursive: true, force: true });
   }

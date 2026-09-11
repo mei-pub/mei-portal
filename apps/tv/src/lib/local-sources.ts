@@ -15,6 +15,7 @@ import type {
   LocalSourceCategory,
   LocalSourceRecord,
   LocalSourceStatus,
+  LocalSourceWithProgress,
 } from './local-source.types';
 
 // ---------------------------------------------------------------------------
@@ -118,6 +119,61 @@ export function mediaTaskTypeOf(url: string): 'm3u8' | 'direct' {
 }
 
 // ---------------------------------------------------------------------------
+// 纯逻辑：播放路由清洗 / 状态机映射 / 瞬时进度装饰
+// ---------------------------------------------------------------------------
+
+/**
+ * POST 请求体里的 playRoute 清洗：只收应用内绝对路径（/ 开头、非 //、不带协议），
+ * 防外链与转义注入；旧记录缺省 null。
+ */
+export function sanitizePlayRoute(input: unknown): string | null {
+  if (typeof input !== 'string') return null;
+  const s = input.trim();
+  if (!s || !s.startsWith('/') || s.startsWith('//')) return null;
+  if (s.includes('://') || /[\x00-\x1f]/.test(s)) return null;
+  if (s.length > 512) return null;
+  return s;
+}
+
+/**
+ * media 任务状态回写到本地源记录（纯映射，无 IO）：
+ * - success → done + localUrl=/videos/<taskId>
+ * - failed/stopped → failed
+ * - 状态未变 / 未知状态 → null（调用方保持原记录）
+ */
+export function applyMediaState(
+  rec: LocalSourceRecord,
+  mediaStatus: string | null
+): LocalSourceRecord | null {
+  if (mediaStatus === null) return null;
+  const mapped = mapMediaStatus(mediaStatus);
+  if (!mapped || mapped === rec.status) return null;
+  return {
+    ...rec,
+    status: mapped,
+    localUrl: mapped === 'done' ? `/videos/${rec.mediaTaskId}` : rec.localUrl,
+    updatedAt: Date.now(),
+  };
+}
+
+/**
+ * 瞬时进度装饰（纯映射）：在途（pending/downloading）且能查到内存队列任务时
+ * 附带 percent/speed；done/failed 或查不到任务时为 0 / 空串。
+ */
+export function withTransientProgress(
+  rec: LocalSourceRecord,
+  task: { status: string; percent?: number; speed?: string } | null
+): LocalSourceWithProgress {
+  const active = rec.status === 'pending' || rec.status === 'downloading';
+  if (!active || !task) return { ...rec, progress: 0, speed: '' };
+  return {
+    ...rec,
+    progress: task.percent ?? 0,
+    speed: task.speed ?? '',
+  };
+}
+
+// ---------------------------------------------------------------------------
 // 文件存储：/data/tv/local-sources.json
 // ---------------------------------------------------------------------------
 
@@ -150,7 +206,8 @@ export class LocalSourceStore {
       const map = new Map<string, LocalSourceRecord>();
       for (const [k, v] of Object.entries(parsed)) {
         if (v && typeof v === 'object' && typeof v.key === 'string') {
-          map.set(k, v);
+          // 旧记录缺省 playRoute → null（可选字段向后兼容）
+          map.set(k, { ...v, playRoute: v.playRoute ?? null });
         }
       }
       this.cache = map;
@@ -375,4 +432,51 @@ export async function fetchMediaTaskProgress(
   } catch {
     return null;
   }
+}
+
+// ---------------------------------------------------------------------------
+// 状态机刷新（GET 按剧查询 / list 全量列表共用）
+// ---------------------------------------------------------------------------
+
+/** 刷新单条在途记录：media 任务终态回写（done + localUrl / failed）；无变化原样返回 */
+export async function refreshRecord(
+  store: LocalSourceStore,
+  rec: LocalSourceRecord
+): Promise<LocalSourceRecord> {
+  if (rec.status !== 'pending' && rec.status !== 'downloading') return rec;
+  const video = await fetchMediaDownload(rec.mediaTaskId);
+  if (!video) return rec; // 查不到（如任务被手动删除）：保持原状态
+  const updated = applyMediaState(rec, video.status);
+  return updated ? store.upsert(updated) : rec;
+}
+
+/**
+ * 列表装饰：在途记录先刷新状态机（media DB 任务），
+ * 再附带内存队列的瞬时进度（percent/speed）；done/failed 无进度。
+ * pending 但内存队列已是 downloading 时以内存为准回写（DB 状态滞后于入队）。
+ */
+export async function refreshAndDecorate(
+  store: LocalSourceStore,
+  records: LocalSourceRecord[]
+): Promise<LocalSourceWithProgress[]> {
+  const out: LocalSourceWithProgress[] = [];
+  for (const rec of records) {
+    let current = rec;
+    if (current.status === 'pending' || current.status === 'downloading') {
+      current = await refreshRecord(store, current);
+    }
+    let task: MediaTaskInfo | null = null;
+    if (current.status === 'pending' || current.status === 'downloading') {
+      task = await fetchMediaTaskProgress(current.mediaTaskId);
+      if (task && current.status === 'pending' && task.status === 'downloading') {
+        current = await store.upsert({
+          ...current,
+          status: 'downloading',
+          updatedAt: Date.now(),
+        });
+      }
+    }
+    out.push(withTransientProgress(current, task));
+  }
+  return out;
 }

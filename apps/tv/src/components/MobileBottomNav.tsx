@@ -2,7 +2,7 @@
 
 'use client';
 
-import { Cat, Clover, Film, Home, Radio, Star, Tv } from 'lucide-react';
+import { Cat, Clover, Film, HardDriveDownload, Home, Radio, Star, Tv } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useEffect, useState } from 'react';
@@ -42,6 +42,12 @@ const MobileBottomNav = ({ activePath }: MobileBottomNavProps) => {
      label: '综艺',
       href: '/douban/show',
    },
+    {
+      // 已下载资源管理（本地源记录 + 落盘文件）
+      icon: HardDriveDownload,
+      label: '已下载',
+      href: '/downloads',
+    },
     {
       icon: Radio,
       label: '直播',

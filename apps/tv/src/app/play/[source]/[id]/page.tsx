@@ -1,6 +1,6 @@
 import { Suspense } from 'react';
 
-import { PlayPageClient } from '../../page';
+import { PlayPageClient } from '../../play-client';
 
 export default function PlayPage({
   params,

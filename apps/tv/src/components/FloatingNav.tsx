@@ -82,6 +82,18 @@ const ITEMS: NavItem[] = [
       </svg>
     ),
   },
+  {
+    // 已下载资源管理（本地源记录 + 落盘文件）：下入手势，语义区别于「下载到服务器」进行态
+    label: '已下载',
+    href: '/downloads',
+    icon: (
+      <svg className='h-[15px] w-[15px]' viewBox='0 0 24 24' {...stroke}>
+        <path d='M12 15V3' />
+        <path d='m7 10 5 5 5-5' />
+        <path d='M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4' />
+      </svg>
+    ),
+  },
 ];
 
 export default function FloatingNav({ activePath }: { activePath?: string }) {

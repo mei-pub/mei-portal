@@ -3,17 +3,23 @@
 import { NextRequest, NextResponse } from 'next/server';
 
 import { getAuthInfoFromCookie } from '@/lib/auth';
-import type { LocalSourceRecord, LocalSourceWithProgress } from '@/lib/local-source.types';
+import {
+  movieDownloadRoot,
+  removeEpisodeFiles,
+  removeSeriesDir,
+  shouldRemoveSeriesDir,
+} from '@/lib/local-source-files';
+import type { LocalSourceRecord } from '@/lib/local-source.types';
 import {
   createMediaDownload,
   downloadNameOf,
-  fetchMediaDownload,
-  fetchMediaTaskProgress,
   LocalSourceStore,
   mapCategory,
-  mapMediaStatus,
   mediaTaskTypeOf,
   recordKeyOf,
+  refreshAndDecorate,
+  refreshRecord,
+  sanitizePlayRoute,
 } from '@/lib/local-sources';
 
 export const runtime = 'nodejs';
@@ -50,34 +56,7 @@ export async function GET(request: NextRequest) {
     const year = searchParams.get('year') ?? '';
 
     const records = await store.listByTitle(title, year);
-    const out: LocalSourceWithProgress[] = [];
-
-    for (const rec of records) {
-      let current = rec;
-      if (current.status === 'pending' || current.status === 'downloading') {
-        current = await refreshRecord(current);
-      }
-      // 瞬时进度（内存队列；服务重启后查不到 → 0）
-      let progress = 0;
-      let speed = '';
-      if (current.status === 'pending' || current.status === 'downloading') {
-        const task = await fetchMediaTaskProgress(current.mediaTaskId);
-        if (task) {
-          progress = task.percent ?? 0;
-          speed = task.speed ?? '';
-          if (current.status === 'pending' && task.status === 'downloading') {
-            // DB 状态滞后（onStart 回写晚于入队）：以内存队列为准
-            current = await store.upsert({
-              ...current,
-              status: 'downloading',
-              updatedAt: Date.now(),
-            });
-          }
-        }
-      }
-      out.push({ ...current, progress, speed });
-    }
-
+    const out = await refreshAndDecorate(store, records);
     return NextResponse.json({ records: out }, { status: 200 });
   } catch (err) {
     console.error('获取本地源失败', err);
@@ -87,10 +66,11 @@ export async function GET(request: NextRequest) {
 
 /**
  * POST /api/local-sources
- * body: { title, year, episode, totalEpisodes, url, className?, doubanType? }
+ * body: { title, year, episode, totalEpisodes, url, className?, doubanType?, playRoute? }
  *
  * 创建 media 下载任务（folder = <分类>/<剧名>，自动启动）并写入本地源记录。
  * 同集已有在途/完成记录时幂等返回，不重复创建。
+ * playRoute 为播放页当前路由（usePathname()+search），done 后管理页据此跳回播放器。
  */
 export async function POST(request: NextRequest) {
   try {
@@ -113,16 +93,19 @@ export async function POST(request: NextRequest) {
 
     const year = String(body.year ?? '').trim();
     const key = recordKeyOf(title, year, episode);
+    const playRoute = sanitizePlayRoute(body.playRoute);
 
     // 幂等：同集已有在途/完成记录 → 先刷新状态（防陈旧 downloading 挡住重试），再决定复用/重建
     const existing = await store.get(key);
     if (existing && existing.status !== 'failed') {
-      const refreshed = await refreshRecord(existing);
+      const refreshed = await refreshRecord(store, existing);
       if (refreshed.status !== 'failed') {
-        return NextResponse.json(
-          { record: refreshed, duplicated: true },
-          { status: 200 }
-        );
+        // 旧记录缺 playRoute（补齐跳转入口），其余字段保持
+        const merged =
+          playRoute && !refreshed.playRoute
+            ? await store.upsert({ ...refreshed, playRoute, updatedAt: Date.now() })
+            : refreshed;
+        return NextResponse.json({ record: merged, duplicated: true }, { status: 200 });
       }
     }
 
@@ -153,6 +136,7 @@ export async function POST(request: NextRequest) {
       mediaTaskId: video.id,
       status: 'downloading',
       localUrl: null,
+      playRoute,
       createdAt: now,
       updatedAt: now,
     };
@@ -167,7 +151,13 @@ export async function POST(request: NextRequest) {
 
 /**
  * DELETE /api/local-sources?key=<记录键>
- * 只删除本地源记录（不影响 media 下载任务与已落盘文件）。
+ *
+ * 删除本地源记录并清理落盘文件：
+ * - 该集文件：<root>/<分类>/<剧名>/ 下模糊匹配集号的媒体文件（仅 mp4/mkv 等媒体扩展）
+ * - 同剧（同 归一剧名|年份 前缀）已无其他记录时，删掉整个剧目录
+ * - 防穿越：所有删除路径经 deletionPlanFor 双重校验（段清洗 + resolve 后必须在
+ *   /downloads/movie 之内），伪造 title=../../etc 的记录直接拒绝文件操作
+ * 文件清理为尽力而为（文件已被手动清走不影响记录删除）；记录本身总是删除。
  */
 export async function DELETE(request: NextRequest) {
   try {
@@ -178,26 +168,41 @@ export async function DELETE(request: NextRequest) {
     if (!key) {
       return NextResponse.json({ error: '缺少 key 参数' }, { status: 400 });
     }
-    const removed = await store.remove(key);
-    return NextResponse.json({ removed }, { status: 200 });
+    const record = await store.get(key);
+    if (!record) {
+      return NextResponse.json({ removed: false }, { status: 200 });
+    }
+
+    // 1. 删除记录（先删：后续“同剧是否还有记录”以删后的全量为准）
+    await store.remove(key);
+
+    // 2. 清理该集落盘文件（路径非法/文件缺失不阻断记录删除）
+    const root = movieDownloadRoot();
+    let filesRemoved: string[] = [];
+    try {
+      filesRemoved = await removeEpisodeFiles(root, record);
+    } catch (err) {
+      console.warn(`清理本地源文件被拒绝/失败 key=${key}:`, err);
+    }
+
+    // 3. 同剧无其他记录 → 删整个剧目录
+    let seriesDirRemoved = false;
+    try {
+      const remaining = await store.listAll();
+      if (shouldRemoveSeriesDir(remaining, record)) {
+        await removeSeriesDir(root, record);
+        seriesDirRemoved = true;
+      }
+    } catch (err) {
+      console.warn(`清理本地源剧目录失败 key=${key}:`, err);
+    }
+
+    return NextResponse.json(
+      { removed: true, filesRemoved, seriesDirRemoved },
+      { status: 200 }
+    );
   } catch (err) {
     console.error('删除本地源失败', err);
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
   }
-}
-
-/** 刷新单条在途记录：media 任务终态回写（done + localUrl / failed） */
-async function refreshRecord(rec: LocalSourceRecord): Promise<LocalSourceRecord> {
-  const video = await fetchMediaDownload(rec.mediaTaskId);
-  if (!video) return rec; // 查不到（如任务被手动删除）：保持原状态
-  const mapped = mapMediaStatus(video.status);
-  if (!mapped || mapped === rec.status) return rec;
-
-  const updated: LocalSourceRecord = {
-    ...rec,
-    status: mapped,
-    localUrl: mapped === 'done' ? `/videos/${rec.mediaTaskId}` : rec.localUrl,
-    updatedAt: Date.now(),
-  };
-  return store.upsert(updated);
 }
