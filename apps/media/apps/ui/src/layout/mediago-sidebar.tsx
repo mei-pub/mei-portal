@@ -98,6 +98,20 @@ const MediagoSidebar: FC = () => {
       ),
       onClick: () => navigate("/done"),
     },
+    // 统一下载中心（/media/downloads?type=media|movie|music）
+    {
+      label: "下载中心",
+      title: "下载中心（媒体 / 影视 / 音乐）",
+      active: isActive("/downloads"),
+      icon: (
+        <svg className="h-[15px] w-[15px]" viewBox="0 0 24 24" {...stroke}>
+          <polygon points="12 2 2 7 12 12 22 7 12 2"/>
+          <polyline points="2 17 12 22 22 17"/>
+          <polyline points="2 12 12 17 22 12"/>
+        </svg>
+      ),
+      onClick: () => navigate("/downloads"),
+    },
   ];
 
   if (!open) {

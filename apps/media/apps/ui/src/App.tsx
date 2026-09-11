@@ -25,7 +25,6 @@ import { setupHttp } from "./utils/http";
 import { getConfig } from "./api/config";
 import { initGoEvents, onConfigChanged } from "./api/events";
 import { DownloadFilter } from "@mediago/shared-common";
-import { useAuth } from "./hooks/use-auth";
 import { Locale } from "antd/es/locale";
 
 const AppLayout = lazy(() => import("./layout/app-layout"));
@@ -33,7 +32,7 @@ const HomePage = lazy(() => import("./pages/home-page"));
 const SourceExtract = lazy(() => import("./pages/source-extract"));
 const SettingPage = lazy(() => import("./pages/setting-page"));
 const ConverterPage = lazy(() => import("./pages/converter-page"));
-const SigninPage = lazy(() => import("./pages/signin-page"));
+const DownloadsPage = lazy(() => import("./pages/downloads-page"));
 const OverlayDialog = lazy(() => import("./pages/overlay-dialog"));
 
 function getAlgorithm(appTheme: "dark" | "light") {
@@ -43,7 +42,6 @@ function getAlgorithm(appTheme: "dark" | "light") {
 }
 
 const App: FC = () => {
-  useAuth();
   const { on, off } = usePlatform();
   const { setUpdateAvailable, setUploadChecking } = useSessionStore(
     useShallow(updateSelector),
@@ -255,17 +253,18 @@ const App: FC = () => {
                 </Suspense>
               }
             />
+            {/* 统一下载中心：?type=media|movie|music 定位面板 */}
+            <Route
+              path="downloads"
+              element={
+                <Suspense fallback={<Loading />}>
+                  <DownloadsPage />
+                </Suspense>
+              }
+            />
 
             <Route path="*" element={<div>404</div>} />
           </Route>
-          <Route
-            path="signin"
-            element={
-              <Suspense fallback={<Loading />}>
-                <SigninPage />
-              </Suspense>
-            }
-          />
           <Route
             path="/browser"
             element={
