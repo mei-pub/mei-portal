@@ -6,6 +6,7 @@ import { CHANGE_PAGE } from "@/const";
 import { setAppStoreSelector, useAppStore } from "@/store/app";
 import { tdApp } from "@/utils";
 import { getConfig } from "@/api/config";
+import { InlineVideoPlayer } from "@/pages/downloads-page/components/inline-player";
 import MediagoSidebar from "./mediago-sidebar";
 
 const App: FC = () => {
@@ -26,6 +27,9 @@ const App: FC = () => {
   }, [location.pathname]);
 
   return (
+    // 内嵌播放弹层 Provider 提升到布局层：所有内页（下载中心/新建/转换器等）
+    // 的就地播放动作都有弹层；无 Provider 时 play-actions 会退化为 window.open
+    <InlineVideoPlayer>
     <div
       // 底色已提到 body（见 globals.css）：这里保持透明，让 body 底色铺到门户胶囊下方
       className="flex w-full flex-col overflow-hidden"
@@ -42,6 +46,7 @@ const App: FC = () => {
         </div>
       </div>
     </div>
+    </InlineVideoPlayer>
   );
 };
 

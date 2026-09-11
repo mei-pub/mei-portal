@@ -14,7 +14,6 @@ import { type FC, useCallback, useMemo } from "react";
 import { useSearchParams } from "react-router-dom";
 import PageContainer from "@/components/page-container";
 import AllView from "./components/all-view";
-import { InlineVideoPlayer } from "./components/inline-player";
 import MediaPanel from "./components/media-panel";
 import MoviePanel from "./components/movie-panel";
 import MusicPanel from "./components/music-panel";
@@ -60,7 +59,6 @@ const DownloadsPage: FC = () => {
   }, [type, goTo]);
 
   return (
-    <InlineVideoPlayer>
       <PageContainer className="bg-white/85 dark:bg-[#1F2024] flex flex-col flex-1 min-h-0 h-full rounded-xl border border-black/5 shadow-sm p-3 gap-3 overflow-hidden">
         {/* 应用信息横幅（对齐 home-page Hero） */}
         <div className="flex shrink-0 items-center gap-3 px-1 pt-1">
@@ -87,7 +85,6 @@ const DownloadsPage: FC = () => {
         {/* 面板区：占满剩余高度并在面板内部滚动 */}
         <div className="flex min-h-0 flex-1 flex-col">{panel}</div>
       </PageContainer>
-    </InlineVideoPlayer>
   );
 };
 
