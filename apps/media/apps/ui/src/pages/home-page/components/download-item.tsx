@@ -17,6 +17,7 @@ import useSWR from "swr";
 import { useShallow } from "zustand/react/shallow";
 import selectedBg from "@/assets/images/select-item-bg.png";
 import {
+  DeleteIcon,
   DownloadIcon,
   DownloadListIcon,
   EditIcon,
@@ -53,6 +54,7 @@ interface Props {
   progress?: DownloadProgress;
   onShowEditForm?: (value: DownloadTask) => void;
   downloadStatus?: DownloadStatus;
+  onDeleteTask?: (task: DownloadTask) => void;
 }
 
 export const DownloadTaskItem = memo(function DownloadTaskItem({
@@ -63,6 +65,7 @@ export const DownloadTaskItem = memo(function DownloadTaskItem({
   onStopDownload,
   onContextMenu,
   onShowEditForm,
+  onDeleteTask,
 }: Props) {
   const appStore = useAppStore(useShallow(appStoreSelector));
   const { t } = useTranslation();
@@ -228,6 +231,17 @@ export const DownloadTaskItem = memo(function DownloadTaskItem({
       }
     }
 
+    // 单条删除入口（web 模式无右键菜单）：全部状态可用，交互由列表层统一弹层
+    if (onDeleteTask) {
+      buttons.push(
+        <IconButton
+          key="delete"
+          title={t("delete")}
+          icon={<DeleteIcon />}
+          onClick={() => onDeleteTask(task)}
+        />,
+      );
+    }
     return buttons;
   }, [
     appStore.showTerminal,
@@ -238,6 +252,7 @@ export const DownloadTaskItem = memo(function DownloadTaskItem({
     handleStop,
     task,
     onShowEditForm,
+    onDeleteTask,
     startWithEvent,
     t,
   ]);

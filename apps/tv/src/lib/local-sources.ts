@@ -408,6 +408,24 @@ export interface MediaTaskInfo {
   speed: string;
 }
 
+/**
+ * 删除 media 下载任务（尽力而为）：停止仍在进行的下载，deleteFiles=true 时
+ * 连落盘产物一起清（未完成任务的分片临时目录 / 成品文件）。
+ * media 任务记录缺失（404，已被手动删除）不影响调用方——删除 tv 记录继续。
+ */
+export async function deleteMediaDownload(
+  id: number,
+  deleteFiles = false
+): Promise<void> {
+  try {
+    await mediaFetch(`/api/downloads/${id}?deleteFiles=${deleteFiles ? '1' : '0'}`, {
+      method: 'DELETE',
+    });
+  } catch (err) {
+    console.warn(`删除 media 下载任务失败 id=${id}:`, err);
+  }
+}
+
 /** 查询下载任务的持久状态（DB 记录，服务重启后仍有值） */
 export async function fetchMediaDownload(
   id: number

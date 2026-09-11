@@ -3,7 +3,7 @@
 // 无下载任务时不轮询）；done 显示分类/集数；failed 标红；删除走契约 2。
 // embedded=true（全部视图）：段卡片 + 段头（计数/进行中徽标 + 「进入 →」），
 // 含进行中任务的分组与条目稳定置前（保持原有相对顺序）。
-import { App, Empty, Popconfirm, Progress } from "antd";
+import { App, Empty, Progress } from "antd";
 import { PlayCircleOutlined } from "@ant-design/icons";
 import { useMemoizedFn } from "ahooks";
 import { type FC, useMemo } from "react";
@@ -20,6 +20,7 @@ import {
 } from "@/api/download-center";
 import { movieFallbackVideo, playMovieRecord } from "@/utils/play-actions";
 import { useInlinePlayer } from "./inline-player";
+import { useDeleteTasks } from "@/components/delete-tasks-dialog";
 import { cn } from "@/utils";
 import { InlineNotice } from "./inline-notice";
 import { SectionHeader } from "./section-header";
@@ -72,6 +73,7 @@ const isDownloading = (record: MovieSourceRecord) =>
 const MoviePanel: FC<Props> = ({ embedded = false, onEnter }) => {
   // 就地播放：无 playRoute 的旧记录弹层播 /videos/:id 直播流，关闭即回列表
   const inlinePlayer = useInlinePlayer();
+  const { confirmDelete, deleteDialog } = useDeleteTasks();
   const { message } = App.useApp();
   const { t } = useTranslation();
   const { data, error, isLoading, mutate } = useSWR(
@@ -135,9 +137,19 @@ const MoviePanel: FC<Props> = ({ embedded = false, onEnter }) => {
     return ordered.map((item) => item.group);
   }, [groups, embedded]);
 
+  // 删除交互：未完成（downloading/pending/failed）必然停止下载并清理临时文件；
+  // 已完成由用户选择是否连文件删除（deleteMovieSource 的 files 参数）
   const handleDeleteRecord = useMemoizedFn(async (record: MovieSourceRecord) => {
+    const unfinished = record.status !== "done" ? 1 : 0;
+    const choice = await confirmDelete({
+      unfinished,
+      done: 1 - unfinished,
+      label: `《${record.title}》${record.name}`,
+    });
+    if (choice === null) return; // 取消
     try {
-      await deleteMovieSource(record.key);
+      // 未完成记录：服务端总是级联停 media 任务并清临时文件（choice 仅对 done 生效）
+      await deleteMovieSource(record.key, choice);
       message.success("已删除");
       mutate();
     } catch (e) {
@@ -146,8 +158,15 @@ const MoviePanel: FC<Props> = ({ embedded = false, onEnter }) => {
   });
 
   const handleDeleteGroup = useMemoizedFn(async (group: Group) => {
+    const unfinished = group.records.filter((r) => r.status !== "done").length;
+    const choice = await confirmDelete({
+      unfinished,
+      done: group.records.length - unfinished,
+      label: `《${group.title}》全部 ${group.records.length} 条记录`,
+    });
+    if (choice === null) return; // 取消
     const results = await Promise.allSettled(
-      group.records.map((record) => deleteMovieSource(record.key)),
+      group.records.map((record) => deleteMovieSource(record.key, choice)),
     );
     const failed = results.filter((r) => r.status === "rejected").length;
     if (failed > 0) {
@@ -246,15 +265,11 @@ const MoviePanel: FC<Props> = ({ embedded = false, onEnter }) => {
               {doneCount}/{group.records.length} 集
             </span>
             <div className="ml-auto">
-              <Popconfirm
-                title="删除该剧全部记录？"
-                description="将同时清理服务端落盘文件"
-                okText="删除"
-                cancelText="取消"
-                onConfirm={() => handleDeleteGroup(group)}
-              >
-                <IconButton title="删除该剧全部" icon={<DeleteIcon />} />
-              </Popconfirm>
+              <IconButton
+                title="删除该剧全部"
+                icon={<DeleteIcon />}
+                onClick={() => handleDeleteGroup(group)}
+              />
             </div>
           </div>
           <div className="flex flex-col gap-2">
@@ -267,7 +282,7 @@ const MoviePanel: FC<Props> = ({ embedded = false, onEnter }) => {
   // ---- embedded（全部视图）：段卡片 + 段头，段内提示用 InlineNotice 不占满屏 ----
   if (embedded) {
     return (
-      <div className="flex flex-col gap-3 rounded-xl border border-black/5 bg-white/85 p-3 shadow-sm dark:border-white/10 dark:bg-[#1F2024]">
+      <div className="relative flex flex-col gap-3 rounded-xl border border-black/5 bg-white/85 p-3 shadow-sm dark:border-white/10 dark:bg-[#1F2024]">
         <SectionHeader
           title="影视"
           count={records.length}
@@ -287,6 +302,7 @@ const MoviePanel: FC<Props> = ({ embedded = false, onEnter }) => {
         {!isLoading && !error && displayGroups.length > 0 && (
           <div className="flex flex-col gap-3">{renderGroups()}</div>
         )}
+        {deleteDialog}
       </div>
     );
   }
@@ -315,6 +331,7 @@ const MoviePanel: FC<Props> = ({ embedded = false, onEnter }) => {
   return (
     <div className="flex flex-1 flex-col gap-4 overflow-auto pr-1">
       {renderGroups()}
+      {deleteDialog}
     </div>
   );
 };

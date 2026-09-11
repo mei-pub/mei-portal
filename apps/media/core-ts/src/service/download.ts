@@ -1,7 +1,9 @@
 // service/download —— Go internal/service/download_task.go 的复刻
 
+import fs from 'node:fs';
 import path from 'node:path';
 import { sanitizeFilename, sanitizeFolder } from '../core/downloader.ts';
+import { logger } from '../logger.ts';
 import type { TaskQueue } from '../core/queue.ts';
 import type { DownloadParams } from '../core/types.ts';
 import type { TaskLogManager } from '../tasklog.ts';
@@ -127,7 +129,36 @@ export class DownloadTaskService {
     this.queue.stop(String(id));
   }
 
-  deleteDownloadTask(id: number): void {
+  /**
+   * 删除下载任务：
+   * - 总是先停队列（删记录后不允许下载继续进行/文件再落盘）
+   * - deleteFiles=true 时尽力清理落盘产物（成功任务的媒体文件/下载器输出目录，
+   *   以及未完成任务的分片临时目录），文件缺失不阻断记录删除
+   * - localPath 由调用方（handlers）从运行时配置取，服务层不持有 conf
+   */
+  deleteDownloadTask(id: number, opts?: { deleteFiles?: boolean; localPath?: string }): void {
+    const task = this.repo.findById(id);
+    // queue.stop 只对活动任务有效，非活动（已完成/排队中/不存在）抛 ErrTaskNotFound：
+    // 删除记录时静默忽略（排队中的任务由 repo.delete 消失，队列补位时按 404 跳过）
+    try {
+      this.queue.stop(String(id));
+    } catch {
+      // 非活动任务无需停止
+    }
+    if (task && opts?.deleteFiles) {
+      const localPath = opts.localPath || '';
+      if (localPath !== '') {
+        try {
+          let dir = localPath;
+          if (task.folder && task.folder !== '') dir = path.join(localPath, sanitizeFolder(task.folder));
+          // 成品文件（name.<ext>）与下载器输出目录（name/）都算落盘产物
+          const [, file] = checkFileExists(task.name, dir);
+          if (file !== '') fs.rmSync(file, { recursive: true, force: true });
+        } catch (err: any) {
+          logger.warn(`删除任务 ${id} 落盘文件失败: ${err?.message ?? err}`);
+        }
+      }
+    }
     this.repo.delete(id);
   }
 

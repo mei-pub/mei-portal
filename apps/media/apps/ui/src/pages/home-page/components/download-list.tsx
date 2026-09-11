@@ -12,8 +12,9 @@ import { usePlatform } from "@/hooks/use-platform";
 import {
   startDownload,
   stopDownload,
-  deleteDownloadTask,
 } from "@/api/download-task";
+import { deleteMediaTask } from "@/api/download-center";
+import { useDeleteTasks } from "@/components/delete-tasks-dialog";
 import { useTasks } from "@/hooks/use-tasks";
 import { cn, tdApp } from "@/utils";
 import { DownloadTaskItem } from "./download-item";
@@ -26,6 +27,7 @@ interface Props {
 }
 
 export function DownloadTaskList({ filter, prioritizeActive = false }: Props) {
+  const { confirmDelete, deleteDialog } = useDeleteTasks();
   const [selected, setSelected] = useState<number[]>([]);
   const { contextMenu } = usePlatform();
   const { message } = App.useApp();
@@ -127,15 +129,45 @@ export function DownloadTaskList({ filter, prioritizeActive = false }: Props) {
     } else if (action === "refresh") {
       mutate();
     } else if (action === "delete") {
-      await deleteDownloadTask(id);
-      mutate();
+      const target = data.find((task) => task.id === id);
+      if (target) await confirmAndDelete([target]);
     }
   });
 
-  const onDeleteItems = useMemoizedFn(async (ids: number[]) => {
-    await Promise.allSettled(ids.map((id) => deleteDownloadTask(Number(id))));
+  // 删除交互（单条/批量/右键共用）：全未完成 → 确认级联清理临时文件；
+  // 含已完成 → 三选一（仅删记录 / 删记录和文件 / 取消）。
+  // 未完成任务服务端总是停止下载（deleteFiles 仅对已完成任务的文件生效）
+  const confirmAndDelete = useMemoizedFn(async (targets: DownloadTask[]) => {
+    if (targets.length === 0) return;
+    const unfinished = targets.filter(
+      (task) => task.status !== DownloadStatus.Success,
+    ).length;
+    const choice = await confirmDelete({
+      unfinished,
+      done: targets.length - unfinished,
+      label: targets.length === 1
+        ? `任务「${targets[0].name}」`
+        : `${targets.length} 个任务`,
+    });
+    if (choice === null) return; // 取消
+    const results = await Promise.allSettled(
+      targets.map((task) => deleteMediaTask(task.id, choice)),
+    );
+    const failed = results.filter((r) => r.status === "rejected").length;
+    if (failed > 0) message.error(`删除失败 ${failed} 项`);
+    else message.success("已删除");
     setSelected([]);
     mutate();
+  });
+
+  /** 单条删除（任务条目删除按钮 / 右键菜单） */
+  const handleDeleteTask = useMemoizedFn((task: DownloadTask) => {
+    confirmAndDelete([task]);
+  });
+
+  const onDeleteItems = useMemoizedFn(async (ids: number[]) => {
+    const targets = data.filter((task) => ids.includes(task.id));
+    await confirmAndDelete(targets);
   });
 
   const onDownloadItems = useMemoizedFn(async (ids: number[]) => {
@@ -199,6 +231,7 @@ export function DownloadTaskList({ filter, prioritizeActive = false }: Props) {
                 onStopDownload={onStopDownload}
                 onContextMenu={handleContext}
                 onShowEditForm={handleShowDownloadForm}
+                onDeleteTask={handleDeleteTask}
               />
             );
           })}
@@ -209,6 +242,7 @@ export function DownloadTaskList({ filter, prioritizeActive = false }: Props) {
         isEdit
         onConfirm={handleFormConfirm}
       />
+      {deleteDialog}
     </div>
   );
 }

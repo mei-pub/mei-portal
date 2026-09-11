@@ -14,6 +14,7 @@ import { IconButton } from "@/components/icon-button";
 import Loading from "@/components/loading";
 import {
   deleteMusicFile,
+  deleteMusicTask,
   formatFileSize,
   getMusicLibrary,
   type MusicLibrary,
@@ -23,6 +24,7 @@ import { cn, fromatDateTime } from "@/utils";
 import { InlineNotice } from "./inline-notice";
 import { SectionHeader } from "./section-header";
 import { useSharedPoll } from "./shared-poll";
+import { useDeleteTasks } from "@/components/delete-tasks-dialog";
 
 interface Props {
   /** 全部视图内嵌模式 */
@@ -41,7 +43,8 @@ const SectionTitle: FC<{ text: string }> = ({ text }) => (
 );
 
 const MusicPanel: FC<Props> = ({ embedded = false, onEnter }) => {
-  const { message } = App.useApp();
+  const { confirmDelete, deleteDialog } = useDeleteTasks();
+  const { message, modal } = App.useApp();
   const { t } = useTranslation();
   const { data, error, isLoading, mutate } = useSWR(
     "download-center/music",
@@ -57,10 +60,35 @@ const MusicPanel: FC<Props> = ({ embedded = false, onEnter }) => {
   // 有进行中任务 → 3s 轮询进度（页面级共享计时器）；空闲时停止轮询
   useSharedPoll(tasks.length > 0, mutate);
 
-  const handleDeleteFile = useMemoizedFn(async (path: string, name: string) => {
+  // 已下载文件：删除即删文件本身（音乐没有独立于文件的「记录」概念）。
+  // 命令式 modal.confirm（不依赖 antd trigger 子元素机制——IconButton 无 ref
+  // 透传，Popconfirm 浮层挂不上）
+  const handleDeleteFile = useMemoizedFn((path: string, name: string) => {
+    modal.confirm({
+      title: `删除文件「${name}」？`,
+      content: "将从服务器删除该音频文件，不可恢复。",
+      okText: "删除",
+      okButtonProps: { danger: true },
+      cancelText: "取消",
+      onOk: async () => {
+        try {
+          await deleteMusicFile(path);
+          message.success(`已删除 ${name}`);
+          mutate();
+        } catch (e) {
+          message.error((e as Error).message || "删除失败");
+        }
+      },
+    });
+  });
+
+  // 未完成任务：停止下载 + 删记录 + 清理 .part 临时文件（服务端级联，无需选择）
+  const handleDeleteTask = useMemoizedFn(async (taskId: string | number, name: string) => {
+    const choice = await confirmDelete({ unfinished: 1, done: 0, label: `下载任务「${name}」` });
+    if (choice === null) return; // 取消
     try {
-      await deleteMusicFile(path);
-      message.success(`已删除 ${name}`);
+      await deleteMusicTask(taskId);
+      message.success("已删除任务并清理临时文件");
       mutate();
     } catch (e) {
       message.error((e as Error).message || "删除失败");
@@ -111,6 +139,13 @@ const MusicPanel: FC<Props> = ({ embedded = false, onEnter }) => {
                 icon={<DownloadIcon fill="#fff" width={14} height={14} />}
                 text={failed ? "失败" : "下载中"}
                 color={failed ? "#ff7373" : "#127af3"}
+              />
+              <IconButton
+                title={t("delete")}
+                icon={<DeleteIcon />}
+                onClick={() =>
+                  handleDeleteTask(task.id, task.song?.name ?? "-")
+                }
               />
             </div>
           );
@@ -189,6 +224,7 @@ const MusicPanel: FC<Props> = ({ embedded = false, onEnter }) => {
             {renderFiles()}
           </div>
         )}
+        {deleteDialog}
       </div>
     );
   }
@@ -218,6 +254,7 @@ const MusicPanel: FC<Props> = ({ embedded = false, onEnter }) => {
     <div className="flex flex-1 flex-col gap-3 overflow-auto pr-1">
       {renderTasks()}
       {renderFiles()}
+      {deleteDialog}
     </div>
   );
 };

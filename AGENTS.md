@@ -283,6 +283,14 @@ document 与 iframe 请求，所有请求都直接代理到子应用，Shell 不
 - **防穿越**：music 的 serve/DELETE/library 三口共享 resolveWithin（realpath +
   path.relative 双校验）；tv 的删除段消毒 + resolve 后必须位于 `/downloads/movie`
   内——任何新增的文件下发/删除端点必须同款双保险
+- **删除交互**（统一，三面板 + 媒体任务列表共用 `useDeleteTasks` 弹层）：
+  未完成任务（downloading/pending/failed/stopped）删除必然级联——停止下载 +
+  清理临时文件，**不询问文件去留**（半成品无保留价值）；已完成任务才由用户
+  三选一（仅删记录 / 删记录和文件 / 取消）。对应服务端：
+  `DELETE /tv/api/local-sources?key=&files=1|0`（未完成记录总是级联停 media
+  任务）、`DELETE /music/api/download/server?id=`（中断流+清 .part）、
+  `DELETE /api/downloads/:id?deleteFiles=1|0`（media core，停队列+可选清盘）。
+  **禁止任何删除入口绕过确认弹层直删**
 - **server-local 播放体系**（music）：已下载条目 `id='file:<相对路径>'`、
   `source='server-local'`，`resolvePlayUrl` 首分支零网络直出 serve URL；iframe 宿主
   模式经 `/music/proxy?types=url&source=server-local` 分支——两条路径都必须保活

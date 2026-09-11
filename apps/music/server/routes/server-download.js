@@ -122,6 +122,18 @@ function createTaskManager(maxTasks = MAX_TASKS) {
     get(id) {
       return tasks.get(String(id)) || null;
     },
+    /** 删除任务：中断下载流 + 清理 .part 临时文件 + 移出任务表（幂等） */
+    remove(id) {
+      const task = tasks.get(String(id));
+      if (!task) return null;
+      task.removed = true;
+      try {
+        if (task.abortController) task.abortController.abort(new Error('任务已删除'));
+        else if (task.cleanupTmp) task.cleanupTmp();
+      } catch { /* abort 不抛 */ }
+      tasks.delete(String(id));
+      return task;
+    },
     /** 同一首歌已有 running 任务则复用（防重复点击产生双份下载） */
     findRunning(song) {
       const source = String((song && song.source) || '');
@@ -233,6 +245,10 @@ async function runDownloadTask(task, ctx = {}) {
   const update = (patch) => Object.assign(task, patch);
   const fail = (message) =>
     update({ status: 'error', error: String(message || '下载失败'), finishedAt: Date.now() });
+  // 删除任务（manager.remove）后不再继续：resolving 阶段在关键点提前退出，
+  // downloading 阶段由 manager.abort 流中断（catch 自动清理临时文件）
+  const removed = () => task.removed === true;
+  task.cleanupTmp = null;
 
   // 1) 解析直链 + 终链校验（probeAudioUrl 跟随 302 拿最终直链与总大小）
   let info;
@@ -245,6 +261,7 @@ async function runDownloadTask(task, ctx = {}) {
   } catch (err) {
     return fail((err && err.message) || '直链解析失败');
   }
+  if (removed()) return; // 解析期间任务被删除
 
   // 2) 目标路径与总量
   const ext = pickExt(info, probeResult);
@@ -268,6 +285,10 @@ async function runDownloadTask(task, ctx = {}) {
   const dir = path.dirname(targetPath);
   const tmpPath = path.join(dir, `.${path.basename(targetPath)}.${task.id}.part`);
   const cleanupTmp = () => fsp.rm(tmpPath, { force: true }).catch(() => {});
+  // 临时文件路径与 abort 句柄挂到任务上：DELETE 时可中断流并清理半成品
+  task.tmpPath = tmpPath;
+  task.cleanupTmp = cleanupTmp;
+  if (removed()) return cleanupTmp();
   // 看门狗中止时 Node 流机器会抛通用 AbortError，真实原因需自行保留
   let watchdogReason = null;
 
@@ -275,6 +296,7 @@ async function runDownloadTask(task, ctx = {}) {
     await fsp.mkdir(dir, { recursive: true });
 
     const controller = new AbortController();
+    task.abortController = controller; // manager.remove 可直接 abort
     let idleTimer = null;
     const bumpIdle = () => {
       if (idleTimer) clearTimeout(idleTimer);
@@ -419,6 +441,14 @@ module.exports = function createServerDownloadRouter(deps = {}) {
     const task = manager.get(String(req.query.id || ''));
     if (!task) return res.status(404).set(JSON_HEADERS).json({ error: '任务不存在或已清理' });
     return res.set(JSON_HEADERS).json(publicView(task));
+  });
+
+  // DELETE /api/download/server?id= —— 删除未完成任务：中断下载流 + 清理 .part
+  // 临时文件（已完成的落盘文件不属于任务，保留由 library 接口管理）
+  router.delete('/server', (req, res) => {
+    const task = manager.remove(String(req.query.id || ''));
+    if (!task) return res.status(404).set(JSON_HEADERS).json({ error: '任务不存在或已清理' });
+    return res.set(JSON_HEADERS).json({ removed: true, id: task.id });
   });
 
   return router;

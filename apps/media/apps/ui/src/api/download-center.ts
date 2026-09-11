@@ -77,10 +77,11 @@ export function listMovieSources(): Promise<MovieSourceRecord[]> {
   ).then((data) => data?.records ?? []);
 }
 
-/** 契约 2：删除影视本地资源（服务端顺带清落盘文件） */
-export function deleteMovieSource(key: string): Promise<void> {
+/** 契约 2：删除影视本地资源；files=false 仅删记录保留落盘文件（已完成
+ * 记录的二选一）；未完成/失败记录服务端总是级联停 media 任务并清临时文件 */
+export function deleteMovieSource(key: string, files = true): Promise<void> {
   return requestJson<{ removed?: boolean }>(
-    `/tv/api/local-sources?key=${encodeURIComponent(key)}`,
+    `/tv/api/local-sources?key=${encodeURIComponent(key)}&files=${files ? "1" : "0"}`,
     { method: "DELETE" },
   ).then(() => undefined);
 }
@@ -90,12 +91,29 @@ export function getMusicLibrary(): Promise<MusicLibrary> {
   return requestJson<MusicLibrary>("/music/api/download/library");
 }
 
-/** 契约 4：删除音乐已下载文件（path 为相对 /downloads/music 的路径） */
+/** 契约 4a：删除音乐进行中任务（服务端中断下载流并清理 .part 临时文件） */
+export function deleteMusicTask(id: string | number): Promise<void> {
+  return requestJson<{ removed?: boolean }>(
+    `/music/api/download/server?id=${encodeURIComponent(String(id))}`,
+    { method: "DELETE" },
+  ).then(() => undefined);
+}
+
+/** 契约 4b：删除音乐已下载文件（path 为相对 /downloads/music 的路径） */
 export function deleteMusicFile(path: string): Promise<void> {
   return requestJson<{ removed?: boolean }>(
     `/music/api/download/library?path=${encodeURIComponent(path)}`,
     { method: "DELETE" },
   ).then(() => undefined);
+}
+
+/** 删除 media 下载任务：停止下载；deleteFiles=true 连落盘产物一起清理
+ *  （未完成任务的分片临时 / 已完成任务的成品文件） */
+export function deleteMediaTask(id: number, deleteFiles = false): Promise<void> {
+  return requestJson(
+    `/api/downloads/${id}?deleteFiles=${deleteFiles ? "1" : "0"}`,
+    { method: "DELETE" },
+  );
 }
 
 /** 契约 5：media core 可播视频列表（已成功且文件在盘的任务，裸 JSON 数组） */

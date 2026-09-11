@@ -385,7 +385,13 @@ export class Handlers {
       return;
     }
     try {
-      this.downloadSvc.deleteDownloadTask(id);
+      // deleteFiles=1：同时清理落盘文件（成品 + 下载器输出目录 + 分片临时）。
+      // 未完成任务总是停队列；文件清理是尽力而为，缺失不阻断记录删除
+      const deleteFilesQuery = c.url.searchParams.get('deleteFiles');
+      const deleteFiles =
+        deleteFilesQuery === '1' || deleteFilesQuery === 'true';
+      const localPath = this.conf ? String(this.conf.get('local') ?? '') : '';
+      this.downloadSvc.deleteDownloadTask(id, { deleteFiles, localPath });
       ok(c, undefined, tLang(c.lang, MSG.DELETED));
     } catch (err: any) {
       fail(c, 500, err?.message ?? String(err));

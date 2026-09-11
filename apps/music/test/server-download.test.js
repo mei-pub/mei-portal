@@ -233,3 +233,60 @@ test('runDownloadTask：无数据看门狗超时 → error 并清理临时文件
   assert.deepEqual(leftovers, []);
   await fsp.rm(root, { recursive: true, force: true });
 });
+
+test('删除任务：remove 中断下载流、清理 .part 临时文件、移出任务表（幂等）', async () => {
+  const m = factory.createTaskManager();
+  const task = m.create({ source: 'qq', id: '789', name: '测试', artist: 'A' }, '320');
+  assert.ok(m.get(task.id));
+
+  // 模拟 downloading 阶段：挂上 abort 句柄与临时文件清理
+  const abortCalls = [];
+  task.abortController = { abort: (r) => abortCalls.push(r) };
+  const tmpRemoved = [];
+  task.cleanupTmp = () => { tmpRemoved.push(task.tmpPath); };
+  task.tmpPath = '/downloads/music/A/.测试.qq.789.part';
+
+  const removedTask = m.remove(task.id);
+  assert.equal(removedTask, task);
+  assert.equal(removedTask.removed, true);
+  assert.equal(abortCalls.length, 1, '应中断下载流');
+  assert.deepEqual(tmpRemoved, [], '有 abortController 时由流中断的 catch 分支清理临时文件');
+  assert.equal(m.get(task.id), null, '任务应移出任务表');
+  // 幂等：再删返回 null 不抛
+  assert.equal(m.remove(task.id), null);
+});
+
+test('删除任务：resolving 阶段（无 abort 句柄）直接清理临时文件', () => {
+  const m = factory.createTaskManager();
+  const task = m.create({ source: 'netease', id: '1', name: 'R', artist: 'B' }, '320');
+  const tmpRemoved = [];
+  task.cleanupTmp = () => tmpRemoved.push('tmp');
+  m.remove(task.id);
+  assert.deepEqual(tmpRemoved, ['tmp'], 'resolving 阶段应直接清临时文件');
+});
+
+test('runDownloadTask：任务被删除后不再落盘（removed 检查点）', async () => {
+  const { createTaskManager, runDownloadTask } = factory;
+  const m = createTaskManager();
+  const task = m.create({ source: 'netease', id: 'z1', name: 'Z', artist: 'C' }, '320');
+  // 模拟一个慢 resolve，任务在解析期间被删除
+  const started = new Promise((r) => setTimeout(r, 0));
+  const resolveImpl = async () => {
+    await started;
+    m.remove(task.id);
+    return { url: 'https://example.com/z.mp3', br: 320, size: 10 };
+  };
+  const probeImpl = async (url) => ({ url, total: 10 });
+  const fetchImpl = async () => {
+    throw new Error('下载不应发起');
+  };
+  await runDownloadTask(task, {
+    downloadRoot: '/tmp/mei-test-dl-root',
+    resolveImpl,
+    probeImpl,
+    fetchImpl,
+    idleTimeoutMs: 1000,
+  });
+  assert.equal(task.status, 'running', '被删除的任务不再写终态（对象已脱离任务表）');
+  assert.equal(m.get(task.id), null);
+});

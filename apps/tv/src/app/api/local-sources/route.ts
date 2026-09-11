@@ -12,6 +12,7 @@ import {
 import type { LocalSourceRecord } from '@/lib/local-source.types';
 import {
   createMediaDownload,
+  deleteMediaDownload,
   downloadNameOf,
   LocalSourceStore,
   mapCategory,
@@ -150,9 +151,12 @@ export async function POST(request: NextRequest) {
 }
 
 /**
- * DELETE /api/local-sources?key=<记录键>
+ * DELETE /api/local-sources?key=<记录键>&files=1|0
  *
- * 删除本地源记录并清理落盘文件：
+ * 删除本地源记录；files=1（默认）级联清理落盘文件：
+ * files=0：仅删记录，保留落盘文件（已完成记录由前端二选一决定）。
+ * 未完成（downloading/pending）与失败记录：总是级联停掉并删除背后的 media
+ * 下载任务（deleteFiles=1 清分片临时），半成品临时文件没有保留价值。
  * - 该集文件：<root>/<分类>/<剧名>/ 下模糊匹配集号的媒体文件（仅 mp4/mkv 等媒体扩展）
  * - 同剧（同 归一剧名|年份 前缀）已无其他记录时，删掉整个剧目录
  * - 防穿越：所有删除路径经 deletionPlanFor 双重校验（段清洗 + resolve 后必须在
@@ -173,28 +177,40 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ removed: false }, { status: 200 });
     }
 
+    // 未完成/失败记录：级联停掉并删除背后的 media 下载任务（连临时文件一起清）
+    if (record.status !== 'done' && record.mediaTaskId != null) {
+      await deleteMediaDownload(Number(record.mediaTaskId), true);
+    }
+
     // 1. 删除记录（先删：后续“同剧是否还有记录”以删后的全量为准）
     await store.remove(key);
 
-    // 2. 清理该集落盘文件（路径非法/文件缺失不阻断记录删除）
+    // files=0：仅删记录（已完成记录的前端二选一），跳过文件清理
+    const keepFiles = new URL(request.url).searchParams.get('files') === '0';
     const root = movieDownloadRoot();
+
+    // 2. 清理该集落盘文件（路径非法/文件缺失不阻断记录删除）
     let filesRemoved: string[] = [];
-    try {
-      filesRemoved = await removeEpisodeFiles(root, record);
-    } catch (err) {
-      console.warn(`清理本地源文件被拒绝/失败 key=${key}:`, err);
+    if (!keepFiles) {
+      try {
+        filesRemoved = await removeEpisodeFiles(root, record);
+      } catch (err) {
+        console.warn(`清理本地源文件被拒绝/失败 key=${key}:`, err);
+      }
     }
 
     // 3. 同剧无其他记录 → 删整个剧目录
     let seriesDirRemoved = false;
-    try {
-      const remaining = await store.listAll();
-      if (shouldRemoveSeriesDir(remaining, record)) {
-        await removeSeriesDir(root, record);
-        seriesDirRemoved = true;
+    if (!keepFiles) {
+      try {
+        const remaining = await store.listAll();
+        if (shouldRemoveSeriesDir(remaining, record)) {
+          await removeSeriesDir(root, record);
+          seriesDirRemoved = true;
+        }
+      } catch (err) {
+        console.warn(`清理本地源剧目录失败 key=${key}:`, err);
       }
-    } catch (err) {
-      console.warn(`清理本地源剧目录失败 key=${key}:`, err);
     }
 
     return NextResponse.json(
