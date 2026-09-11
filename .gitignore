@@ -62,3 +62,6 @@ apps/tv/public/workbox-*.js
 
 # disks TS 引擎本地运行缓存（生产环境走 /data/disks/cache）
 apps/disks/engine/cache/
+
+# 本地服务器下载库（compose 卷默认落点，运行时数据）
+downloads/
