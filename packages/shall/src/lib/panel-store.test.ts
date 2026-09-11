@@ -86,3 +86,62 @@ test('normalizeConfig falls back to first engine when default id is unknown', ()
   });
   assert.equal(config.style.searchEngine, 'a');
 });
+
+test('内置卡片标题/描述跟随插件清单改名（应用名是系统级）', () => {
+  const config = {
+    ...DEFAULT_CONFIG,
+    items: [
+      {
+        id: 'b-mediago',
+        groupId: 'builtin',
+        title: '媒体下载',
+        description: '旧描述',
+        url: '/media',
+        lanUrl: '',
+        icon: 'lucide:download',
+        iconColor: '',
+        builtin: 'mediago',
+      },
+      {
+        id: 'custom-x',
+        groupId: 'builtin',
+        title: '我的自定义站',
+        description: '自定义',
+        url: 'https://example.com',
+        lanUrl: '',
+        icon: 'lucide:link',
+        iconColor: '',
+      },
+    ],
+  };
+  const result = syncBuiltinItems(config, [
+    { id: 'mediago', name: '下载中心', description: '统一下载管理', icon: 'lucide:download', url: '/media' },
+  ]);
+  // 内置卡片跟随清单
+  assert.equal(result.config.items[0].title, '下载中心');
+  assert.equal(result.config.items[0].description, '统一下载管理');
+  // 自定义项标题不受影响
+  assert.equal(result.config.items[1].title, '我的自定义站');
+  assert.equal(result.changed, true);
+});
+
+test('标题与清单一致时不产生变更（幂等）', () => {
+  const config = {
+    ...DEFAULT_CONFIG,
+    items: [
+      {
+        id: 'b-lunatv',
+        groupId: 'builtin',
+        title: '影视门户',
+        description: '',
+        url: '/tv',
+        lanUrl: '',
+        icon: 'lucide:tv',
+        iconColor: '',
+        builtin: 'lunatv',
+      },
+    ],
+  };
+  const result = syncBuiltinItems(config, [plugin]);
+  assert.equal(result.changed, false);
+});
