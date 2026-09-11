@@ -215,8 +215,10 @@ const DataMigration = ({ onRefreshConfig }: DataMigrationProps) => {
       a.style.left = '0';
       document.body.appendChild(a);
       a.click();
-      window.URL.revokeObjectURL(url);
       document.body.removeChild(a);
+      // click() 返回时部分浏览器（尤其 Safari）尚未真正开始读取 blob URL，
+      // 立即 revoke 会让下载永远停在「下载中」——延迟释放给浏览器留足取流时间。
+      setTimeout(() => window.URL.revokeObjectURL(url), 30_000);
 
       showAlert({
         type: 'success',

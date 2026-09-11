@@ -4,9 +4,9 @@
 
 import Artplayer from 'artplayer';
 import Hls from 'hls.js';
-import { Heart } from 'lucide-react';
+import { Download, Heart } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Suspense, useEffect, useRef, useState } from 'react';
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import {
   deleteFavorite,
@@ -21,6 +21,8 @@ import {
   saveSkipConfig,
   subscribeToDataUpdates,
 } from '@/lib/db.client';
+import type { LocalSourceWithProgress } from '@/lib/local-source.types';
+import { createLocalDownload, fetchLocalSources } from '@/lib/local-sources.client';
 import { SearchResult } from '@/lib/types';
 import { getVideoResolutionFromM3u8, processImageUrl } from '@/lib/utils';
 
@@ -890,9 +892,15 @@ export function PlayPageClient({ pathSource, pathId }: { pathSource?: string; pa
         }
       }
 
-      const newDetail = availableSources.find(
-        (source) => source.source === newSource && source.id === newId
-      );
+      let newDetail: SearchResult | null = null;
+      if (newSource === 'mei-local') {
+        // 本地服务器源（置顶伪源，done 的集直接播本地流）
+        newDetail = localSource;
+      } else {
+        newDetail = availableSources.find(
+          (source) => source.source === newSource && source.id === newId
+        ) ?? null;
+      }
       if (!newDetail) {
         setError('未找到匹配结果');
         return;
@@ -1193,6 +1201,175 @@ export function PlayPageClient({ pathSource, pathId }: { pathSource?: string; pa
 
     return unsubscribe;
   }, [currentSource, currentId]);
+
+  // ---------------------------------------------------------------------------
+  // 本地源（下载到本地服务器 / 本地源优先播放）
+  // ---------------------------------------------------------------------------
+  // 记录按集存放（key 含剧名+年份+集号，服务端 /data/tv/local-sources.json）
+  const [localRecords, setLocalRecords] = useState<LocalSourceWithProgress[]>([]);
+  // 「下载到服务器」请求进行中（创建 media 任务）
+  const [localBusy, setLocalBusy] = useState(false);
+  const [localError, setLocalError] = useState<string | null>(null);
+  // 已自动切到本地源的集（剧名|集号）：防止用户手动换源后又被抢回本地
+  const autoSwitchedEpisodeRef = useRef('');
+  // 最近一次「非本地」详情：在本地源上点下载时取原源直链用
+  const originalDetailRef = useRef<SearchResult | null>(null);
+
+  useEffect(() => {
+    if (detail && detail.source !== 'mei-local') {
+      originalDetailRef.current = detail;
+    }
+  }, [detail]);
+
+  const refreshLocalSources = useCallback(async () => {
+    const title = videoTitleRef.current;
+    if (!title) return;
+    try {
+      const records = await fetchLocalSources({
+        title,
+        year: videoYearRef.current,
+      });
+      setLocalRecords(records);
+      setLocalError(null);
+    } catch (err) {
+      console.warn('刷新本地源失败:', err);
+    }
+  }, []);
+
+  // 标题确定后拉一次本地源记录（videoTitle 在 initAll 后为规范剧名）
+  useEffect(() => {
+    if (!videoTitle) return;
+    void refreshLocalSources();
+  }, [videoTitle, refreshLocalSources]);
+
+  // 有在途下载任务时轮询（3s），驱动 pending → downloading x% → done 状态机
+  useEffect(() => {
+    const hasActive = localRecords.some(
+      (r) => r.status === 'pending' || r.status === 'downloading'
+    );
+    if (!hasActive) return;
+    const timer = setInterval(() => {
+      void refreshLocalSources();
+    }, 3000);
+    return () => clearInterval(timer);
+  }, [localRecords, refreshLocalSources]);
+
+  // 按集号索引
+  const localEpisodeStatus = useMemo(() => {
+    const map = new Map<number, LocalSourceWithProgress>();
+    for (const r of localRecords) map.set(r.episode, r);
+    return map;
+  }, [localRecords]);
+
+  // 「本地服务器」伪源：以当前详情为底，done 的集替换为本地流 URL，置顶插入换源列表
+  const localSource = useMemo<SearchResult | null>(() => {
+    const base =
+      detail && detail.source !== 'mei-local'
+        ? detail
+        : originalDetailRef.current;
+    if (!base || !base.episodes || base.episodes.length === 0) return null;
+    const hasDone = localRecords.some((r) => r.status === 'done');
+    if (!hasDone) return null;
+    const episodes = base.episodes.map((orig, i) => {
+      const rec = localEpisodeStatus.get(i + 1);
+      return rec?.status === 'done' && rec.localUrl ? rec.localUrl : orig;
+    });
+    return {
+      id: 'mei-local',
+      title: base.title,
+      poster: base.poster,
+      episodes,
+      episodes_titles: base.episodes_titles,
+      source: 'mei-local',
+      source_name: '本地服务器',
+      year: base.year,
+      class: base.class,
+      desc: base.desc,
+      type_name: base.type_name,
+      douban_id: base.douban_id,
+    } as SearchResult;
+  }, [detail, localRecords, localEpisodeStatus]);
+
+  // 换源列表（本地源置顶）
+  const mergedSources = useMemo(
+    () => (localSource ? [localSource, ...availableSources] : availableSources),
+    [localSource, availableSources]
+  );
+
+  // 当前集的本地源记录（驱动下载按钮 / 下载中进度 / 本地源切换）
+  const currentLocalRecord =
+    localEpisodeStatus.get(currentEpisodeIndex + 1) ?? null;
+
+  // 切换到本地源（不改集数；进度恢复交给播放器 canplay 逻辑）
+  const switchToLocalSource = useCallback(() => {
+    if (!localSource) return;
+    const newUrl = new URL(window.location.href);
+    newUrl.searchParams.set('source', 'mei-local');
+    newUrl.searchParams.set('id', 'mei-local');
+    window.history.replaceState({}, '', newUrl.toString());
+    setCurrentSource('mei-local');
+    setCurrentId('mei-local');
+    setDetail(localSource);
+  }, [localSource]);
+
+  // 本地源优先：当前集已有 done 记录 → 自动切到本地源（每次进页/换集只切一次）
+  useEffect(() => {
+    if (!detail || !localSource) return;
+    if (currentSource === 'mei-local') return;
+    const episodeNo = currentEpisodeIndex + 1;
+    const rec = localEpisodeStatus.get(episodeNo);
+    if (!rec || rec.status !== 'done' || !rec.localUrl) return;
+    const guard = `${detail.title}|${episodeNo}`;
+    if (autoSwitchedEpisodeRef.current === guard) return;
+    autoSwitchedEpisodeRef.current = guard;
+    switchToLocalSource();
+  }, [
+    detail,
+    localSource,
+    localEpisodeStatus,
+    currentSource,
+    currentEpisodeIndex,
+    switchToLocalSource,
+  ]);
+
+  // 「下载到本地服务器」：取当前集的原源直链，服务端建 media 任务（按 分类/剧名 落盘）
+  const handleDownloadToServer = useCallback(async () => {
+    const base =
+      detailRef.current && detailRef.current.source !== 'mei-local'
+        ? detailRef.current
+        : originalDetailRef.current;
+    if (!base || !base.episodes || base.episodes.length === 0) return;
+    const idx = currentEpisodeIndexRef.current;
+    const url = base.episodes[idx];
+    if (!url) return;
+    const title = videoTitleRef.current || base.title;
+    setLocalBusy(true);
+    setLocalError(null);
+    try {
+      const { record, duplicated } = await createLocalDownload({
+        title,
+        year: videoYearRef.current || base.year,
+        episode: idx + 1,
+        totalEpisodes: base.episodes.length,
+        url,
+        className: base.class,
+        doubanType: searchType,
+      });
+      setLocalRecords((prev) => {
+        const rest = prev.filter((r) => r.key !== record.key);
+        return [...rest, { ...record, progress: 0, speed: '' }].sort(
+          (a, b) => a.episode - b.episode
+        );
+      });
+      if (duplicated) {
+        console.log('本集已有本地源任务，复用现有记录');
+      }
+    } catch (err) {
+      setLocalError(err instanceof Error ? err.message : '创建下载任务失败');
+    } finally {
+      setLocalBusy(false);
+    }
+  }, [searchType]);
 
   // 切换收藏
   const handleToggleFavorite = async () => {
@@ -1915,7 +2092,7 @@ export function PlayPageClient({ pathSource, pathId }: { pathSource?: string; pa
                 currentSource={currentSource}
                 currentId={currentId}
                 videoTitle={searchTitle || videoTitle}
-                availableSources={availableSources}
+                availableSources={mergedSources}
                 sourceSearchLoading={sourceSearchLoading}
                 sourceSearchError={sourceSearchError}
                 precomputedVideoInfo={precomputedVideoInfo}
@@ -1941,6 +2118,71 @@ export function PlayPageClient({ pathSource, pathId }: { pathSource?: string; pa
                 >
                   <FavoriteIcon filled={favorited} />
                 </button>
+                {/* 下载到本地服务器（media 下载器落盘，本地源优先播放） */}
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (currentLocalRecord?.status === 'done') {
+                      switchToLocalSource();
+                    } else {
+                      void handleDownloadToServer();
+                    }
+                  }}
+                  disabled={localBusy || currentLocalRecord?.status === 'pending' || currentLocalRecord?.status === 'downloading'}
+                  title={
+                    currentLocalRecord?.status === 'done'
+                      ? '本集已下载到本地服务器，点击切换本地源播放'
+                      : '下载当前集到本地服务器'
+                  }
+                  className={`ml-2 flex-shrink-0 transition-all ${
+                    currentLocalRecord?.status === 'done'
+                      ? 'rounded-full bg-green-500/10 px-3 py-1 text-xs font-semibold text-green-600 dark:text-green-400 hover:bg-green-500/20'
+                      : currentLocalRecord?.status === 'failed'
+                        ? 'rounded-full bg-red-500/10 px-3 py-1 text-xs font-semibold text-red-600 dark:text-red-400 hover:bg-red-500/20'
+                        : 'rounded-full border border-gray-400/40 px-3 py-1 text-xs font-medium text-gray-600 dark:text-gray-300 hover:border-green-500/60 hover:text-green-600 dark:hover:text-green-400 disabled:opacity-70 disabled:cursor-not-allowed'
+                  }`}
+                >
+                  {localBusy ? (
+                    <span className='inline-flex items-center gap-1.5'>
+                      <svg className='h-3.5 w-3.5 animate-spin' viewBox='0 0 24 24' fill='none' stroke='currentColor' strokeWidth='2'>
+                        <path d='M21 12a9 9 0 1 1-6.2-8.55' strokeLinecap='round' />
+                      </svg>
+                      创建任务...
+                    </span>
+                  ) : currentLocalRecord?.status === 'done' ? (
+                    <span className='inline-flex items-center gap-1.5'>
+                      <svg className='h-3.5 w-3.5' viewBox='0 0 24 24' fill='none' stroke='currentColor' strokeWidth='2' strokeLinecap='round' strokeLinejoin='round'>
+                        <path d='M20 6 9 17l-5-5' />
+                      </svg>
+                      本地源
+                    </span>
+                  ) : currentLocalRecord?.status === 'failed' ? (
+                    '下载失败 · 重试'
+                  ) : currentLocalRecord?.status === 'pending' ||
+                    currentLocalRecord?.status === 'downloading' ? (
+                    <span className='inline-flex items-center gap-1.5'>
+                      <svg className='h-3.5 w-3.5 animate-pulse' viewBox='0 0 24 24' fill='none' stroke='currentColor' strokeWidth='2' strokeLinecap='round' strokeLinejoin='round'>
+                        <path d='M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4' />
+                        <path d='M7 10l5 5 5-5' />
+                        <path d='M12 15V3' />
+                      </svg>
+                      服务器下载中
+                      {currentLocalRecord?.progress
+                        ? ` ${Math.round(currentLocalRecord.progress)}%`
+                        : ''}
+                    </span>
+                  ) : (
+                    <span className='inline-flex items-center gap-1.5'>
+                      <Download className='h-3.5 w-3.5' strokeWidth={2} />
+                      下载到服务器
+                    </span>
+                  )}
+                </button>
+                {localError && (
+                  <span className='ml-2 flex-shrink-0 text-xs text-red-500 dark:text-red-400'>
+                    {localError}
+                  </span>
+                )}
               </h1>
 
               {/* 关键信息行 */}

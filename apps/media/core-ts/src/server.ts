@@ -317,7 +317,7 @@ async function main(): Promise<void> {
 
   const hub = new Hub();
   const conversionSvc = new ConversionService(conversionRepo, converter, hub);
-  const videoSvc = new VideoService(videoRepo, cfg.localDir);
+  const videoSvc = new VideoService(videoRepo, () => cfg.localDir);
 
   // 9. 队列回调（tasklog 追加 + DB 状态回写 + SSE 广播；对应 Go queue_callbacks.go）
   queue.onStart = (id) => {

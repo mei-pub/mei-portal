@@ -47,18 +47,19 @@ function isVideoExt(p: string): string | null {
 /** 播放器服务：基于下载记录 + 本地文件检查 */
 export class VideoService {
   private readonly repo: VideoRepository;
-  private readonly localPath: string;
+  /** localDir 经闭包读取（配置热更新 local 后流式路径立即跟随，而非只在启动时定格） */
+  private readonly localDir: () => string;
 
-  constructor(repo: VideoRepository, localPath: string) {
+  constructor(repo: VideoRepository, localDir: () => string) {
     this.repo = repo;
-    this.localPath = localPath;
+    this.localDir = localDir;
   }
 
   /** 找到下载记录对应的实际文件；目录形式（分段下载）时取其中第一个视频文件 */
   private resolveFilePath(rec: Video): string | null {
-    let searchDir = this.localPath;
+    let searchDir = this.localDir();
     // folder 为用户可控：按段清洗，防止 ../ 逃出 localDir 读任意文件（/videos/:id 免鉴权）
-    if (rec.folder && rec.folder !== '') searchDir = path.join(this.localPath, sanitizeFolder(rec.folder));
+    if (rec.folder && rec.folder !== '') searchDir = path.join(this.localDir(), sanitizeFolder(rec.folder));
     const [exists, filePath] = checkFileExists(rec.name, searchDir);
     if (!exists) return null;
     try {
