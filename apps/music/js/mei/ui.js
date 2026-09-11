@@ -17,6 +17,7 @@ export const I = {
   disc: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="3"/></svg>',
   folder: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2z"/></svg>',
   zap: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z"/></svg>',
+  gear: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h.01a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51h.01a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v.01a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>',
 };
 
 let toastTimer = 0;
@@ -32,6 +33,23 @@ export function toast(message) {
   el.classList.add("show");
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => el.classList.remove("show"), 1800);
+}
+
+// 常驻进度 toast：独立元素，不与普通 toast 抢占；返回 { update, close }
+export function progressToast(message) {
+  let el = document.getElementById("meiToastProgress");
+  if (!el) {
+    el = document.createElement("div");
+    el.id = "meiToastProgress";
+    el.className = "mei-toast mei-toast-prog";
+    document.body.appendChild(el);
+  }
+  el.textContent = message;
+  el.classList.add("show");
+  return {
+    update(msg) { el.textContent = msg; el.classList.add("show"); },
+    close() { el.classList.remove("show"); },
+  };
 }
 
 // 通用弹层：返回关闭函数；content 为 DOM 节点
@@ -99,6 +117,52 @@ export function promptDialog(message, initial = "", placeholder = "") {
     box.querySelector('[data-r="ok"]').onclick = () => done(input.value);
     input.onkeydown = (e) => { if (e.key === "Enter") done(input.value); };
     setTimeout(() => input.focus(), 30);
+  });
+}
+
+// 多选一弹层：options = [{value, label, primary?}]；Esc / 遮罩点击 → null（取消）
+// 与 openDialog 同样式（mei-mask / mei-dialog），不阻塞其他操作
+export function choiceDialog({ title = "", sub = "", options = [] }) {
+  return new Promise((resolve) => {
+    const mask = document.createElement("div");
+    mask.className = "mei-mask";
+    const dialog = document.createElement("div");
+    dialog.className = "mei-dialog";
+    if (title) {
+      const t = document.createElement("h3");
+      t.className = "d-title";
+      t.textContent = title;
+      dialog.appendChild(t);
+    }
+    if (sub) {
+      const s = document.createElement("p");
+      s.className = "d-sub";
+      s.textContent = sub;
+      dialog.appendChild(s);
+    }
+    const row = document.createElement("div");
+    row.style.cssText = "display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-top:4px";
+    let settled = false;
+    const done = (value) => {
+      if (settled) return;
+      settled = true;
+      document.removeEventListener("keydown", onKey);
+      mask.remove();
+      resolve(value);
+    };
+    const onKey = (e) => { if (e.key === "Escape") done(null); };
+    options.forEach((o) => {
+      const b = document.createElement("button");
+      b.className = o.primary ? "mei-btn" : "mei-btn-ghost";
+      b.textContent = o.label;
+      b.onclick = () => done(o.value);
+      row.appendChild(b);
+    });
+    dialog.appendChild(row);
+    mask.appendChild(dialog);
+    mask.addEventListener("click", (e) => { if (e.target === mask) done(null); });
+    document.addEventListener("keydown", onKey);
+    document.body.appendChild(mask);
   });
 }
 

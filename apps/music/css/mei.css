@@ -463,6 +463,12 @@ img { display: block; }
   opacity: 0; transition: opacity .25s; pointer-events: none;
 }
 .mei-toast.show { opacity: 1; }
+/* 服务器下载进度 toast：与普通 toast 同样式，位置上移错开，路径过长时省略 */
+.mei-toast-prog {
+  bottom: calc(var(--playerbar-h) + 78px);
+  max-width: min(86vw, 480px);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
 .mei-empty { padding: 60px 20px; text-align: center; color: var(--muted); font-size: 13px; }
 .mei-empty .mei-btn, .mei-empty .mei-btn-ghost { min-width: 170px; justify-content: center; white-space: nowrap; }
 .mei-empty .e-icon { width: 54px; height: 54px; margin: 0 auto 14px; border-radius: 16px; background: var(--gradient-soft); color: var(--primary); display: flex; align-items: center; justify-content: center; }

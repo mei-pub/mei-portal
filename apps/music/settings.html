@@ -59,6 +59,12 @@ h1 .logo { width: 34px; height: 34px; border-radius: 10px; background: var(--gra
     <div id="sourceList"></div>
   </div>
 
+  <div class="card">
+    <h2>下载方式</h2>
+    <p class="hint">点击下载按钮时歌曲的保存位置。本地服务器 = 下载到服务器 /downloads/music/&lt;歌手&gt;/ 目录（服务器下载任务，含进度提示）。</p>
+    <div id="dlModeGrid" class="grid"></div>
+  </div>
+
   <div class="actions">
     <button class="btn btn-ghost" onclick="resetSources()">恢复默认源</button>
     <button class="btn btn-primary" onclick="saveAll()">保存设置</button>
@@ -82,6 +88,15 @@ var SOURCES = [
 // 单源解析失败时前端会跨源匹配同名歌曲兜底播放
 var DEFAULT_SOURCES = ["netease", "qq", "kugou", "kuwo", "migu", "joox", "youtube"];
 var YOUTUBE_MIGRATION_KEY = "mei-youtube-source-migrated-v1";
+
+// 下载方式（与 js/mei/api.js 的 getDownloadMode 语义一致，默认 local 保持既有行为）
+var DOWNLOAD_MODES = [
+  { value: "local",  label: "本地电脑" },
+  { value: "server", label: "本地服务器" },
+  { value: "both",  label: "两者都要" },
+  { value: "ask",   label: "每次询问" }
+];
+var DOWNLOAD_MODE_KEY = "mei-download-mode";
 
 function toast(msg) {
   var t = document.getElementById("toast");
@@ -120,6 +135,31 @@ function loadSources() {
 
 var selGenres = loadGenres();
 var selSources = loadSources();
+var selDlMode = loadDownloadMode();
+
+function loadDownloadMode() {
+  try {
+    var v = localStorage.getItem(DOWNLOAD_MODE_KEY);
+    for (var i = 0; i < DOWNLOAD_MODES.length; i++) {
+      if (DOWNLOAD_MODES[i].value === v) return v;
+    }
+  } catch (e) {}
+  return "local";
+}
+function renderDlMode() {
+  var box = document.getElementById("dlModeGrid");
+  box.innerHTML = "";
+  DOWNLOAD_MODES.forEach(function (m) {
+    var b = document.createElement("button");
+    b.className = "chip" + (selDlMode === m.value ? " on" : "");
+    b.textContent = m.label;
+    b.onclick = function () {
+      selDlMode = m.value;
+      renderDlMode();
+    };
+    box.appendChild(b);
+  });
+}
 
 function renderGenres() {
   var g = document.getElementById("genreGrid");
@@ -172,6 +212,7 @@ function saveAll() {
   try {
     localStorage.setItem("radarSettings", JSON.stringify({ genres: selGenres }));
     localStorage.setItem("mei-music-sources", JSON.stringify(selSources));
+    localStorage.setItem(DOWNLOAD_MODE_KEY, selDlMode);
     localStorage.setItem(YOUTUBE_MIGRATION_KEY, "1");
     // 若当前搜索源被停用，切到第一个启用源
     var cur = localStorage.getItem("searchSource");
@@ -183,6 +224,7 @@ function saveAll() {
 }
 renderGenres();
 renderSources();
+renderDlMode();
 </script>
 </body>
 </html>

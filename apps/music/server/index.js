@@ -7,6 +7,7 @@
  *   GET  /login         → login.html（公开）
  *   POST /api/login     → 登录
  *   GET/POST/DELETE /api/storage → 数据持久化（SQLite）
+ *   POST /api/download/server    → 服务端下载任务（保存到 MUSIC_DOWNLOAD_DIR）
  *   GET  /proxy         → 音乐 API 代理（带内存缓存）
  *   GET  /palette       → 专辑封面调色板分析（带内存缓存）
  *   *                   → 静态文件（css/, js/, favicon 等）
@@ -23,6 +24,7 @@ const createLoginRouter     = require('./routes/login');
 const createStorageRouter   = require('./routes/storage');
 const createProxyRouter     = require('./routes/proxy');
 const createPaletteRouter   = require('./routes/palette');
+const createServerDownloadRouter = require('./routes/server-download');
 
 const PORT     = parseInt(process.env.PORT  || '8787', 10);
 const HOST     = process.env.HOST || '0.0.0.0';
@@ -52,6 +54,8 @@ app.use(createAuthMiddleware(PASSWORD));
 app.use('/api/storage', createStorageRouter());
 app.use('/proxy',       createProxyRouter());
 app.use('/palette',     createPaletteRouter());
+// 服务端下载（受 auth 保护）：POST /api/download/server + GET /api/download/server/status
+app.use('/api/download', createServerDownloadRouter());
 
 // ─── 静态文件服务（css/, js/, favicon.png 等）──────────────────────────────────
 app.use(express.static(ROOT_DIR, {

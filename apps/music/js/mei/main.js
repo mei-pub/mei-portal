@@ -56,12 +56,22 @@ function mountPanel() {
         <button class="p-item ${activeRoute === item.path ? "active" : ""}" data-path="${item.path}" title="${item.title}">${item.icon}</button>
       `).join("")}
       <div class="p-divider"></div>
+      <button class="p-item" data-act="settings" title="播放设置">${I.gear}</button>
       <button class="p-collapse" title="收起面板">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>
       </button>
     `;
     panel.querySelector(".p-info").onclick = () => { pushRoute("/search"); };
     panel.querySelectorAll(".p-item").forEach((btn) => {
+      if (btn.dataset.act === "settings") {
+        // 播放设置页（settings.html）：新标签打开，不打断当前播放
+        btn.onclick = () => {
+          const url = "/music/settings.html";
+          const win = window.open(url, "_blank", "noopener");
+          if (!win) location.assign(url);
+        };
+        return;
+      }
       btn.onclick = () => { pushRoute(btn.dataset.path); };
     });
     panel.querySelector(".p-collapse").onclick = () => { open = false; persist(); render(); };

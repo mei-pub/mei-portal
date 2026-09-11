@@ -1,8 +1,13 @@
-// Mei Music API 层：聚合搜索 / 播放地址 / 歌词 / 封面 / 远端存储
+// Mei Music API 层：聚合搜索 / 播放地址 / 歌词 / 封面 / 远端存储 / 下载
 // 说明：路径常量使用双引号字面量，nginx sub_filter 会将其改写为 /music 前缀子路径
+
+import { toast, progressToast, choiceDialog } from "./ui.js";
 
 const PROXY = "/proxy";
 const STORAGE = "/api/storage";
+// 服务端下载任务接口（双引号字面量，由 nginx sub_filter 改写为 /music 前缀）
+const SERVER_DOWNLOAD_API = "/api/download/server";
+const SERVER_DOWNLOAD_STATUS_API = "/api/download/server/status";
 
 export const ALL_SOURCES = [
   { value: "netease", label: "网易云音乐" },
@@ -219,8 +224,33 @@ export async function fetchLyric(song) {
   return data && typeof data === "object" ? data.lrc || "" : "";
 }
 
-// 下载：先解析真实地址再触发浏览器下载
-export async function downloadSong(song, quality = "320") {
+// ── 下载（四模式）────────────────────────────────────────────────────────────
+// 设置项「下载方式」：local 本地电脑 / server 本地服务器 / both 两者 / ask 每次询问。
+// 存 localStorage（与设置页 settings.html 共用），默认 local：保持既有下载行为，
+// 服务器下载需在设置页主动开启，避免老用户下载去向悄然改变。
+const DOWNLOAD_MODE_KEY = "mei-download-mode";
+export const DOWNLOAD_MODES = ["local", "server", "both", "ask"];
+
+export function getDownloadMode() {
+  try {
+    const v = localStorage.getItem(DOWNLOAD_MODE_KEY);
+    if (DOWNLOAD_MODES.includes(v)) return v;
+  } catch { /* ignore */ }
+  return "local";
+}
+
+export function setDownloadMode(mode) {
+  if (!DOWNLOAD_MODES.includes(mode)) return false;
+  try {
+    localStorage.setItem(DOWNLOAD_MODE_KEY, mode);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+// 本地电脑下载：解析真实地址后触发浏览器下载（同源代理流，浏览器自行落盘）
+async function downloadToComputer(song, quality = "320") {
   if (song.source === "youtube") {
     const params = new URLSearchParams({
       types: "download",
@@ -246,6 +276,98 @@ export async function downloadSong(song, quality = "320") {
   document.body.appendChild(a);
   a.click();
   a.remove();
+}
+
+// 本地服务器下载：创建任务 → toast 进度轮询 → 完成/失败 toast（内部自捕获，不外抛）
+async function downloadToServer(song, quality = "320") {
+  let task;
+  try {
+    const res = await fetch(SERVER_DOWNLOAD_API, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        source: song.source || "netease",
+        id: String(song.id),
+        name: song.name || "",
+        artist: song.artist || "",
+        quality,
+      }),
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    task = await res.json();
+  } catch (e) {
+    toast(`服务器下载任务创建失败：${(e && e.message) || e}`);
+    return;
+  }
+  if (task.status === "done") {
+    toast(task.existed ? `服务器已有该文件：${task.path}` : `已保存到服务器：${task.path}`);
+    return;
+  }
+  await trackServerDownload(task.id, song);
+}
+
+// 轮询服务器下载进度：常驻进度 toast 更新，完成/失败后转普通 toast
+async function trackServerDownload(id, song) {
+  const progress = progressToast(`正在下载到服务器：${song.name}`);
+  const deadline = Date.now() + 15 * 60 * 1000; // 15 分钟兜底，防任务永久挂起
+  try {
+    while (Date.now() < deadline) {
+      await new Promise((r) => setTimeout(r, 1000));
+      const res = await fetch(`${SERVER_DOWNLOAD_STATUS_API}?id=${encodeURIComponent(id)}`);
+      if (!res.ok) throw new Error(`进度查询失败（HTTP ${res.status}）`);
+      const t = await res.json();
+      if (t.status === "done") {
+        progress.close();
+        toast(t.existed ? `服务器已有该文件：${t.path}` : `已保存到服务器：${t.path}`);
+        return;
+      }
+      if (t.status === "error") {
+        progress.close();
+        toast(`服务器下载失败：${t.error || "未知错误"}`);
+        return;
+      }
+      progress.update(t.total > 0
+        ? `正在下载到服务器：${song.name} ${t.percent || 0}%`
+        : `正在下载到服务器：${song.name} ${Math.round((t.received || 0) / 1024)}KB`);
+    }
+    throw new Error("下载超时未完成");
+  } catch (e) {
+    progress.close();
+    toast(`服务器下载失败：${(e && e.message) || e}`);
+  }
+}
+
+// 每次询问：轻量选择弹层（Esc / 遮罩关闭 = 取消下载，不阻塞其他操作）
+async function chooseDownloadTarget(song) {
+  return choiceDialog({
+    title: "下载方式",
+    sub: `「${song.name}」保存到哪里？`,
+    options: [
+      { value: "local", label: "本地电脑", primary: true },
+      { value: "server", label: "本地服务器" },
+    ],
+  });
+}
+
+async function dispatchDownload(target, song, quality) {
+  if (target === "both") {
+    // 两者都要：本地与服务器并行执行，各自独立汇报结果
+    downloadToComputer(song, quality).catch(() => toast("本地电脑下载失败，请稍后重试"));
+    return downloadToServer(song, quality);
+  }
+  if (target === "server") return downloadToServer(song, quality);
+  return downloadToComputer(song, quality);
+}
+
+// 下载统一入口：按「下载方式」设置分发到本地电脑 / 本地服务器 / 两者 / 询问
+export async function downloadSong(song, quality = "320") {
+  const mode = getDownloadMode();
+  if (mode === "ask") {
+    const choice = await chooseDownloadTarget(song);
+    if (!choice) return; // Esc / 遮罩关闭：视为取消，不执行任何下载
+    return dispatchDownload(choice, song, quality);
+  }
+  return dispatchDownload(mode, song, quality);
 }
 
 // 远端 KV 存储（可用性探测 + 读写；不可用时静默回退 localStorage）
