@@ -24,11 +24,9 @@ import { usePlatform } from "./hooks/use-platform";
 import { setupHttp } from "./utils/http";
 import { getConfig } from "./api/config";
 import { initGoEvents, onConfigChanged } from "./api/events";
-import { DownloadFilter } from "@mediago/shared-common";
 import { Locale } from "antd/es/locale";
 
 const AppLayout = lazy(() => import("./layout/app-layout"));
-const HomePage = lazy(() => import("./pages/home-page"));
 const SourceExtract = lazy(() => import("./pages/source-extract"));
 const SettingPage = lazy(() => import("./pages/setting-page"));
 const ConverterPage = lazy(() => import("./pages/converter-page"));
@@ -223,23 +221,9 @@ const App: FC = () => {
                 </Suspense>
               }
             />
-            {/* 新建下载 + 媒体任务列表（原应用首页，路由 /home） */}
-            <Route
-              path="home"
-              element={
-                <Suspense fallback={<Loading />}>
-                  <HomePage />
-                </Suspense>
-              }
-            />
-            <Route
-              path="done"
-              element={
-                <Suspense fallback={<Loading />}>
-                  <HomePage filter={DownloadFilter.done} />
-                </Suspense>
-              }
-            />
+            {/* 下载列表/下载完成已整合进下载中心四 tab（媒体面板），
+                独立的 /home、/done 页面路由已删除；home-page/components 仍被
+                媒体面板复用（download-list 等任务列表组件） */}
             <Route
               path="source"
               element={

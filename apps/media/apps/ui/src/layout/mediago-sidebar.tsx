@@ -1,6 +1,6 @@
 // mei-portal 标准左侧面板（数据驱动）：应用信息（Logo + 纵向名称）+ 行动入口
 // 组件契约见仓库根 AGENTS.md「顶栏与左侧面板组件化强约束」
-// 行动入口：下载中心（应用根 /）/ 新建（弹层）/ 下载中（/home）/ 已完成（/done）
+// 行动入口：下载中心（应用根 /）/ 新建（弹层）；下载列表/下载完成已整合进四 tab
 import { type FC, useEffect, useRef, useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useShallow } from "zustand/react/shallow";
@@ -89,31 +89,6 @@ const MediagoSidebar: FC = () => {
       ),
       onClick: openNewForm,
     },
-    // 媒体下载任务列表（原应用首页，路由 /home）
-    {
-      label: "下载中",
-      title: "下载列表",
-      active: isActive("/home"),
-      icon: (
-        <svg className="h-[15px] w-[15px]" viewBox="0 0 24 24" {...stroke}>
-          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-          <polyline points="7 10 12 15 17 10"/>
-          <line x1="12" y1="15" x2="12" y2="3"/>
-        </svg>
-      ),
-      onClick: () => navigate("/home"),
-    },
-    {
-      label: "已完成",
-      title: "下载完成",
-      active: isActive("/done"),
-      icon: (
-        <svg className="h-[15px] w-[15px]" viewBox="0 0 24 24" {...stroke}>
-          <polyline points="20 6 9 17 4 12"/>
-        </svg>
-      ),
-      onClick: () => navigate("/done"),
-    },
   ];
 
   if (!open) {
@@ -132,7 +107,7 @@ const MediagoSidebar: FC = () => {
           id="mediago-sidebar-new"
           ref={newFormRef}
           destroyOnClose
-          onConfirm={() => navigate("/home")}
+          onConfirm={() => navigate("/")}
         />
       </>
     );
@@ -182,13 +157,14 @@ const MediagoSidebar: FC = () => {
         </button>
       </div>
 
-      {/* 新建弹层（DownloadForm 内部自渲染 Modal，ref 驱动；新建成功后回到下载列表 /home） */}
+      {/* 新建弹层（DownloadForm 内部自渲染 Modal，ref 驱动；新建成功后回到下载中心根，
+          媒体任务在四 tab 的媒体面板里统一管理） */}
       <DownloadForm
         id="mediago-sidebar-new"
         ref={newFormRef}
         destroyOnClose
         onConfirm={() => {
-          navigate("/home");
+          navigate("/");
         }}
       />
     </>
