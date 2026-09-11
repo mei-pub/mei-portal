@@ -962,7 +962,7 @@ function dlFileRowHtml(file, i) {
       <span class="r-cover" style="display:flex;align-items:center;justify-content:center;color:var(--primary)" title="已下载到服务器">${I.disc}</span>
       <div class="r-meta">
         <div class="r-name" title="${escapeHtml(file.name)}">${escapeHtml(file.name)}</div>
-        <div class="r-sub" title="${escapeHtml(file.fileName)}">${escapeHtml(file.fileName)} · ${fmtBytes(file.size)}</div>
+        <div class="r-sub" title="${escapeHtml(file.fileName)}">${escapeHtml(sourceLabel(file.source) || "未知源")} · ${fmtBytes(file.size)}</div>
       </div>
       <span class="r-src">已下载</span>
       <div class="r-ops">
@@ -1056,14 +1056,16 @@ export function renderDownloads(root) {
           <button class="mei-btn" id="dlGoSearch">${I.search} 去搜索下载</button>
         </div>
       ` : ""}
-      ${[...groups.entries()].map(([artist, files]) => `
+      ${[...groups.entries()].map(([artist, files]) => {
+        const groupSize = files.reduce((sum, f) => sum + (Number(f.size) || 0), 0);
+        return `
         <div class="mei-dl-group">
-          <div class="mei-dl-group-head">${I.folder} ${escapeHtml(artist)} <span class="cnt">${files.length} 首</span></div>
+          <div class="mei-dl-group-head">${I.folder} ${escapeHtml(artist)} <span class="cnt">${files.length} 首${groupSize > 0 ? ` · ${fmtBytes(groupSize)}` : ""}</span></div>
           <div class="mei-fav-list mei-dl-list">
             ${files.map((f) => dlFileRowHtml(f, globalIdx(f))).join("")}
           </div>
         </div>
-      `).join("")}
+      `; }).join("")}
     `;
 
     root.querySelector("#dlRefresh").onclick = () => { dlState.loading = true; draw(); load(); };

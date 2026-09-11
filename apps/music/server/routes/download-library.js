@@ -157,6 +157,7 @@ async function scanLibrary(root, deps = {}) {
       files.push({
         artist,
         name: parsed.name,
+        source: parsed.source, // 落盘文件名「歌名 - 源.ext」中的源短码（netease/qq/...）
         fileName,
         path: `${artist}/${fileName}`,
         size: stat.size,
