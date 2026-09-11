@@ -13,7 +13,7 @@ export const SWITCHABLE_APPS: SwitchableApp[] = [
   { id: 'ai-draw', name: 'AI 绘图', icon: 'lucide:pen-tool', desc: '关闭后门户卡片与顶栏入口置灰' },
   { id: 'solara', name: '音乐播放', icon: 'lucide:music', desc: '关闭后门户卡片与顶栏入口置灰' },
   { id: 'lunatv', name: '影视门户', icon: 'lucide:tv', desc: '关闭后门户卡片与顶栏入口置灰' },
-  { id: 'mediago', name: '流媒体下载', icon: 'lucide:download', desc: '关闭后门户卡片与顶栏入口置灰' },
+  { id: 'mediago', name: '下载中心', icon: 'lucide:download', desc: '关闭后门户卡片与顶栏入口置灰' },
 ];
 
 const STORAGE_KEY = 'mei-enabled';

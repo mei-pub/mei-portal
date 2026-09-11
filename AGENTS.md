@@ -272,12 +272,14 @@ document 与 iframe 请求，所有请求都直接代理到子应用，Shell 不
 - **落盘布局**：`/downloads/music/<歌手>/<歌名> - <源>.mp3`（music 服务端，
   `MUSIC_DOWNLOAD_DIR`）；`/downloads/movie/<电影|电视|动漫|综艺>/<剧名>/`（media
   下载引擎，`--local-dir`；tv 按 `分类/剧名` 组 folder）
-- **media 下载中心**（统一下载管理 UI）：`/media/downloads?type=media|movie|music`
-  是唯一对外路由格式——影视/音乐应用里的「下载中」引导跳转一律 postMessage
+- **media 下载中心**（统一下载管理 UI，应用显示名为「下载中心」，但路由与插件 id 仍
+  是 `/media` 与 `mediago`，不得因改名改动）：`/media/downloads?type=media|movie|music`
+  是唯一对外深链路由格式——影视/音乐应用里的「下载中」引导跳转一律 postMessage
   `{source:'mei-iframe',type:'navigate',path:'/media/downloads?type=…'}`（走外壳
-  承载路由，禁止直接改 location）；三个面板分别消费：
-  `GET /tv/api/local-sources/list`、`GET /music/api/download/library`、media 自身任务
-  （SSE）。删除分别走各自 DELETE
+  承载路由，禁止直接改 location）；页面为四 tab（全部/媒体/影视/音乐），「全部」为
+  默认 tab 且规范 URL 不带 query（`?type=all` 也接受并归一到无 query）；三个数据面板
+  分别消费：`GET /tv/api/local-sources/list`、`GET /music/api/download/library`、
+  media 自身任务（SSE）。删除分别走各自 DELETE
 - **防穿越**：music 的 serve/DELETE/library 三口共享 resolveWithin（realpath +
   path.relative 双校验）；tv 的删除段消毒 + resolve 后必须位于 `/downloads/movie`
   内——任何新增的文件下发/删除端点必须同款双保险

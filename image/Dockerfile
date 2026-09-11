@@ -105,7 +105,7 @@ COPY apps/disks/web/ ./
 RUN npm ci --no-audit --no-fund || npm install --no-audit --no-fund
 RUN npm run build
 
-# ---- media 流媒体下载（core-ts Node 引擎 + React UI + 外部下载工具；Go core 已退役）----
+# ---- media 下载中心（core-ts Node 引擎 + React UI + 外部下载工具；Go core 已退役）----
 # 全部从本地源码构建
 FROM node:22-bookworm-slim AS media-node-builder
 WORKDIR /src

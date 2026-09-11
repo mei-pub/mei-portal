@@ -80,7 +80,7 @@ const HomePage: FC<Props> = ({ filter = DownloadFilter.list }) => {
         </span>
         <div className="min-w-0">
           <div className="bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500 bg-clip-text text-[22px] font-extrabold leading-tight tracking-tight text-transparent">
-            媒体下载
+            下载中心
           </div>
           <div className="truncate text-xs text-gray-500 dark:text-gray-400">
             m3u8 / B站 / 流媒体视频批量下载

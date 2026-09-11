@@ -1,6 +1,6 @@
 # Mei-Portal
 
-> 多应用聚合门户·单镜像交付：影视、音乐、网盘搜索、流媒体下载、AI 绘图、工具箱、内网穿透、小说阅读——一个容器全带走。
+> 多应用聚合门户·单镜像交付：影视、音乐、网盘搜索、下载中心、AI 绘图、工具箱、内网穿透、小说阅读——一个容器全带走。
 > 前身 mei-allin，2026-09 更名 mei-portal（GitHub 旧地址自动重定向）。
 
 [![apps](https://img.shields.io/badge/apps-8-blue)](#整合的应用) [![deploy](https://img.shields.io/badge/deploy-单镜像-9cf)](#快速开始) [![status](https://img.shields.io/badge/status-生产可用-brightgreen)](#核心特性) [![license](https://img.shields.io/badge/license-Apache--2.0-lightgrey)](LICENSE)
@@ -23,7 +23,7 @@
 | 📺 影视门户 MeiTV | `/tv` | 豆瓣式影视聚合与在线播放 |
 | 🎵 音乐播放 Mei Music | `/music` | 沉浸式音乐播放器，完整播控 + 歌词，跨应用不断播 |
 | 🔍 网盘搜索 | `/disks` | 聚合网盘/磁力搜索：多网盘分享链接与 magnet/ed2k 一键检索，跨源去重、按网盘/磁力类型筛选 |
-| ⬇️ 媒体下载 | `/media` | m3u8 / 视频流批量嗅探下载 |
+| ⬇️ 下载中心 | `/media` | m3u8 / 视频流批量嗅探下载 + 影视/音乐落盘统一管理 |
 | 🖼 AI 绘图 Mei Draw | `/draw` | Excalidraw / Mermaid / Drawio 三种画板 |
 | 🧰 工具箱 | `/tools` | 隐私优先的本地工具集合（图片 / PDF / 文本处理） |
 | 🔗 内网穿透 | `/link` | frp 隧道客户端管理：故障引导弹层 + 自动重连 |
@@ -118,7 +118,7 @@ mei-portal/
 │   ├── disks/              #   网盘搜索：web/（Vue 前端）+ engine/（Node/TS 引擎，
 │   │                       #   51 个启用插件全量移植，含 gying/qqpd/weibo/panlian
 │   │                       #   四个账号型源的管理页 Web 路由）
-│   ├── media/              #   流媒体下载（core-ts/ Node 复刻引擎 + React UI；
+│   ├── media/              #   下载中心（core-ts/ Node 复刻引擎 + React UI；
 │   │                       #   鉴权统一走门户会话，无独立 setup/signin）
 │   ├── draw/               #   AI 绘图（Vite + React + Express，原 ai-draw）
 │   ├── tools/              #   工具箱（Vite + React + MUI，纯静态，原 omni-tools）

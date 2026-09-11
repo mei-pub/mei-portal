@@ -1,6 +1,6 @@
 // mei-portal 标准左侧面板（数据驱动）：应用信息（Logo + 纵向名称）+ 行动入口
 // 组件契约见仓库根 AGENTS.md「顶栏与左侧面板组件化强约束」
-// 媒体下载入口：新建（弹层）/ 下载中（列表）/ 已完成
+// 下载中心入口：新建（弹层）/ 下载中（列表）/ 已完成
 import { type FC, useEffect, useRef, useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useShallow } from "zustand/react/shallow";
@@ -98,7 +98,7 @@ const MediagoSidebar: FC = () => {
       ),
       onClick: () => navigate("/done"),
     },
-    // 统一下载中心（/media/downloads?type=media|movie|music）
+    // 统一下载中心（/downloads 四 tab：全部为默认，深链 ?type=media|movie|music）
     {
       label: "下载中心",
       title: "下载中心（媒体 / 影视 / 音乐）",
@@ -142,7 +142,7 @@ const MediagoSidebar: FC = () => {
         {/* 应用信息区：Logo + 纵向名称（标准窄面板） */}
         <button
           onClick={() => navigate("/")}
-          title="媒体下载"
+          title="下载中心"
           className="flex flex-col items-center gap-1.5 rounded-xl px-0.5 py-1.5 transition-colors hover:bg-gray-900/5 dark:hover:bg-white/10"
         >
           <span className="flex h-[30px] w-[30px] items-center justify-center rounded-lg bg-gradient-to-br from-indigo-500 to-purple-500 text-white shadow-md">
@@ -152,7 +152,7 @@ const MediagoSidebar: FC = () => {
               <line x1="12" y1="15" x2="12" y2="3"/>
             </svg>
           </span>
-          <span className="select-none text-[10px] font-medium leading-none tracking-[0.18em] text-gray-700 [writing-mode:vertical-rl] dark:text-gray-300">媒体下载</span>
+          <span className="select-none text-[10px] font-medium leading-none tracking-[0.18em] text-gray-700 [writing-mode:vertical-rl] dark:text-gray-300">下载中心</span>
         </button>
         <div className="h-px w-6 bg-black/10 dark:bg-white/10" />
         {actions.map(a => (

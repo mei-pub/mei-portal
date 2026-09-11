@@ -1,3 +1,4 @@
+import { DownloadStatus } from "@mediago/shared-common";
 import type { DownloadFilter, DownloadTask } from "@mediago/shared-common";
 import { useMemoizedFn } from "ahooks";
 import { App, Empty } from "antd";
@@ -20,9 +21,11 @@ import { ListHeader } from "./list-header";
 
 interface Props {
   filter: DownloadFilter;
+  /** true 时进行中（downloading）任务稳定置前，其余保持原有顺序（下载中心全部视图用） */
+  prioritizeActive?: boolean;
 }
 
-export function DownloadTaskList({ filter }: Props) {
+export function DownloadTaskList({ filter, prioritizeActive = false }: Props) {
   const [selected, setSelected] = useState<number[]>([]);
   const { contextMenu } = usePlatform();
   const { message } = App.useApp();
@@ -76,6 +79,19 @@ export function DownloadTaskList({ filter }: Props) {
     }
     return "indeterminate";
   }, [selected, data.length]);
+
+  // 进行中置前（可选）：downloading 优先，其余条目保持服务端原有相对顺序（稳定排序）
+  const orderedData = useMemo(() => {
+    if (!prioritizeActive) return data;
+    return data
+      .map((task, index) => ({ task, index }))
+      .sort((a, b) => {
+        const aActive = a.task.status === DownloadStatus.Downloading ? 0 : 1;
+        const bActive = b.task.status === DownloadStatus.Downloading ? 0 : 1;
+        return aActive - bActive || a.index - b.index;
+      })
+      .map((item) => item.task);
+  }, [data, prioritizeActive]);
 
   const onStartDownload = useMemoizedFn(async (id: number) => {
     await startDownload(id);
@@ -166,13 +182,13 @@ export function DownloadTaskList({ filter }: Props) {
         )}
       >
         {isLoading && <Loading />}
-        {data.length === 0 && !isLoading && (
+        {orderedData.length === 0 && !isLoading && (
           <div className="flex h-full flex-1 flex-row items-center justify-center rounded-lg bg-white dark:bg-[#1F2024]">
             <Empty description={t("noData")} />
           </div>
         )}
-        {data.length > 0 &&
-          data.map((task) => {
+        {orderedData.length > 0 &&
+          orderedData.map((task) => {
             return (
               <DownloadTaskItem
                 key={task.id}

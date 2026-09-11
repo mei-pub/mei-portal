@@ -1,9 +1,11 @@
 // 影视下载面板 —— 数据源：/tv/api/local-sources/list（契约 1）
-// 按剧名（title + year）分组；下载中显示进度条 + 速度（3s 轮询）；
-// done 显示分类/集数；failed 标红；删除走契约 2。
+// 按剧名（title + year）分组；下载中显示进度条 + 速度（经 shared-poll 统一 3s 轮询，
+// 无下载任务时不轮询）；done 显示分类/集数；failed 标红；删除走契约 2。
+// embedded=true（全部视图）：段卡片 + 段头（计数/进行中徽标 + 「进入 →」），
+// 含进行中任务的分组与条目稳定置前（保持原有相对顺序）。
 import { App, Empty, Popconfirm, Progress } from "antd";
 import { useMemoizedFn } from "ahooks";
-import { type FC, useEffect, useMemo } from "react";
+import { type FC, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import useSWR from "swr";
 import { DeleteIcon, DownloadIcon, FailedIcon } from "@/assets/svg";
@@ -16,6 +18,16 @@ import {
   listMovieSources,
 } from "@/api/download-center";
 import { cn } from "@/utils";
+import { InlineNotice } from "./inline-notice";
+import { SectionHeader } from "./section-header";
+import { useSharedPoll } from "./shared-poll";
+
+interface Props {
+  /** 全部视图内嵌模式 */
+  embedded?: boolean;
+  /** 段头「进入 →」回调（锚定影视 tab） */
+  onEnter?: () => void;
+}
 
 interface Group {
   groupKey: string;
@@ -51,7 +63,10 @@ const statusTag = (record: MovieSourceRecord) => {
   }
 };
 
-const MoviePanel: FC = () => {
+const isDownloading = (record: MovieSourceRecord) =>
+  record.status === "downloading";
+
+const MoviePanel: FC<Props> = ({ embedded = false, onEnter }) => {
   const { message } = App.useApp();
   const { t } = useTranslation();
   const { data, error, isLoading, mutate } = useSWR(
@@ -62,18 +77,17 @@ const MoviePanel: FC = () => {
 
   const records = useMemo(() => data ?? [], [data]);
 
-  // 下载中 → 3s 轮询刷新进度/速度；无下载任务时停止轮询
+  // 下载中 → 3s 轮询刷新进度/速度（页面级共享计时器）；无下载任务时停止轮询
   const hasDownloading = useMemo(
-    () => records.some((item) => item.status === "downloading"),
+    () => records.some(isDownloading),
     [records],
   );
-  useEffect(() => {
-    if (!hasDownloading) return;
-    const timer = setInterval(() => {
-      mutate();
-    }, 3000);
-    return () => clearInterval(timer);
-  }, [hasDownloading, mutate]);
+  useSharedPoll(hasDownloading, mutate);
+
+  const activeCount = useMemo(
+    () => records.filter(isDownloading).length,
+    [records],
+  );
 
   const groups = useMemo(() => {
     const map = new Map<string, Group>();
@@ -89,6 +103,32 @@ const MoviePanel: FC = () => {
     }
     return [...map.values()];
   }, [records]);
+
+  // 全部视图：进行中置前 —— 含下载中条目的分组优先（组内下载中条目优先），
+  // 稳定排序保持其余条目原有相对顺序（沿用服务端顺序）
+  const displayGroups = useMemo(() => {
+    if (!embedded) return groups;
+    const ordered = groups.map((group, groupIndex) => ({
+      groupIndex,
+      group: {
+        ...group,
+        records: group.records
+          .map((record, index) => ({ record, index }))
+          .sort((a, b) => {
+            const av = isDownloading(a.record) ? 0 : 1;
+            const bv = isDownloading(b.record) ? 0 : 1;
+            return av - bv || a.index - b.index;
+          })
+          .map((item) => item.record),
+      },
+    }));
+    ordered.sort((a, b) => {
+      const av = a.group.records.some(isDownloading) ? 0 : 1;
+      const bv = b.group.records.some(isDownloading) ? 0 : 1;
+      return av - bv || a.groupIndex - b.groupIndex;
+    });
+    return ordered.map((item) => item.group);
+  }, [groups, embedded]);
 
   const handleDeleteRecord = useMemoizedFn(async (record: MovieSourceRecord) => {
     try {
@@ -115,7 +155,7 @@ const MoviePanel: FC = () => {
 
   const renderRow = (record: MovieSourceRecord) => {
     const isFailed = record.status === "failed";
-    const isDownloading = record.status === "downloading";
+    const rowDownloading = isDownloading(record);
     return (
       <div
         key={record.key}
@@ -134,7 +174,7 @@ const MoviePanel: FC = () => {
           >
             {record.name}
           </div>
-          {isDownloading ? (
+          {rowDownloading ? (
             <div className="flex flex-row items-center gap-2 text-xs text-[rgba(0,0,0,0.65)] dark:text-[rgba(255,255,255,0.65)]">
               <Progress
                 percent={Math.round(Number(record.progress ?? 0))}
@@ -164,6 +204,75 @@ const MoviePanel: FC = () => {
     );
   };
 
+  const renderGroups = () =>
+    displayGroups.map((group) => {
+      const doneCount = group.records.filter(
+        (r) => r.status === "done",
+      ).length;
+      const category = group.records[0]?.category || "";
+      return (
+        <div
+          key={group.groupKey}
+          className="flex flex-col gap-2 rounded-xl border border-black/5 bg-white/85 p-3 shadow-sm dark:border-white/10 dark:bg-[#1F2024]"
+        >
+          <div className="flex flex-row items-center gap-2">
+            <span className="truncate text-sm font-medium text-[#343434] dark:text-white">
+              {group.title}
+              {group.year ? `（${group.year}）` : ""}
+            </span>
+            {category && (
+              <DownloadTag text={category} color="#6366f1" />
+            )}
+            <span className="shrink-0 text-xs text-[#B3B3B3] dark:text-[#515257]">
+              {doneCount}/{group.records.length} 集
+            </span>
+            <div className="ml-auto">
+              <Popconfirm
+                title="删除该剧全部记录？"
+                description="将同时清理服务端落盘文件"
+                okText="删除"
+                cancelText="取消"
+                onConfirm={() => handleDeleteGroup(group)}
+              >
+                <IconButton title="删除该剧全部" icon={<DeleteIcon />} />
+              </Popconfirm>
+            </div>
+          </div>
+          <div className="flex flex-col gap-2">
+            {group.records.map(renderRow)}
+          </div>
+        </div>
+      );
+    });
+
+  // ---- embedded（全部视图）：段卡片 + 段头，段内提示用 InlineNotice 不占满屏 ----
+  if (embedded) {
+    return (
+      <div className="flex flex-col gap-3 rounded-xl border border-black/5 bg-white/85 p-3 shadow-sm dark:border-white/10 dark:bg-[#1F2024]">
+        <SectionHeader
+          title="影视"
+          count={records.length}
+          activeCount={activeCount}
+          onEnter={onEnter}
+        />
+        {isLoading && <InlineNotice text="影视下载记录加载中…" />}
+        {error && (
+          <InlineNotice
+            error
+            text="影视服务不可用，暂时无法获取下载记录"
+          />
+        )}
+        {!isLoading && !error && displayGroups.length === 0 && (
+          <InlineNotice text="暂无影视下载记录" />
+        )}
+        {!isLoading && !error && displayGroups.length > 0 && (
+          <div className="flex flex-col gap-3">{renderGroups()}</div>
+        )}
+      </div>
+    );
+  }
+
+  // ---- 单 tab 页面模式（原逻辑） ----
   if (isLoading) {
     return <Loading />;
   }
@@ -176,7 +285,7 @@ const MoviePanel: FC = () => {
     );
   }
 
-  if (groups.length === 0) {
+  if (displayGroups.length === 0) {
     return (
       <div className={PANEL_ERROR_STYLE}>
         <Empty description="暂无影视下载记录" />
@@ -186,45 +295,7 @@ const MoviePanel: FC = () => {
 
   return (
     <div className="flex flex-1 flex-col gap-4 overflow-auto pr-1">
-      {groups.map((group) => {
-        const doneCount = group.records.filter(
-          (r) => r.status === "done",
-        ).length;
-        const category = group.records[0]?.category || "";
-        return (
-          <div
-            key={group.groupKey}
-            className="flex flex-col gap-2 rounded-xl border border-black/5 bg-white/85 p-3 shadow-sm dark:border-white/10 dark:bg-[#1F2024]"
-          >
-            <div className="flex flex-row items-center gap-2">
-              <span className="truncate text-sm font-medium text-[#343434] dark:text-white">
-                {group.title}
-                {group.year ? `（${group.year}）` : ""}
-              </span>
-              {category && (
-                <DownloadTag text={category} color="#6366f1" />
-              )}
-              <span className="shrink-0 text-xs text-[#B3B3B3] dark:text-[#515257]">
-                {doneCount}/{group.records.length} 集
-              </span>
-              <div className="ml-auto">
-                <Popconfirm
-                  title="删除该剧全部记录？"
-                  description="将同时清理服务端落盘文件"
-                  okText="删除"
-                  cancelText="取消"
-                  onConfirm={() => handleDeleteGroup(group)}
-                >
-                  <IconButton title="删除该剧全部" icon={<DeleteIcon />} />
-                </Popconfirm>
-              </div>
-            </div>
-            <div className="flex flex-col gap-2">
-              {group.records.map(renderRow)}
-            </div>
-          </div>
-        );
-      })}
+      {renderGroups()}
     </div>
   );
 };

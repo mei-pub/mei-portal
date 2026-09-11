@@ -1,46 +1,61 @@
-// 统一下载中心 —— 路由 /downloads?type=media|movie|music
-// 三个面板统一风格（复用 DownloadTag / Progress / IconButton 视觉语言）：
-//   media：媒体下载（复用 home-page 下载任务列表）
+// 下载中心 —— 路由 /downloads（默认全部）或 /downloads?type=media|movie|music
+// 四个 tab：全部 / 媒体 / 影视 / 音乐；「全部」聚合三段（各段带段头与「进入 →」，
+// 实现在 components/all-view.tsx）。三个单类型面板统一风格（复用 DownloadTag /
+// Progress / IconButton 视觉语言）：
+//   media：媒体任务（复用 home-page 下载任务列表）
 //   movie：影视服务器下载（/tv/api/local-sources，契约 1/2）
 //   music：音乐下载库（/music/api/download/library，契约 3/4）
-// query 定位：进入 ?type=movie 自动选中影视面板；切换面板时同步 query，
-// 供其他应用经 /media/downloads?type=... 深链跳转。
+// URL 规范：默认 tab（全部）清空 query——`/downloads` 是无 query 的规范地址；
+// `?type=all` 也接受并归一为全部。深链契约保持不变：影视/音乐应用经
+// ?type=movie|music 直达对应面板。
 import { Segmented } from "antd";
-import { type FC, useMemo } from "react";
+import { type FC, useCallback, useMemo } from "react";
 import { useSearchParams } from "react-router-dom";
 import PageContainer from "@/components/page-container";
+import AllView from "./components/all-view";
 import MediaPanel from "./components/media-panel";
 import MoviePanel from "./components/movie-panel";
 import MusicPanel from "./components/music-panel";
 
-export type DownloadCenterType = "media" | "movie" | "music";
+export type DownloadCenterTab = "all" | "media" | "movie" | "music";
 
-const TYPE_OPTIONS: Array<{ label: string; value: DownloadCenterType }> = [
+const TYPE_OPTIONS: Array<{ label: string; value: DownloadCenterTab }> = [
+  { label: "全部", value: "all" },
   { label: "媒体", value: "media" },
   { label: "影视", value: "movie" },
   { label: "音乐", value: "music" },
 ];
 
-const parseType = (raw: string | null): DownloadCenterType => {
-  return TYPE_OPTIONS.some((option) => option.value === raw)
-    ? (raw as DownloadCenterType)
-    : "media";
+// 无 query / type=all / 无效值 → 全部（默认 tab）；media|movie|music 深链保持原语义
+const parseType = (raw: string | null): DownloadCenterTab => {
+  return raw === "media" || raw === "movie" || raw === "music" ? raw : "all";
 };
 
 const DownloadsPage: FC = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const type = parseType(searchParams.get("type"));
 
+  // 切 tab / 段头「进入 →」统一出口：全部 → 清空 query（规范 URL），
+  // 其余 → ?type=<tab>，浏览器前进后退与深链分享都可用
+  const goTo = useCallback(
+    (next: DownloadCenterTab) => {
+      setSearchParams(next === "all" ? {} : { type: next });
+    },
+    [setSearchParams],
+  );
+
   const panel = useMemo(() => {
     switch (type) {
+      case "media":
+        return <MediaPanel />;
       case "movie":
         return <MoviePanel />;
       case "music":
         return <MusicPanel />;
       default:
-        return <MediaPanel />;
+        return <AllView onEnter={goTo} />;
     }
-  }, [type]);
+  }, [type, goTo]);
 
   return (
     <PageContainer className="bg-white/85 dark:bg-[#1F2024] flex flex-col flex-1 min-h-0 h-full rounded-xl border border-black/5 shadow-sm p-3 gap-3 overflow-hidden">
@@ -54,15 +69,14 @@ const DownloadsPage: FC = () => {
             下载中心
           </div>
           <div className="truncate text-xs text-gray-500 dark:text-gray-400">
-            媒体 / 影视 / 音乐 服务器下载统一管理
+            全部 / 媒体 / 影视 / 音乐 服务器下载统一管理
           </div>
         </div>
         <Segmented
           value={type}
           options={TYPE_OPTIONS}
           onChange={(value) => {
-            const next = parseType(value as string);
-            setSearchParams(next === "media" ? {} : { type: next });
+            goTo(parseType(value as string));
           }}
         />
       </div>

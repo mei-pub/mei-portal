@@ -230,7 +230,7 @@
     ['ai-draw', 'AI 绘图', '关闭后门户卡片与顶栏入口置灰'],
     ['solara', '音乐播放', '关闭后门户卡片与顶栏入口置灰'],
     ['lunatv', '影视门户', '关闭后门户卡片与顶栏入口置灰'],
-    ['mediago', '流媒体下载', '关闭后门户卡片与顶栏入口置灰'],
+    ['mediago', '下载中心', '关闭后门户卡片与顶栏入口置灰'],
   ];
   function readEnabled() {
     try { return JSON.parse(localStorage.getItem('mei-enabled') || '{}') || {}; } catch (e) { return {}; }

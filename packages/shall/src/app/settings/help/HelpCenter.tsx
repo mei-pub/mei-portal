@@ -36,11 +36,11 @@ const DOCS: Record<string, HelpDoc> = {
     ],
   },
   mediago: {
-    name: '媒体下载帮助', icon: 'lucide:download',
+    name: '下载中心帮助', icon: 'lucide:download',
     intro: 'm3u8/流媒体视频下载工具。',
     sections: [
       { title: '新建下载', body: ['点击「新建下载」粘贴视频页面或 m3u8 链接，自动解析下载。', '支持批量任务与下载完成后自动合并转码。'] },
-      { title: '设置', body: ['「设置 → 媒体下载设置」可配置下载目录、并发数、代理等。'] },
+      { title: '设置', body: ['「设置 → 下载中心设置」可配置下载目录、并发数、代理等。'] },
     ],
   },
   pansou: {
