@@ -1,6 +1,6 @@
 // 内嵌播放弹层 —— 下载中心已完成条目就地播放（/videos/:id 直播流，
 // media core 免鉴权 Range 端点），关闭即回列表。
-// 取代原先跳独立播放器页（/media/player）的方案：那个页面没有返回路径，
+// 取代原先跳独立播放器页（/downloads/player）的方案：那个页面没有返回路径，
 // 用户看完回不到下载中心（实测反馈）。
 //
 // 经 Context 注入 play(target)：下载中心页挂 Provider 弹层播放；

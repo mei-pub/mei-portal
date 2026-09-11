@@ -14,7 +14,7 @@ export interface ParsedAppRoute {
 const FALLBACK_PLUGINS: HostPluginRef[] = [
   { id: 'lunatv', url: '/tv' },
   { id: 'solara', url: '/music' },
-  { id: 'mediago', url: '/media' },
+  { id: 'mediago', url: '/downloads' },
   { id: 'pansou', url: '/disks' },
   { id: 'ai-draw', url: '/draw' },
   { id: 'omni-tools', url: '/tools' },

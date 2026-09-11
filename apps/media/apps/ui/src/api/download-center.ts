@@ -5,7 +5,7 @@
 //   4. DELETE /music/api/download/library?path=→ { removed: true }
 //   5. GET    /api/v1/videos                   → MediaPlayableVideo[]（裸 JSON，media core）
 //
-// 单镜像同源部署（UI 在 /media/ iframe 内），相对路径 fetch 自动携带门户
+// 单镜像同源部署（UI 在 /downloads/ iframe 内），相对路径 fetch 自动携带门户
 // mei-auth cookie；不经过 http axios 实例（那是 media core 专用，会注入 X-API-Key）。
 
 export type MovieSourceStatus = "pending" | "downloading" | "done" | "failed";

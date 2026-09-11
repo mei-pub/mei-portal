@@ -115,11 +115,13 @@ test('内置卡片标题/描述跟随插件清单改名（应用名是系统级�
     ],
   };
   const result = syncBuiltinItems(config, [
-    { id: 'mediago', name: '下载中心', description: '统一下载管理', icon: 'lucide:download', url: '/media' },
+    { id: 'mediago', name: '下载中心', description: '统一下载管理', icon: 'lucide:download', url: '/downloads' },
   ]);
   // 内置卡片跟随清单
   assert.equal(result.config.items[0].title, '下载中心');
   assert.equal(result.config.items[0].description, '统一下载管理');
+  // 旧前缀 url（/media 时代的卡片快照）跟随清单改写为 /downloads
+  assert.equal(result.config.items[0].url, '/downloads');
   // 自定义项标题不受影响
   assert.equal(result.config.items[1].title, '我的自定义站');
   assert.equal(result.changed, true);

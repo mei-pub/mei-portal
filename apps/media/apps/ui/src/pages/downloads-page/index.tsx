@@ -1,11 +1,12 @@
-// 下载中心 —— 路由 /downloads（默认全部）或 /downloads?type=media|movie|music
+// 下载中心 —— 应用根路由 /（默认全部）或 /?type=media|movie|music
+// （应用部署在 /downloads 子路径下，下载中心即应用首页）
 // 四个 tab：全部 / 媒体 / 影视 / 音乐；「全部」聚合三段（各段带段头与「进入 →」，
 // 实现在 components/all-view.tsx）。三个单类型面板统一风格（复用 DownloadTag /
 // Progress / IconButton 视觉语言）：
 //   media：媒体任务（复用 home-page 下载任务列表）
 //   movie：影视服务器下载（/tv/api/local-sources，契约 1/2）
 //   music：音乐下载库（/music/api/download/library，契约 3/4）
-// URL 规范：默认 tab（全部）清空 query——`/downloads` 是无 query 的规范地址；
+// URL 规范：默认 tab（全部）清空 query——应用根是无 query 的规范地址；
 // `?type=all` 也接受并归一为全部。深链契约保持不变：影视/音乐应用经
 // ?type=movie|music 直达对应面板。
 import { Segmented } from "antd";

@@ -32,9 +32,9 @@
     "icon": "lucide:download",
     "category": "utility",
     "weight": 30,
-    "subdomainPrefix": "media",
+    "subdomainPrefix": "downloads",
     "endpoint": "",
-    "healthPath": "/media/",
+    "healthPath": "/downloads/",
     "healthExpect": 200,
     "hasSkin": false
   },

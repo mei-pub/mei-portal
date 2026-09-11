@@ -213,8 +213,19 @@ const App: FC = () => {
               </Suspense>
             }
           >
+            {/* 下载中心即应用根（下载中心内部内置了媒体下载能力）：
+                ?type=media|movie|music 深链定位面板，全部为默认且无 query */}
             <Route
               index
+              element={
+                <Suspense fallback={<Loading />}>
+                  <DownloadsPage />
+                </Suspense>
+              }
+            />
+            {/* 新建下载 + 媒体任务列表（原应用首页，路由 /home） */}
+            <Route
+              path="home"
               element={
                 <Suspense fallback={<Loading />}>
                   <HomePage />
@@ -250,15 +261,6 @@ const App: FC = () => {
               element={
                 <Suspense fallback={<Loading />}>
                   <ConverterPage />
-                </Suspense>
-              }
-            />
-            {/* 统一下载中心：?type=media|movie|music 定位面板 */}
-            <Route
-              path="downloads"
-              element={
-                <Suspense fallback={<Loading />}>
-                  <DownloadsPage />
                 </Suspense>
               }
             />

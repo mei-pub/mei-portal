@@ -4,7 +4,7 @@ description: m3u8/视频流下载工具
 icon: lucide:download
 category: utility
 weight: 30
-path: /media
+path: /downloads
 endpoint: http://mediago:8899
 embed:
   iframe: true

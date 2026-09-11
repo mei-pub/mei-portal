@@ -321,14 +321,14 @@ test('openMediaDownloads：iframe 内 postMessage 给外壳；独立访问降级
     assert.equal(posted.length, 1);
     assert.equal(posted[0].msg.source, 'mei-iframe');
     assert.equal(posted[0].msg.type, 'navigate');
-    assert.equal(posted[0].msg.path, '/media/downloads?type=music');
+    assert.equal(posted[0].msg.path, '/downloads?type=music');
     assert.equal(posted[0].origin, 'https://mei.example');
     assert.equal(assigned.length, 0);
     // 2) parent === self → 降级 location.assign
     globalThis.window.parent = globalThis.window;
     api.openMediaDownloads();
     assert.equal(assigned.length, 1);
-    assert.equal(assigned[0], '/media/downloads?type=music');
+    assert.equal(assigned[0], '/downloads?type=music');
   } finally {
     delete globalThis.window;
     delete globalThis.location;

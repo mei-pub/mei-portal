@@ -1,6 +1,6 @@
 // mei-portal 标准左侧面板（数据驱动）：应用信息（Logo + 纵向名称）+ 行动入口
 // 组件契约见仓库根 AGENTS.md「顶栏与左侧面板组件化强约束」
-// 下载中心入口：新建（弹层）/ 下载中（列表）/ 已完成
+// 行动入口：下载中心（应用根 /）/ 新建（弹层）/ 下载中（/home）/ 已完成（/done）
 import { type FC, useEffect, useRef, useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useShallow } from "zustand/react/shallow";
@@ -55,14 +55,29 @@ const MediagoSidebar: FC = () => {
   };
 
   const isActive = (path: string) => {
-    if (path === "/") return location.pathname === "/media/" || location.pathname === "/media" || location.pathname === "/";
+    // 根路由（下载中心）：覆盖带 /downloads basename 与根路径两种部署形态
+    if (path === "/") return location.pathname === "/downloads/" || location.pathname === "/downloads" || location.pathname === "/";
     return location.pathname === path;
   };
 
   const stroke = { fill: "none", stroke: "currentColor", strokeWidth: 2, strokeLinecap: "round" as const, strokeLinejoin: "round" as const };
 
-  // 面板数据：行动入口（图标 + 激活态 + 响应事件）
+  // 面板数据：行动入口（图标 + 激活态 + 响应事件）；「下载中心」是应用根，放首位
   const actions: PanelAction[] = [
+    // 统一下载中心（应用根 /，四 tab：全部为默认，深链 ?type=media|movie|music）
+    {
+      label: "下载中心",
+      title: "下载中心（媒体 / 影视 / 音乐）",
+      active: isActive("/"),
+      icon: (
+        <svg className="h-[15px] w-[15px]" viewBox="0 0 24 24" {...stroke}>
+          <polygon points="12 2 2 7 12 12 22 7 12 2"/>
+          <polyline points="2 17 12 22 22 17"/>
+          <polyline points="2 12 12 17 22 12"/>
+        </svg>
+      ),
+      onClick: () => navigate("/"),
+    },
     {
       label: "新建",
       title: "新建下载",
@@ -74,10 +89,11 @@ const MediagoSidebar: FC = () => {
       ),
       onClick: openNewForm,
     },
+    // 媒体下载任务列表（原应用首页，路由 /home）
     {
       label: "下载中",
       title: "下载列表",
-      active: isActive("/"),
+      active: isActive("/home"),
       icon: (
         <svg className="h-[15px] w-[15px]" viewBox="0 0 24 24" {...stroke}>
           <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
@@ -85,7 +101,7 @@ const MediagoSidebar: FC = () => {
           <line x1="12" y1="15" x2="12" y2="3"/>
         </svg>
       ),
-      onClick: () => navigate("/"),
+      onClick: () => navigate("/home"),
     },
     {
       label: "已完成",
@@ -97,20 +113,6 @@ const MediagoSidebar: FC = () => {
         </svg>
       ),
       onClick: () => navigate("/done"),
-    },
-    // 统一下载中心（/downloads 四 tab：全部为默认，深链 ?type=media|movie|music）
-    {
-      label: "下载中心",
-      title: "下载中心（媒体 / 影视 / 音乐）",
-      active: isActive("/downloads"),
-      icon: (
-        <svg className="h-[15px] w-[15px]" viewBox="0 0 24 24" {...stroke}>
-          <polygon points="12 2 2 7 12 12 22 7 12 2"/>
-          <polyline points="2 17 12 22 22 17"/>
-          <polyline points="2 12 12 17 22 12"/>
-        </svg>
-      ),
-      onClick: () => navigate("/downloads"),
     },
   ];
 
@@ -130,7 +132,7 @@ const MediagoSidebar: FC = () => {
           id="mediago-sidebar-new"
           ref={newFormRef}
           destroyOnClose
-          onConfirm={() => navigate("/")}
+          onConfirm={() => navigate("/home")}
         />
       </>
     );
@@ -180,13 +182,13 @@ const MediagoSidebar: FC = () => {
         </button>
       </div>
 
-      {/* 新建弹层（DownloadForm 内部自渲染 Modal，ref 驱动；新建成功后回到下载列表） */}
+      {/* 新建弹层（DownloadForm 内部自渲染 Modal，ref 驱动；新建成功后回到下载列表 /home） */}
       <DownloadForm
         id="mediago-sidebar-new"
         ref={newFormRef}
         destroyOnClose
         onConfirm={() => {
-          navigate("/");
+          navigate("/home");
         }}
       />
     </>

@@ -21,7 +21,7 @@ nginx（唯一入口，监听 7777）
   ├─ /tv         影视门户     (:3003)   ┐
   ├─ /music      音乐播放     (:3005)   │
   ├─ /disks      disks 引擎   (:3008)   │ 各应用独立进程，supervisord 守护
-  ├─ /media      media core-ts (:3000)  │ 目录名 = URL 子路径
+  ├─ /downloads  media core-ts (:3000)  │ 目录名 = URL 子路径
   ├─ /draw       AI 绘图     (:3004)   │
   ├─ /tools      工具箱      （静态）    │
   ├─ /link       mei-link    (:3002)   │

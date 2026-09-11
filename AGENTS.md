@@ -7,7 +7,7 @@ Cursor、Claude Code、Copilot 等）在本仓库内工作时必须遵守。
 
 mei-portal 是多应用聚合门户：`packages/shall` 为门户外壳，`apps/*` 为各子应用（全部为
 一等公民本地代码，不同技术栈：React / Vue / 原生 JS / 静态页；目录名与 URL 子路径
-对齐：novels/tv/music/link/draw/tools/disks/media）。顶栏与左侧面板是全应用共享的
+对齐：novels/tv/music/link/draw/tools/disks；例外：media 目录对外前缀为 /downloads）。顶栏与左侧面板是全应用共享的
 门户级组件，**不允许任何子应用自行重写一套样式**。
 
 ### 1. 顶部导航栏
@@ -273,9 +273,9 @@ document 与 iframe 请求，所有请求都直接代理到子应用，Shell 不
   `MUSIC_DOWNLOAD_DIR`）；`/downloads/movie/<电影|电视|动漫|综艺>/<剧名>/`（media
   下载引擎，`--local-dir`；tv 按 `分类/剧名` 组 folder）
 - **media 下载中心**（统一下载管理 UI，应用显示名为「下载中心」，但路由与插件 id 仍
-  是 `/media` 与 `mediago`，不得因改名改动）：`/media/downloads?type=media|movie|music`
+  是 `/downloads` 与 `mediago`，不得因改名改动）：`/downloads?type=media|movie|music`
   是唯一对外深链路由格式——影视/音乐应用里的「下载中」引导跳转一律 postMessage
-  `{source:'mei-iframe',type:'navigate',path:'/media/downloads?type=…'}`（走外壳
+  `{source:'mei-iframe',type:'navigate',path:'/downloads?type=…'}`（走外壳
   承载路由，禁止直接改 location）；页面为四 tab（全部/媒体/影视/音乐），「全部」为
   默认 tab 且规范 URL 不带 query（`?type=all` 也接受并归一到无 query）；三个数据面板
   分别消费：`GET /tv/api/local-sources/list`、`GET /music/api/download/library`、
@@ -291,7 +291,7 @@ document 与 iframe 请求，所有请求都直接代理到子应用，Shell 不
   ——外壳引擎 `playNow()` 进临时队列立即播（不打扰播放列表/收藏，MusicDock 常驻）；
   影视有 playRoute 时 postMessage navigate（tv 播放页本地源自动优先）；旧记录与
   媒体任务**就地内嵌弹层播放**（`/videos/<id>` 直播流，useInlinePlayer Context，
-  关闭即回列表）——**禁止再跳独立播放器页 `/media/player`**：该页无返回路径
+  关闭即回列表）——**禁止再跳独立播放器页**（原 `/media/player` 路径已随前缀迁移废弃）：该页无返回路径
 - **本地优先播放**：engine（music-engine.ts tryLocalFile）与 api.js
   （matchLocalDownload）双侧在走网络源之前先查已下载曲库
   （`/music/api/download/library`，60s 缓存、失败静默降级），同名+同歌手命中即用

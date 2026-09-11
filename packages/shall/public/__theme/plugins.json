@@ -58,7 +58,7 @@
     "icon": "lucide:download",
     "category": "utility",
     "weight": 30,
-    "subdomainPrefix": "media",
+    "subdomainPrefix": "downloads",
     "endpoint": "http://mediago:8899",
     "healthPath": "/",
     "healthExpect": 200,

@@ -258,7 +258,7 @@ export async function deleteDownloadFile(relPath) {
 // 跳转 media 下载中心（音乐分区）。门户外壳 iframe 内走 postMessage 客户端路由，
 // 禁止直接改 location（整页加载会销毁常驻音乐引擎与保活 iframe）；
 // 独立访问模式（parent===self）降级 location.assign
-const MEDIA_DOWNLOADS_PATH = "/media/downloads?type=music";
+const MEDIA_DOWNLOADS_PATH = "/downloads?type=music";
 export function openMediaDownloads() {
   const parent = (typeof window !== "undefined" && window.parent) || null;
   if (parent && parent !== window) {

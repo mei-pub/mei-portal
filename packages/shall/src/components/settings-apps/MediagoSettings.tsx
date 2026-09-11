@@ -36,7 +36,7 @@ export default function MediagoSettings() {
   async function load() {
     setLoading(true);
     try {
-      const d = await authorizedJsonFetch<Wrapped<MediagoConfig>>('/media/api/config', 'mediago');
+      const d = await authorizedJsonFetch<Wrapped<MediagoConfig>>('/downloads/api/config', 'mediago');
       setConfig(d.data || {});
       setError('');
     } catch (err) {
@@ -55,7 +55,7 @@ export default function MediagoSettings() {
     if (!silent) setMessage('');
     setError('');
     try {
-      const d = await authorizedJsonFetch<Wrapped<{ message?: string }>>(`/media/api/config/${key}`, 'mediago', {
+      const d = await authorizedJsonFetch<Wrapped<{ message?: string }>>(`/downloads/api/config/${key}`, 'mediago', {
         method: 'PUT',
         body: JSON.stringify({ value: config[key] }),
       });

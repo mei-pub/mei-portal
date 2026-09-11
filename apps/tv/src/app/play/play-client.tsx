@@ -1340,7 +1340,7 @@ export function PlayPageClient({ pathSource, pathId }: { pathSource?: string; pa
   // 前往 media 下载中心（外部应用）：iframe 内经外壳 postMessage 走客户端承载路由，
   // 避免整页跳转打断外壳常驻播放；独立访问模式降级 location.assign
   const navigateToDownloadCenter = useCallback(() => {
-    const target = '/media/downloads?type=movie';
+    const target = '/downloads?type=movie';
     if (window.parent !== window.self) {
       window.parent.postMessage(
         { source: 'mei-iframe', type: 'navigate', path: target },

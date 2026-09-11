@@ -23,7 +23,7 @@
 | 📺 影视门户 MeiTV | `/tv` | 豆瓣式影视聚合与在线播放 |
 | 🎵 音乐播放 Mei Music | `/music` | 沉浸式音乐播放器，完整播控 + 歌词，跨应用不断播 |
 | 🔍 网盘搜索 | `/disks` | 聚合网盘/磁力搜索：多网盘分享链接与 magnet/ed2k 一键检索，跨源去重、按网盘/磁力类型筛选 |
-| ⬇️ 下载中心 | `/media` | m3u8 / 视频流批量嗅探下载 + 影视/音乐落盘统一管理 |
+| ⬇️ 下载中心 | `/downloads` | m3u8 / 视频流批量嗅探下载 + 影视/音乐落盘统一管理 |
 | 🖼 AI 绘图 Mei Draw | `/draw` | Excalidraw / Mermaid / Drawio 三种画板 |
 | 🧰 工具箱 | `/tools` | 隐私优先的本地工具集合（图片 / PDF / 文本处理） |
 | 🔗 内网穿透 | `/link` | frp 隧道客户端管理：故障引导弹层 + 自动重连 |
@@ -91,7 +91,7 @@ nginx（唯一入口，sub_filter 注入顶栏脚本）
   ├─ /tv         影视门户     (:3003)   ┐
   ├─ /music      音乐播放     (:3005)   │
   ├─ /disks      disks engine (:3008)   │ 各应用独立进程，supervisord 守护
-  ├─ /media      media core-ts (:3000) │ 顶栏/左面板由门户注入
+  ├─ /downloads  media core-ts (:3000) │ 顶栏/左面板由门户注入（旧 /media 301）
   ├─ /draw       AI 绘图     (:3004)   │
   ├─ /tools      工具箱      （静态）   │
   ├─ /link       mei-link    (:3002)   │
@@ -112,7 +112,8 @@ mei-portal/
 │   └── shall/              # 门户外壳（Next.js）：登录、顶栏、iframe 宿主、
 │                           #   综合搜索（含网盘/磁力源注册表 disk-sources.ts）、
 │                           #   MusicDock 音乐引擎 music-engine.ts
-├── apps/                   # 各应用——全部为一等公民本地代码（目录名 = URL 子路径）
+├── apps/                   # 各应用——全部为一等公民本地代码（目录名 = URL 子路径，
+│                           #   例外：media 目录对外前缀为 /downloads）
 │   ├── tv/                 #   影视门户（Next.js，原 LunaTV 魔改演进）
 │   ├── music/              #   音乐播放（原生 JS + Node 服务，原 Solara）
 │   ├── disks/              #   网盘搜索：web/（Vue 前端）+ engine/（Node/TS 引擎，
