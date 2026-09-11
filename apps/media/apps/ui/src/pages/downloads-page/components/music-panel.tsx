@@ -3,6 +3,7 @@
 // （歌手/歌名/大小）；删除文件走契约 4。进行中任务天然置前（tasks 段在 files 段之前）。
 // embedded=true（全部视图）：段卡片 + 段头（计数/进行中徽标 + 「进入 →」）。
 import { App, Empty, Progress } from "antd";
+import { PlayCircleOutlined } from "@ant-design/icons";
 import { useMemoizedFn } from "ahooks";
 import { type FC, useMemo } from "react";
 import { useTranslation } from "react-i18next";
@@ -17,6 +18,7 @@ import {
   getMusicLibrary,
   type MusicLibrary,
 } from "@/api/download-center";
+import { playMusicFile } from "@/utils/play-actions";
 import { cn, fromatDateTime } from "@/utils";
 import { InlineNotice } from "./inline-notice";
 import { SectionHeader } from "./section-header";
@@ -146,6 +148,11 @@ const MusicPanel: FC<Props> = ({ embedded = false, onEnter }) => {
               </div>
             </div>
             <DownloadTag text="已完成" color="#09ce87" />
+            <IconButton
+              title={t("playVideo")}
+              icon={<PlayCircleOutlined />}
+              onClick={() => playMusicFile(file)}
+            />
             <IconButton
               title={t("delete")}
               icon={<DeleteIcon />}

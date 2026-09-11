@@ -3,6 +3,7 @@
 //   2. DELETE /tv/api/local-sources?key=       → { removed: true }
 //   3. GET    /music/api/download/library      → { tasks, files }
 //   4. DELETE /music/api/download/library?path=→ { removed: true }
+//   5. GET    /api/v1/videos                   → MediaPlayableVideo[]（裸 JSON，media core）
 //
 // 单镜像同源部署（UI 在 /media/ iframe 内），相对路径 fetch 自动携带门户
 // mei-auth cookie；不经过 http axios 实例（那是 media core 专用，会注入 X-API-Key）。
@@ -24,6 +25,8 @@ export interface MovieSourceRecord {
   speed: string | null;
   createdAt: string;
   updatedAt: string;
+  /** done 记录的播放页深链（如 /play/liangzi/48245?source=xx）；旧记录缺省为 null */
+  playRoute?: string | null;
 }
 
 export interface MusicDownloadTask {
@@ -93,6 +96,22 @@ export function deleteMusicFile(path: string): Promise<void> {
     `/music/api/download/library?path=${encodeURIComponent(path)}`,
     { method: "DELETE" },
   ).then(() => undefined);
+}
+
+/** 契约 5：media core 可播视频列表（已成功且文件在盘的任务，裸 JSON 数组） */
+export function listMediaVideos(): Promise<MediaPlayableVideo[]> {
+  return requestJson<MediaPlayableVideo[]>(getMediaVideosKey);
+}
+
+/** media core /api/v1/videos 的 SWR 缓存 key（可播视频列表共享缓存） */
+export const getMediaVideosKey = "/api/v1/videos";
+
+/** media core /api/v1/videos 条目：title = 下载任务 name（匹配键） */
+export interface MediaPlayableVideo {
+  id: number;
+  title: string;
+  url: string;
+  mimeType: string;
 }
 
 /** 字节数格式化（音乐文件大小展示） */

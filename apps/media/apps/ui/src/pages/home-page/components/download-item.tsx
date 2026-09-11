@@ -13,6 +13,7 @@ import { useMemoizedFn } from "ahooks";
 import { Progress } from "antd";
 import { memo, type ReactNode, useMemo } from "react";
 import { useTranslation } from "react-i18next";
+import useSWR from "swr";
 import { useShallow } from "zustand/react/shallow";
 import selectedBg from "@/assets/images/select-item-bg.png";
 import {
@@ -34,7 +35,9 @@ import {
 } from "@/const";
 import type { DownloadTaskDetails } from "@/hooks/use-tasks";
 import { appStoreSelector, useAppStore } from "@/store/app";
-import { cn, fromatDateTime, tdApp } from "@/utils";
+import { getMediaVideosKey, listMediaVideos } from "@/api/download-center";
+import { matchMediaVideo, openMediaVideo } from "@/utils/play-actions";
+import { cn, fromatDateTime, isWeb, tdApp } from "@/utils";
 import { TerminalDialog } from "./terminal-dialog";
 import { usePlatform } from "@/hooks/use-platform";
 import { useEnvPath } from "@/hooks/use-config";
@@ -70,6 +73,27 @@ export const DownloadTaskItem = memo(function DownloadTaskItem({
     tdApp.onEvent(PLAY_VIDEO);
     if (envPath?.playerUrl) {
       shell.open(`${envPath.playerUrl}?id=${task.id}`);
+    }
+  });
+
+  // 服务器（web）模式播放出口：/api/v1/videos 只含已成功且文件在盘的任务，
+  // 按 title（= 任务 name）匹配后新开 media 自带播放器页。SWR 统一 key 缓存，
+  // 列表内多个 done 任务共享一次请求；桌面模式 / 非 done 任务不发起请求。
+  const webPlay = isWeb && task.status === DownloadStatus.Success;
+  const { data: videoList, isLoading: videoListLoading } = useSWR(
+    webPlay ? getMediaVideosKey : null,
+    listMediaVideos,
+    { revalidateOnFocus: false },
+  );
+  const playableVideo = useMemo(
+    () => (webPlay && videoList ? matchMediaVideo(videoList, task.name) : null),
+    [webPlay, videoList, task.name],
+  );
+
+  const handleWebPlay = useMemoizedFn(() => {
+    tdApp.onEvent(PLAY_VIDEO);
+    if (playableVideo) {
+      openMediaVideo(playableVideo);
     }
   });
 
@@ -162,24 +186,52 @@ export const DownloadTaskItem = memo(function DownloadTaskItem({
           />,
         );
         break;
-      default:
+      default: {
         // Success
-        buttons.push(
-          <IconButton
-            key="play"
-            icon={<PlayCircleOutlined />}
-            title={t("playVideo")}
-            disabled={!task.exists}
-            onClick={handlePlay}
-          />,
-        );
+        if (isWeb) {
+          // 服务器模式：可播列表加载中先渲染禁用占位（避免加载完成后按钮突现）；
+          // 已加载但未匹配（文件不在盘/非视频）不渲染播放按钮，避免死按钮
+          if (videoListLoading) {
+            buttons.push(
+              <IconButton
+                key="play"
+                icon={<PlayCircleOutlined />}
+                title="正在匹配可播放视频…"
+                disabled
+              />,
+            );
+          } else if (playableVideo) {
+            buttons.push(
+              <IconButton
+                key="play"
+                icon={<PlayCircleOutlined />}
+                title={t("playVideo")}
+                onClick={handleWebPlay}
+              />,
+            );
+          }
+        } else {
+          buttons.push(
+            <IconButton
+              key="play"
+              icon={<PlayCircleOutlined />}
+              title={t("playVideo")}
+              disabled={!task.exists}
+              onClick={handlePlay}
+            />,
+          );
+        }
         break;
+      }
     }
 
     return buttons;
   }, [
     appStore.showTerminal,
     handlePlay,
+    handleWebPlay,
+    videoListLoading,
+    playableVideo,
     handleStop,
     task,
     onShowEditForm,

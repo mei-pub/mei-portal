@@ -4,6 +4,7 @@
 // embedded=true（全部视图）：段卡片 + 段头（计数/进行中徽标 + 「进入 →」），
 // 含进行中任务的分组与条目稳定置前（保持原有相对顺序）。
 import { App, Empty, Popconfirm, Progress } from "antd";
+import { PlayCircleOutlined } from "@ant-design/icons";
 import { useMemoizedFn } from "ahooks";
 import { type FC, useMemo } from "react";
 import { useTranslation } from "react-i18next";
@@ -17,6 +18,7 @@ import {
   type MovieSourceRecord,
   listMovieSources,
 } from "@/api/download-center";
+import { playMovieRecord } from "@/utils/play-actions";
 import { cn } from "@/utils";
 import { InlineNotice } from "./inline-notice";
 import { SectionHeader } from "./section-header";
@@ -195,6 +197,13 @@ const MoviePanel: FC<Props> = ({ embedded = false, onEnter }) => {
           )}
         </div>
         {statusTag(record)}
+        {record.status === "done" && (
+          <IconButton
+            title={t("playVideo")}
+            icon={<PlayCircleOutlined />}
+            onClick={() => playMovieRecord(record)}
+          />
+        )}
         <IconButton
           title={t("delete")}
           icon={<DeleteIcon />}
