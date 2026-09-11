@@ -1,6 +1,7 @@
 import {forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState} from 'react'
 import {DrawIoEmbed, type DrawIoEmbedRef, type EventAutoSave, type EventExport, type EventSave} from 'react-drawio'
 import {cn} from '@/lib/utils'
+import {triggerBrowserDownload} from '@/lib/browser-download'
 import {Button} from '@/components/ui/Button'
 import Editor from '@monaco-editor/react'
 import {Tooltip, TooltipContent, TooltipProvider, TooltipTrigger,} from '@/components/ui/Tooltip'
@@ -266,14 +267,8 @@ export const DrawioEditor = forwardRef<DrawioEditorRef, DrawioEditorProps>(
       if (!data) return
 
       const blob = new Blob([data], { type: 'application/xml' })
-      const url = URL.createObjectURL(blob)
-      const link = document.createElement('a')
-      link.href = url
-      link.download = `diagram-${Date.now()}.drawio`
-      document.body.appendChild(link)
-      link.click()
-      document.body.removeChild(link)
-      URL.revokeObjectURL(url)
+      // 延迟释放 object URL：同步 revoke 会让浏览器下载永远停在下载中
+      triggerBrowserDownload(blob, `diagram-${Date.now()}.drawio`)
     }, [data])
 
     // Get thumbnail as PNG data URL

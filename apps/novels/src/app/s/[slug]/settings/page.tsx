@@ -4,6 +4,7 @@ import Link from "@/components/Link";
 import SitePanel from "@/components/SitePanel";
 import { useSite } from "@/components/SiteContext";
 import { showToast } from "@/components/Toast";
+import { triggerBrowserDownload } from "@/lib/browser-download";
 
 // 站点设置：显示名称 / 开启密码（仅隐秘站点）/ 数据备份
 export default function SettingsPage() {
@@ -67,14 +68,11 @@ export default function SettingsPage() {
       const res = await fetch("/novels/api/backup/export", { method: "POST" });
       if (res.ok) {
         const blob = await res.blob();
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = res.headers.get("Content-Disposition")?.match(/filename="(.+)"/)?.[1] || "novels-backup.json";
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
+        // 禁止手搓 a.click()+同步 revoke：会毁掉下载（见 browser-download 注释）
+        triggerBrowserDownload(
+          blob,
+          res.headers.get("Content-Disposition")?.match(/filename="(.+)"/)?.[1] || "novels-backup.json",
+        );
         showToast("导出成功", "success");
       } else {
         showToast("导出失败", "error");

@@ -504,7 +504,7 @@ $("#panelRelogin").addEventListener("click", async event => {
 })();
 $("#refreshButton").addEventListener("click", () => load().catch(error => notify(error.message, true)));
 $("#copyLogsButton").addEventListener("click", () => copyText(formatLogs(), "运行日志已复制").catch(error => notify(error.message, true)));
-$("#exportLogsButton").addEventListener("click", () => { const blob = new Blob([formatLogs() || "尚无运行日志\n"], { type: "text/plain;charset=utf-8" }); const link = document.createElement("a"); link.href = URL.createObjectURL(blob); link.download = `meilink-log-${new Date().toISOString().replace(/[:.]/g, "-")}.txt`; link.click(); URL.revokeObjectURL(link.href); });
+$("#exportLogsButton").addEventListener("click", () => { const blob = new Blob([formatLogs() || "尚无运行日志\n"], { type: "text/plain;charset=utf-8" }); const link = document.createElement("a"); link.href = URL.createObjectURL(blob); link.download = `meilink-log-${new Date().toISOString().replace(/[:.]/g, "-")}.txt`; link.click(); /* 禁止同步 revoke：浏览器 click 后才异步读 blob，须延迟释放（对齐 apps/tools triggerBrowserDownload） */ setTimeout(() => URL.revokeObjectURL(link.href), 1000); });
 $("#clearLogsButton").addEventListener("click", async () => { if (!events.length || !confirm("确定清空当前运行日志吗？")) return; try { await api("/api/events", { method: "DELETE" }); notify("运行日志已清空"); await load(); } catch (error) { notify(error.message, true); } });
 
 (async function restoreSession() {

@@ -669,7 +669,10 @@ const downloadContent = (content: string, fileName: string, mimeType: string) =>
   document.body.appendChild(anchor);
   anchor.click();
   document.body.removeChild(anchor);
-  URL.revokeObjectURL(url);
+  // 禁止同步 revoke：浏览器在 click 之后才异步读取 blob 数据，同步释放
+  // 会让下载项永远停在「下载中」。必须延迟释放（与 apps/tools 的
+  // triggerBrowserDownload 一致）。
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
 };
 
 const handleExportConfirm = () => {

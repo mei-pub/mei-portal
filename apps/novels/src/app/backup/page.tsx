@@ -5,6 +5,7 @@
 import Link from "@/components/Link";
 import { useEffect, useRef, useState } from "react";
 import { showToast } from "@/components/Toast";
+import { triggerBrowserDownload } from "@/lib/browser-download";
 
 const card = "bg-white rounded-2xl border border-[var(--border)] p-5 space-y-4";
 const input = "mei-input";
@@ -41,11 +42,11 @@ export default function BackupPage() {
       const res = await fetch(`/novels/api/admin/backup?format=${format}`);
       if (!res.ok) throw new Error();
       const blob = await res.blob();
-      const a = document.createElement("a");
-      a.href = URL.createObjectURL(blob);
-      a.download = res.headers.get("Content-Disposition")?.match(/filename="(.+)"/)?.[1] || `novels-backup.${format === "zip" ? "zip" : "db"}`;
-      a.click();
-      URL.revokeObjectURL(a.href);
+      // 禁止手搓 a.click()+同步 revoke：会毁掉下载（见 browser-download 注释）
+      triggerBrowserDownload(
+        blob,
+        res.headers.get("Content-Disposition")?.match(/filename="(.+)"/)?.[1] || `novels-backup.${format === "zip" ? "zip" : "db"}`,
+      );
       showToast("导出成功", "success");
     } catch {
       showToast("导出失败", "error");

@@ -4,6 +4,7 @@ import elkLayouts from '@mermaid-js/layout-elk'
 import tidyTreeLayouts from '@mermaid-js/layout-tidy-tree'
 import Editor from '@monaco-editor/react'
 import { cn } from '@/lib/utils'
+import { triggerBrowserDownload } from '@/lib/browser-download'
 import { Button } from '@/components/ui/Button'
 import { useEditorStore } from '@/stores/editorStore'
 import {
@@ -383,14 +384,8 @@ export const MermaidRenderer = forwardRef<MermaidRendererRef, MermaidRendererPro
     if (!svg) return
 
     const blob = new Blob([svg], { type: 'image/svg+xml' })
-    const url = URL.createObjectURL(blob)
-    const link = document.createElement('a')
-    link.href = url
-    link.download = `diagram-${Date.now()}.svg`
-    document.body.appendChild(link)
-    link.click()
-    document.body.removeChild(link)
-    URL.revokeObjectURL(url)
+    // 延迟释放 object URL：同步 revoke 会让浏览器下载永远停在下载中
+    triggerBrowserDownload(blob, `diagram-${Date.now()}.svg`)
   }, [svg])
 
   const exportAsPng = useCallback(async () => {
@@ -447,14 +442,8 @@ export const MermaidRenderer = forwardRef<MermaidRendererRef, MermaidRendererPro
     if (!code) return
 
     const blob = new Blob([code], { type: 'text/plain' })
-    const url = URL.createObjectURL(blob)
-    const link = document.createElement('a')
-    link.href = url
-    link.download = `diagram-${Date.now()}.mmd`
-    document.body.appendChild(link)
-    link.click()
-    document.body.removeChild(link)
-    URL.revokeObjectURL(url)
+    // 延迟释放 object URL：同步 revoke 会让浏览器下载永远停在下载中
+    triggerBrowserDownload(blob, `diagram-${Date.now()}.mmd`)
   }, [code])
 
   // Expose methods via ref

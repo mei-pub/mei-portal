@@ -4,6 +4,7 @@ import '@excalidraw/excalidraw/index.css'
 import type { ExcalidrawImperativeAPI } from '@excalidraw/excalidraw/types'
 import Editor from '@monaco-editor/react'
 import { cn } from '@/lib/utils'
+import { triggerBrowserDownload } from '@/lib/browser-download'
 import { Button } from '@/components/ui/Button'
 import {
   Tooltip,
@@ -299,14 +300,8 @@ export const ExcalidrawEditor = forwardRef<ExcalidrawEditorRef, ExcalidrawEditor
 
       const svgString = new XMLSerializer().serializeToString(svg)
       const blob = new Blob([svgString], { type: 'image/svg+xml' })
-      const url = URL.createObjectURL(blob)
-      const link = document.createElement('a')
-      link.href = url
-      link.download = `diagram-${Date.now()}.svg`
-      document.body.appendChild(link)
-      link.click()
-      document.body.removeChild(link)
-      URL.revokeObjectURL(url)
+      // 延迟释放 object URL：同步 revoke 会让浏览器下载永远停在下载中
+      triggerBrowserDownload(blob, `diagram-${Date.now()}.svg`)
     } catch (err) {
       console.error('Failed to export SVG:', err)
     }
@@ -335,14 +330,8 @@ export const ExcalidrawEditor = forwardRef<ExcalidrawEditorRef, ExcalidrawEditor
         }),
       })
 
-      const url = URL.createObjectURL(blob)
-      const link = document.createElement('a')
-      link.href = url
-      link.download = `diagram-${Date.now()}.png`
-      document.body.appendChild(link)
-      link.click()
-      document.body.removeChild(link)
-      URL.revokeObjectURL(url)
+      // 延迟释放 object URL：同步 revoke 会让浏览器下载永远停在下载中
+      triggerBrowserDownload(blob, `diagram-${Date.now()}.png`)
     } catch (err) {
       console.error('Failed to export PNG:', err)
     }
@@ -371,14 +360,8 @@ export const ExcalidrawEditor = forwardRef<ExcalidrawEditorRef, ExcalidrawEditor
 
       const jsonString = JSON.stringify(exportData, null, 2)
       const blob = new Blob([jsonString], { type: 'application/json' })
-      const url = URL.createObjectURL(blob)
-      const link = document.createElement('a')
-      link.href = url
-      link.download = `diagram-${Date.now()}.excalidraw`
-      document.body.appendChild(link)
-      link.click()
-      document.body.removeChild(link)
-      URL.revokeObjectURL(url)
+      // 延迟释放 object URL：同步 revoke 会让浏览器下载永远停在下载中
+      triggerBrowserDownload(blob, `diagram-${Date.now()}.excalidraw`)
     } catch (err) {
       console.error('Failed to export source:', err)
     }
