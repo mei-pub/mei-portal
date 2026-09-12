@@ -304,4 +304,12 @@ document 与 iframe 请求，所有请求都直接代理到子应用，Shell 不
   （matchLocalDownload）双侧在走网络源之前先查已下载曲库
   （`/music/api/download/library`，60s 缓存、失败静默降级），同名+同歌手命中即用
   serve 流——播放列表/收藏里播放已下载过的歌不再拉网络流
+- **tv 本地文件缺失引导**（play-client.tsx，三触发点共用一弹层）：观看历史以
+  `mei-local` 伪源进入但记录/文件已不在（no-local，网络源优选接管）、换集自动切
+  本地源时记录 done 但文件不在（auto，拦截切换）、本地流起播即失败（play-error，
+  Artplayer error 兜底）。判定基准 = media `/api/v1/videos` 可播集合（localUrl
+  `/videos/<id>` 不在集合即缺失；列表拉取失败一律不判缺失，防误报）。弹层两选项：
+  在线播放（auto/no-local 接管网络源、play-error 切回原源、无源跳聚合优选页）/
+  重新下载（auto/play-error 先删缺失记录绕 POST 幂等再重建下载）。伪源生成对缺失
+  集退回网络源 URL，不产生黑屏集
 

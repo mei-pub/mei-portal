@@ -26,7 +26,7 @@ import {
   subscribeToDataUpdates,
 } from '@/lib/db.client';
 import type { LocalSourceWithProgress } from '@/lib/local-source.types';
-import { createLocalDownload, fetchLocalSources } from '@/lib/local-sources.client';
+import { createLocalDownload, deleteLocalSource, fetchLocalSources } from '@/lib/local-sources.client';
 import { SearchResult } from '@/lib/types';
 import { getVideoResolutionFromM3u8, processImageUrl } from '@/lib/utils';
 
@@ -740,6 +740,17 @@ export function PlayPageClient({ pathSource, pathId }: { pathSource?: string; pa
         sourcesInfo = await fetchSourceDetail(currentSource, currentId);
       }
       if (sourcesInfo.length === 0) {
+        // 观看历史等入口以 mei-local（本地服务器伪源）进入、但本地记录/文件
+        // 已不存在：给出恢复引导而非死胡同（弹层：在线播放 / 重新下载）
+        if (currentSource === 'mei-local' && (videoTitle || searchTitle)) {
+          setLocalMissing({
+            episode: currentEpisodeIndex + 1,
+            reason: 'no-local',
+            noSources: true,
+          });
+          setLoading(false);
+          return;
+        }
         setError('未找到匹配结果');
         setLoading(false);
         return;
@@ -747,7 +758,14 @@ export function PlayPageClient({ pathSource, pathId }: { pathSource?: string; pa
 
       let detailData: SearchResult = sourcesInfo[0];
       // 指定源和id且无需优选
-      if (currentSource && currentId && !needPreferRef.current) {
+      if (
+        currentSource &&
+        currentId &&
+        !needPreferRef.current &&
+        // mei-local 是置顶伪源、不在源列表：跳过精确匹配，落到下方优选流程
+        // 让网络源接管播放，并提示本地文件缺失（弹层引导）
+        currentSource !== 'mei-local'
+      ) {
         const target = sourcesInfo.find(
           (source) => source.source === currentSource && source.id === currentId
         );
@@ -758,6 +776,14 @@ export function PlayPageClient({ pathSource, pathId }: { pathSource?: string; pa
           setLoading(false);
           return;
         }
+      }
+      if (currentSource === 'mei-local') {
+        // 观看历史等入口以本地服务器伪源进入但本地记录已不存在：
+        // 网络源优选接管 + 弹层提示（在线播放在进行中 / 可重新下载）
+        setLocalMissing({
+          episode: currentEpisodeIndex + 1,
+          reason: 'no-local',
+        });
       }
 
       // 未指定源和 id 或需要优选，且开启优选开关
@@ -1215,6 +1241,18 @@ export function PlayPageClient({ pathSource, pathId }: { pathSource?: string; pa
   // 「下载到服务器」请求进行中（创建 media 任务）
   const [localBusy, setLocalBusy] = useState(false);
   const [localError, setLocalError] = useState<string | null>(null);
+  // media core 可播任务 id 集（文件在盘）：判定 done 记录的落盘文件是否仍存在
+  const [mediaPlayableIds, setMediaPlayableIds] = useState<Set<number>>(
+    () => new Set()
+  );
+  // 本地文件缺失弹层：{ episode } 非空即显示（两个选项：在线播放 / 重新下载）
+  const [localMissing, setLocalMissing] = useState<{
+    episode: number;
+    reason: 'auto' | 'play-error' | 'no-local';
+    /** no-local 且无可用网络源：需跳聚合优选页恢复 */
+    noSources?: boolean;
+  } | null>(null);
+  const localMissingPromptedRef = useRef<string>(''); // 剧|集：防重复弹层
   // 已自动切到本地源的集（剧名|集号）：防止用户手动换源后又被抢回本地
   const autoSwitchedEpisodeRef = useRef('');
   // 最近一次「非本地」详情：在本地源上点下载时取原源直链用
@@ -1239,6 +1277,21 @@ export function PlayPageClient({ pathSource, pathId }: { pathSource?: string; pa
     } catch (err) {
       console.warn('刷新本地源失败:', err);
     }
+    // media 可播列表（文件在盘的任务）：localUrl=/videos/<id> 不在集合 → 文件丢失。
+    // 拉取失败时清空集合（判定保守：查不到 = 不视为缺失，避免误报弹层）
+    try {
+      const resp = await fetch('/api/v1/videos', {
+        headers: { Accept: 'application/json' },
+      });
+      if (resp.ok) {
+        const list = (await resp.json()) as Array<{ id: number }>;
+        setMediaPlayableIds(new Set(list.map((v) => Number(v.id))));
+      } else {
+        setMediaPlayableIds(new Set());
+      }
+    } catch {
+      setMediaPlayableIds(new Set());
+    }
   }, []);
 
   // 标题确定后拉一次本地源记录（videoTitle 在 initAll 后为规范剧名）
@@ -1259,6 +1312,19 @@ export function PlayPageClient({ pathSource, pathId }: { pathSource?: string; pa
     return () => clearInterval(timer);
   }, [localRecords, refreshLocalSources]);
 
+  // 本地文件缺失判定：done 记录的 /videos/<id> 不在 media 可播集合（文件被删/丢失）。
+  // 可播集合为空（列表拉取失败）时一律不判缺失（保守，避免误报）
+  const isRecordFileMissing = useCallback(
+    (rec: LocalSourceWithProgress | null | undefined): boolean => {
+      if (!rec || rec.status !== 'done' || !rec.localUrl) return false;
+      if (mediaPlayableIds.size === 0) return false;
+      const m = /\/videos\/(\d+)/.exec(rec.localUrl);
+      if (!m) return false;
+      return !mediaPlayableIds.has(Number(m[1]));
+    },
+    [mediaPlayableIds]
+  );
+
   // 按集号索引
   const localEpisodeStatus = useMemo(() => {
     const map = new Map<number, LocalSourceWithProgress>();
@@ -1277,7 +1343,10 @@ export function PlayPageClient({ pathSource, pathId }: { pathSource?: string; pa
     if (!hasDone) return null;
     const episodes = base.episodes.map((orig, i) => {
       const rec = localEpisodeStatus.get(i + 1);
-      return rec?.status === 'done' && rec.localUrl ? rec.localUrl : orig;
+      // 文件缺失的集退回网络源 URL（切到伪源时该集在线播放，不黑屏）
+      return rec?.status === 'done' && rec.localUrl && !isRecordFileMissing(rec)
+        ? rec.localUrl
+        : orig;
     });
     return {
       id: 'mei-local',
@@ -1293,7 +1362,7 @@ export function PlayPageClient({ pathSource, pathId }: { pathSource?: string; pa
       type_name: base.type_name,
       douban_id: base.douban_id,
     } as SearchResult;
-  }, [detail, localRecords, localEpisodeStatus]);
+  }, [detail, localRecords, localEpisodeStatus, isRecordFileMissing]);
 
   // 换源列表（本地源置顶）
   const mergedSources = useMemo(
@@ -1317,7 +1386,8 @@ export function PlayPageClient({ pathSource, pathId }: { pathSource?: string; pa
     setDetail(localSource);
   }, [localSource]);
 
-  // 本地源优先：当前集已有 done 记录 → 自动切到本地源（每次进页/换集只切一次）
+  // 本地源优先：当前集已有 done 记录 → 自动切到本地源（每次进页/换集只切一次）。
+  // 文件已不在盘（被删/丢失）时不切，弹层引导：在线播放 / 重新下载
   useEffect(() => {
     if (!detail || !localSource) return;
     if (currentSource === 'mei-local') return;
@@ -1326,6 +1396,13 @@ export function PlayPageClient({ pathSource, pathId }: { pathSource?: string; pa
     if (!rec || rec.status !== 'done' || !rec.localUrl) return;
     const guard = `${detail.title}|${episodeNo}`;
     if (autoSwitchedEpisodeRef.current === guard) return;
+    if (isRecordFileMissing(rec)) {
+      // 该集缺失：提示一次（同剧同集不重复打扰），保持网络源在线播放
+      if (localMissingPromptedRef.current === guard) return;
+      localMissingPromptedRef.current = guard;
+      setLocalMissing({ episode: episodeNo, reason: 'auto' });
+      return;
+    }
     autoSwitchedEpisodeRef.current = guard;
     switchToLocalSource();
   }, [
@@ -1335,6 +1412,7 @@ export function PlayPageClient({ pathSource, pathId }: { pathSource?: string; pa
     currentSource,
     currentEpisodeIndex,
     switchToLocalSource,
+    isRecordFileMissing,
   ]);
 
   // 前往 media 下载中心（外部应用）：iframe 内经外壳 postMessage 走客户端承载路由，
@@ -1393,6 +1471,68 @@ export function PlayPageClient({ pathSource, pathId }: { pathSource?: string; pa
       setLocalBusy(false);
     }
   }, [searchType, searchParams, pathname]);
+
+  // 本地文件缺失弹层：选项一「在线播放」——回到原网络源（auto 提示时本就在
+  // 网络源，直接关弹层；本地源播放失败时显式切回原源）
+  const handleMissingPlayOnline = useCallback(() => {
+    const reason = localMissing?.reason;
+    setLocalMissing(null);
+    if (reason === 'no-local') {
+      // 观看历史直入伪源且本地已不存在：页面已在优选网络源——直接观看；
+      // 无可用网络源时跳聚合优选页恢复
+      if (localMissing?.noSources) {
+        router.replace(
+          `/play?title=${encodeURIComponent(
+            videoTitle || searchTitle || ''
+          )}${videoYear ? `&year=${videoYear}` : ''}&prefer=true`
+        );
+      }
+      return;
+    }
+    if (reason !== 'play-error') return;
+    const base = originalDetailRef.current;
+    if (!base || !base.source) return;
+    const newUrl = new URL(window.location.href);
+    newUrl.searchParams.set('source', base.source);
+    newUrl.searchParams.set('id', base.id);
+    window.history.replaceState({}, '', newUrl.toString());
+    setCurrentSource(base.source);
+    setCurrentId(base.id);
+    setDetail(base);
+  }, [localMissing, router, videoTitle, searchTitle, videoYear]);
+
+  // 本地文件缺失弹层：选项二「重新下载」——先删缺失记录（绕开 POST 幂等
+  // 的 done 复用），再走现有「下载到服务器」流程（原源直链重建任务）
+  const handleMissingRedownload = useCallback(async () => {
+    const episode = localMissing?.episode;
+    const reason = localMissing?.reason;
+    setLocalMissing(null);
+    if (reason === 'no-local') {
+      // 无原源上下文（无网络源可接管）：去聚合优选页，选好源后在播放页
+      // 点「下载到服务器」重建；有源接管时当前页已具备下载上下文，直接关弹层
+      if (localMissing?.noSources) {
+        router.replace(
+          `/play?title=${encodeURIComponent(
+            videoTitle || searchTitle || ''
+          )}${videoYear ? `&year=${videoYear}` : ''}&prefer=true`
+        );
+      }
+      return;
+    }
+    const rec =
+      typeof episode === 'number'
+        ? localEpisodeStatus.get(episode)
+        : undefined;
+    if (rec) {
+      try {
+        await deleteLocalSource(rec.key);
+      } catch (err) {
+        console.warn('清理缺失的本地源记录失败:', err);
+      }
+    }
+    await handleDownloadToServer();
+    void refreshLocalSources();
+  }, [localMissing, localEpisodeStatus, handleDownloadToServer, refreshLocalSources, router, videoTitle, searchTitle, videoYear]);
 
   // 切换收藏
   const handleToggleFavorite = async () => {
@@ -1818,6 +1958,21 @@ export function PlayPageClient({ pathSource, pathId }: { pathSource?: string; pa
         console.error('播放器错误:', err);
         if (artPlayerRef.current.currentTime > 0) {
           return;
+        }
+        // 本地服务器源起播即失败（currentTime=0）：落盘文件已不存在——弹层引导
+        if (
+          currentSourceRef.current === 'mei-local' &&
+          !artPlayerRef.current.url.startsWith('http')
+        ) {
+          // localUrl 为相对路径 /videos/N；网络源直链为 http(s)。二者区分
+        }
+        if (currentSourceRef.current === 'mei-local') {
+          const episodeNo = currentEpisodeIndexRef.current + 1;
+          const guard = `${videoTitleRef.current}|${episodeNo}`;
+          if (localMissingPromptedRef.current !== guard) {
+            localMissingPromptedRef.current = guard;
+            setLocalMissing({ episode: episodeNo, reason: 'play-error' });
+          }
         }
       });
 
@@ -2297,6 +2452,61 @@ export function PlayPageClient({ pathSource, pathId }: { pathSource?: string; pa
           </div>
         </div>
       </div>
+
+      {/* 本地文件缺失引导：在线播放 / 重新下载（对齐 downloads 页弹层风格） */}
+      {localMissing && (
+        <div
+          className='fixed inset-0 z-[60] flex items-center justify-center bg-black/50 p-4'
+          onClick={() => setLocalMissing(null)}
+        >
+          <div
+            className='w-full max-w-md rounded-lg border border-amber-200 bg-white shadow-xl dark:border-amber-700 dark:bg-gray-900'
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className='p-6 text-center'>
+              <div className='mb-4 flex justify-center'>
+                <svg
+                  className='h-11 w-11 text-amber-500'
+                  viewBox='0 0 24 24'
+                  fill='none'
+                  stroke='currentColor'
+                  strokeWidth='2'
+                  strokeLinecap='round'
+                  strokeLinejoin='round'
+                >
+                  <path d='M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z' />
+                  <line x1='12' y1='9' x2='12' y2='13' />
+                  <line x1='12' y1='17' x2='12.01' y2='17' />
+                </svg>
+              </div>
+              <h3 className='mb-2 text-lg font-semibold text-gray-900 dark:text-gray-100'>
+                本地服务器文件已不存在
+              </h3>
+              <p className='mb-5 text-sm text-gray-600 dark:text-gray-400'>
+                「{videoTitle || '该剧'}」第 {localMissing.episode} 集
+                {localMissing.reason === 'no-local'
+                  ? '的本地下载记录已不存在（文件已被删除或丢失）'
+                  : '的本地文件已被删除或丢失（下载记录仍标记为已完成）'}
+                。你可以切换网络资源在线播放，或重新下载到本地服务器。
+              </p>
+              <div className='flex justify-center gap-3'>
+                <button
+                  onClick={() => void handleMissingRedownload()}
+                  className='rounded-lg border border-gray-300/70 px-4 py-2 text-sm font-medium text-gray-600 transition-colors hover:border-green-400 hover:text-green-600 dark:border-gray-600/70 dark:text-gray-300 dark:hover:border-green-500 dark:hover:text-green-400'
+                >
+                  重新下载
+                </button>
+                <button
+                  onClick={handleMissingPlayOnline}
+                  className='rounded-lg bg-gradient-to-r from-green-500 to-emerald-600 px-4 py-2 text-sm font-medium text-white shadow-md transition-colors hover:from-green-600 hover:to-emerald-700'
+                >
+                  在线播放
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </PageLayout>
   );
 }
