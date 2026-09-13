@@ -2456,7 +2456,7 @@ export function PlayPageClient({ pathSource, pathId }: { pathSource?: string; pa
       {/* 本地文件缺失引导：在线播放 / 重新下载（对齐 downloads 页弹层风格） */}
       {localMissing && (
         <div
-          className='fixed inset-0 z-[60] flex items-center justify-center bg-black/50 p-4'
+          className='fixed inset-0 z-[600] flex items-center justify-center bg-black/50 p-4'
           onClick={() => setLocalMissing(null)}
         >
           <div
