@@ -11,8 +11,16 @@ import { initLogger, logger } from "./logger.ts";
 import { Conf } from "./conf.ts";
 import { TaskLogManager } from "./tasklog.ts";
 import { loadSchemasFromJSON } from "./core/schema.ts";
-import { BinaryNames, FFmpegBinaryName } from "./core/types.ts";
-import { DownloaderSvc, type DownloaderConfig } from "./core/downloader.ts";
+import {
+  BinaryNames,
+  FFmpegBinaryName,
+  type Aria2Options,
+} from "./core/types.ts";
+import {
+  DownloaderSvc,
+  type DownloaderConfig,
+  normalizeAria2Options,
+} from "./core/downloader.ts";
 import { TaskQueue } from "./core/queue.ts";
 import {
   openDatabase,
@@ -43,6 +51,8 @@ interface AppConfig {
   deleteSegments: boolean;
   proxy: string;
   useProxy: boolean;
+  /** aria2 引擎设置（设置页「下载引擎」驱动，热更新） */
+  aria2: Aria2Options;
   dbPath: string;
   configDir: string;
   staticDir: string;
@@ -63,6 +73,7 @@ function defaultConfig(): AppConfig {
     deleteSegments: true,
     proxy: "",
     useProxy: false,
+    aria2: normalizeAria2Options(undefined),
     dbPath: "/data/media/mediago.db",
     configDir: "", // 为空时回落到 logDir（与 Go 一致）
     staticDir: "",
@@ -162,6 +173,24 @@ const appStoreDefaults: Record<string, unknown> = {
   enableMobilePlayer: false,
   apiKey: "",
   passwordHash: "",
+  // aria2 下载引擎设置（下载中心设置页「下载引擎」tab；值经 normalizeAria2Options 收敛）
+  aria2: {
+    connections: 16,
+    splits: 16,
+    minSplitSize: "1M",
+    speedLimit: "",
+    maxTries: 5,
+    retryWait: 0,
+    bt: {
+      enableDht: true,
+      enableLpd: true,
+      enablePex: true,
+      listenPort: "",
+      uploadLimit: "",
+      maxPeers: 55,
+      trackers: "",
+    },
+  },
 };
 
 /** 系统下载目录（$HOME/Downloads，缺失回落 $HOME） */
@@ -231,6 +260,8 @@ async function main(): Promise<void> {
     cfg.deleteSegments = s.deleteSegments;
   if (typeof s.maxRunner === "number" && s.maxRunner > 0)
     cfg.maxRunner = s.maxRunner;
+  // aria2 引擎设置（外部手改 config.json 也要收敛，normalize 兜底类型/越界）
+  cfg.aria2 = normalizeAria2Options(appStore.get("aria2"));
 
   // 3. 下载目录不可用时回落系统下载目录；appStore 缺 local 时补写
   {
@@ -277,6 +308,7 @@ async function main(): Promise<void> {
     getDeleteSegments: () => cfg.deleteSegments,
     getProxy: () => cfg.proxy,
     getUseProxy: () => cfg.useProxy,
+    getAria2Options: () => cfg.aria2,
   };
   const downloader = new DownloaderSvc(binMap, schemas, downloaderCfg);
   const queue = new TaskQueue(downloader, cfg.maxRunner);
@@ -314,6 +346,13 @@ async function main(): Promise<void> {
       cfg.localDir = newVal;
       logger.info(`localDir updated to "${newVal}" via config change`);
     }
+  });
+  // aria2 引擎设置热更新：设置页保存 → conf dotSet 'aria2' → 在跑任务不受影响，新任务立即用新参数
+  appStore.onDidChange("aria2", (newVal) => {
+    cfg.aria2 = normalizeAria2Options(newVal);
+    logger.info(
+      `aria2 options updated via config change: ${JSON.stringify(cfg.aria2)}`,
+    );
   });
 
   // 8. 数据库

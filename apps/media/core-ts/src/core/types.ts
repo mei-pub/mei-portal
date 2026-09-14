@@ -28,6 +28,41 @@ export const BinaryNames: Record<DownloadType, string> = {
 
 export const FFmpegBinaryName = "ffmpeg";
 
+/** aria2 下载引擎设置（下载中心设置页「下载引擎」tab，direct/bt 共用）
+ *  —— 与 apps/ui 侧 shared/common types 的 Aria2Options 结构对齐（双侧平行定义） */
+export interface Aria2BtOptions {
+  /** DHT 网络（磁力找 peer 的主要途径；关闭后纯靠 tracker） */
+  enableDht: boolean;
+  /** 本地对等发现（LPD，局域网组播） */
+  enableLpd: boolean;
+  /** Peer 交换（PEX） */
+  enablePex: boolean;
+  /** BT 监听端口（形如 6881-6999 或 6881；空 = aria2 默认 6881-6999，TCP/UDP 同源） */
+  listenPort: string;
+  /** 上传限速（如 2M；空 = 不限） */
+  uploadLimit: string;
+  /** 最大 Peer 连接数 */
+  maxPeers: number;
+  /** 补充 tracker 列表（逗号/换行分隔；拼 --bt-tracker，磁力自带 tr 之外的全局注入） */
+  trackers: string;
+}
+
+export interface Aria2Options {
+  /** 单服务器并发连接数（--max-connection-per-server，aria2 上限 16） */
+  connections: number;
+  /** 分下载数（--split） */
+  splits: number;
+  /** 最小分片大小（--min-split-size，如 1M / 512K） */
+  minSplitSize: string;
+  /** 全局下载限速（--max-overall-download-limit，如 10M；空 = 不限） */
+  speedLimit: string;
+  /** 重试次数（--max-tries） */
+  maxTries: number;
+  /** 重试间隔秒（--retry-wait） */
+  retryWait: number;
+  bt: Aria2BtOptions;
+}
+
 /** 下载任务参数（DB 任务用数字 ID 字符串，内存任务可用任意字符串） */
 export interface DownloadParams {
   id: string;
@@ -74,4 +109,6 @@ export interface DownloaderConfig {
   getDeleteSegments(): boolean;
   getProxy(): string;
   getUseProxy(): boolean;
+  /** aria2 引擎设置（direct/bt；热更新经闭包读最新值） */
+  getAria2Options(): Aria2Options;
 }

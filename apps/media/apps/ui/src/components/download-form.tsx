@@ -11,6 +11,7 @@ import {
   Form,
   Input,
   Modal,
+  Segmented,
   Select,
   Switch,
 } from "antd";
@@ -29,11 +30,35 @@ import { BatchUrlTextarea } from "./batchurl-textarea";
 
 const { TextArea } = Input;
 
+/** 下载大类：普通下载（直链文件）/ 视频下载（站点流媒体）/ 磁力下载（BT）。
+ *  三类执行路径与表单形态完全不同，先选大类再细分 —— 大类决定 URL 校验、
+ *  名称可空性、headers 显隐；视频类内部再由 subtype 细分下载器 */
+export type DownloadCategory = "normal" | "video" | "magnet";
+
+/** 具体下载类型 → 大类（外部 ref 接口与编辑回填仍以 DownloadType 进出） */
+const CATEGORY_OF_TYPE: Record<DownloadType, DownloadCategory> = {
+  direct: "normal",
+  m3u8: "video",
+  bilibili: "video",
+  youtube: "video",
+  mediago: "video",
+  bt: "magnet",
+};
+
+/** 大类默认下载类型（video 的细分由 subtype 决定） */
+const TYPE_OF_CATEGORY: Record<DownloadCategory, DownloadType> = {
+  normal: DownloadType.direct,
+  video: DownloadType.m3u8,
+  magnet: DownloadType.bt,
+};
+
 export interface DownloadFormItem {
   batch?: boolean;
   batchList?: string;
   name?: string;
   type?: DownloadType;
+  category?: DownloadCategory;
+  subtype?: DownloadType;
   headers?: string;
   url?: string;
   id?: number;
@@ -102,14 +127,27 @@ export default forwardRef<DownloadFormRef, DownloadFormProps>(
     }, [modalOpen]);
 
     useImperativeHandle(ref, () => {
+      // 外部（侧栏/嗅探弹层/编辑回填）都以 DownloadType 传入；表单内部
+      // 用大类+细分驱动 UI，type 只在提交时映射回去
+      const applyValue = (value: DownloadFormItem) => {
+        const { type, subtype, ...rest } = value;
+        const patch: DownloadFormItem = { ...rest };
+        if (type) {
+          const category = CATEGORY_OF_TYPE[type] ?? "video";
+          patch.category = category;
+          // 非 video 大类的旧 subtype 残留不携带（切回视频类避免显示错值）
+          if (category === "video") patch.subtype = subtype ?? type;
+        }
+        form.setFieldsValue(patch);
+      };
       return {
         openModal: (value) => {
           setModalOpen(true);
           // Defer so the Form is mounted before setting values
-          queueMicrotask(() => form.setFieldsValue(value));
+          queueMicrotask(() => applyValue(value));
         },
         setFieldsValue: (value) => {
-          form.setFieldsValue(value);
+          applyValue(value);
         },
         getFieldsValue: () => {
           return form.getFieldsValue();
@@ -117,10 +155,32 @@ export default forwardRef<DownloadFormRef, DownloadFormProps>(
       };
     }, []);
 
+    /** 表单当前大类 → 提交用 DownloadType（video 细分缺失回 m3u8） */
+    const formType = useMemoizedFn((): DownloadType => {
+      const { category, subtype } = form.getFieldsValue();
+      if (category === "video") {
+        return subtype ?? DownloadType.m3u8;
+      }
+      if (category) {
+        return TYPE_OF_CATEGORY[category];
+      }
+      return DownloadType.m3u8; // 未设置（理论不可达：initialValues 有默认）
+    });
+
     const handleValuesChange = useMemoizedFn(
       (values: Record<string, unknown>) => {
-        const { type, batch } = values;
-        if (type) {
+        const { category, subtype, batch } = values;
+        if (category || subtype) {
+          const cat =
+            (category as DownloadCategory) ??
+            form.getFieldValue("category") ??
+            "video";
+          const type =
+            cat === "video"
+              ? ((subtype as DownloadType) ??
+                form.getFieldValue("subtype") ??
+                DownloadType.m3u8)
+              : TYPE_OF_CATEGORY[cat];
           setLastDownloadTypes(type);
         }
         if (batch !== null && batch !== undefined) {
@@ -204,12 +264,9 @@ export default forwardRef<DownloadFormRef, DownloadFormProps>(
 
     const getFormItems = useMemoizedFn(async () => {
       const { batch } = form.getFieldsValue();
+      const type = formType();
       if (batch) {
-        const {
-          batchList = "",
-          headers,
-          type = DownloadType.m3u8,
-        } = form.getFieldsValue();
+        const { batchList = "", headers } = form.getFieldsValue();
 
         const tasks: Omit<DownloadTask, "id">[] = await Promise.all(
           batchList.split("\n").map(async (line: string) => {
@@ -226,13 +283,7 @@ export default forwardRef<DownloadFormRef, DownloadFormProps>(
 
         return tasks;
       } else {
-        const {
-          name = "",
-          url = "",
-          headers,
-          type = DownloadType.m3u8,
-          folder,
-        } = form.getFieldsValue();
+        const { name = "", url = "", headers, folder } = form.getFieldsValue();
 
         const task: Omit<DownloadTask, "id"> = {
           name,
@@ -291,6 +342,7 @@ export default forwardRef<DownloadFormRef, DownloadFormProps>(
           labelCol={{ span: 5 }}
           layout="horizontal"
           colon={false}
+          initialValues={{ category: "video", subtype: "m3u8" }}
           onValuesChange={handleValuesChange}
         >
           <Form.Item name="id" hidden>
@@ -300,46 +352,69 @@ export default forwardRef<DownloadFormRef, DownloadFormProps>(
             <Switch />
           </Form.Item>
           <Form.Item
-            key="type"
-            name="type"
-            label={t("videoType")}
+            key="category"
+            name="category"
+            label={t("taskCategory")}
             rules={[
               {
                 required: true,
-                message: t("pleaseEnterVideoName"),
+                message: t("pleaseEnterCorrectFormInfo"),
               },
             ]}
           >
-            <Select
+            <Segmented
+              block
               disabled={isEdit}
               options={[
-                {
-                  label: t("streamMedia"),
-                  value: "m3u8",
-                },
-                {
-                  label: t("bilibiliMedia"),
-                  value: "bilibili",
-                },
-                {
-                  label: t("youtubeMedia"),
-                  value: "youtube",
-                },
-                {
-                  label: t("direct"),
-                  value: "direct",
-                },
-                {
-                  label: t("btMedia"),
-                  value: "bt",
-                },
-                {
-                  label: t("mediagoMedia"),
-                  value: "mediago",
-                },
+                { label: t("normalDownload"), value: "normal" },
+                { label: t("videoDownload"), value: "video" },
+                { label: t("magnetDownload"), value: "magnet" },
               ]}
-              placeholder={t("pleaseSelectVideoType")}
             />
+          </Form.Item>
+          <Form.Item noStyle shouldUpdate>
+            {(formInstance) => {
+              // 视频类才细分下载器；普通/磁力的执行路径由大类唯一确定
+              if (formInstance.getFieldValue("category") !== "video") {
+                return null;
+              }
+              return (
+                <Form.Item
+                  key="subtype"
+                  name="subtype"
+                  label={t("videoType")}
+                  rules={[
+                    {
+                      required: true,
+                      message: t("pleaseEnterVideoName"),
+                    },
+                  ]}
+                >
+                  <Select
+                    disabled={isEdit}
+                    options={[
+                      {
+                        label: t("streamMedia"),
+                        value: "m3u8",
+                      },
+                      {
+                        label: t("bilibiliMedia"),
+                        value: "bilibili",
+                      },
+                      {
+                        label: t("youtubeMedia"),
+                        value: "youtube",
+                      },
+                      {
+                        label: t("mediagoMedia"),
+                        value: "mediago",
+                      },
+                    ]}
+                    placeholder={t("pleaseSelectVideoType")}
+                  />
+                </Form.Item>
+              );
+            }}
           </Form.Item>
           <Form.Item noStyle shouldUpdate>
             {(formInstance) => {
@@ -347,7 +422,8 @@ export default forwardRef<DownloadFormRef, DownloadFormProps>(
               if (isBatch) {
                 return null;
               }
-
+              const { category, subtype } = formInstance.getFieldsValue();
+              const isMagnet = category === "magnet";
               return (
                 <Form.Item
                   shouldUpdate
@@ -355,17 +431,19 @@ export default forwardRef<DownloadFormRef, DownloadFormProps>(
                   label={t("videoName")}
                   rules={[
                     {
-                      // bilibili 抓页面标题；bt 落盘名由种子决定（dn/FILE 行回写），都可留空
-                      required:
-                        formInstance.getFieldsValue().type !== "bilibili" &&
-                        formInstance.getFieldsValue().type !== "bt",
+                      // 视频类的 bilibili 抓页面标题；磁力的落盘名由种子决定
+                      //（dn/FILE 行回写）——都可留空；普通下载与其它视频源必填
+                      required: !(
+                        isMagnet ||
+                        (category === "video" && subtype === "bilibili")
+                      ),
                       message: t("pleaseEnterCorrectFormInfo"),
                     },
                   ]}
                 >
                   <Input
                     placeholder={
-                      formInstance.getFieldsValue().type === "bt"
+                      isMagnet
                         ? t("btVideoNamePlaceholder")
                         : t("pleaseEnterVideoName")
                     }
@@ -436,6 +514,8 @@ export default forwardRef<DownloadFormRef, DownloadFormProps>(
               if (formInstance.getFieldValue("batch") && !isEdit) {
                 return null;
               }
+              const isMagnet =
+                formInstance.getFieldsValue().category === "magnet";
               return (
                 <Form.Item
                   name="url"
@@ -447,18 +527,17 @@ export default forwardRef<DownloadFormRef, DownloadFormProps>(
                       message: t("pleaseEnterOnlineVideoUrl"),
                     },
                     {
-                      // bt 接受磁力（magnet:?xt=…，无 //），其余走 file/http(s)
-                      pattern:
-                        formInstance.getFieldsValue().type === "bt"
-                          ? /^magnet:\?.+/
-                          : /^(file|https?):\/\/.+/,
+                      // 磁力类只接受 magnet:（无 //）；普通/视频类走 file/http(s)/ftp 直链
+                      pattern: isMagnet
+                        ? /^magnet:\?.+/
+                        : /^(file|https?|ftp):\/\/.+/,
                       message: t("pleaseEnterCorrectVideoLink"),
                     },
                   ]}
                 >
                   <Input
                     placeholder={
-                      formInstance.getFieldsValue().type === "bt"
+                      isMagnet
                         ? t("btUrlPlaceholder")
                         : t("pleaseEnterOnlineVideoUrlOrDragM3U8Here")
                     }
@@ -499,10 +578,15 @@ export default forwardRef<DownloadFormRef, DownloadFormProps>(
           </Form.Item>
           <Form.Item noStyle shouldUpdate>
             {(formInstance) => {
+              const { category, subtype, batch } =
+                formInstance.getFieldsValue();
+              // headers 只对视频类的流媒体 / MediaGo 且单任务有意义
               if (
-                formInstance.getFieldValue("type") !== "m3u8" &&
-                formInstance.getFieldValue("type") !== "mediago" &&
-                !formInstance.getFieldValue("batch")
+                !(
+                  category === "video" &&
+                  (subtype === "m3u8" || subtype === "mediago") &&
+                  !batch
+                )
               ) {
                 return null;
               }

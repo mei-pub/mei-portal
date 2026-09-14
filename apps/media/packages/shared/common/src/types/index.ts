@@ -72,6 +72,41 @@ export enum DownloadType {
   bt = "bt",
 }
 
+/** aria2 引擎 BT 设置 —— 与 core-ts core/types.ts 的 Aria2BtOptions 结构对齐（双侧平行定义） */
+export interface Aria2BtOptions {
+  /** DHT 网络（磁力找 peer 的主要途径；关闭后纯靠 tracker） */
+  enableDht: boolean;
+  /** 本地对等发现（LPD，局域网组播） */
+  enableLpd: boolean;
+  /** Peer 交换（PEX） */
+  enablePex: boolean;
+  /** BT 监听端口（形如 6881-6999 或 6881；空 = aria2 默认） */
+  listenPort: string;
+  /** 上传限速（如 2M；空 = 不限） */
+  uploadLimit: string;
+  /** 最大 Peer 连接数 */
+  maxPeers: number;
+  /** 补充 tracker 列表（逗号/换行分隔，磁力自带 tr 之外的全局注入） */
+  trackers: string;
+}
+
+/** aria2 引擎设置（下载中心设置页「下载引擎」，direct/bt 共用） */
+export interface Aria2Options {
+  /** 单服务器并发连接数（aria2 上限 16） */
+  connections: number;
+  /** 分下载数 */
+  splits: number;
+  /** 最小分片大小（如 1M / 512K） */
+  minSplitSize: string;
+  /** 全局下载限速（如 10M；空 = 不限） */
+  speedLimit: string;
+  /** 重试次数 */
+  maxTries: number;
+  /** 重试间隔秒 */
+  retryWait: number;
+  bt: Aria2BtOptions;
+}
+
 export interface DownloadParams {
   id: number;
   type: DownloadType;
@@ -244,6 +279,8 @@ export interface AppStore {
   enableMobilePlayer: boolean;
   // server apikey
   apiKey: string;
+  // aria2 引擎设置（下载中心「下载引擎」；服务端 direct/bt 注入 aria2c 参数）
+  aria2: Aria2Options;
 }
 
 export interface WebSource {

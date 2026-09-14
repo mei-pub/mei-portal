@@ -30,6 +30,25 @@ const initialState: AppStore = {
   dockerUrl: "",
   closeMainWindow: false,
   apiKey: "",
+  // 与 core-ts server.ts appStoreDefaults.aria2 / configSetKey 回源对齐；
+  // 服务端 normalizeAria2Options 兜底，这里保持结构完整供 Form initialValues
+  aria2: {
+    connections: 16,
+    splits: 16,
+    minSplitSize: "1M",
+    speedLimit: "",
+    maxTries: 5,
+    retryWait: 0,
+    bt: {
+      enableDht: true,
+      enableLpd: true,
+      enablePex: true,
+      listenPort: "",
+      uploadLimit: "",
+      maxPeers: 55,
+      trackers: "",
+    },
+  },
 };
 
 type Actions = {

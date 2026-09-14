@@ -84,20 +84,17 @@ export function defaultSchemas(): SchemaList {
         },
       },
       {
-        // direct 下载走 aria2c；-x/-s/-k 与旧 gopeed 配置一致（aria2 同名短参数）
+        // direct 下载走 aria2c。连接数/分片/限速/重试不再写死（原 -x 16 -s 16 -k 1M），
+        // 由 aria2Common 动态注入（下载中心设置页「下载引擎」，conf.aria2）
         type: "direct",
         args: {
           localDir: { argsName: ["-d"] },
           name: { argsName: ["-o"], postfix: "@@AUTO@@" },
           url: { argsName: [] },
+          // 标记：buildArgs 从运行时配置拼装通用引擎参数（连接数/分片/限速/重试）
+          aria2Common: { argsName: [] },
           __common__: {
             argsName: [
-              "-x",
-              "16",
-              "-s",
-              "16",
-              "-k",
-              "1M",
               "--console-log-level=notice",
               "--summary-interval=1",
               "--allow-overwrite=true",
@@ -116,25 +113,26 @@ export function defaultSchemas(): SchemaList {
         },
       },
       {
-        // 磁力（BT）下载走 aria2c：DHT/LPD/PEX 发现 peer；seed-time=0 下载完成即退出
-        //（aria2 默认下载完继续做种不退出，任务会永远停在 downloading）。
+        // 磁力（BT）下载走 aria2c：seed-time=0 下载完成即退出（aria2 默认下载完
+        // 继续做种不退出，任务会永远停在 downloading；下载中心不做种）。
         // 实测（aria2 1.36.0，管道输出 console-log-level=notice + summary-interval=1）：
         //   metadata 阶段：[#gid 0B/0B CN:2 SD:0 DL:0B] / FILE: [MEMORY][METADATA]<dn>
         //   下载阶段：[#gid 1.5MiB/3.7GiB(0%) CN:1 DL:0B] / FILE: <落盘绝对路径>
         // percent/speed 正则与 direct 相同（(N%) / DL:xxx）；DL:0B 让 parser 自动 ready。
         // 注意：不定义 name —— BT 落盘名由种子元数据决定（aria2c -o 只对单文件种子
         // 有效且会强改文件名），实际种子名由 service 层解析 FILE:/Download Results 回写。
+        // DHT/LPD/PEX/端口/tracker 等由 aria2Bt 动态注入（conf.aria2.bt）。
         // error 置空：首次运行 DHT 路由表不存在、IPv6 bind 失败都会打 [ERROR] errorCode=1
         //（无害启动噪声，magnet/direct 共有），真失败由进程退出码判定；任务日志有全量输出。
         type: "bt",
         args: {
           localDir: { argsName: ["-d"] },
           url: { argsName: [] },
+          // 标记：通用引擎参数（限速/重试）+ BT 参数（DHT/端口/tracker）动态注入
+          aria2Common: { argsName: [] },
+          aria2Bt: { argsName: [] },
           __common__: {
             argsName: [
-              "--enable-dht=true",
-              "--bt-enable-lpd=true",
-              "--enable-peer-exchange=true",
               "--seed-time=0",
               "--console-log-level=notice",
               "--summary-interval=1",

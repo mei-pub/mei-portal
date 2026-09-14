@@ -21,6 +21,7 @@ import {
   Select,
   Space,
   Switch,
+  Tabs,
 } from "antd";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -114,6 +115,17 @@ const SettingPage: React.FC = () => {
 
   const onFormValueChange = useMemoizedFn(async (values: Partial<AppStore>) => {
     try {
+      // 嵌套字段（aria2）的服务端 conf.set 是整对象替换：变更回调里只带
+      // 变更子键（{aria2:{connections:3}}），直接提交会丢其它子键 ——
+      // 从 form 取全量 aria2 再提交
+      if (values.aria2 !== undefined) {
+        const fullAria2 = formRef.current?.getFieldValue("aria2");
+        if (fullAria2) {
+          await setConfigValue("aria2", fullAria2);
+          setAppStore({ aria2: fullAria2 });
+          return;
+        }
+      }
       await Promise.all(
         Object.entries(values)
           .filter(([, value]) => value !== undefined && value !== null)
@@ -622,15 +634,167 @@ const SettingPage: React.FC = () => {
           initialValues={settings}
           onValuesChange={onFormValueChange}
         >
-          <div className="gap-4 md:columns-2">
-            {cardSections.slice(0, visibleCount).map((section) => (
-              <div key={section.key} className="mb-4 block break-inside-avoid">
-                <Card title={section.title} size="small" variant="borderless">
-                  {section.children}
-                </Card>
-              </div>
-            ))}
-          </div>
+          <Tabs
+            defaultActiveKey="general"
+            items={[
+              {
+                key: "general",
+                label: t("generalSetting"),
+                // 懒挂载：常规 tab 的卡片逐帧出现（保留原有渲染优化）
+                children: (
+                  <div className="gap-4 md:columns-2">
+                    {cardSections.slice(0, visibleCount).map((section) => (
+                      <div
+                        key={section.key}
+                        className="mb-4 block break-inside-avoid"
+                      >
+                        <Card
+                          title={section.title}
+                          size="small"
+                          variant="borderless"
+                        >
+                          {section.children}
+                        </Card>
+                      </div>
+                    ))}
+                  </div>
+                ),
+              },
+              {
+                key: "engine",
+                label: t("engineSetting"),
+                // 下载引擎（aria2）：普通下载 / 磁力下载共用；服务端 conf.aria2
+                // 驱动（buildArgs 动态注入），保存即热更新（新任务立即生效）
+                children: (
+                  <div className="flex flex-col gap-4">
+                    <Card
+                      title={t("aria2CommonSection")}
+                      size="small"
+                      variant="borderless"
+                    >
+                      <Form.Item
+                        label={t("aria2Connections")}
+                        tooltip={t("aria2ConnectionsTooltip")}
+                        name={["aria2", "connections"]}
+                      >
+                        <InputNumber min={1} max={16} precision={0} />
+                      </Form.Item>
+                      <Form.Item
+                        label={t("aria2Splits")}
+                        tooltip={t("aria2SplitsTooltip")}
+                        name={["aria2", "splits"]}
+                      >
+                        <InputNumber min={1} max={128} precision={0} />
+                      </Form.Item>
+                      <Form.Item
+                        label={t("aria2MinSplitSize")}
+                        tooltip={t("aria2MinSplitSizeTooltip")}
+                        name={["aria2", "minSplitSize"]}
+                      >
+                        <Input placeholder="1M" />
+                      </Form.Item>
+                      <Form.Item
+                        label={t("aria2SpeedLimit")}
+                        tooltip={t("aria2SpeedLimitTooltip")}
+                        name={["aria2", "speedLimit"]}
+                      >
+                        <Input
+                          placeholder={t("aria2SpeedSizePlaceholder")}
+                          onContextMenu={() =>
+                            contextMenu.show([
+                              { key: "copy", label: t("copy") },
+                              { key: "paste", label: t("paste") },
+                            ])
+                          }
+                        />
+                      </Form.Item>
+                      <Form.Item
+                        label={t("aria2MaxTries")}
+                        name={["aria2", "maxTries"]}
+                      >
+                        <InputNumber min={0} max={99} precision={0} />
+                      </Form.Item>
+                      <Form.Item
+                        label={t("aria2RetryWait")}
+                        name={["aria2", "retryWait"]}
+                      >
+                        <InputNumber min={0} max={60} precision={0} />
+                      </Form.Item>
+                    </Card>
+                    <Card
+                      title={t("aria2BtSection")}
+                      size="small"
+                      variant="borderless"
+                    >
+                      <Form.Item
+                        label={t("aria2EnableDht")}
+                        tooltip={t("aria2EnableDhtTooltip")}
+                        name={["aria2", "bt", "enableDht"]}
+                      >
+                        <Switch />
+                      </Form.Item>
+                      <Form.Item
+                        label={t("aria2EnableLpd")}
+                        name={["aria2", "bt", "enableLpd"]}
+                      >
+                        <Switch />
+                      </Form.Item>
+                      <Form.Item
+                        label={t("aria2EnablePex")}
+                        name={["aria2", "bt", "enablePex"]}
+                      >
+                        <Switch />
+                      </Form.Item>
+                      <Form.Item
+                        label={t("aria2ListenPort")}
+                        tooltip={t("aria2ListenPortTooltip")}
+                        name={["aria2", "bt", "listenPort"]}
+                      >
+                        <Input placeholder={t("aria2PortPlaceholder")} />
+                      </Form.Item>
+                      <Form.Item
+                        label={t("aria2UploadLimit")}
+                        tooltip={t("aria2UploadLimitTooltip")}
+                        name={["aria2", "bt", "uploadLimit"]}
+                      >
+                        <Input
+                          placeholder={t("aria2SpeedSizePlaceholder")}
+                          onContextMenu={() =>
+                            contextMenu.show([
+                              { key: "copy", label: t("copy") },
+                              { key: "paste", label: t("paste") },
+                            ])
+                          }
+                        />
+                      </Form.Item>
+                      <Form.Item
+                        label={t("aria2MaxPeers")}
+                        name={["aria2", "bt", "maxPeers"]}
+                      >
+                        <InputNumber min={1} max={999} precision={0} />
+                      </Form.Item>
+                      <Form.Item
+                        label={t("aria2BtTrackers")}
+                        tooltip={t("aria2BtTrackersTooltip")}
+                        name={["aria2", "bt", "trackers"]}
+                      >
+                        <Input.TextArea
+                          rows={3}
+                          placeholder={t("aria2TrackersPlaceholder")}
+                          onContextMenu={() =>
+                            contextMenu.show([
+                              { key: "copy", label: t("copy") },
+                              { key: "paste", label: t("paste") },
+                            ])
+                          }
+                        />
+                      </Form.Item>
+                    </Card>
+                  </div>
+                ),
+              },
+            ]}
+          />
         </Form>
       </div>
 
