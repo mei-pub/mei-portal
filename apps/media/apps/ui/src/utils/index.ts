@@ -86,6 +86,10 @@ export function isDownloadType(value: string | null): value is DownloadType {
 }
 
 export const urlDownloadType = (url: string): DownloadType => {
+  // 磁力链接（magnet:?xt=urn:btih:…）→ BT 下载（aria2c + DHT）
+  if (url.startsWith("magnet:")) {
+    return DownloadType.bt;
+  }
   if (url.includes("bilibili")) {
     return DownloadType.bilibili;
   }

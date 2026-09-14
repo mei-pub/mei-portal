@@ -180,6 +180,10 @@ export const en = {
   confirmChange: "Confirm",
   createdAt: "Created",
   direct: "Direct download (MP4)",
+  btMedia: "Magnet (BT)",
+  btVideoNamePlaceholder:
+    "Optional; the torrent name is used once metadata arrives",
+  btUrlPlaceholder: "Enter a magnet link (magnet:?xt=urn:btih:…)",
   enableDocker: "Enable Docker",
   addToDocker: "Add to Docker",
   addToDockerSuccess: "Added to Docker",

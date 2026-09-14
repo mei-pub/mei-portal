@@ -330,6 +330,10 @@ export default forwardRef<DownloadFormRef, DownloadFormProps>(
                   value: "direct",
                 },
                 {
+                  label: t("btMedia"),
+                  value: "bt",
+                },
+                {
                   label: t("mediagoMedia"),
                   value: "mediago",
                 },
@@ -351,14 +355,20 @@ export default forwardRef<DownloadFormRef, DownloadFormProps>(
                   label={t("videoName")}
                   rules={[
                     {
+                      // bilibili 抓页面标题；bt 落盘名由种子决定（dn/FILE 行回写），都可留空
                       required:
-                        formInstance.getFieldsValue().type !== "bilibili",
+                        formInstance.getFieldsValue().type !== "bilibili" &&
+                        formInstance.getFieldsValue().type !== "bt",
                       message: t("pleaseEnterCorrectFormInfo"),
                     },
                   ]}
                 >
                   <Input
-                    placeholder={t("pleaseEnterVideoName")}
+                    placeholder={
+                      formInstance.getFieldsValue().type === "bt"
+                        ? t("btVideoNamePlaceholder")
+                        : t("pleaseEnterVideoName")
+                    }
                     onContextMenu={() =>
                       contextMenu.show([
                         { key: "copy", label: t("copy") },
@@ -396,7 +406,7 @@ export default forwardRef<DownloadFormRef, DownloadFormProps>(
                             );
                           }
                           const [url] = params;
-                          if (!/^(https?):\/\/.+/.test(url)) {
+                          if (!/^(https?):\/\/.+|^magnet:\?.+/.test(url)) {
                             return Promise.reject(
                               new Error(t("pleaseEnterCorrectBatchList")),
                             );
@@ -437,13 +447,21 @@ export default forwardRef<DownloadFormRef, DownloadFormProps>(
                       message: t("pleaseEnterOnlineVideoUrl"),
                     },
                     {
-                      pattern: /^(file|https?):\/\/.+/,
+                      // bt 接受磁力（magnet:?xt=…，无 //），其余走 file/http(s)
+                      pattern:
+                        formInstance.getFieldsValue().type === "bt"
+                          ? /^magnet:\?.+/
+                          : /^(file|https?):\/\/.+/,
                       message: t("pleaseEnterCorrectVideoLink"),
                     },
                   ]}
                 >
                   <Input
-                    placeholder={t("pleaseEnterOnlineVideoUrlOrDragM3U8Here")}
+                    placeholder={
+                      formInstance.getFieldsValue().type === "bt"
+                        ? t("btUrlPlaceholder")
+                        : t("pleaseEnterOnlineVideoUrlOrDragM3U8Here")
+                    }
                     onContextMenu={() =>
                       contextMenu.show([
                         { key: "copy", label: t("copy") },

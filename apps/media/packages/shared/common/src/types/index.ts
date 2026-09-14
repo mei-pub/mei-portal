@@ -69,6 +69,7 @@ export enum DownloadType {
   direct = "direct",
   mediago = "mediago",
   youtube = "youtube",
+  bt = "bt",
 }
 
 export interface DownloadParams {

@@ -1,19 +1,32 @@
 // core/types —— Go internal/core/types.go 的复刻
 
-export type DownloadType = 'm3u8' | 'bilibili' | 'direct' | 'mediago' | 'youtube';
+export type DownloadType =
+  | "m3u8"
+  | "bilibili"
+  | "direct"
+  | "mediago"
+  | "youtube"
+  | "bt";
 
-export type TaskStatus = 'pending' | 'downloading' | 'success' | 'failed' | 'stopped';
+export type TaskStatus =
+  | "pending"
+  | "downloading"
+  | "success"
+  | "failed"
+  | "stopped";
 
 /** 各下载类型对应的外部二进制名（不含扩展名；Windows 下调用方补 .exe） */
 export const BinaryNames: Record<DownloadType, string> = {
-  m3u8: 'N_m3u8DL-RE',
-  bilibili: 'BBDown',
-  direct: 'aria2c',
-  mediago: 'mediago',
-  youtube: 'yt-dlp',
+  m3u8: "N_m3u8DL-RE",
+  bilibili: "BBDown",
+  direct: "aria2c",
+  mediago: "mediago",
+  youtube: "yt-dlp",
+  // 磁力（BT）复用 aria2c（DHT 发现 peer；seed-time=0 下载完成即退出）
+  bt: "aria2c",
 };
 
-export const FFmpegBinaryName = 'ffmpeg';
+export const FFmpegBinaryName = "ffmpeg";
 
 /** 下载任务参数（DB 任务用数字 ID 字符串，内存任务可用任意字符串） */
 export interface DownloadParams {
@@ -27,7 +40,7 @@ export interface DownloadParams {
 
 export interface ProgressEvent {
   id: string;
-  type: 'ready' | 'progress';
+  type: "ready" | "progress";
   percent: number;
   speed: string;
   isLive: boolean;

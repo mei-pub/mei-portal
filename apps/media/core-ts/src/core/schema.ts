@@ -1,7 +1,7 @@
 // core/schema —— Go internal/core/schema/loader.go 的复刻：DefaultSchemas 参数表 + JSON 覆盖
 
-import fs from 'node:fs';
-import { logger } from '../logger.ts';
+import fs from "node:fs";
+import { logger } from "../logger.ts";
 
 export interface ArgSpec {
   /** 命令行参数名列表（多个则依次重复出现） */
@@ -37,106 +37,158 @@ export function defaultSchemas(): SchemaList {
   return {
     schemas: [
       {
-        type: 'm3u8',
+        type: "m3u8",
         args: {
           url: { argsName: [] },
-          localDir: { argsName: ['--tmp-dir', '--save-dir'] },
-          name: { argsName: ['--save-name'] },
-          headers: { argsName: ['--header'] },
-          deleteSegments: { argsName: ['--del-after-done'] },
-          proxy: { argsName: ['--custom-proxy'] },
+          localDir: { argsName: ["--tmp-dir", "--save-dir"] },
+          name: { argsName: ["--save-name"] },
+          headers: { argsName: ["--header"] },
+          deleteSegments: { argsName: ["--del-after-done"] },
+          proxy: { argsName: ["--custom-proxy"] },
           __common__: {
             argsName: [
-              '--no-log', '--auto-select', '--ui-language', 'zh-CN',
-              '--live-real-time-merge', '--check-segments-count', 'false',
+              "--no-log",
+              "--auto-select",
+              "--ui-language",
+              "zh-CN",
+              "--live-real-time-merge",
+              "--check-segments-count",
+              "false",
             ],
           },
         },
         consoleReg: {
-          percent: '([\\d.]+)%',
-          speed: '([\\d.]+[GMK]Bps)',
-          error: 'ERROR',
-          start: '保存文件名:',
-          isLive: '检测到直播流',
+          percent: "([\\d.]+)%",
+          speed: "([\\d.]+[GMK]Bps)",
+          error: "ERROR",
+          start: "保存文件名:",
+          isLive: "检测到直播流",
         },
       },
       {
-        type: 'bilibili',
+        type: "bilibili",
         args: {
           url: { argsName: [] },
-          localDir: { argsName: ['--work-dir'] },
-          name: { argsName: ['--file-pattern'] },
-          __common__: { argsName: ['--use-app-api', '--encoding-priority', 'avc,hevc,av1'] },
+          localDir: { argsName: ["--work-dir"] },
+          name: { argsName: ["--file-pattern"] },
+          __common__: {
+            argsName: ["--use-app-api", "--encoding-priority", "avc,hevc,av1"],
+          },
         },
         consoleReg: {
-          percent: '([\\d.]+)%',
-          speed: '([\\d.]+\\s[GMK]B/s)',
-          error: 'ERROR',
-          start: '开始下载',
-          isLive: '检测到直播流',
+          percent: "([\\d.]+)%",
+          speed: "([\\d.]+\\s[GMK]B/s)",
+          error: "ERROR",
+          start: "开始下载",
+          isLive: "检测到直播流",
         },
       },
       {
         // direct 下载走 aria2c；-x/-s/-k 与旧 gopeed 配置一致（aria2 同名短参数）
-        type: 'direct',
+        type: "direct",
         args: {
-          localDir: { argsName: ['-d'] },
-          name: { argsName: ['-o'], postfix: '@@AUTO@@' },
+          localDir: { argsName: ["-d"] },
+          name: { argsName: ["-o"], postfix: "@@AUTO@@" },
           url: { argsName: [] },
           __common__: {
             argsName: [
-              '-x', '16', '-s', '16', '-k', '1M',
-              '--console-log-level=notice',
-              '--summary-interval=1',
-              '--allow-overwrite=true',
-              '--auto-file-renaming=false',
-              '--check-certificate=false',
+              "-x",
+              "16",
+              "-s",
+              "16",
+              "-k",
+              "1M",
+              "--console-log-level=notice",
+              "--summary-interval=1",
+              "--allow-overwrite=true",
+              "--auto-file-renaming=false",
+              "--check-certificate=false",
             ],
           },
         },
         consoleReg: {
-          percent: '\\((\\d+)%\\)',
-          speed: 'DL:(\\S+)',
-          error: 'errorCode=\\d+|exception',
-          start: 'Download (started|Results:)',
-          isLive: '',
+          percent: "\\((\\d+)%\\)",
+          // summary 行尾部带 ']'（DL:3MiB]），排除括号避免速度值带尾巴
+          speed: "DL:([^\\]\\s]+)",
+          error: "errorCode=\\d+|exception",
+          start: "Download (started|Results:)",
+          isLive: "",
         },
       },
       {
-        type: 'youtube',
+        // 磁力（BT）下载走 aria2c：DHT/LPD/PEX 发现 peer；seed-time=0 下载完成即退出
+        //（aria2 默认下载完继续做种不退出，任务会永远停在 downloading）。
+        // 实测（aria2 1.36.0，管道输出 console-log-level=notice + summary-interval=1）：
+        //   metadata 阶段：[#gid 0B/0B CN:2 SD:0 DL:0B] / FILE: [MEMORY][METADATA]<dn>
+        //   下载阶段：[#gid 1.5MiB/3.7GiB(0%) CN:1 DL:0B] / FILE: <落盘绝对路径>
+        // percent/speed 正则与 direct 相同（(N%) / DL:xxx）；DL:0B 让 parser 自动 ready。
+        // 注意：不定义 name —— BT 落盘名由种子元数据决定（aria2c -o 只对单文件种子
+        // 有效且会强改文件名），实际种子名由 service 层解析 FILE:/Download Results 回写。
+        // error 置空：首次运行 DHT 路由表不存在、IPv6 bind 失败都会打 [ERROR] errorCode=1
+        //（无害启动噪声，magnet/direct 共有），真失败由进程退出码判定；任务日志有全量输出。
+        type: "bt",
         args: {
+          localDir: { argsName: ["-d"] },
           url: { argsName: [] },
-          localDir: { argsName: ['-P'] },
-          name: { argsName: ['-o'] },
-          headers: { argsName: ['--add-header'] },
-          proxy: { argsName: ['--proxy'] },
-          __common__: { argsName: ['--no-mtime', '--progress', '--newline', '--no-colors'] },
+          __common__: {
+            argsName: [
+              "--enable-dht=true",
+              "--bt-enable-lpd=true",
+              "--enable-peer-exchange=true",
+              "--seed-time=0",
+              "--console-log-level=notice",
+              "--summary-interval=1",
+              "--allow-overwrite=true",
+              "--auto-file-renaming=false",
+              "--check-certificate=false",
+            ],
+          },
         },
         consoleReg: {
-          percent: '([\\d.]+)%',
-          speed: '([\\d.]+\\s?[MKG]?i?B/s)',
-          error: 'ERROR',
-          start: '\\[download\\] Destination:',
-          isLive: '\\[live\\]',
+          percent: "\\((\\d+)%\\)",
+          speed: "DL:([^\\]\\s]+)",
+          error: "",
+          start: "Downloading \\d+ item",
+          isLive: "",
         },
       },
       {
-        type: 'mediago',
+        type: "youtube",
         args: {
           url: { argsName: [] },
-          localDir: { argsName: ['--save-dir', '--tmp-dir'] },
-          name: { argsName: ['--save-name'] },
-          headers: { argsName: ['--header'] },
-          deleteSegments: { argsName: ['--del-after-done'] },
-          proxy: { argsName: ['--proxy'] },
-          __common__: { argsName: ['--auto-select', '--thread-count', '8'] },
+          localDir: { argsName: ["-P"] },
+          name: { argsName: ["-o"] },
+          headers: { argsName: ["--add-header"] },
+          proxy: { argsName: ["--proxy"] },
+          __common__: {
+            argsName: ["--no-mtime", "--progress", "--newline", "--no-colors"],
+          },
         },
         consoleReg: {
-          percent: '([\\d.]+)%',
-          speed: '([\\d.]+\\s?[MKG]?B/s)',
-          error: 'Error:',
-          start: '\\[download\\] \\d+ segments',
-          isLive: 'is_live:\\s*true|\\[live\\]',
+          percent: "([\\d.]+)%",
+          speed: "([\\d.]+\\s?[MKG]?i?B/s)",
+          error: "ERROR",
+          start: "\\[download\\] Destination:",
+          isLive: "\\[live\\]",
+        },
+      },
+      {
+        type: "mediago",
+        args: {
+          url: { argsName: [] },
+          localDir: { argsName: ["--save-dir", "--tmp-dir"] },
+          name: { argsName: ["--save-name"] },
+          headers: { argsName: ["--header"] },
+          deleteSegments: { argsName: ["--del-after-done"] },
+          proxy: { argsName: ["--proxy"] },
+          __common__: { argsName: ["--auto-select", "--thread-count", "8"] },
+        },
+        consoleReg: {
+          percent: "([\\d.]+)%",
+          speed: "([\\d.]+\\s?[MKG]?B/s)",
+          error: "Error:",
+          start: "\\[download\\] \\d+ segments",
+          isLive: "is_live:\\s*true|\\[live\\]",
         },
       },
     ],
@@ -149,16 +201,20 @@ export function defaultSchemas(): SchemaList {
 export function loadSchemasFromJSON(p: string): SchemaList {
   logger.debug(`Loading schemas from file: ${p}`);
   try {
-    const raw = fs.readFileSync(p, 'utf8');
+    const raw = fs.readFileSync(p, "utf8");
     const sl = JSON.parse(raw) as SchemaList;
-    logger.info(`Schemas loaded successfully: ${p} count=${sl.schemas?.length ?? 0}`);
+    logger.info(
+      `Schemas loaded successfully: ${p} count=${sl.schemas?.length ?? 0}`,
+    );
     return sl;
   } catch (err: any) {
-    if (err?.code === 'ENOENT') {
+    if (err?.code === "ENOENT") {
       logger.info(`Schema file not found, using built-in defaults: ${p}`);
       return defaultSchemas();
     }
-    logger.error(`Failed to read/parse schema file: ${p}: ${err?.message ?? err}`);
+    logger.error(
+      `Failed to read/parse schema file: ${p}: ${err?.message ?? err}`,
+    );
     // Go 版解析失败直接 Fatal；这里保持一致 —— 让启动失败
     throw err;
   }
