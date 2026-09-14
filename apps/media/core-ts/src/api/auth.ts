@@ -6,15 +6,16 @@
 // 门户改密后令牌立即轮换，所有子应用会话同步失效。
 // 令牌可经 mei-auth cookie、Authorization Bearer、X-API-Key 三通道携带。
 
-import crypto from 'node:crypto';
-import fs from 'node:fs';
-import type { IncomingMessage } from 'node:http';
-import { logger } from '../logger.ts';
+import crypto from "node:crypto";
+import fs from "node:fs";
+import type { IncomingMessage } from "node:http";
+import { logger } from "../logger.ts";
 
 // 本机验证可用 MEI_SHELL_USER_FILE 覆盖（生产默认与 Go 版一致：/data/shell/user.json）
-const SHELL_USER_FILE = process.env.MEI_SHELL_USER_FILE || '/data/shell/user.json';
+const SHELL_USER_FILE =
+  process.env.MEI_SHELL_USER_FILE || "/data/shell/user.json";
 
-let cachedToken = '';
+let cachedToken = "";
 let cachedTokenExpires = 0;
 
 /** 计算门户会话令牌（30s 缓存；读取失败缓存 5s 空值） */
@@ -22,20 +23,20 @@ export function portalSessionToken(): string {
   const now = Date.now();
   if (now < cachedTokenExpires) return cachedToken;
   try {
-    const raw = fs.readFileSync(SHELL_USER_FILE, 'utf8');
+    const raw = fs.readFileSync(SHELL_USER_FILE, "utf8");
     const user = JSON.parse(raw) as { username?: string; hash?: string };
     if (!user.username || !user.hash) {
-      cachedToken = '';
+      cachedToken = "";
       cachedTokenExpires = now + 5_000;
-      return '';
+      return "";
     }
     cachedToken = crypto
-      .createHash('sha256')
+      .createHash("sha256")
       .update(`${user.username}:${user.hash}`)
-      .digest('hex');
+      .digest("hex");
     cachedTokenExpires = now + 30_000;
   } catch {
-    cachedToken = '';
+    cachedToken = "";
     cachedTokenExpires = now + 5_000;
   }
   return cachedToken;
@@ -47,16 +48,20 @@ export function isPortalSession(req: IncomingMessage): boolean {
   if (!expected) return false;
 
   const headers = req.headers;
-  const apiKey = headerValue(headers['x-api-key']);
+  const apiKey = headerValue(headers["x-api-key"]);
   if (apiKey === expected) return true;
 
   const auth = headerValue(headers.authorization);
-  if (auth.startsWith('Bearer ') && auth.slice('Bearer '.length) === expected) return true;
+  if (auth.startsWith("Bearer ") && auth.slice("Bearer ".length) === expected)
+    return true;
 
   const cookie = headerValue(headers.cookie);
-  for (const part of cookie.split(';')) {
+  for (const part of cookie.split(";")) {
     const trimmed = part.trim();
-    if (trimmed.startsWith('mei-auth=') && trimmed.slice('mei-auth='.length) === expected) {
+    if (
+      trimmed.startsWith("mei-auth=") &&
+      trimmed.slice("mei-auth=".length) === expected
+    ) {
       return true;
     }
   }
@@ -64,34 +69,35 @@ export function isPortalSession(req: IncomingMessage): boolean {
 }
 
 function headerValue(v: string | string[] | undefined): string {
-  if (Array.isArray(v)) return v[0] ?? '';
-  return v ?? '';
+  if (Array.isArray(v)) return v[0] ?? "";
+  return v ?? "";
 }
 
 /** 与 Go AuthMiddleware 一致的白名单（setup/signin 已移除但保留白名单项无害） */
 const WHITELIST = new Set([
-  '/healthy',
-  '/api/auth/setup',
-  '/api/auth/signin',
-  '/api/auth/status',
-  '/favicon.ico',
-  '/',
+  "/healthy",
+  "/api/auth/setup",
+  "/api/auth/signin",
+  "/api/auth/status",
+  "/favicon.ico",
+  "/",
 ]);
 
 /** 请求是否免鉴权（白名单 / 前缀 / SPA 前端路由） */
 export function isWhitelisted(pathname: string): boolean {
   if (WHITELIST.has(pathname)) return true;
   if (
-    pathname.startsWith('/swagger/') ||
-    pathname.startsWith('/player') ||
-    pathname.startsWith('/api/v1/') ||
-    pathname.startsWith('/videos/') ||
-    pathname.startsWith('/assets/')
+    pathname.startsWith("/swagger/") ||
+    pathname.startsWith("/player") ||
+    pathname.startsWith("/api/v1/") ||
+    pathname.startsWith("/videos/") ||
+    pathname.startsWith("/files/") ||
+    pathname.startsWith("/assets/")
   ) {
     return true;
   }
   // SPA 前端路由：非 /api/ 且不含 "." 的路径视为客户端路由
-  if (!pathname.startsWith('/api/') && !pathname.includes('.')) return true;
+  if (!pathname.startsWith("/api/") && !pathname.includes(".")) return true;
   return false;
 }
 

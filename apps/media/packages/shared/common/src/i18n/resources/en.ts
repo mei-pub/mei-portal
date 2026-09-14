@@ -188,6 +188,9 @@ export const en = {
   videoDownload: "Video",
   magnetDownload: "Magnet",
   taskCategory: "Task type",
+  downloadToLocal: "Download to this device",
+  fileLabel: "File name",
+  fileLinkLabel: "Download URL",
   normalDownloadTip:
     "Direct file download (http/ftp, multi-connection via aria2)",
   generalSetting: "General",

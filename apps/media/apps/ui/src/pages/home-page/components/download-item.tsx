@@ -1,4 +1,5 @@
 import {
+  DownloadOutlined,
   FileTextOutlined,
   PauseCircleOutlined,
   PlayCircleOutlined,
@@ -213,6 +214,20 @@ export const DownloadTaskItem = memo(function DownloadTaskItem({
                 icon={<PlayCircleOutlined />}
                 title={t("playVideo")}
                 onClick={handleWebPlay}
+              />,
+            );
+          }
+          // 下载到本地：/files/:id 附件端点（任意扩展产物都能回拉，视频之外的
+          // 压缩包/文档也可；attachment 响应触发浏览器下载，不离开当前页）
+          if (task.exists) {
+            buttons.push(
+              <IconButton
+                key="download"
+                icon={<DownloadOutlined />}
+                title={t("downloadToLocal")}
+                onClick={() => {
+                  window.location.href = `files/${task.id}`;
+                }}
               />,
             );
           }

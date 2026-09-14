@@ -464,6 +464,50 @@ const openLink = (url: string) => {
   window.open(url, '_blank', 'noopener,noreferrer');
 };
 
+// ===== 用内置下载中心下载（磁力）=====
+// 磁力结果一键投递到 media core 建任务并自动开始（type=bt，aria2 DHT）。
+// 相对路径 fetch 携带门户 cookie（跨应用契约）；行内状态做反馈，成功态点击跳
+// 下载中心媒体面板查看进度（iframe 内经外壳承载路由，独立部署整页跳转）。
+const isMagnetUrl = (url: string) => /^magnet:\?/i.test((url || '').trim());
+const dlCenterState = ref<Record<string, 'loading' | 'success' | 'error'>>({});
+const downloadViaCenter = async (item: MergedResultItem) => {
+  const key = item.url;
+  if (!isMagnetUrl(key) || dlCenterState.value[key] === 'loading') return;
+  dlCenterState.value = { ...dlCenterState.value, [key]: 'loading' };
+  try {
+    const res = await fetch('/downloads/api/downloads', {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        tasks: [{ name: '', type: 'bt', url: item.url.trim() }],
+        startDownload: true,
+      }),
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    dlCenterState.value = { ...dlCenterState.value, [key]: 'success' };
+  } catch (err) {
+    console.warn('投递下载中心失败:', err);
+    dlCenterState.value = { ...dlCenterState.value, [key]: 'error' };
+    setTimeout(() => {
+      const next = { ...dlCenterState.value };
+      delete next[key];
+      dlCenterState.value = next;
+    }, 2500);
+  }
+};
+const openDownloadCenter = () => {
+  const path = '/downloads?type=media';
+  if (window.parent && window.parent !== window) {
+    window.parent.postMessage(
+      { source: 'mei-iframe', type: 'navigate', path },
+      window.location.origin,
+    );
+  } else {
+    window.open(path, '_blank');
+  }
+};
+
 // 通用复制函数（支持降级处理）
 const copyToClipboard = async (text: string): Promise<boolean> => {
   // 方法1: 优先使用现代 Clipboard API（安全上下文可用）
@@ -767,6 +811,20 @@ onUnmounted(() => {
             <!-- 第二行：链接和提取码 -->
             <div class="result-row">
               <div class="result-link" @click="openLink(item.url)">{{ item.url }}</div>
+              <!-- 磁力链接：一键投递到内置下载中心（BT 下载，进度在下载中心媒体面板） -->
+              <button
+                v-if="isMagnetUrl(item.url)"
+                type="button"
+                class="result-password dl-center-btn"
+                :class="{
+                  copied: dlCenterState[item.url] === 'success',
+                  'copy-failed': dlCenterState[item.url] === 'error'
+                }"
+                :title="dlCenterState[item.url] === 'success' ? '已在下载中心开始下载，点击查看进度' : '用内置下载中心下载（磁力 / BT）'"
+                @click="dlCenterState[item.url] === 'success' ? openDownloadCenter() : downloadViaCenter(item)"
+              >
+                {{ dlCenterState[item.url] === 'loading' ? '投递中…' : dlCenterState[item.url] === 'success' ? '已投递 · 查看进度' : '下载中心下载' }}
+              </button>
               <button
                 v-if="item.password"
                 type="button"

@@ -146,8 +146,19 @@ export function normalizeAria2Options(v: unknown): Aria2Options {
   };
 }
 
-/** 从 URL 推断扩展名（与 Go guessExtFromURL 一致） */
+/**
+ * 从 URL 推断扩展名（direct 保存文件名用）。
+ * 普通下载不再限定死视频：优先提取路径最后一段的真实扩展（1-5 位字母数字，
+ * 如 .zip/.iso/.epub 原样保留）；URL 无法解析出扩展时按流媒体常见后缀兜底、
+ * 最终回退 mp4（与旧 Go guessExtFromURL 的回退语义一致）。
+ */
 export function guessExtFromURL(u: string): string {
+  try {
+    const m = /\.([A-Za-z0-9]{1,5})$/.exec(new URL(u).pathname);
+    if (m) return m[1]!.toLowerCase();
+  } catch {
+    // 非法 URL → 走下方兜底
+  }
   const l = u.toLowerCase();
   if (l.includes(".m3u8")) return "m3u8";
   if (l.includes(".mp4")) return "mp4";

@@ -38,6 +38,17 @@ export const hostBridge = {
     window.addEventListener("message", (ev) => {
       if (ev.origin !== window.location.origin) return;
       const data = ev.data;
+      // 外壳播放条「下载」按钮 → 转给下载统一入口（downloadSong 按「下载方式」
+      // 设置分发本地电脑 / 本地服务器；动态 import 规避 hostbridge↔api 循环依赖）
+      if (data && data.source === "mei-shell" && data.type === "music-download" && data.song) {
+        const payload = data.song;
+        void import("./api.js")
+          .then(({ downloadSong }) => downloadSong(payload, "320"))
+          .catch(() => {
+            this.send({ type: "toast", message: "下载失败，请稍后重试" });
+          });
+        return;
+      }
       if (!data || data.source !== HOST_SOURCE || data.type !== "state") return;
       this.connected = true;
       applyState(data.state || {});

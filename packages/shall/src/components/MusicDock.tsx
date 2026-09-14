@@ -115,6 +115,12 @@ export default function MusicDock() {
         case 'cycle-dock-mode':
           eng.cycleDockMode();
           break;
+        case 'toast': {
+          // 音乐 iframe 的轻量反馈（如下载失败提示）借道播放条 toast 展示
+          const message = String(data.message || '');
+          if (message) setToast(message);
+          break;
+        }
         default:
           break;
       }
@@ -350,6 +356,35 @@ export default function MusicDock() {
           <span className="mei-dock-time">{fmt(snap.duration)}</span>
         </div>
         <div className="mei-dock-right">
+          {/* 下载：转发给音乐应用 iframe（providers 解析 + 「下载方式」设置分发
+              本地电脑 / 本地服务器），下载链路与音乐应用内各入口完全一致 */}
+          <button
+            className="mei-dock-btn"
+            title={`下载「${song.name}」（按音乐应用「下载方式」设置分发）`}
+            onClick={() => {
+              const frame = document.querySelector<HTMLIFrameElement>('iframe[data-mei-app="music"]');
+              if (!frame?.contentWindow) return;
+              frame.contentWindow.postMessage(
+                {
+                  source: 'mei-shell',
+                  type: 'music-download',
+                  song: {
+                    id: String(song.id || ''),
+                    name: String(song.name || ''),
+                    artist: String(song.artist || ''),
+                    album: String(song.album || ''),
+                    pic_id: String(song.pic_id || ''),
+                    lyric_id: String(song.lyric_id || ''),
+                    source: String(song.source || ''),
+                  },
+                },
+                window.location.origin,
+              );
+              setToast('已发起下载（按音乐应用「下载方式」设置分发）');
+            }}
+          >
+            <MeiIcon icon="lucide:download" size={16} />
+          </button>
           <button
             className={`mei-dock-btn${faved ? ' faved' : ''}`}
             title={faved ? '取消收藏' : '加入收藏'}

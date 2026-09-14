@@ -424,11 +424,12 @@ export default forwardRef<DownloadFormRef, DownloadFormProps>(
               }
               const { category, subtype } = formInstance.getFieldsValue();
               const isMagnet = category === "magnet";
+              const isNormal = category === "normal";
               return (
                 <Form.Item
                   shouldUpdate
                   name="name"
-                  label={t("videoName")}
+                  label={isNormal ? t("fileLabel") : t("videoName")}
                   rules={[
                     {
                       // 视频类的 bilibili 抓页面标题；磁力的落盘名由种子决定
@@ -516,10 +517,12 @@ export default forwardRef<DownloadFormRef, DownloadFormProps>(
               }
               const isMagnet =
                 formInstance.getFieldsValue().category === "magnet";
+              const isNormal =
+                formInstance.getFieldsValue().category === "normal";
               return (
                 <Form.Item
                   name="url"
-                  label={t("videoLink")}
+                  label={isNormal ? t("fileLinkLabel") : t("videoLink")}
                   required
                   rules={[
                     {

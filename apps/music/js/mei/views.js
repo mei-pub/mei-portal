@@ -499,6 +499,11 @@ export function renderPlaylists(root) {
       };
       row.querySelector('[data-act="up"]').onclick = () => store.moveSongInPlaylist(selected.id, i, -1);
       row.querySelector('[data-act="down"]').onclick = () => store.moveSongInPlaylist(selected.id, i, 1);
+      // 下载入口：与搜索卡片/播放页同一链路（「下载方式」设置分发）
+      row.querySelector('[data-act="dl"]').onclick = () => {
+        toast("正在解析下载地址…");
+        downloadSong(song, "320").catch(() => toast("下载失败，请稍后重试"));
+      };
       row.querySelector('[data-act="del"]').onclick = () => store.removeFromPlaylist(selected.id, songKey(song));
     });
   };
@@ -520,6 +525,7 @@ function songRowHtml(song, i, { playing = false, showSort = true, showFav = fals
         <button class="mei-icon-btn" data-act="play" title="播放">${I.play}</button>
         ${showSort ? `<button class="mei-icon-btn" data-act="up" title="上移">${I.up}</button>` : ""}
         ${showSort ? `<button class="mei-icon-btn" data-act="down" title="下移">${I.down}</button>` : ""}
+        <button class="mei-icon-btn" data-act="dl" title="下载（按「下载方式」设置分发到本地电脑 / 本地服务器）">${I.download}</button>
         ${showFav ? `<button class="mei-icon-btn danger" data-act="unfav" title="取消收藏">${I.heartFill}</button>` : ""}
         <button class="mei-icon-btn danger" data-act="del" title="移除">${I.x}</button>
       </div>
@@ -895,6 +901,11 @@ export function renderFavorites(root) {
     if (unfav) unfav.onclick = () => {
       store.removeFavorite(songKey(store.favorites[i]));
       renderFavorites(root);
+    };
+    // 下载入口：收藏页与搜索/播放页/播放列表同链路
+    row.querySelector('[data-act="dl"]').onclick = () => {
+      toast("正在解析下载地址…");
+      downloadSong(store.favorites[i], "320").catch(() => toast("下载失败，请稍后重试"));
     };
     const del = row.querySelector('[data-act="del"]');
     if (del) del.onclick = () => {

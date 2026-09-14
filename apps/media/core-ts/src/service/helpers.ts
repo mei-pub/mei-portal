@@ -100,6 +100,9 @@ function concat(chunks: Uint8Array[]): Uint8Array {
 /**
  * 在 localPath 目录下找 name.<视频扩展名> 文件（Go CheckFileExists）。
  * 返回 [是否存在, 文件全路径]；下载器输出目录（无扩展名）也算存在。
+ * 视频扩展与目录都未命中时，回退扫同目录任意 `name.*` 文件 —— 普通下载
+ *（direct）的产物可能是任意扩展（zip/iso/pdf…），exists 检查不能只认视频。
+ * aria2 控制文件（*.aria2，未完成/中断产物）不算存在。
  */
 export function checkFileExists(
   name: string,
@@ -120,6 +123,19 @@ export function checkFileExists(
     if (fs.statSync(dirPath).isDirectory()) return [true, dirPath];
   } catch {
     // 不存在
+  }
+  // 任意扩展回退（普通下载产物）：首个 name.<ext> 文件（跳过 .aria2 控制文件）
+  try {
+    const prefix = `${name}.`;
+    const hit = fs
+      .readdirSync(localPath)
+      .find((e) => e.startsWith(prefix) && !e.endsWith(".aria2"));
+    if (hit) {
+      const p = path.join(localPath, hit);
+      if (fs.statSync(p).isFile()) return [true, p];
+    }
+  } catch {
+    // 目录不可读 → 不存在
   }
   return [false, ""];
 }
