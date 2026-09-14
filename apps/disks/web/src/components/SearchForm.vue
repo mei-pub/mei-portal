@@ -248,7 +248,8 @@ const handleSearch = () => {
   width: 100%;
 }
 
-/* 高级选项切换按钮（左侧） */
+/* 高级选项切换按钮（左侧）——与胶囊搜索框完全贴合：
+   同高（48px）、左端全圆角、右缘分隔线极淡 */
 .advanced-toggle-left {
   position: absolute;
   left: 0;
@@ -256,12 +257,12 @@ const handleSearch = () => {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 40px;
-  height: 40px;
-  border-radius: 6px 0 0 6px;
+  width: 44px;
+  height: 48px;
+  border-radius: 9999px 0 0 9999px;
   background: transparent;
   border: none;
-  border-right: 1px solid hsl(var(--border));
+  border-right: 1px solid hsl(var(--border) / 0.5);
   color: hsl(var(--muted-foreground));
   cursor: pointer;
   transition: all 0.2s ease;
@@ -276,6 +277,8 @@ const handleSearch = () => {
 .advanced-toggle-left.active {
   background: hsl(var(--primary));
   color: hsl(var(--primary-foreground));
+  border-radius: 9999px;
+  border-right-color: transparent;
 }
 
 .advanced-toggle-left.has-filter {
@@ -286,8 +289,8 @@ const handleSearch = () => {
 .advanced-toggle-left.has-filter::after {
   content: '';
   position: absolute;
-  top: 4px;
-  right: 4px;
+  top: 6px;
+  right: 8px;
   width: 8px;
   height: 8px;
   background: hsl(var(--primary));

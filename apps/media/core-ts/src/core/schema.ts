@@ -131,6 +131,9 @@ export function defaultSchemas(): SchemaList {
           // 标记：通用引擎参数（限速/重试）+ BT 参数（DHT/端口/tracker）动态注入
           aria2Common: { argsName: [] },
           aria2Bt: { argsName: [] },
+          // 种子文件任务的下载文件索引（"1,3-5"；仅 torrent 文件任务有效，
+          // 由 UI 内容勾选生成；空 = 全部文件）。值条件注入见 buildArgs selectFile
+          selectFile: { argsName: ["--select-file"] },
           __common__: {
             argsName: [
               "--seed-time=0",

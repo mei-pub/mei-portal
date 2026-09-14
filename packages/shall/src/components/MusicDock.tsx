@@ -359,7 +359,7 @@ export default function MusicDock() {
           {/* 下载：转发给音乐应用 iframe（providers 解析 + 「下载方式」设置分发
               本地电脑 / 本地服务器），下载链路与音乐应用内各入口完全一致 */}
           <button
-            className="mei-dock-btn"
+            className="mei-dock-btn mei-dock-opt-dl"
             title={`下载「${song.name}」（按音乐应用「下载方式」设置分发）`}
             onClick={() => {
               const frame = document.querySelector<HTMLIFrameElement>('iframe[data-mei-app="music"]');
@@ -386,7 +386,7 @@ export default function MusicDock() {
             <MeiIcon icon="lucide:download" size={16} />
           </button>
           <button
-            className={`mei-dock-btn${faved ? ' faved' : ''}`}
+            className={`mei-dock-btn mei-dock-opt-fav${faved ? ' faved' : ''}`}
             title={faved ? '取消收藏' : '加入收藏'}
             onClick={() => {
               const added = engine.toggleFavorite(song);
@@ -474,10 +474,10 @@ export default function MusicDock() {
               </div>
             )}
           </div>
-          <a className="mei-dock-btn" href={engine.playerPageHref()} title="打开音乐播放页">
+          <a className="mei-dock-btn mei-dock-opt-page" href={engine.playerPageHref()} title="打开音乐播放页">
             <MeiIcon icon="lucide:music" size={16} />
           </a>
-          <button className="mei-dock-btn" title="缩小为小球" onClick={() => engine.setDockMode('mini')}>
+          <button className="mei-dock-btn mei-dock-opt-mini" title="缩小为小球" onClick={() => engine.setDockMode('mini')}>
             <MeiIcon icon="lucide:minimize-2" size={16} />
           </button>
           <button className="mei-dock-btn" title="隐藏播放条" onClick={() => engine.setDockMode('hidden')}>
@@ -606,10 +606,22 @@ const dockStyles = (
   .mei-dock-toast { position: fixed; left: 50%; bottom: 106px; transform: translateX(-50%); z-index: 9999;
     padding: 9px 22px; border-radius: 999px; background: rgba(13,18,32,0.88); color: #fff; font-size: 13px;
     box-shadow: 0 18px 52px rgba(23,32,56,0.20); pointer-events: none; }
+  /* ---- 窄屏渐进降级：按「次要 → 核心」次序隐藏，杜绝元素挤压重叠。
+     页面入口 / 缩小球 → 收藏 / 音量 → 下载 / 队列标签 → 时间文本。
+     播放控制、进度条、隐藏把手任何宽度下都保留 */
+  @media (max-width: 980px) {
+    .mei-dock { gap: 10px; padding: 0 14px; }
+    .mei-dock-meta { width: 122px; }
+    .mei-dock-opt-page, .mei-dock-opt-mini { display: none; }
+  }
+  @media (max-width: 860px) {
+    .mei-dock-volume, .mei-dock-opt-fav { display: none; }
+  }
   @media (max-width: 760px) {
     .mei-dock { gap: 8px; padding: 0 12px; }
-    .mei-dock-meta { width: 110px; }
-    .mei-dock-time, .mei-dock-tag { display: none; }
+    .mei-dock-meta { width: 96px; }
+    .mei-dock-controls { gap: 2px; }
+    .mei-dock-time, .mei-dock-tag, .mei-dock-opt-dl { display: none; }
   }
   `}</style>
 );

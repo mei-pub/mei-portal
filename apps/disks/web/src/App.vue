@@ -309,58 +309,73 @@ const handleSearchComplete = () => {
   // 只处理UI相关的状态，不影响搜索流程
 };
 
-// 应用关键词过滤（后端filter参数已经处理，这里保留作为备用）
-const applyKeywordFilter = (results: any, filterStr: string) => {
-  if (!results || !filterStr.trim()) return results;
-  
-  try {
-    const filter = JSON.parse(filterStr);
-    const includeKeywords = (filter.include || []).map((k: string) => k.toLowerCase());
-    const excludeKeywords = (filter.exclude || []).map((k: string) => k.toLowerCase());
-    
-    if (includeKeywords.length === 0 && excludeKeywords.length === 0) {
-      return results;
-    }
-    
-    const filteredResults: any = {};
-    
-    // 遍历每个网盘类型的结果
-    Object.keys(results).forEach(diskType => {
-      const diskResults = results[diskType];
-      if (!Array.isArray(diskResults)) return;
-      
-      // 过滤每个结果项
-      const filtered = diskResults.filter((item: any) => {
-        const note = (item.note || '').toLowerCase();
-        const source = (item.source || '').toLowerCase();
-        const searchText = `${note} ${source}`;
-        
-        // 包含检查 (OR关系)：如果有include，必须至少包含一个
-        if (includeKeywords.length > 0) {
-          const hasInclude = includeKeywords.some(keyword => searchText.includes(keyword));
-          if (!hasInclude) return false;
-        }
-        
-        // 排除检查 (OR关系)：如果有exclude，包含任意一个就排除
-        if (excludeKeywords.length > 0) {
-          const hasExclude = excludeKeywords.some(keyword => searchText.includes(keyword));
-          if (hasExclude) return false;
-        }
-        
-        return true;
-      });
-      
-      // 只保留有结果的网盘类型
-      if (filtered.length > 0) {
-        filteredResults[diskType] = filtered;
-      }
-    });
-    
-    return filteredResults;
-  } catch (error) {
-    console.error('过滤参数解析失败:', error);
+// 应用关键词过滤（综合搜索结果页的实时筛选）：包含词 OR 命中、排除词任一
+// 命中即剔除；大小写不敏感，匹配范围 = 标题/描述 + 来源
+const applyResultFilter = (results: any, includeList: string[], excludeList: string[]) => {
+  const includeKeywords = includeList.map((k) => k.toLowerCase());
+  const excludeKeywords = excludeList.map((k) => k.toLowerCase());
+
+  if (includeKeywords.length === 0 && excludeKeywords.length === 0) {
     return results;
   }
+
+  const filteredResults: any = {};
+
+  // 遍历每个网盘类型的结果
+  Object.keys(results).forEach(diskType => {
+    const diskResults = results[diskType];
+    if (!Array.isArray(diskResults)) return;
+
+    // 过滤每个结果项
+    const filtered = diskResults.filter((item: any) => {
+      const note = (item.note || '').toLowerCase();
+      const source = (item.source || '').toLowerCase();
+      const searchText = `${note} ${source}`;
+
+      // 包含检查 (OR关系)：如果有include，必须至少包含一个
+      if (includeKeywords.length > 0) {
+        const hasInclude = includeKeywords.some(keyword => searchText.includes(keyword));
+        if (!hasInclude) return false;
+      }
+
+      // 排除检查：命中任意一个排除词即剔除
+      if (excludeKeywords.length > 0) {
+        const hasExclude = excludeKeywords.some(keyword => searchText.includes(keyword));
+        if (hasExclude) return false;
+      }
+
+      return true;
+    });
+
+    // 只保留有结果的网盘类型
+    if (filtered.length > 0) {
+      filteredResults[diskType] = filtered;
+    }
+  });
+
+  return filteredResults;
+};
+
+// 结果页筛选控件状态：包含 / 排除（逗号或空格分隔，客户端实时过滤展示层）
+const resultFilter = ref({ include: '', exclude: '' });
+const parseFilterWords = (raw: string) =>
+  raw.split(/[,\s，\s]+/).map(k => k.trim()).filter(Boolean);
+const resultFilterActive = computed(
+  () =>
+    parseFilterWords(resultFilter.value.include).length > 0 ||
+    parseFilterWords(resultFilter.value.exclude).length > 0,
+);
+const filteredMergedResults = computed(() => {
+  const base = searchResults.mergedResults || {};
+  if (!resultFilterActive.value) return base;
+  return applyResultFilter(
+    base,
+    parseFilterWords(resultFilter.value.include),
+    parseFilterWords(resultFilter.value.exclude),
+  );
+});
+const clearResultFilter = () => {
+  resultFilter.value = { include: '', exclude: '' };
 };
 
 // 更新搜索结果
@@ -1277,9 +1292,37 @@ onUnmounted(() => {
           </div>
         </div>
         
+        <!-- 结果页筛选（包含 / 排除，客户端实时过滤） -->
+        <div v-if="hasSearched && !loading" class="result-filter-bar mb-4">
+          <span class="result-filter-label">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>
+            筛选
+          </span>
+          <input
+            v-model="resultFilter.include"
+            type="text"
+            class="result-filter-input"
+            placeholder="包含关键词（逗号分隔）"
+          />
+          <input
+            v-model="resultFilter.exclude"
+            type="text"
+            class="result-filter-input"
+            placeholder="排除关键词（逗号分隔）"
+          />
+          <button
+            v-if="resultFilterActive"
+            type="button"
+            class="result-filter-clear"
+            @click="clearResultFilter"
+          >
+            清除
+          </button>
+        </div>
+
         <!-- 搜索结果 -->
         <div
-          v-else
+          v-if="!loading"
           ref="searchResultsBlockRef"
           class="search-results-block"
           :style="mobileSearchResultsHeight ? {
@@ -1288,8 +1331,8 @@ onUnmounted(() => {
             maxHeight: mobileSearchResultsHeight
           } : undefined"
         >
-          <ResultTabs 
-            :mergedResults="searchResults.mergedResults || {}" 
+          <ResultTabs
+            :mergedResults="filteredMergedResults"
             :loading="loading"
             :hasSearched="hasSearched"
             :isActivelySearching="isActivelySearching"
@@ -1357,6 +1400,57 @@ onUnmounted(() => {
 </template>
 
 <style scoped>
+/* 结果页筛选栏（包含 / 排除） */
+.result-filter-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.result-filter-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 0.8rem;
+  color: #6b7280;
+  white-space: nowrap;
+}
+
+.result-filter-input {
+  height: 30px;
+  padding: 0 0.6rem;
+  font-size: 0.8rem;
+  color: #374151;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  outline: none;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  min-width: 180px;
+}
+
+.result-filter-input:focus {
+  border-color: #a5b4fc;
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.12);
+}
+
+.result-filter-clear {
+  appearance: none;
+  border: none;
+  background: transparent;
+  font-size: 0.8rem;
+  color: #6366f1;
+  cursor: pointer;
+  padding: 0.25rem 0.5rem;
+  border-radius: 6px;
+  transition: background 0.2s ease;
+}
+
+.result-filter-clear:hover {
+  background: #eef2ff;
+}
+
 .bg-decorative {
   position: fixed;
   inset: 0;
@@ -1483,6 +1577,7 @@ onUnmounted(() => {
 
   .search-form-block,
   .search-stats-block,
+  .result-filter-bar,
   .search-loading-block {
     margin-bottom: 0 !important;
     min-height: 0;

@@ -11,6 +11,8 @@ export interface DownloadTask {
   status?: DownloadStatus;
   folder?: string;
   isLive?: boolean;
+  /** BT 种子文件任务的下载文件索引（aria2 --select-file，如 "1,3"；缺省=全部） */
+  selectFile?: string;
   createdDate?: Date;
 }
 
@@ -23,6 +25,8 @@ export interface DownloadTaskPagination {
   current?: number;
   pageSize?: number;
   filter?: DownloadFilter;
+  /** 任务类型过滤：direct=文件 / bt=磁力 / media=视频类（排除 direct、bt） */
+  type?: string;
 }
 
 export interface ConversionPagination {

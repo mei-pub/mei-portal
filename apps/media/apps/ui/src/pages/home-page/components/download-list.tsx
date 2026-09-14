@@ -9,10 +9,7 @@ import DownloadForm, { type DownloadFormRef } from "@/components/download-form";
 import Loading from "@/components/loading";
 import { EDIT_DOWNLOAD } from "@/const";
 import { usePlatform } from "@/hooks/use-platform";
-import {
-  startDownload,
-  stopDownload,
-} from "@/api/download-task";
+import { startDownload, stopDownload } from "@/api/download-task";
 import { deleteMediaTask } from "@/api/download-center";
 import { useDeleteTasks } from "@/components/delete-tasks-dialog";
 import { useTasks } from "@/hooks/use-tasks";
@@ -24,9 +21,15 @@ interface Props {
   filter: DownloadFilter;
   /** true 时进行中（downloading）任务稳定置前，其余保持原有顺序（下载中心全部视图用） */
   prioritizeActive?: boolean;
+  /** 任务类型过滤：direct=文件 / bt=磁力 / media=视频类（下载中心分类 tab 用） */
+  taskType?: string;
 }
 
-export function DownloadTaskList({ filter, prioritizeActive = false }: Props) {
+export function DownloadTaskList({
+  filter,
+  prioritizeActive = false,
+  taskType,
+}: Props) {
   const { confirmDelete, deleteDialog } = useDeleteTasks();
   const [selected, setSelected] = useState<number[]>([]);
   const { contextMenu } = usePlatform();
@@ -35,7 +38,7 @@ export function DownloadTaskList({ filter, prioritizeActive = false }: Props) {
   const editFormRef = useRef<DownloadFormRef>(null);
   const refreshTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const downloadListId = useId();
-  const { mutate, isLoading, data } = useTasks(filter);
+  const { mutate, isLoading, data } = useTasks(filter, taskType);
 
   useEffect(() => {
     return () => {
@@ -145,9 +148,10 @@ export function DownloadTaskList({ filter, prioritizeActive = false }: Props) {
     const choice = await confirmDelete({
       unfinished,
       done: targets.length - unfinished,
-      label: targets.length === 1
-        ? `任务「${targets[0].name}」`
-        : `${targets.length} 个任务`,
+      label:
+        targets.length === 1
+          ? `任务「${targets[0].name}」`
+          : `${targets.length} 个任务`,
     });
     if (choice === null) return; // 取消
     const results = await Promise.allSettled(

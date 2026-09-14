@@ -4,8 +4,7 @@ import fs from "node:fs";
 import path from "node:path";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import type { VideoRepository, Video } from "../db.ts";
-import { sanitizeFolder } from "../core/downloader.ts";
-import { checkFileExists } from "../service/helpers.ts";
+import { checkFileExists, resolveTaskDir } from "../service/helpers.ts";
 
 export interface PlayableVideo {
   id: number;
@@ -57,10 +56,8 @@ export class VideoService {
 
   /** 找到下载记录对应的实际文件；目录形式（分段下载）时取其中第一个视频文件 */
   private resolveFilePath(rec: Video): string | null {
-    let searchDir = this.localDir();
-    // folder 为用户可控：按段清洗，防止 ../ 逃出 localDir 读任意文件（/videos/:id 免鉴权）
-    if (rec.folder && rec.folder !== "")
-      searchDir = path.join(this.localDir(), sanitizeFolder(rec.folder));
+    // 目录解析唯一规则（内置 key → 下载根/key；其余 localDir+folder）
+    const searchDir = resolveTaskDir(rec.folder, this.localDir());
     const [exists, filePath] = checkFileExists(rec.name, searchDir);
     if (!exists) return null;
     try {

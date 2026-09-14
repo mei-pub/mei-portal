@@ -2,7 +2,12 @@
 
 import fs from "node:fs";
 import path from "node:path";
-import { sanitizeFilename, sanitizeFolder } from "../core/downloader.ts";
+import { extractTorrentMeta } from "../core/bencode.ts";
+import {
+  resolveTaskDir,
+  sanitizeFilename,
+  sanitizeFolder,
+} from "../core/downloader.ts";
 import { logger } from "../logger.ts";
 import type { TaskQueue } from "../core/queue.ts";
 import type { DownloadParams } from "../core/types.ts";
@@ -21,6 +26,8 @@ export interface AddDownloadTaskInput {
   url: string;
   headers?: string | null;
   folder?: string | null;
+  /** BT 种子文件任务的下载文件索引（"1,3-5"；空 = 全部） */
+  selectFile?: string | null;
 }
 
 export interface DownloadTaskWithFile extends Video {
@@ -92,9 +99,19 @@ export class DownloadTaskService {
         title = await getPageTitle(input.url, "");
       }
       // 磁力：优先取 dn 参数（download name）作任务名；真实种子名在 metadata
-      // 获取后由 noteBtResult 解析 FILE: 行回写
+      // 获取后由 noteBtResult 解析 FILE: 行回写。
+      // 种子文件：直接读 .torrent 的 info.name 作任务名（上传端点已解析校验过）
       if (title === "" && input.type === "bt") {
         title = magnetDisplayName(input.url) ?? "";
+        if (title === "" && /\.torrent$/i.test(input.url)) {
+          try {
+            title = extractTorrentMeta(fs.readFileSync(input.url)).name;
+          } catch (err: any) {
+            logger.warn(
+              `torrent name extract failed url=${input.url}: ${err?.message ?? err}`,
+            );
+          }
+        }
       }
       if (title === "") {
         title = `untitled-${randomName()}`;
@@ -110,10 +127,12 @@ export class DownloadTaskService {
         type: input.type,
         url: input.url,
         headers: input.headers ?? null,
-        // folder 为用户可控，且会拼进 localDir：清洗掉 ../ 等穿越段
+        // folder 为用户可控：内置 key（bt/files/video）或相对段（影视分类/剧名），
+        // 清洗掉 ../ 等穿越段；落盘解析统一走 resolveTaskDir
         folder: input.folder ? sanitizeFolder(input.folder) : null,
         isLive: false,
         status: "ready",
+        selectFile: input.selectFile ?? null,
       });
     }
     return this.repo.createMany(videos);
@@ -132,14 +151,19 @@ export class DownloadTaskService {
     pageSize: number,
     filter: string,
     localPath: string,
+    type = "",
   ): { total: number; list: DownloadTaskWithFile[] } {
-    const result = this.repo.findWithPagination(current, pageSize, filter);
+    const result = this.repo.findWithPagination(
+      current,
+      pageSize,
+      filter,
+      type,
+    );
     const list: DownloadTaskWithFile[] = result.items.map((item) => {
       const withFile: DownloadTaskWithFile = { ...item, exists: false };
       if (item.status === "success" && localPath !== "") {
-        let searchDir = localPath;
-        if (item.folder && item.folder !== "")
-          searchDir = path.join(localPath, sanitizeFolder(item.folder));
+        // 目录解析唯一规则：内置 key → 下载根/key；其余 localDir+folder
+        const searchDir = resolveTaskDir(item.folder, localPath);
         const [exists, file] = checkFileExists(item.name, searchDir);
         withFile.exists = exists;
         if (file !== "") withFile.file = file;
@@ -176,6 +200,8 @@ export class DownloadTaskService {
       // 旧记录可能带未清洗的 folder —— 入队前再洗一次（buildArgs 亦有防御）
       folder: video.folder ? sanitizeFolder(video.folder) : "",
       headers,
+      // BT 种子文件任务的内容勾选（--select-file）
+      selectFile: video.selectFile ?? "",
     };
 
     const status = this.queue.enqueue(params);
@@ -216,7 +242,7 @@ export class DownloadTaskService {
 
     let searchDir = localPath;
     if (task.folder && task.folder !== "")
-      searchDir = path.join(localPath, sanitizeFolder(task.folder));
+      searchDir = resolveTaskDir(task.folder, localPath);
     let name = btNameFromPath(file, searchDir);
     if (name === "" || name === task.name) return;
     const existing = this.repo.findByName(name);
@@ -257,9 +283,8 @@ export class DownloadTaskService {
       const localPath = opts.localPath || "";
       if (localPath !== "") {
         try {
-          let dir = localPath;
-          if (task.folder && task.folder !== "")
-            dir = path.join(localPath, sanitizeFolder(task.folder));
+          // 目录解析唯一规则（内置 key → 下载根/key；其余 localDir+folder）
+          const dir = resolveTaskDir(task.folder, localPath);
           // 成品文件（name.<ext>）与下载器输出目录（name/）都算落盘产物
           const [, file] = checkFileExists(task.name, dir);
           if (file !== "") fs.rmSync(file, { recursive: true, force: true });

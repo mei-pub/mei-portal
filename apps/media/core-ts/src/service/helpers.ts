@@ -97,6 +97,17 @@ function concat(chunks: Uint8Array[]): Uint8Array {
   return out;
 }
 
+// 内置下载目录体系实现在 core/downloader.ts（core 层），此处 re-export 供
+// service 层（列表 exists 检查 / 删除清理）与 UI 契约引用。
+export {
+  BUILTIN_DIR_KEYS,
+  BUILTIN_DIR_LABELS,
+  downloadRoot,
+  isBuiltinDirKey,
+  resolveTaskDir,
+  type BuiltinDirKey,
+} from "../core/downloader.ts";
+
 /**
  * 在 localPath 目录下找 name.<视频扩展名> 文件（Go CheckFileExists）。
  * 返回 [是否存在, 文件全路径]；下载器输出目录（无扩展名）也算存在。

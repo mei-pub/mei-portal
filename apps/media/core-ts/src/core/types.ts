@@ -71,6 +71,8 @@ export interface DownloadParams {
   name: string;
   folder: string;
   headers: string[];
+  /** BT 种子文件任务的下载文件索引（--select-file，如 "1,3-5"；空/缺省 = 全部） */
+  selectFile?: string;
 }
 
 export interface ProgressEvent {

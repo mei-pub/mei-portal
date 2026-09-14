@@ -1,26 +1,29 @@
 import {
   CloudDownloadOutlined,
   DockerOutlined,
+  PaperClipOutlined,
   UnorderedListOutlined,
 } from "@ant-design/icons";
-import { useAsyncEffect, useMemoizedFn } from "ahooks";
+import { useMemoizedFn } from "ahooks";
 import {
   App,
-  AutoComplete,
   Button,
+  Checkbox,
   Form,
   Input,
   Modal,
+  Radio,
   Segmented,
   Select,
   Switch,
+  Upload,
 } from "antd";
-import { forwardRef, useImperativeHandle, useState } from "react";
+import { forwardRef, useImperativeHandle, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useShallow } from "zustand/react/shallow";
 import { ADD_TO_LIST, DOWNLOAD_NOW } from "@/const";
 import { usePlatform } from "@/hooks/use-platform";
-import { createDownloadTasks, getDownloadFolders } from "@/api/download-task";
+import { createDownloadTasks } from "@/api/download-task";
 import { useDockerApi } from "@/hooks/use-docker-api";
 import { appStoreSelector, useAppStore } from "@/store/app";
 import { downloadFormSelector, useConfigStore } from "@/store/config";
@@ -34,6 +37,17 @@ const { TextArea } = Input;
  *  三类执行路径与表单形态完全不同，先选大类再细分 —— 大类决定 URL 校验、
  *  名称可空性、headers 显隐；视频类内部再由 subtype 细分下载器 */
 export type DownloadCategory = "normal" | "video" | "magnet";
+
+/** 磁力下载的输入方式：粘贴磁力链接 / 上传 BT 种子文件 */
+export type MagnetInputMode = "magnet" | "torrent";
+
+/** /api/upload/torrent 的响应（种子元数据） */
+export interface TorrentUploadResult {
+  path: string;
+  name: string;
+  size: number;
+  files: Array<{ index: number; path: string; size: number }> | null;
+}
 
 /** 具体下载类型 → 大类（外部 ref 接口与编辑回填仍以 DownloadType 进出） */
 const CATEGORY_OF_TYPE: Record<DownloadType, DownloadCategory> = {
@@ -52,6 +66,26 @@ const TYPE_OF_CATEGORY: Record<DownloadCategory, DownloadType> = {
   magnet: DownloadType.bt,
 };
 
+/** 内置保存目录（media core 侧约定，独立于影视/音乐对接目录 movie/music）。
+ *  值 = media core folder 字段的内置 key，落盘 <下载根>/<key>；
+ *  label 由渲染时 t(`builtinDir_${key}`) 提供（支持 i18n） */
+const BUILTIN_FOLDER_KEYS = ["bt", "files", "video"] as const;
+const DEFAULT_FOLDER_OF_CATEGORY: Record<DownloadCategory, string> = {
+  normal: "files",
+  video: "video",
+  magnet: "bt",
+};
+
+/** 从磁力链接解析 dn（display name，URL 解码）—— 输入时即时预填任务名 */
+function parseMagnetDisplayName(url: string): string {
+  try {
+    const dn = new URL(url).searchParams.get("dn");
+    return dn?.trim() ?? "";
+  } catch {
+    return "";
+  }
+}
+
 export interface DownloadFormItem {
   batch?: boolean;
   batchList?: string;
@@ -59,6 +93,7 @@ export interface DownloadFormItem {
   type?: DownloadType;
   category?: DownloadCategory;
   subtype?: DownloadType;
+  magnetMode?: MagnetInputMode;
   headers?: string;
   url?: string;
   id?: number;
@@ -84,11 +119,6 @@ export interface DownloadTaskForm extends DownloadTask {
   batchList?: string;
 }
 
-interface Options {
-  label: string;
-  value: string;
-}
-
 export default forwardRef<DownloadFormRef, DownloadFormProps>(
   function DownloadForm(
     { isEdit, destroyOnClose, onFormVisibleChange, id, onConfirm },
@@ -102,29 +132,17 @@ export default forwardRef<DownloadFormRef, DownloadFormProps>(
     const { setLastDownloadTypes, setLastIsBatch } = useConfigStore(
       useShallow(downloadFormSelector),
     );
-    const [folders, setFolders] = useState<Options[]>([]);
-    const [videoFolders, setVideoFolders] = useState<string[]>([]);
     const { contextMenu } = usePlatform();
     const { addVideosToDocker } = useDockerApi();
 
-    useAsyncEffect(async () => {
-      if (modalOpen) {
-        try {
-          const fetchedFolders = await getDownloadFolders();
-          if (Array.isArray(fetchedFolders)) {
-            setVideoFolders(fetchedFolders);
-            setFolders(() =>
-              fetchedFolders.map((f) => ({
-                value: f,
-                label: f,
-              })),
-            );
-          }
-        } catch {
-          // Go Core may not be ready yet, ignore
-        }
-      }
-    }, [modalOpen]);
+    // 磁力下载（种子文件模式）：上传解析结果 + 内容勾选状态
+    const [torrentMeta, setTorrentMeta] = useState<TorrentUploadResult | null>(
+      null,
+    );
+    const [selectedFiles, setSelectedFiles] = useState<number[]>([]);
+    const [uploading, setUploading] = useState(false);
+    // 用户手动改过任务名后，dn/种子名不再自动覆盖
+    const nameTouchedRef = useRef(false);
 
     useImperativeHandle(ref, () => {
       // 外部（侧栏/嗅探弹层/编辑回填）都以 DownloadType 传入；表单内部
@@ -169,7 +187,7 @@ export default forwardRef<DownloadFormRef, DownloadFormProps>(
 
     const handleValuesChange = useMemoizedFn(
       (values: Record<string, unknown>) => {
-        const { category, subtype, batch } = values;
+        const { category, subtype, batch, url } = values;
         if (category || subtype) {
           const cat =
             (category as DownloadCategory) ??
@@ -182,6 +200,22 @@ export default forwardRef<DownloadFormRef, DownloadFormProps>(
                 DownloadType.m3u8)
               : TYPE_OF_CATEGORY[cat];
           setLastDownloadTypes(type);
+          // 大类切换 → 保存目录自动切到对应内置目录（可手动改选其它内置目录）
+          if (category) {
+            form.setFieldValue("folder", DEFAULT_FOLDER_OF_CATEGORY[cat]);
+          }
+        }
+        // 磁力链接输入：即时识别 dn 预填任务名（用户已手动改名则不覆盖）
+        if (
+          typeof url === "string" &&
+          url.startsWith("magnet:") &&
+          form.getFieldValue("category") === "magnet" &&
+          !nameTouchedRef.current
+        ) {
+          const dn = parseMagnetDisplayName(url);
+          if (dn !== "" && !form.getFieldValue("name")) {
+            form.setFieldValue("name", dn);
+          }
         }
         if (batch !== null && batch !== undefined) {
           setLastIsBatch(batch);
@@ -194,7 +228,61 @@ export default forwardRef<DownloadFormRef, DownloadFormProps>(
 
       if (!open) {
         form.resetFields();
+        // 种子文件模式的临时状态一并清空
+        setTorrentMeta(null);
+        setSelectedFiles([]);
+        nameTouchedRef.current = false;
       }
+    });
+
+    // BT 种子文件上传：base64 → /api/upload/torrent（服务端解析 info.name/files
+    // 并落盘 torrents 目录），返回的 path 作任务 url；name 自动预填（可改）
+    const handleTorrentUpload = useMemoizedFn(async (file: File) => {
+      setUploading(true);
+      try {
+        const dataUrl = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(String(reader.result || ""));
+          reader.onerror = () => reject(new Error("read failed"));
+          reader.readAsDataURL(file);
+        });
+        const base64 = dataUrl.split(",")[1] ?? "";
+        const res = await fetch("/api/upload/torrent", {
+          method: "POST",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ data: base64 }),
+        });
+        const payload = (await res.json().catch(() => null)) as {
+          success?: boolean;
+          data?: TorrentUploadResult;
+          message?: string;
+        } | null;
+        if (!res.ok || !payload?.data) {
+          throw new Error(payload?.message || `HTTP ${res.status}`);
+        }
+        setTorrentMeta(payload.data);
+        setSelectedFiles(payload.data.files?.map((f) => f.index) ?? []);
+        if (!nameTouchedRef.current) {
+          form.setFieldValue("name", payload.data.name);
+        }
+        message.success(t("torrentParsed"));
+      } catch (e: unknown) {
+        message.error((e as Error)?.message || t("pleaseEnterCorrectFormInfo"));
+      } finally {
+        setUploading(false);
+      }
+      return false; // 阻止 antd Upload 默认上传行为
+    });
+
+    // 内容勾选 → --select-file 索引串（全选/未选 = 下载全部，不传）
+    const deriveSelectFile = useMemoizedFn((): string => {
+      const files = torrentMeta?.files;
+      if (!files || files.length === 0) return "";
+      if (selectedFiles.length === 0 || selectedFiles.length === files.length) {
+        return "";
+      }
+      return [...selectedFiles].sort((a, b) => a - b).join(",");
     });
 
     const handleSave = useMemoizedFn(async () => {
@@ -254,23 +342,15 @@ export default forwardRef<DownloadFormRef, DownloadFormProps>(
       }
     });
 
-    const handleSearchFolder = useMemoizedFn((val: string) => {
-      return setFolders(() => {
-        const videoOptions = videoFolders.map((f) => ({ value: f, label: f }));
-        if (!val) return videoOptions;
-        return [{ value: val, label: val }, ...videoOptions];
-      });
-    });
-
     const getFormItems = useMemoizedFn(async () => {
       const { batch } = form.getFieldsValue();
       const type = formType();
       if (batch) {
-        const { batchList = "", headers } = form.getFieldsValue();
+        const { batchList = "", headers, folder } = form.getFieldsValue();
 
         const tasks: Omit<DownloadTask, "id">[] = await Promise.all(
           batchList.split("\n").map(async (line: string) => {
-            const [url, customName, folder] = line.trim().split(" ");
+            const [url, customName] = line.trim().split(" ");
             return {
               url: url.trim(),
               name: customName?.trim(),
@@ -283,7 +363,20 @@ export default forwardRef<DownloadFormRef, DownloadFormProps>(
 
         return tasks;
       } else {
-        const { name = "", url = "", headers, folder } = form.getFieldsValue();
+        const {
+          name = "",
+          headers,
+          folder,
+          magnetMode,
+        } = form.getFieldsValue();
+        let { url = "" } = form.getFieldsValue();
+        // 磁力下载（种子文件模式）：任务 url = 服务端落盘的 .torrent 路径，
+        // 内容勾选派生 --select-file（全选/未选 = 全部文件）
+        let selectFile: string | undefined;
+        if (type === DownloadType.bt && magnetMode === "torrent") {
+          url = torrentMeta?.path ?? "";
+          selectFile = deriveSelectFile() || undefined;
+        }
 
         const task: Omit<DownloadTask, "id"> = {
           name,
@@ -291,7 +384,8 @@ export default forwardRef<DownloadFormRef, DownloadFormProps>(
           headers,
           type,
           folder,
-        };
+          selectFile,
+        } as Omit<DownloadTask, "id">;
 
         return [task];
       }
@@ -342,7 +436,12 @@ export default forwardRef<DownloadFormRef, DownloadFormProps>(
           labelCol={{ span: 5 }}
           layout="horizontal"
           colon={false}
-          initialValues={{ category: "video", subtype: "m3u8" }}
+          initialValues={{
+            category: "video",
+            subtype: "m3u8",
+            magnetMode: "magnet",
+            folder: "video",
+          }}
           onValuesChange={handleValuesChange}
         >
           <Form.Item name="id" hidden>
@@ -429,11 +528,17 @@ export default forwardRef<DownloadFormRef, DownloadFormProps>(
                 <Form.Item
                   shouldUpdate
                   name="name"
-                  label={isNormal ? t("fileLabel") : t("videoName")}
+                  label={
+                    isMagnet
+                      ? t("magnetNameLabel")
+                      : isNormal
+                        ? t("fileLabel")
+                        : t("videoName")
+                  }
                   rules={[
                     {
-                      // 视频类的 bilibili 抓页面标题；磁力的落盘名由种子决定
-                      //（dn/FILE 行回写）——都可留空；普通下载与其它视频源必填
+                      // 视频类的 bilibili 抓页面标题；磁力的落盘名由 dn/种子
+                      // 自动读取（可改）——都可留空；普通下载与其它视频源必填
                       required: !(
                         isMagnet ||
                         (category === "video" && subtype === "bilibili")
@@ -445,9 +550,14 @@ export default forwardRef<DownloadFormRef, DownloadFormProps>(
                   <Input
                     placeholder={
                       isMagnet
-                        ? t("btVideoNamePlaceholder")
-                        : t("pleaseEnterVideoName")
+                        ? t("magnetNamePlaceholder")
+                        : isNormal
+                          ? t("fileNamePlaceholder")
+                          : t("pleaseEnterVideoName")
                     }
+                    onChange={() => {
+                      nameTouchedRef.current = true;
+                    }}
                     onContextMenu={() =>
                       contextMenu.show([
                         { key: "copy", label: t("copy") },
@@ -512,17 +622,116 @@ export default forwardRef<DownloadFormRef, DownloadFormProps>(
           </Form.Item>
           <Form.Item noStyle shouldUpdate>
             {(formInstance) => {
+              const { category, batch } = formInstance.getFieldsValue();
+              // 磁力类（单任务）才出现输入方式切换：粘贴磁力链接 / 上传种子文件
+              if (category !== "magnet" || batch) {
+                return null;
+              }
+              return (
+                <Form.Item name="magnetMode" label={t("magnetInputMode")}>
+                  <Radio.Group
+                    options={[
+                      { label: t("magnetModeLink"), value: "magnet" },
+                      { label: t("magnetModeTorrent"), value: "torrent" },
+                    ]}
+                    optionType="button"
+                    buttonStyle="solid"
+                  />
+                </Form.Item>
+              );
+            }}
+          </Form.Item>
+          <Form.Item noStyle shouldUpdate>
+            {(formInstance) => {
               if (formInstance.getFieldValue("batch") && !isEdit) {
                 return null;
               }
-              const isMagnet =
-                formInstance.getFieldsValue().category === "magnet";
-              const isNormal =
-                formInstance.getFieldsValue().category === "normal";
+              const { category, magnetMode } = formInstance.getFieldsValue();
+              const isMagnet = category === "magnet";
+              const isNormal = category === "normal";
+              // 磁力（种子文件模式）：上传 .torrent → 服务端解析预填名称与
+              // 内容清单；任务 url 用服务端落盘路径，不再手输链接
+              if (isMagnet && magnetMode === "torrent") {
+                const files = torrentMeta?.files ?? null;
+                const allIndexes = files?.map((f) => f.index) ?? [];
+                const allSelected =
+                  files !== null && selectedFiles.length === allIndexes.length;
+                return (
+                  <>
+                    <Form.Item label={t("torrentFile")} required>
+                      <Upload
+                        accept=".torrent"
+                        maxCount={1}
+                        showUploadList={false}
+                        beforeUpload={(file) => {
+                          void handleTorrentUpload(file);
+                          return false;
+                        }}
+                      >
+                        <Button
+                          icon={<PaperClipOutlined />}
+                          loading={uploading}
+                        >
+                          {t("selectTorrentFile")}
+                        </Button>
+                      </Upload>
+                      {torrentMeta && (
+                        <div className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                          {torrentMeta.name} · {torrentMeta.path}
+                        </div>
+                      )}
+                    </Form.Item>
+                    {files && files.length > 0 && (
+                      <Form.Item label={t("torrentContent")}>
+                        <div className="max-h-40 overflow-auto rounded-lg border border-black/5 p-2 dark:border-white/10">
+                          <Checkbox
+                            checked={allSelected}
+                            indeterminate={
+                              !allSelected && selectedFiles.length > 0
+                            }
+                            onChange={(e) =>
+                              setSelectedFiles(
+                                e.target.checked ? allIndexes : [],
+                              )
+                            }
+                          >
+                            {t("torrentSelectAll")}
+                          </Checkbox>
+                          <div className="mt-1 flex flex-col gap-1">
+                            {files.map((f) => (
+                              <Checkbox
+                                key={f.index}
+                                checked={selectedFiles.includes(f.index)}
+                                onChange={(e) =>
+                                  setSelectedFiles((prev) =>
+                                    e.target.checked
+                                      ? [...prev, f.index]
+                                      : prev.filter((i) => i !== f.index),
+                                  )
+                                }
+                              >
+                                <span className="text-xs">
+                                  {f.path}（{f.size} B）
+                                </span>
+                              </Checkbox>
+                            ))}
+                          </div>
+                        </div>
+                      </Form.Item>
+                    )}
+                  </>
+                );
+              }
               return (
                 <Form.Item
                   name="url"
-                  label={isNormal ? t("fileLinkLabel") : t("videoLink")}
+                  label={
+                    isMagnet
+                      ? t("magnetUrlLabel")
+                      : isNormal
+                        ? t("fileLinkLabel")
+                        : t("videoLink")
+                  }
                   required
                   rules={[
                     {
@@ -534,7 +743,9 @@ export default forwardRef<DownloadFormRef, DownloadFormProps>(
                       pattern: isMagnet
                         ? /^magnet:\?.+/
                         : /^(file|https?|ftp):\/\/.+/,
-                      message: t("pleaseEnterCorrectVideoLink"),
+                      message: isMagnet
+                        ? t("pleaseEnterCorrectMagnetLink")
+                        : t("pleaseEnterCorrectVideoLink"),
                     },
                   ]}
                 >
@@ -542,7 +753,9 @@ export default forwardRef<DownloadFormRef, DownloadFormProps>(
                     placeholder={
                       isMagnet
                         ? t("btUrlPlaceholder")
-                        : t("pleaseEnterOnlineVideoUrlOrDragM3U8Here")
+                        : isNormal
+                          ? t("fileUrlPlaceholder")
+                          : t("pleaseEnterOnlineVideoUrlOrDragM3U8Here")
                     }
                     onContextMenu={() =>
                       contextMenu.show([
@@ -551,6 +764,7 @@ export default forwardRef<DownloadFormRef, DownloadFormProps>(
                       ])
                     }
                     onDrop={(e) => {
+                      if (isMagnet) return; // 磁力不接受文件拖拽（种子走上传）
                       const file = e.dataTransfer.files[0] as File & {
                         path: string;
                       };
@@ -564,16 +778,35 @@ export default forwardRef<DownloadFormRef, DownloadFormProps>(
           </Form.Item>
           <Form.Item noStyle shouldUpdate>
             {(formInstance) => {
-              if (formInstance.getFieldValue("batch")) {
-                return null;
+              // 保存目录只能从内置目录选择（按文件类型落盘）；编辑旧任务时
+              // folder 可能是非内置值（影视分类/剧名）——兜底追加一个选项展示
+              const cur = formInstance.getFieldValue("folder");
+              const folderOptions: Array<{ value: string; label: string }> =
+                BUILTIN_FOLDER_KEYS.map((k) => ({
+                  value: k,
+                  label: t(`builtinDir_${k}`),
+                }));
+              if (
+                typeof cur === "string" &&
+                cur !== "" &&
+                !(BUILTIN_FOLDER_KEYS as readonly string[]).includes(cur)
+              ) {
+                folderOptions.push({ value: cur, label: cur });
               }
               return (
-                <Form.Item name="folder" label={t("folder")}>
-                  <AutoComplete
-                    placeholder={t("pleaseInputVideoFolder")}
-                    optionFilterProp="label"
-                    options={folders}
-                    onSearch={handleSearchFolder}
+                <Form.Item
+                  name="folder"
+                  label={t("saveDir")}
+                  rules={[
+                    {
+                      required: true,
+                      message: t("pleaseSelectSaveDir"),
+                    },
+                  ]}
+                >
+                  <Select
+                    placeholder={t("pleaseSelectSaveDir")}
+                    options={folderOptions}
                   />
                 </Form.Item>
               );

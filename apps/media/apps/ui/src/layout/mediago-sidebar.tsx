@@ -9,6 +9,7 @@ import DownloadForm, {
   type DownloadFormRef,
 } from "@/components/download-form";
 import { downloadFormSelector, useConfigStore } from "@/store/config";
+import { DownloadType } from "@mediago/shared-common";
 
 const STORE_KEY = "mei-float-mediago";
 
@@ -38,6 +39,25 @@ const MediagoSidebar: FC = () => {
     newFormRef.current?.openModal(item);
   };
 
+  // 磁力投递唤起：网盘搜索等外部应用经 /?new=magnet&magnet=…&dn=… 跳入下载
+  // 中心时，打开新建下载弹层并预填磁力链接/任务名 —— 用户确认内容、改名、
+  // 选目录后再提交（绝不静默直接下载）；处理后立即清掉参数防止后退重唤起
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    if (params.get("new") !== "magnet") return;
+    const magnet = (params.get("magnet") ?? "").trim();
+    const dn = (params.get("dn") ?? "").trim();
+    const item: DownloadFormItem = {
+      batch: false,
+      type: DownloadType.bt,
+      url: magnet || undefined,
+      name: dn || undefined,
+    };
+    newFormRef.current?.openModal(item);
+    navigate(location.pathname, { replace: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.search]);
+
   // 初始：localStorage 记忆优先，默认展开
   useEffect(() => {
     try {
@@ -56,11 +76,22 @@ const MediagoSidebar: FC = () => {
 
   const isActive = (path: string) => {
     // 根路由（下载中心）：覆盖带 /downloads basename 与根路径两种部署形态
-    if (path === "/") return location.pathname === "/downloads/" || location.pathname === "/downloads" || location.pathname === "/";
+    if (path === "/")
+      return (
+        location.pathname === "/downloads/" ||
+        location.pathname === "/downloads" ||
+        location.pathname === "/"
+      );
     return location.pathname === path;
   };
 
-  const stroke = { fill: "none", stroke: "currentColor", strokeWidth: 2, strokeLinecap: "round" as const, strokeLinejoin: "round" as const };
+  const stroke = {
+    fill: "none",
+    stroke: "currentColor",
+    strokeWidth: 2,
+    strokeLinecap: "round" as const,
+    strokeLinejoin: "round" as const,
+  };
 
   // 面板数据：行动入口（图标 + 激活态 + 响应事件）；「下载中心」是应用根，放首位
   const actions: PanelAction[] = [
@@ -71,9 +102,9 @@ const MediagoSidebar: FC = () => {
       active: isActive("/"),
       icon: (
         <svg className="h-[15px] w-[15px]" viewBox="0 0 24 24" {...stroke}>
-          <polygon points="12 2 2 7 12 12 22 7 12 2"/>
-          <polyline points="2 17 12 22 22 17"/>
-          <polyline points="2 12 12 17 22 12"/>
+          <polygon points="12 2 2 7 12 12 22 7 12 2" />
+          <polyline points="2 17 12 22 22 17" />
+          <polyline points="2 12 12 17 22 12" />
         </svg>
       ),
       onClick: () => navigate("/"),
@@ -84,7 +115,7 @@ const MediagoSidebar: FC = () => {
       active: false,
       icon: (
         <svg className="h-[15px] w-[15px]" viewBox="0 0 24 24" {...stroke}>
-          <path d="M12 5v14M5 12h14"/>
+          <path d="M12 5v14M5 12h14" />
         </svg>
       ),
       onClick: openNewForm,
@@ -100,7 +131,7 @@ const MediagoSidebar: FC = () => {
           className="fixed left-0 top-1/2 z-40 h-14 w-5 -translate-y-1/2 flex items-center justify-center rounded-r-lg bg-gradient-to-b from-indigo-500 to-purple-500 text-white shadow-lg transition-all hover:w-7"
         >
           <svg className="h-4 w-4" viewBox="0 0 24 24" {...stroke}>
-            <path d="m9 18 6-6-6-6"/>
+            <path d="m9 18 6-6-6-6" />
           </svg>
         </button>
         <DownloadForm
@@ -124,15 +155,17 @@ const MediagoSidebar: FC = () => {
         >
           <span className="flex h-[30px] w-[30px] items-center justify-center rounded-lg bg-gradient-to-br from-indigo-500 to-purple-500 text-white shadow-md">
             <svg className="h-4 w-4" viewBox="0 0 24 24" {...stroke}>
-              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-              <polyline points="7 10 12 15 17 10"/>
-              <line x1="12" y1="15" x2="12" y2="3"/>
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+              <polyline points="7 10 12 15 17 10" />
+              <line x1="12" y1="15" x2="12" y2="3" />
             </svg>
           </span>
-          <span className="select-none text-[10px] font-medium leading-none tracking-[0.18em] text-gray-700 [writing-mode:vertical-rl] dark:text-gray-300">下载中心</span>
+          <span className="select-none text-[10px] font-medium leading-none tracking-[0.18em] text-gray-700 [writing-mode:vertical-rl] dark:text-gray-300">
+            下载中心
+          </span>
         </button>
         <div className="h-px w-6 bg-black/10 dark:bg-white/10" />
-        {actions.map(a => (
+        {actions.map((a) => (
           <button
             key={a.label}
             onClick={a.onClick}
@@ -152,7 +185,7 @@ const MediagoSidebar: FC = () => {
           className="h-6 w-[34px] rounded-lg flex items-center justify-center text-gray-400 hover:bg-gray-900/5 dark:text-gray-400 dark:hover:bg-white/10 transition-colors"
         >
           <svg className="h-4 w-4" viewBox="0 0 24 24" {...stroke}>
-            <path d="m15 18-6-6 6-6"/>
+            <path d="m15 18-6-6 6-6" />
           </svg>
         </button>
       </div>

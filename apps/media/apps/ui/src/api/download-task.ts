@@ -17,6 +17,7 @@ export const getDownloadTasks = (
       current: p.current,
       pageSize: p.pageSize,
       filter: p.filter,
+      type: p.type,
       localPath: local,
     },
   });

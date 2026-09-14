@@ -1,7 +1,6 @@
 // 音乐下载面板 —— 数据源：/music/api/download/library（契约 3）
 // tasks = 进行中任务（进度经 shared-poll 统一 3s 轮询），files = 磁盘已下载
 // （歌手/歌名/大小）；删除文件走契约 4。进行中任务天然置前（tasks 段在 files 段之前）。
-// embedded=true（全部视图）：段卡片 + 段头（计数/进行中徽标 + 「进入 →」）。
 import { App, Empty, Progress } from "antd";
 import { PlayCircleOutlined } from "@ant-design/icons";
 import { useMemoizedFn } from "ahooks";
@@ -21,20 +20,12 @@ import {
 } from "@/api/download-center";
 import { playMusicFile } from "@/utils/play-actions";
 import { cn, fromatDateTime } from "@/utils";
-import { InlineNotice } from "./inline-notice";
-import { SectionHeader } from "./section-header";
-import { useSharedPoll } from "./shared-poll";
 import { useDeleteTasks } from "@/components/delete-tasks-dialog";
-
-interface Props {
-  /** 全部视图内嵌模式 */
-  embedded?: boolean;
-  /** 段头「进入 →」回调（锚定音乐 tab） */
-  onEnter?: () => void;
-}
+import { useSharedPoll } from "./shared-poll";
 
 const EMPTY_LIBRARY: MusicLibrary = { tasks: [], files: [] };
-const PANEL_ERROR_STYLE = "flex flex-1 flex-col items-center justify-center gap-3";
+const PANEL_ERROR_STYLE =
+  "flex flex-1 flex-col items-center justify-center gap-3";
 
 const SectionTitle: FC<{ text: string }> = ({ text }) => (
   <div className="shrink-0 px-1 text-sm font-medium text-[#343434] dark:text-white">
@@ -42,7 +33,7 @@ const SectionTitle: FC<{ text: string }> = ({ text }) => (
   </div>
 );
 
-const MusicPanel: FC<Props> = ({ embedded = false, onEnter }) => {
+const MusicPanel: FC = () => {
   const { confirmDelete, deleteDialog } = useDeleteTasks();
   const { message, modal } = App.useApp();
   const { t } = useTranslation();
@@ -83,24 +74,33 @@ const MusicPanel: FC<Props> = ({ embedded = false, onEnter }) => {
   });
 
   // 未完成任务：停止下载 + 删记录 + 清理 .part 临时文件（服务端级联，无需选择）
-  const handleDeleteTask = useMemoizedFn(async (taskId: string | number, name: string) => {
-    const choice = await confirmDelete({ unfinished: 1, done: 0, label: `下载任务「${name}」` });
-    if (choice === null) return; // 取消
-    try {
-      await deleteMusicTask(taskId);
-      message.success("已删除任务并清理临时文件");
-      mutate();
-    } catch (e) {
-      message.error((e as Error).message || "删除失败");
-    }
-  });
+  const handleDeleteTask = useMemoizedFn(
+    async (taskId: string | number, name: string) => {
+      const choice = await confirmDelete({
+        unfinished: 1,
+        done: 0,
+        label: `下载任务「${name}」`,
+      });
+      if (choice === null) return; // 取消
+      try {
+        await deleteMusicTask(taskId);
+        message.success("已删除任务并清理临时文件");
+        mutate();
+      } catch (e) {
+        message.error((e as Error).message || "删除失败");
+      }
+    },
+  );
 
   const renderTasks = () =>
     tasks.length > 0 && (
       <div className="flex flex-col gap-2 rounded-xl border border-black/5 bg-white/85 p-3 shadow-sm dark:border-white/10 dark:bg-[#1F2024]">
         <SectionTitle text={`下载任务（${tasks.length}）`} />
         {tasks.map((task) => {
-          const percent = Math.max(0, Math.min(100, Math.round(task.percent ?? 0)));
+          const percent = Math.max(
+            0,
+            Math.min(100, Math.round(task.percent ?? 0)),
+          );
           const failed = task.error != null && task.error !== "";
           return (
             <div
@@ -124,12 +124,19 @@ const MusicPanel: FC<Props> = ({ embedded = false, onEnter }) => {
                   </span>
                 </div>
                 {failed ? (
-                  <div className="truncate text-xs text-[#ff7373]" title={task.error}>
+                  <div
+                    className="truncate text-xs text-[#ff7373]"
+                    title={task.error}
+                  >
                     {task.error}
                   </div>
                 ) : (
                   <div className="flex flex-row items-center gap-2 text-xs text-[rgba(0,0,0,0.65)] dark:text-[rgba(255,255,255,0.65)]">
-                    <Progress percent={percent} strokeLinecap="butt" showInfo={false} />
+                    <Progress
+                      percent={percent}
+                      strokeLinecap="butt"
+                      showInfo={false}
+                    />
                     <div className="min-w-10 shrink-0">{percent}%</div>
                     <div className="min-w-20 shrink-0">{task.speed || "-"}</div>
                   </div>
@@ -191,45 +198,15 @@ const MusicPanel: FC<Props> = ({ embedded = false, onEnter }) => {
             <IconButton
               title={t("delete")}
               icon={<DeleteIcon />}
-              onClick={() => handleDeleteFile(file.path, file.name || file.fileName)}
+              onClick={() =>
+                handleDeleteFile(file.path, file.name || file.fileName)
+              }
             />
           </div>
         ))}
       </div>
     );
 
-  // ---- embedded（全部视图）：段卡片 + 段头，段内提示用 InlineNotice 不占满屏 ----
-  if (embedded) {
-    return (
-      <div className="flex flex-col gap-3 rounded-xl border border-black/5 bg-white/85 p-3 shadow-sm dark:border-white/10 dark:bg-[#1F2024]">
-        <SectionHeader
-          title="音乐"
-          count={tasks.length + files.length}
-          activeCount={tasks.length}
-          onEnter={onEnter}
-        />
-        {isLoading && <InlineNotice text="音乐下载库加载中…" />}
-        {error && (
-          <InlineNotice
-            error
-            text="音乐服务不可用，暂时无法获取下载库"
-          />
-        )}
-        {!isLoading && !error && tasks.length === 0 && files.length === 0 && (
-          <InlineNotice text="暂无音乐下载" />
-        )}
-        {!isLoading && !error && (tasks.length > 0 || files.length > 0) && (
-          <div className="flex flex-col gap-3">
-            {renderTasks()}
-            {renderFiles()}
-          </div>
-        )}
-        {deleteDialog}
-      </div>
-    );
-  }
-
-  // ---- 单 tab 页面模式（原逻辑） ----
   if (isLoading) {
     return <Loading />;
   }

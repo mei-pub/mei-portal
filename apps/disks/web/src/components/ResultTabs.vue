@@ -465,39 +465,25 @@ const openLink = (url: string) => {
 };
 
 // ===== 用内置下载中心下载（磁力）=====
-// 磁力结果一键投递到 media core 建任务并自动开始（type=bt，aria2 DHT）。
-// 相对路径 fetch 携带门户 cookie（跨应用契约）；行内状态做反馈，成功态点击跳
-// 下载中心媒体面板查看进度（iframe 内经外壳承载路由，独立部署整页跳转）。
+// 点击行动点 → 跳转下载中心并唤起新建下载弹层（new=magnet&magnet=…&dn=…）：
+// 下载中心先做内容识别/勾选/改名/选目录，用户确认后才创建任务 —— 这里绝不
+// 静默直投。iframe 内经外壳承载路由 postMessage（query 会保留），独立模式整页跳转。
 const isMagnetUrl = (url: string) => /^magnet:\?/i.test((url || '').trim());
-const dlCenterState = ref<Record<string, 'loading' | 'success' | 'error'>>({});
-const downloadViaCenter = async (item: MergedResultItem) => {
-  const key = item.url;
-  if (!isMagnetUrl(key) || dlCenterState.value[key] === 'loading') return;
-  dlCenterState.value = { ...dlCenterState.value, [key]: 'loading' };
+const getMagnetDisplayName = (url: string): string => {
   try {
-    const res = await fetch('/downloads/api/downloads', {
-      method: 'POST',
-      credentials: 'include',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        tasks: [{ name: '', type: 'bt', url: item.url.trim() }],
-        startDownload: true,
-      }),
-    });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    dlCenterState.value = { ...dlCenterState.value, [key]: 'success' };
-  } catch (err) {
-    console.warn('投递下载中心失败:', err);
-    dlCenterState.value = { ...dlCenterState.value, [key]: 'error' };
-    setTimeout(() => {
-      const next = { ...dlCenterState.value };
-      delete next[key];
-      dlCenterState.value = next;
-    }, 2500);
+    return (new URL(url).searchParams.get('dn') || '').trim();
+  } catch {
+    return '';
   }
 };
-const openDownloadCenter = () => {
-  const path = '/downloads?type=media';
+const downloadViaCenter = (item: MergedResultItem) => {
+  const magnet = item.url.trim();
+  const params = new URLSearchParams();
+  params.set('new', 'magnet');
+  params.set('magnet', magnet);
+  const dn = getMagnetDisplayName(magnet);
+  if (dn) params.set('dn', dn);
+  const path = `/downloads?${params.toString()}`;
   if (window.parent && window.parent !== window) {
     window.parent.postMessage(
       { source: 'mei-iframe', type: 'navigate', path },
@@ -811,19 +797,19 @@ onUnmounted(() => {
             <!-- 第二行：链接和提取码 -->
             <div class="result-row">
               <div class="result-link" @click="openLink(item.url)">{{ item.url }}</div>
-              <!-- 磁力链接：一键投递到内置下载中心（BT 下载，进度在下载中心媒体面板） -->
+              <!-- 磁力链接：行动点 → 唤起下载中心新建下载弹层（先确认再下载） -->
               <button
                 v-if="isMagnetUrl(item.url)"
                 type="button"
-                class="result-password dl-center-btn"
-                :class="{
-                  copied: dlCenterState[item.url] === 'success',
-                  'copy-failed': dlCenterState[item.url] === 'error'
-                }"
-                :title="dlCenterState[item.url] === 'success' ? '已在下载中心开始下载，点击查看进度' : '用内置下载中心下载（磁力 / BT）'"
-                @click="dlCenterState[item.url] === 'success' ? openDownloadCenter() : downloadViaCenter(item)"
+                class="dl-center-icon-btn"
+                title="用内置下载中心下载（磁力 / BT）"
+                @click="downloadViaCenter(item)"
               >
-                {{ dlCenterState[item.url] === 'loading' ? '投递中…' : dlCenterState[item.url] === 'success' ? '已投递 · 查看进度' : '下载中心下载' }}
+                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                  <polyline points="7 10 12 15 17 10"/>
+                  <line x1="12" y1="15" x2="12" y2="3"/>
+                </svg>
               </button>
               <button
                 v-if="item.password"
@@ -1285,6 +1271,35 @@ onUnmounted(() => {
 .password-value {
   color: #10b981;
   font-weight: 500;
+}
+
+/* 磁力行内行动点：唤起下载中心新建弹层（图标按钮，不占文字空间） */
+.dl-center-icon-btn {
+  appearance: none;
+  border: 1px solid #e5e7eb;
+  background: #fff;
+  color: #4b5563;
+  width: 26px;
+  height: 26px;
+  margin-left: 0.5rem;
+  border-radius: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: all 0.2s ease;
+}
+
+.dl-center-icon-btn:hover {
+  color: #6366f1;
+  border-color: #c7d2fe;
+  background: #eef2ff;
+}
+
+.dl-center-icon-btn:focus-visible {
+  outline: 2px solid #93c5fd;
+  outline-offset: 2px;
 }
 
 .detail-overlay {

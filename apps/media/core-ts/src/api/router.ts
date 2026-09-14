@@ -2,10 +2,12 @@
 
 import fs from "node:fs";
 import path from "node:path";
-import type { IncomingMessage, Server, ServerResponse } from "node:http";
-import http from "node:http";
-import { resolveLang, type Lang } from "../i18n.ts";
-import { MSG, tLang } from "../i18n.ts";
+import http, {
+  type IncomingMessage,
+  type Server,
+  type ServerResponse,
+} from "node:http";
+import { MSG, resolveLang, tLang } from "../i18n.ts";
 import { checkAuth } from "./auth.ts";
 import type { Ctx, Handlers } from "./handlers.ts";
 import {
@@ -13,7 +15,6 @@ import {
   serveVideoFile,
   type VideoService,
 } from "./video.ts";
-import type { IncomingMessage } from "node:http";
 
 export interface RouterOptions {
   handlers: Handlers;
@@ -56,7 +57,7 @@ const MIME: Record<string, string> = {
 
 /** 创建 HTTP 服务器并装配路由 */
 export function createServer(opts: RouterOptions): Server {
-  const { handlers: h, videoSvc } = opts;
+  const { handlers: h } = opts;
 
   // 路由表（顺序即优先级：静态段路由排在参数路由之前）
   const routes: Route[] = [
@@ -126,6 +127,13 @@ export function createServer(opts: RouterOptions): Server {
       handler: (c) => h.urlTitle(c),
     },
     { method: "GET", parts: ["api", "env"], handler: (c) => h.envPaths(c) },
+
+    // torrent 上传（种子文件模式的元数据解析 + 落盘）
+    {
+      method: "POST",
+      parts: ["api", "upload", "torrent"],
+      handler: (c) => h.uploadTorrent(c),
+    },
 
     // downloads（静态段在前，:id 在后）
     {

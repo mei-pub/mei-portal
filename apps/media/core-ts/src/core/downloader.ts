@@ -14,6 +14,55 @@ import type {
   ProgressEvent,
 } from "./types.ts";
 
+// ---- 内置下载目录（下载中心三类任务各自的落盘目录）----
+// 下载总根 = localDir 的父目录（部署 localDir=/downloads/movie，影视应用对接
+// 专用；媒体自身任务的目录独立在 movie/music 之外）。folder 值精确等于内置
+// key（bt/files/video）→ 落 <下载根>/<key>；其余 folder（影视分类/剧名等既有
+// 数据与跨应用契约）沿用 localDir+folder 老规则。
+
+export const BUILTIN_DIR_KEYS = ["bt", "files", "video"] as const;
+export type BuiltinDirKey = (typeof BUILTIN_DIR_KEYS)[number];
+
+export const BUILTIN_DIR_LABELS: Record<BuiltinDirKey, string> = {
+  bt: "磁力下载",
+  files: "普通文件",
+  video: "视频下载",
+};
+
+/** folder 是否内置目录 key（精确匹配，sanitize 后比较） */
+export function isBuiltinDirKey(
+  folder: string | null | undefined,
+): folder is BuiltinDirKey {
+  return (
+    folder !== null &&
+    folder !== undefined &&
+    (BUILTIN_DIR_KEYS as readonly string[]).includes(folder)
+  );
+}
+
+/** 下载总根：localDir 的父目录（localDir 形如 /downloads/movie → /downloads） */
+export function downloadRoot(localDir: string): string {
+  return path.dirname(localDir);
+}
+
+/**
+ * 任务落盘目录解析（buildArgs localDir / downloadList exists 检查 / 删除清理
+ * 三处共用的唯一规则）：
+ * - 内置 key（bt/files/video）→ <下载根>/<key>（独立于 movie/music 对接目录）
+ * - 其它非空 folder → localDir/<folder>（影视 分类/剧名、旧数据）
+ * - 空 → localDir
+ */
+export function resolveTaskDir(
+  folder: string | null | undefined,
+  localDir: string,
+): string {
+  const f = sanitizeFolder(folder ?? "");
+  if (isBuiltinDirKey(f)) {
+    return path.join(downloadRoot(localDir), f);
+  }
+  return f !== "" ? path.join(localDir, f) : localDir;
+}
+
 export class UnsupportedTypeError extends Error {
   readonly taskType: string;
   constructor(taskType: string) {
@@ -201,10 +250,9 @@ export class DownloaderSvc {
           out.push(p.url);
           break;
         case "localDir": {
-          let final = this.cfg.getLocalDir();
-          // folder 为用户可控输入：先按段清洗，防御 ../ 逃出 localDir
-          if (p.folder !== "")
-            final = path.join(final, sanitizeFolder(p.folder));
+          // 内置目录 key（bt/files/video）→ 下载根下的独立目录（不进 movie 对接目录）；
+          // 其余 folder 沿用 localDir+folder 老规则（影视分类/剧名等跨应用契约）
+          let final = resolveTaskDir(p.folder, this.cfg.getLocalDir());
           pushKV(spec.argsName, final);
           break;
         }
@@ -279,6 +327,13 @@ export class DownloaderSvc {
           out.push("--bt-max-peers", String(clampNum(b.maxPeers, 55, 1, 999)));
           const trackers = splitList(b.trackers);
           if (trackers.length > 0) out.push("--bt-tracker", trackers.join(","));
+          break;
+        }
+        // 种子文件勾选下载：--select-file 仅在 UI 解析出内容清单并勾选后携带；
+        // 空/缺省（磁力任务、全量下载）不注入
+        case "selectFile": {
+          const sel = (p.selectFile ?? "").trim();
+          if (sel !== "") pushKV(spec.argsName, sel);
           break;
         }
         case "__common__":

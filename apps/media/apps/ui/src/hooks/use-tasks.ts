@@ -39,7 +39,11 @@ const isProgressEvent = (
   obj: DownloadEvent,
 ): obj is DownloadEvent<DownloadProgress[]> => obj.type === "progress";
 
-export function useTasks(filter: DownloadFilter = DownloadFilter.list) {
+export function useTasks(
+  filter: DownloadFilter = DownloadFilter.list,
+  /** 任务类型过滤：direct=文件 / bt=磁力 / media=视频类（排除 direct、bt） */
+  taskType?: string,
+) {
   const { setEvents, eventsMap } = useDownloadStore(
     useShallow(downloadStoreSelector),
   );
@@ -54,6 +58,7 @@ export function useTasks(filter: DownloadFilter = DownloadFilter.list) {
         current: page,
         pageSize,
         filter,
+        type: taskType,
       },
     },
     ({ args }) => {

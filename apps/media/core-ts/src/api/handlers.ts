@@ -1,6 +1,8 @@
 // api/handlers —— Go internal/api/handler/* 的复刻（各端点 1:1）
 
 import crypto from "node:crypto";
+import fs from "node:fs";
+import path from "node:path";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { logger } from "../logger.ts";
 import { MSG, tLang, type Lang } from "../i18n.ts";
@@ -8,6 +10,7 @@ import type { Conf } from "../conf.ts";
 import type { TaskLogManager } from "../tasklog.ts";
 import type { TaskQueue } from "../core/queue.ts";
 import type { TaskInfo } from "../core/types.ts";
+import { extractTorrentMeta } from "../core/bencode.ts";
 import type { Hub } from "./sse.ts";
 import type { DownloadTaskService } from "../service/download.ts";
 import type { FavoriteService } from "../service/favorite.ts";
@@ -57,7 +60,7 @@ export function json(
   const body = JSON.stringify(payload);
   c.res.writeHead(status, {
     "Content-Type": "application/json; charset=utf-8",
-    ...(headers ?? {}),
+    ...headers,
   });
   c.res.end(body);
 }
@@ -332,6 +335,50 @@ export class Handlers {
     res.on("error", cleanup);
   }
 
+  // ---- Torrent 上传（种子文件模式）----
+
+  /**
+   * POST /api/upload/torrent  {data: <base64 的 .torrent 内容>}
+   * 校验 bencode 并提取元数据，存 <configDir>/torrents/<sha1-16>.torrent。
+   * 返回的 path 直接作 bt 任务 url（aria2c 原生支持种子文件路径）；
+   * name/files 供 UI 预填任务名与内容勾选清单。
+   */
+  uploadTorrent(c: Ctx): void {
+    const body = asObject(c.body);
+    const data = typeof body?.data === "string" ? body.data : "";
+    const buf = data !== "" ? Buffer.from(data, "base64") : Buffer.alloc(0);
+    if (buf.length === 0) {
+      fail(c, 400, "torrent data is required (base64)");
+      return;
+    }
+    if (buf.length > 1024 * 1024) {
+      fail(c, 400, "torrent file too large (max 1MB)");
+      return;
+    }
+    let meta;
+    try {
+      meta = extractTorrentMeta(buf);
+    } catch (err: any) {
+      fail(c, 400, `invalid torrent file: ${err?.message ?? err}`);
+      return;
+    }
+    const torrentsDir = path.join(this.env.configDir, "torrents");
+    fs.mkdirSync(torrentsDir, { recursive: true });
+    const hash = crypto
+      .createHash("sha1")
+      .update(buf)
+      .digest("hex")
+      .slice(0, 16);
+    const filePath = path.join(torrentsDir, `${hash}.torrent`);
+    fs.writeFileSync(filePath, buf);
+    ok(c, {
+      path: filePath,
+      name: meta.name,
+      size: meta.size,
+      files: meta.files,
+    });
+  }
+
   // ---- Downloads（DB 持久化主通道）----
 
   downloadCreate(c: Ctx): void {
@@ -344,16 +391,51 @@ export class Handlers {
       fail(c, 400, "Key: 'AddDownloadBatchReq.Tasks' Error: tasks is required");
       return;
     }
-    const inputs = body.tasks.map((t) => {
-      const o = asObject(t) ?? {};
-      return {
-        name: typeof o.name === "string" ? o.name : "",
-        type: typeof o.type === "string" ? o.type : "",
-        url: typeof o.url === "string" ? o.url : "",
-        headers: typeof o.headers === "string" ? o.headers : null,
-        folder: typeof o.folder === "string" ? o.folder : null,
-      };
-    });
+    const torrentsDir = path.join(this.env.configDir, "torrents");
+    let inputs: Array<{
+      name: string;
+      type: string;
+      url: string;
+      headers: string | null;
+      folder: string | null;
+      selectFile: string | null;
+    }>;
+    try {
+      inputs = body.tasks.map((t, i) => {
+        const o = asObject(t) ?? {};
+        const type = typeof o.type === "string" ? o.type : "";
+        const url = typeof o.url === "string" ? o.url : "";
+        // BT 种子文件模式：url 是本地 .torrent 路径，只允许指向上传目录
+        //（防止借任务读/写任意本地文件路径）
+        if (
+          type === "bt" &&
+          url !== "" &&
+          !url.startsWith("magnet:") &&
+          /\.torrent$/i.test(url)
+        ) {
+          const resolved = path.resolve(url);
+          if (!resolved.startsWith(path.resolve(torrentsDir) + path.sep)) {
+            throw new Error(
+              `tasks[${i}].url: torrent file must be uploaded via /api/upload/torrent`,
+            );
+          }
+        }
+        return {
+          name: typeof o.name === "string" ? o.name : "",
+          type,
+          url,
+          headers: typeof o.headers === "string" ? o.headers : null,
+          folder: typeof o.folder === "string" ? o.folder : null,
+          selectFile:
+            typeof o.selectFile === "string" && o.selectFile.trim() !== ""
+              ? o.selectFile.trim()
+              : null,
+        };
+      });
+    } catch (err: any) {
+      fail(c, 400, err?.message ?? String(err));
+      return;
+    }
     const startDownload = body.startDownload === true;
 
     this.downloadSvc
@@ -387,10 +469,18 @@ export class Handlers {
     const pageSize = queryNum(c, "pageSize", 0);
     const filter = c.url.searchParams.get("filter") ?? "";
     const localPath = c.url.searchParams.get("localPath") ?? "";
+    // 任务类型过滤（direct/bt/media），下载中心文件/磁力/媒体 tab 用
+    const taskType = c.url.searchParams.get("type") ?? "";
     try {
       ok(
         c,
-        this.downloadSvc.getDownloadTasks(current, pageSize, filter, localPath),
+        this.downloadSvc.getDownloadTasks(
+          current,
+          pageSize,
+          filter,
+          localPath,
+          taskType,
+        ),
       );
     } catch (err: any) {
       fail(c, 500, err?.message ?? String(err));
