@@ -1252,6 +1252,13 @@ export function PlayPageClient({ pathSource, pathId }: { pathSource?: string; pa
     /** no-local 且无可用网络源：需跳聚合优选页恢复 */
     noSources?: boolean;
   } | null>(null);
+  // 已下载确认弹层（创建任务前的存在监测）：同集已有在途/完成记录时提示
+  // 取消 / 重新下载；只有用户确认才删旧记录重建任务
+  const [duplicateConfirm, setDuplicateConfirm] = useState<{
+    key: string;
+    episode: number;
+    title: string;
+  } | null>(null);
   const localMissingPromptedRef = useRef<string>(''); // 剧|集：防重复弹层
   // 已自动切到本地源的集（剧名|集号）：防止用户手动换源后又被抢回本地
   const autoSwitchedEpisodeRef = useRef('');
@@ -1456,15 +1463,22 @@ export function PlayPageClient({ pathSource, pathId }: { pathSource?: string; pa
         doubanType: searchType,
         playRoute,
       });
+      if (duplicated) {
+        // 存在监测（创建前）：同集已有在途/完成记录 → 提示取消 / 重新下载；
+        // 不再静默复用（用户确认后删旧记录重建任务，下载中不覆盖已有文件）
+        setDuplicateConfirm({
+          key: record.key,
+          episode: idx + 1,
+          title,
+        });
+        return;
+      }
       setLocalRecords((prev) => {
         const rest = prev.filter((r) => r.key !== record.key);
         return [...rest, { ...record, progress: 0, speed: '' }].sort(
           (a, b) => a.episode - b.episode
         );
       });
-      if (duplicated) {
-        console.log('本集已有本地源任务，复用现有记录');
-      }
     } catch (err) {
       setLocalError(err instanceof Error ? err.message : '创建下载任务失败');
     } finally {
@@ -1533,6 +1547,20 @@ export function PlayPageClient({ pathSource, pathId }: { pathSource?: string; pa
     await handleDownloadToServer();
     void refreshLocalSources();
   }, [localMissing, localEpisodeStatus, handleDownloadToServer, refreshLocalSources, router, videoTitle, searchTitle, videoYear]);
+
+  // 已下载确认：重新下载 = 删除旧记录（含文件）后重建任务；取消 = 关闭弹层不动
+  const handleDuplicateRedownload = useCallback(async () => {
+    const info = duplicateConfirm;
+    setDuplicateConfirm(null);
+    if (!info) return;
+    try {
+      await deleteLocalSource(info.key);
+    } catch (err) {
+      console.warn('清理已有下载记录失败:', err);
+    }
+    await handleDownloadToServer();
+    void refreshLocalSources();
+  }, [duplicateConfirm, handleDownloadToServer, refreshLocalSources]);
 
   // 切换收藏
   const handleToggleFavorite = async () => {
@@ -2501,6 +2529,57 @@ export function PlayPageClient({ pathSource, pathId }: { pathSource?: string; pa
                   className='rounded-lg bg-gradient-to-r from-green-500 to-emerald-600 px-4 py-2 text-sm font-medium text-white shadow-md transition-colors hover:from-green-600 hover:to-emerald-700'
                 >
                   在线播放
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 已下载确认弹层（创建任务前的存在监测）：取消 / 重新下载 */}
+      {duplicateConfirm && (
+        <div
+          className='fixed inset-0 z-[600] flex items-center justify-center bg-black/50 p-4'
+          onClick={() => setDuplicateConfirm(null)}
+        >
+          <div
+            className='w-full max-w-md rounded-lg border border-blue-200 bg-white shadow-xl dark:border-blue-700 dark:bg-gray-900'
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className='p-6 text-center'>
+              <div className='mb-4 flex justify-center'>
+                <svg
+                  className='h-11 w-11 text-blue-500'
+                  viewBox='0 0 24 24'
+                  fill='none'
+                  stroke='currentColor'
+                  strokeWidth='2'
+                  strokeLinecap='round'
+                  strokeLinejoin='round'
+                >
+                  <path d='M9 12l2 2 4-4' />
+                  <circle cx='12' cy='12' r='10' />
+                </svg>
+              </div>
+              <h3 className='mb-2 text-lg font-semibold text-gray-900 dark:text-gray-100'>
+                该集已下载过
+              </h3>
+              <p className='mb-5 text-sm text-gray-600 dark:text-gray-400'>
+                「{duplicateConfirm.title}」第 {duplicateConfirm.episode} 集
+                在本地服务器已有下载记录（在途或已完成）。重新下载将删除旧记录与文件并重新创建任务。
+              </p>
+              <div className='flex justify-center gap-3'>
+                <button
+                  onClick={() => setDuplicateConfirm(null)}
+                  className='rounded-lg border border-gray-300/70 px-4 py-2 text-sm font-medium text-gray-600 transition-colors hover:border-blue-400 hover:text-blue-600 dark:border-gray-600/70 dark:text-gray-300 dark:hover:border-blue-500 dark:hover:text-blue-400'
+                >
+                  取消
+                </button>
+                <button
+                  onClick={() => void handleDuplicateRedownload()}
+                  className='rounded-lg bg-gradient-to-r from-blue-500 to-indigo-600 px-4 py-2 text-sm font-medium text-white shadow-md transition-colors hover:from-blue-600 hover:to-indigo-700'
+                >
+                  重新下载
                 </button>
               </div>
             </div>

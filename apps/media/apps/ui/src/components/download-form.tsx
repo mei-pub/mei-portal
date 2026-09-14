@@ -15,6 +15,7 @@ import {
   Radio,
   Segmented,
   Select,
+  Spin,
   Switch,
   Upload,
 } from "antd";
@@ -143,6 +144,12 @@ export default forwardRef<DownloadFormRef, DownloadFormProps>(
     const [uploading, setUploading] = useState(false);
     // 用户手动改过任务名后，dn/种子名不再自动覆盖
     const nameTouchedRef = useRef(false);
+    // 磁力链接内容解析（创建前强制流程）：防抖自动触发 + 去重 + 解析中状态
+    const [magnetResolving, setMagnetResolving] = useState(false);
+    const resolvedMagnetRef = useRef("");
+    const magnetDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(
+      null,
+    );
 
     useImperativeHandle(ref, () => {
       // 外部（侧栏/嗅探弹层/编辑回填）都以 DownloadType 传入；表单内部
@@ -162,7 +169,18 @@ export default forwardRef<DownloadFormRef, DownloadFormProps>(
         openModal: (value) => {
           setModalOpen(true);
           // Defer so the Form is mounted before setting values
-          queueMicrotask(() => applyValue(value));
+          queueMicrotask(() => {
+            applyValue(value);
+            // 磁力深链（网盘搜索 new=magnet 唤起等）：预填即自动解析内容，
+            // 用户在弹层内完成勾选/改名/选目录确认后才创建任务
+            const url = String(value.url ?? "").trim();
+            if (
+              (value.category === "magnet" || value.type === DownloadType.bt) &&
+              /^magnet:\?.+/.test(url)
+            ) {
+              void resolveMagnetUrl(url);
+            }
+          });
         },
         setFieldsValue: (value) => {
           applyValue(value);
@@ -205,16 +223,39 @@ export default forwardRef<DownloadFormRef, DownloadFormProps>(
             form.setFieldValue("folder", DEFAULT_FOLDER_OF_CATEGORY[cat]);
           }
         }
-        // 磁力链接输入：即时识别 dn 预填任务名（用户已手动改名则不覆盖）
-        if (
-          typeof url === "string" &&
-          url.startsWith("magnet:") &&
-          form.getFieldValue("category") === "magnet" &&
-          !nameTouchedRef.current
-        ) {
-          const dn = parseMagnetDisplayName(url);
-          if (dn !== "" && !form.getFieldValue("name")) {
-            form.setFieldValue("name", dn);
+        // 磁力链接输入：即时识别 dn 预填任务名（用户已手动改名则不覆盖），
+        // 并防抖自动解析内容（粘贴/手工编辑都触发；同链接不重复解析）
+        if (typeof url === "string" && url.startsWith("magnet:")) {
+          const cat = form.getFieldValue("category");
+          if (cat === "magnet") {
+            if (!nameTouchedRef.current) {
+              const dn = parseMagnetDisplayName(url);
+              if (dn !== "" && !form.getFieldValue("name")) {
+                form.setFieldValue("name", dn);
+              }
+            }
+            if (magnetDebounceRef.current) {
+              clearTimeout(magnetDebounceRef.current);
+            }
+            const target = url.trim();
+            if (target !== resolvedMagnetRef.current) {
+              magnetDebounceRef.current = setTimeout(() => {
+                magnetDebounceRef.current = null;
+                void resolveMagnetUrl(target);
+              }, 600);
+            }
+          }
+        }
+        // 磁力输入方式切换：清空上一模式的解析产物（上传种子 ↔ 链接解析互不沿用）；
+        // 切回链接模式且已有合法磁力 → 立即解析
+        if (values.magnetMode) {
+          setTorrentMeta(null);
+          setSelectedFiles([]);
+          if (values.magnetMode === "magnet") {
+            const cur = String(form.getFieldValue("url") ?? "").trim();
+            if (/^magnet:\?.+/.test(cur)) {
+              void resolveMagnetUrl(cur);
+            }
           }
         }
         if (batch !== null && batch !== undefined) {
@@ -232,6 +273,11 @@ export default forwardRef<DownloadFormRef, DownloadFormProps>(
         setTorrentMeta(null);
         setSelectedFiles([]);
         nameTouchedRef.current = false;
+        resolvedMagnetRef.current = "";
+        if (magnetDebounceRef.current) {
+          clearTimeout(magnetDebounceRef.current);
+          magnetDebounceRef.current = null;
+        }
       }
     });
 
@@ -275,6 +321,47 @@ export default forwardRef<DownloadFormRef, DownloadFormProps>(
       return false; // 阻止 antd Upload 默认上传行为
     });
 
+    // 磁力链接内容解析（创建前强制流程，对齐迅雷）：POST /api/downloads/resolve-magnet
+    // → aria2 只取 metadata 产出 .torrent → 返回 path（白名单内，直接作任务 url）。
+    // 解析成功后展示文件勾选/名称预填；失败清空 torrentMeta 强制校验拦截提交。
+    const resolveMagnetUrl = useMemoizedFn(async (magnet: string) => {
+      const url = magnet.trim();
+      if (!/^magnet:\?.+/.test(url) || url === resolvedMagnetRef.current) {
+        return;
+      }
+      setMagnetResolving(true);
+      try {
+        const res = await fetch("/api/downloads/resolve-magnet", {
+          method: "POST",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ url }),
+        });
+        const payload = (await res.json().catch(() => null)) as {
+          success?: boolean;
+          data?: TorrentUploadResult;
+          message?: string;
+        } | null;
+        if (!res.ok || !payload?.data) {
+          throw new Error(payload?.message || `HTTP ${res.status}`);
+        }
+        resolvedMagnetRef.current = url;
+        setTorrentMeta(payload.data);
+        setSelectedFiles(payload.data.files?.map((f) => f.index) ?? []);
+        if (!nameTouchedRef.current) {
+          form.setFieldValue("name", payload.data.name);
+        }
+        message.success(t("torrentParsed"));
+      } catch (e: unknown) {
+        setTorrentMeta(null);
+        setSelectedFiles([]);
+        resolvedMagnetRef.current = "";
+        message.error((e as Error)?.message || t("magnetResolveFailed"));
+      } finally {
+        setMagnetResolving(false);
+      }
+    });
+
     // 内容勾选 → --select-file 索引串（全选/未选 = 下载全部，不传）
     const deriveSelectFile = useMemoizedFn((): string => {
       const files = torrentMeta?.files;
@@ -285,12 +372,29 @@ export default forwardRef<DownloadFormRef, DownloadFormProps>(
       return [...selectedFiles].sort((a, b) => a - b).join(",");
     });
 
+    // 磁力任务创建前的强制校验：必须先完成内容解析（勾选文件/确认名称）才能
+    // 创建 —— 与迅雷一致，禁止未解析的磁力直接成任务
+    const ensureMagnetResolved = useMemoizedFn((): boolean => {
+      const { category, batch } = form.getFieldsValue();
+      if (category !== "magnet" || batch) return true;
+      if (magnetResolving) {
+        message.warning(t("magnetResolving"));
+        return false;
+      }
+      if (!torrentMeta) {
+        message.warning(t("pleaseResolveMagnetFirst"));
+        return false;
+      }
+      return true;
+    });
+
     const handleSave = useMemoizedFn(async () => {
       try {
         await form.validateFields();
       } catch {
         return;
       }
+      if (!ensureMagnetResolved()) return;
 
       try {
         const tasks = await getFormItems();
@@ -312,6 +416,7 @@ export default forwardRef<DownloadFormRef, DownloadFormProps>(
       } catch {
         return;
       }
+      if (!ensureMagnetResolved()) return;
 
       try {
         const tasks = await getFormItems();
@@ -329,6 +434,7 @@ export default forwardRef<DownloadFormRef, DownloadFormProps>(
       } catch {
         return;
       }
+      if (!ensureMagnetResolved()) return;
       try {
         const tasks = await getFormItems();
         await createDownloadTasks(tasks, true);
@@ -363,18 +469,13 @@ export default forwardRef<DownloadFormRef, DownloadFormProps>(
 
         return tasks;
       } else {
-        const {
-          name = "",
-          headers,
-          folder,
-          magnetMode,
-        } = form.getFieldsValue();
+        const { name = "", headers, folder } = form.getFieldsValue();
         let { url = "" } = form.getFieldsValue();
-        // 磁力下载（种子文件模式）：任务 url = 服务端落盘的 .torrent 路径，
-        // 内容勾选派生 --select-file（全选/未选 = 全部文件）
+        // 磁力任务（链接已解析 / 种子文件上传）：任务 url = 服务端落盘的
+        // .torrent 路径（白名单内），内容勾选派生 --select-file（全选/未选 = 全部）
         let selectFile: string | undefined;
-        if (type === DownloadType.bt && magnetMode === "torrent") {
-          url = torrentMeta?.path ?? "";
+        if (type === DownloadType.bt && torrentMeta) {
+          url = torrentMeta.path;
           selectFile = deriveSelectFile() || undefined;
         }
 
@@ -649,13 +750,50 @@ export default forwardRef<DownloadFormRef, DownloadFormProps>(
               const { category, magnetMode } = formInstance.getFieldsValue();
               const isMagnet = category === "magnet";
               const isNormal = category === "normal";
+              const files = torrentMeta?.files ?? null;
+              const allIndexes = files?.map((f) => f.index) ?? [];
+              const allSelected =
+                files !== null && selectedFiles.length === allIndexes.length;
+              // 内容清单（磁力链接解析成功 / 种子文件上传 共用）：勾选 → --select-file
+              const renderFileList = () =>
+                files &&
+                files.length > 0 && (
+                  <Form.Item label={t("torrentContent")}>
+                    <div className="max-h-40 overflow-auto rounded-lg border border-black/5 p-2 dark:border-white/10">
+                      <Checkbox
+                        checked={allSelected}
+                        indeterminate={!allSelected && selectedFiles.length > 0}
+                        onChange={(e) =>
+                          setSelectedFiles(e.target.checked ? allIndexes : [])
+                        }
+                      >
+                        {t("torrentSelectAll")}
+                      </Checkbox>
+                      <div className="mt-1 flex flex-col gap-1">
+                        {files.map((f) => (
+                          <Checkbox
+                            key={f.index}
+                            checked={selectedFiles.includes(f.index)}
+                            onChange={(e) =>
+                              setSelectedFiles((prev) =>
+                                e.target.checked
+                                  ? [...prev, f.index]
+                                  : prev.filter((i) => i !== f.index),
+                              )
+                            }
+                          >
+                            <span className="text-xs">
+                              {f.path}（{f.size} B）
+                            </span>
+                          </Checkbox>
+                        ))}
+                      </div>
+                    </div>
+                  </Form.Item>
+                );
               // 磁力（种子文件模式）：上传 .torrent → 服务端解析预填名称与
               // 内容清单；任务 url 用服务端落盘路径，不再手输链接
               if (isMagnet && magnetMode === "torrent") {
-                const files = torrentMeta?.files ?? null;
-                const allIndexes = files?.map((f) => f.index) ?? [];
-                const allSelected =
-                  files !== null && selectedFiles.length === allIndexes.length;
                 return (
                   <>
                     <Form.Item label={t("torrentFile")} required>
@@ -681,98 +819,87 @@ export default forwardRef<DownloadFormRef, DownloadFormProps>(
                         </div>
                       )}
                     </Form.Item>
-                    {files && files.length > 0 && (
-                      <Form.Item label={t("torrentContent")}>
-                        <div className="max-h-40 overflow-auto rounded-lg border border-black/5 p-2 dark:border-white/10">
-                          <Checkbox
-                            checked={allSelected}
-                            indeterminate={
-                              !allSelected && selectedFiles.length > 0
-                            }
-                            onChange={(e) =>
-                              setSelectedFiles(
-                                e.target.checked ? allIndexes : [],
-                              )
-                            }
-                          >
-                            {t("torrentSelectAll")}
-                          </Checkbox>
-                          <div className="mt-1 flex flex-col gap-1">
-                            {files.map((f) => (
-                              <Checkbox
-                                key={f.index}
-                                checked={selectedFiles.includes(f.index)}
-                                onChange={(e) =>
-                                  setSelectedFiles((prev) =>
-                                    e.target.checked
-                                      ? [...prev, f.index]
-                                      : prev.filter((i) => i !== f.index),
-                                  )
-                                }
-                              >
-                                <span className="text-xs">
-                                  {f.path}（{f.size} B）
-                                </span>
-                              </Checkbox>
-                            ))}
-                          </div>
-                        </div>
-                      </Form.Item>
-                    )}
+                    {renderFileList()}
                   </>
                 );
               }
               return (
-                <Form.Item
-                  name="url"
-                  label={
-                    isMagnet
-                      ? t("magnetUrlLabel")
-                      : isNormal
-                        ? t("fileLinkLabel")
-                        : t("videoLink")
-                  }
-                  required
-                  rules={[
-                    {
-                      required: true,
-                      message: t("pleaseEnterOnlineVideoUrl"),
-                    },
-                    {
-                      // 磁力类只接受 magnet:（无 //）；普通/视频类走 file/http(s)/ftp 直链
-                      pattern: isMagnet
-                        ? /^magnet:\?.+/
-                        : /^(file|https?|ftp):\/\/.+/,
-                      message: isMagnet
-                        ? t("pleaseEnterCorrectMagnetLink")
-                        : t("pleaseEnterCorrectVideoLink"),
-                    },
-                  ]}
-                >
-                  <Input
-                    placeholder={
+                <>
+                  <Form.Item
+                    name="url"
+                    label={
                       isMagnet
-                        ? t("btUrlPlaceholder")
+                        ? t("magnetUrlLabel")
                         : isNormal
-                          ? t("fileUrlPlaceholder")
-                          : t("pleaseEnterOnlineVideoUrlOrDragM3U8Here")
+                          ? t("fileLinkLabel")
+                          : t("videoLink")
                     }
-                    onContextMenu={() =>
-                      contextMenu.show([
-                        { key: "copy", label: t("copy") },
-                        { key: "paste", label: t("paste") },
-                      ])
-                    }
-                    onDrop={(e) => {
-                      if (isMagnet) return; // 磁力不接受文件拖拽（种子走上传）
-                      const file = e.dataTransfer.files[0] as File & {
-                        path: string;
-                      };
-                      formInstance.setFieldValue("url", `file://${file.path}`);
-                      formInstance.validateFields(["url"]);
-                    }}
-                  />
-                </Form.Item>
+                    required
+                    rules={[
+                      {
+                        required: true,
+                        message: t("pleaseEnterOnlineVideoUrl"),
+                      },
+                      {
+                        // 磁力类只接受 magnet:（无 //）；普通/视频类走 file/http(s)/ftp 直链
+                        pattern: isMagnet
+                          ? /^magnet:\?.+/
+                          : /^(file|https?|ftp):\/\/.+/,
+                        message: isMagnet
+                          ? t("pleaseEnterCorrectMagnetLink")
+                          : t("pleaseEnterCorrectVideoLink"),
+                      },
+                    ]}
+                  >
+                    <Input
+                      placeholder={
+                        isMagnet
+                          ? t("btUrlPlaceholder")
+                          : isNormal
+                            ? t("fileUrlPlaceholder")
+                            : t("pleaseEnterOnlineVideoUrlOrDragM3U8Here")
+                      }
+                      onContextMenu={() =>
+                        contextMenu.show([
+                          { key: "copy", label: t("copy") },
+                          { key: "paste", label: t("paste") },
+                        ])
+                      }
+                      onDrop={(e) => {
+                        if (isMagnet) return; // 磁力不接受文件拖拽（种子走上传）
+                        const file = e.dataTransfer.files[0] as File & {
+                          path: string;
+                        };
+                        formInstance.setFieldValue(
+                          "url",
+                          `file://${file.path}`,
+                        );
+                        formInstance.validateFields(["url"]);
+                      }}
+                    />
+                  </Form.Item>
+                  {isMagnet && (
+                    <Form.Item label={t("torrentFile")} required>
+                      {/* 磁力链接：自动/手动解析状态行 —— 解析完成才能创建任务 */}
+                      {magnetResolving ? (
+                        <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
+                          <Spin size="small" />
+                          {t("magnetResolving")}
+                        </div>
+                      ) : torrentMeta ? (
+                        <div className="text-xs text-emerald-600 dark:text-emerald-400">
+                          {t("torrentParsed")}：{torrentMeta.name} ·{" "}
+                          {torrentMeta.path}
+                        </div>
+                      ) : (
+                        <div className="text-xs text-gray-500 dark:text-gray-400">
+                          {t("magnetResolveHint")}
+                        </div>
+                      )}
+                    </Form.Item>
+                  )}
+                  {isMagnet && renderFileList()}
+                </>
               );
             }}
           </Form.Item>

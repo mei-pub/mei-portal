@@ -958,7 +958,7 @@ function dlTaskHtml(task) {
         <span class="t-name">${escapeHtml(task.song && task.song.name || "未知歌曲")}</span>
         <span class="t-sub">${escapeHtml(task.song && task.song.artist || "")} · ${escapeHtml(sourceLabel(task.song && task.song.source))}</span>
       </div>
-      ${running || task.status === "done" ? `<div class="mei-dl-bar"><i style="width:${percent}%"></i></div>` : ""}
+      ${running ? `<div class="mei-dl-bar"><i style="width:${percent}%"></i></div>` : ""}
       <div class="t-sub">${escapeHtml(sub)}</div>
     </div>
   `;

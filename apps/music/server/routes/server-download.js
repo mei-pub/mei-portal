@@ -100,7 +100,7 @@ function createTaskManager(maxTasks = MAX_TASKS) {
     }
   };
   return {
-    create(song, quality) {
+    create(song, quality, force = false) {
       const task = {
         id: createId(),
         song: {
@@ -114,6 +114,7 @@ function createTaskManager(maxTasks = MAX_TASKS) {
         received: 0, total: 0, percent: 0, size: 0,
         path: '', error: '', existed: false,
         createdAt: Date.now(), finishedAt: 0, downloadStartedAt: 0,
+        force: Boolean(force),
       };
       tasks.set(task.id, task);
       prune();
@@ -269,10 +270,10 @@ async function runDownloadTask(task, ctx = {}) {
   const total = (probeResult && probeResult.total) || Number(info.size) || 0;
   update({ phase: 'downloading', path: targetPath, total, downloadStartedAt: Date.now() });
 
-  // 3) 已存在且大小一致 → 直接复用
+  // 3) 已存在且大小一致 → 直接复用（force=重新下载：跳过复用直接覆盖重下）
   try {
     const existed = await fsp.stat(targetPath).catch(() => null);
-    if (existed && existed.isFile() && total > 0 && existed.size === total) {
+    if (!task.force && existed && existed.isFile() && total > 0 && existed.size === total) {
       return update({
         status: 'done', existed: true,
         received: existed.size, size: existed.size, percent: 100,
@@ -417,6 +418,8 @@ module.exports = function createServerDownloadRouter(deps = {}) {
       artist: String(body.artist || '').trim(),
     };
     const quality = String(body.quality || '320');
+    // force：用户确认「重新下载」后跳过已存在复用，覆盖重下
+    const force = body.force === true;
 
     if (!song.source || !song.id || !song.name) {
       return res.status(400).set(JSON_HEADERS).json({ error: '缺少 source / id / name' });
@@ -426,7 +429,7 @@ module.exports = function createServerDownloadRouter(deps = {}) {
     const running = manager.findRunning(song);
     if (running) return res.set(JSON_HEADERS).json(publicView(running));
 
-    const task = manager.create(song, quality);
+    const task = manager.create(song, quality, force);
     runDownloadTask(task, ctx).catch((err) => {
       // runDownloadTask 自身不抛；此处兜底防御（防未捕获拒绝压掉进程）
       task.status = 'error';

@@ -209,6 +209,14 @@ export const en = {
   torrentContent: "Torrent content",
   torrentSelectAll: "Select all",
   torrentParsed: "Torrent parsed",
+  pleaseResolveMagnetFirst:
+    "Resolve the magnet content and confirm files before creating the task",
+  magnetResolving:
+    "Resolving magnet content (connecting to peers, up to ~45s)…",
+  magnetResolveHint:
+    "The magnet link resolves automatically; confirm the files after resolving to create the task",
+  magnetResolveFailed:
+    "Magnet resolve failed; check the link or retry later",
   downloadToLocal: "Download to this device",
   fileLabel: "File name",
   fileLinkLabel: "Download URL",

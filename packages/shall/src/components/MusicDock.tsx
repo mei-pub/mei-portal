@@ -362,7 +362,9 @@ export default function MusicDock() {
             className="mei-dock-btn mei-dock-opt-dl"
             title={`下载「${song.name}」（按音乐应用「下载方式」设置分发）`}
             onClick={() => {
-              const frame = document.querySelector<HTMLIFrameElement>('iframe[data-mei-app="music"]');
+              // 音乐应用的 iframe appId 是 solara（注册表 /lib/app-routes）；
+              // 查 music 找不到 contentWindow，按钮会静默失效
+              const frame = document.querySelector<HTMLIFrameElement>('iframe[data-mei-app="solara"]');
               if (!frame?.contentWindow) return;
               frame.contentWindow.postMessage(
                 {
@@ -393,7 +395,8 @@ export default function MusicDock() {
               setToast(added ? '已加入收藏' : '已取消收藏');
             }}
           >
-            <MeiIcon icon={faved ? 'lucide:heart' : 'lucide:heart'} size={16} />
+            {/* 已收藏 = 红色实心爱心（.faved 样式给 svg fill currentColor） */}
+            <MeiIcon icon="lucide:heart" size={16} />
           </button>
           {/* 音量：常驻图标，hover 展开滑杆，避免占满播放条宽度 */}
           <div className="mei-dock-volume">
@@ -517,6 +520,8 @@ const dockStyles = (
   .mei-dock-btn.main { width: 44px; height: 44px; color: #fff;
     background: linear-gradient(135deg,#6366f1,#a855f7); box-shadow: 0 4px 14px rgba(99,102,241,0.4); }
   .mei-dock-btn.faved { color: #ec4899; background: rgba(236,72,153,0.10); }
+  /* 已收藏实心爱心：iconify lucide 是描边路径，fill currentColor 即实心 */
+  .mei-dock-btn.faved svg { fill: currentColor; }
   .mei-dock-progress { flex: 1; min-width: 0; display: flex; align-items: center; gap: 10px; }
   .mei-dock-time { font-size: 11px; color: #98a1b3; font-variant-numeric: tabular-nums; flex-shrink: 0; }
   .mei-dock-slider { flex: 1; -webkit-appearance: none; appearance: none; height: 5px; border-radius: 99px;

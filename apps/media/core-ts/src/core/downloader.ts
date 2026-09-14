@@ -63,6 +63,23 @@ export function resolveTaskDir(
   return f !== "" ? path.join(localDir, f) : localDir;
 }
 
+// ---- 下载中临时目录（保护已存在文件不被半成品污染，对齐迅雷 .td 思路）----
+// 下载器统一写入 <任务目录>/.meipart-<任务id>/，任务成功后由 service 层把产物
+// rename 到 <任务目录>/<最终名>（fs.rename 同分区原子）；失败/停止保留临时目录
+// （aria2 的 .aria2 控制文件可续传），删除任务时级联清理。已存在文件在整个
+// 下载过程中不被写打开，「重新下载」也不会先把旧文件截断。
+
+/** 任务专属临时目录名（buildArgs 与 finalize/清理/进度回写四处共用） */
+export const TMP_DIR_PREFIX = ".meipart-";
+
+export function taskTmpDir(
+  id: string,
+  folder: string | null | undefined,
+  localDir: string,
+): string {
+  return path.join(resolveTaskDir(folder, localDir), TMP_DIR_PREFIX + id);
+}
+
 export class UnsupportedTypeError extends Error {
   readonly taskType: string;
   constructor(taskType: string) {
@@ -236,6 +253,67 @@ export class DownloaderSvc {
     return this.cfg;
   }
 
+  /**
+   * 磁力链接元数据解析（任务创建前的强制内容识别）：
+   * aria2c --bt-metadata-only + --bt-save-metadata 只连 DHT 取 metadata 并存成
+   * <InfoHash>.torrent 到 torrentsDir（不下载任何数据块），外层 timeoutMs 超时
+   * 强杀。返回落盘的 .torrent 路径 —— 它可直接作为 bt 任务 url（白名单内），
+   * 任务执行时 aria2 不再二次取 metadata。
+   */
+  async resolveMagnet(
+    magnet: string,
+    torrentsDir: string,
+    timeoutMs = 45000,
+  ): Promise<string> {
+    const bin = this.binMap["bt"];
+    if (!bin || !fs.existsSync(bin)) {
+      throw new Error("aria2c binary not configured for magnet resolve");
+    }
+    const hashMatch = /urn:btih:([0-9a-fA-F]{40})/i.exec(magnet);
+    if (!hashMatch) {
+      throw new Error("invalid magnet link (missing 40-hex btih)");
+    }
+    const infoHash = hashMatch[1]!.toLowerCase();
+    fs.mkdirSync(torrentsDir, { recursive: true });
+    const target = path.join(torrentsDir, `${infoHash}.torrent`);
+
+    const args = [
+      magnet,
+      "-d",
+      torrentsDir,
+      "--bt-metadata-only=true",
+      "--bt-save-metadata=true",
+      // 无 peer 供 metadata 时尽快放弃（外层 timeout 之外的第二道保险）
+      "--bt-stop-timeout=20",
+      "--seed-time=0",
+      "--console-log-level=notice",
+      "--summary-interval=0",
+    ];
+    const ac = new AbortController();
+    const timer = setTimeout(() => ac.abort(), timeoutMs);
+    try {
+      await execRun(
+        bin,
+        args,
+        (line) => logger.debug(`resolve-magnet: ${line}`),
+        ac.signal,
+      );
+    } catch (err: any) {
+      if (err instanceof CanceledError || err?.message === "exit status 7") {
+        // 外层超时强杀 / aria2 bt-stop-timeout 无数据提前退出（exit 7）：
+        // 都统一为对用户可理解的「未找到可用节点」
+        throw new Error("磁力解析超时（未找到可用节点）");
+      }
+      throw err;
+    } finally {
+      clearTimeout(timer);
+    }
+    if (!fs.existsSync(target)) {
+      throw new Error("磁力解析未产出种子文件（资源可能已失效）");
+    }
+    return target;
+  }
+
   /** 按 Schema 参数表构建命令行参数（与 Go buildArgs 逐条对齐） */
   buildArgs(p: DownloadParams, s: Schema): string[] {
     const out: string[] = [];
@@ -250,9 +328,9 @@ export class DownloaderSvc {
           out.push(p.url);
           break;
         case "localDir": {
-          // 内置目录 key（bt/files/video）→ 下载根下的独立目录（不进 movie 对接目录）；
-          // 其余 folder 沿用 localDir+folder 老规则（影视分类/剧名等跨应用契约）
-          let final = resolveTaskDir(p.folder, this.cfg.getLocalDir());
+          // 下载器统一写任务专属临时目录 .meipart-<id>（保护已存在文件）；
+          // 成功后 service.finalizeTask rename 到任务目录，失败保留临时续传
+          let final = taskTmpDir(p.id, p.folder, this.cfg.getLocalDir());
           pushKV(spec.argsName, final);
           break;
         }

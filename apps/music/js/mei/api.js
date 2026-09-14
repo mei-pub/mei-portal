@@ -1,7 +1,7 @@
 // Mei Music API 层：聚合搜索 / 播放地址 / 歌词 / 封面 / 远端存储 / 下载
 // 说明：路径常量使用双引号字面量，nginx sub_filter 会将其改写为 /music 前缀子路径
 
-import { toast, progressToast, choiceDialog } from "./ui.js";
+import { toast, progressToast, choiceDialog, confirmDialog } from "./ui.js";
 
 const PROXY = "/proxy";
 const STORAGE = "/api/storage";
@@ -28,7 +28,7 @@ export const ALL_SOURCES = [
 const DEFAULT_ENABLED = ["netease", "qq", "kugou", "kuwo", "migu", "joox", "youtube"];
 const YOUTUBE_MIGRATION_KEY = "mei-youtube-source-migrated-v1";
 
-// 启用源：与设置页（settings.html）共用 localStorage mei-music-sources
+// 启用源：与设置后台「音乐播放设置」（/settings/solara）共用 localStorage mei-music-sources
 export function enabledSources() {
   try {
     const raw = localStorage.getItem("mei-music-sources");
@@ -342,8 +342,8 @@ export async function fetchLyric(song) {
 
 // ── 下载（四模式）────────────────────────────────────────────────────────────
 // 设置项「下载方式」：local 本地电脑 / server 本地服务器 / both 两者 / ask 每次询问。
-// 存 localStorage（与设置页 settings.html 共用），默认 local：保持既有下载行为，
-// 服务器下载需在设置页主动开启，避免老用户下载去向悄然改变。
+// 存 localStorage（与设置后台「音乐播放设置」共用），默认 local：保持既有下载行为，
+// 服务器下载需在设置后台主动开启，避免老用户下载去向悄然改变。
 const DOWNLOAD_MODE_KEY = "mei-download-mode";
 export const DOWNLOAD_MODES = ["local", "server", "both", "ask"];
 
@@ -396,6 +396,29 @@ async function downloadToComputer(song, quality = "320") {
 
 // 本地服务器下载：创建任务 → toast 进度轮询 → 完成/失败 toast（内部自捕获，不外抛）
 async function downloadToServer(song, quality = "320") {
+  // 创建任务前的存在监测：服务器已下载过该歌曲（歌名+歌手匹配）→ 提示
+  // 取消 / 重新下载；只有用户确认重新下载才创建任务（force 覆盖重下）
+  try {
+    const lib = await fetchDownloadLibrary();
+    const norm = (s) => String(s || "").trim().toLowerCase().replace(/\s+/g, " ");
+    const name = norm(song.name);
+    const artist = norm(song.artist);
+    const hit = (lib.files || []).find(
+      (f) => f.path && norm(f.name) === name && (!artist || norm(f.artist) === artist)
+    );
+    if (hit) {
+      const ok = await confirmDialog(
+        `服务器已下载过「${song.name}${song.artist ? " - " + song.artist : ""}」，重新下载会覆盖该文件。`,
+        { okText: "重新下载" }
+      );
+      if (!ok) return; // 取消：不创建任务
+      return createServerDownload(song, quality, true);
+    }
+  } catch { /* 曲库查询失败：不阻断下载，按常规创建 */ }
+  return createServerDownload(song, quality, false);
+}
+
+async function createServerDownload(song, quality = "320", force = false) {
   let task;
   try {
     const res = await fetch(SERVER_DOWNLOAD_API, {
@@ -407,6 +430,7 @@ async function downloadToServer(song, quality = "320") {
         name: song.name || "",
         artist: song.artist || "",
         quality,
+        force,
       }),
     });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);

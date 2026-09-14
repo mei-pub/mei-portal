@@ -465,9 +465,9 @@ const openLink = (url: string) => {
 };
 
 // ===== 用内置下载中心下载（磁力）=====
-// 点击行动点 → 跳转下载中心并唤起新建下载弹层（new=magnet&magnet=…&dn=…）：
-// 下载中心先做内容识别/勾选/改名/选目录，用户确认后才创建任务 —— 这里绝不
-// 静默直投。iframe 内经外壳承载路由 postMessage（query 会保留），独立模式整页跳转。
+// 点击行动点 → 本页弹层原地处理（不打断搜索+下载）：自动解析磁力内容 →
+// 文件勾选确认 / 改名 / 选保存目录 → 创建任务。全流程调 media core API
+// （同源 /downloads/api/…），完成后留在搜索页 toast 提示，绝不静默直投、不跳页。
 const isMagnetUrl = (url: string) => /^magnet:\?/i.test((url || '').trim());
 const getMagnetDisplayName = (url: string): string => {
   try {
@@ -476,21 +476,149 @@ const getMagnetDisplayName = (url: string): string => {
     return '';
   }
 };
+
+// 内置保存目录（与 media core 下载中心表单同一套内置 key）
+const DL_FOLDERS = [
+  { value: 'bt', label: '磁力下载 (bt)' },
+  { value: 'files', label: '普通文件 (files)' },
+  { value: 'video', label: '视频下载 (video)' },
+];
+
+interface MagnetDialogState {
+  visible: boolean;
+  url: string;
+  resolving: boolean;
+  error: string;
+  meta: { path: string; name: string; size: number; files: Array<{ index: number; path: string; size: number }> | null } | null;
+  name: string;
+  selected: number[];
+  folder: string;
+  creating: boolean;
+}
+const magnetDialog = ref<MagnetDialogState>({
+  visible: false,
+  url: '',
+  resolving: false,
+  error: '',
+  meta: null,
+  name: '',
+  selected: [],
+  folder: 'bt',
+  creating: false,
+});
+
+const resolveMagnet = async (url: string) => {
+  magnetDialog.value.resolving = true;
+  magnetDialog.value.error = '';
+  try {
+    const res = await fetch('/downloads/api/downloads/resolve-magnet', {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url }),
+    });
+    const payload = await res.json().catch(() => null);
+    if (!res.ok || !payload?.data) {
+      throw new Error(payload?.message || `HTTP ${res.status}`);
+    }
+    magnetDialog.value.meta = payload.data;
+    magnetDialog.value.name = payload.data.name || getMagnetDisplayName(url);
+    magnetDialog.value.selected = payload.data.files?.map((f: { index: number }) => f.index) ?? [];
+  } catch (err) {
+    magnetDialog.value.meta = null;
+    magnetDialog.value.error = (err instanceof Error && err.message) || '磁力解析失败，请稍后重试';
+  } finally {
+    magnetDialog.value.resolving = false;
+  }
+};
+
 const downloadViaCenter = (item: MergedResultItem) => {
   const magnet = item.url.trim();
-  const params = new URLSearchParams();
-  params.set('new', 'magnet');
-  params.set('magnet', magnet);
-  const dn = getMagnetDisplayName(magnet);
-  if (dn) params.set('dn', dn);
-  const path = `/downloads?${params.toString()}`;
-  if (window.parent && window.parent !== window) {
-    window.parent.postMessage(
-      { source: 'mei-iframe', type: 'navigate', path },
-      window.location.origin,
-    );
-  } else {
-    window.open(path, '_blank');
+  magnetDialog.value = {
+    ...magnetDialog.value,
+    visible: true,
+    url: magnet,
+    resolving: false,
+    error: '',
+    meta: null,
+    name: getMagnetDisplayName(magnet),
+    selected: [],
+    folder: 'bt',
+    creating: false,
+  };
+  void resolveMagnet(magnet);
+};
+
+const closeMagnetDialog = () => {
+  magnetDialog.value.visible = false;
+};
+
+const toggleMagnetFile = (index: number, checked: boolean) => {
+  const cur = magnetDialog.value.selected;
+  magnetDialog.value.selected = checked
+    ? [...cur, index]
+    : cur.filter((i) => i !== index);
+};
+
+const magnetAllSelected = computed(() => {
+  const files = magnetDialog.value.meta?.files;
+  return !!files && magnetDialog.value.selected.length === files.length;
+});
+
+const magnetSelectAll = (checked: boolean) => {
+  magnetDialog.value.selected = checked
+    ? (magnetDialog.value.meta?.files ?? []).map((f) => f.index)
+    : [];
+};
+
+// 勾选 → aria2 --select-file 索引串（全选/未选 = 全部文件，不传）
+const deriveSelectFile = () => {
+  const files = magnetDialog.value.meta?.files;
+  if (!files || files.length === 0) return '';
+  const sel = magnetDialog.value.selected;
+  if (sel.length === 0 || sel.length === files.length) return '';
+  return [...sel].sort((a, b) => a - b).join(',');
+};
+
+// 原地下载结果轻提示（2.6s 自动消失）
+const dlToast = ref('');
+let dlToastTimer: number | null = null;
+const setDlToast = (text: string) => {
+  dlToast.value = text;
+  if (dlToastTimer) window.clearTimeout(dlToastTimer);
+  dlToastTimer = window.setTimeout(() => {
+    dlToast.value = '';
+  }, 2600);
+};
+
+const createMagnetTask = async () => {
+  const st = magnetDialog.value;
+  if (!st.meta) return;
+  st.creating = true;
+  try {
+    const res = await fetch('/downloads/api/downloads', {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        tasks: [{
+          name: st.name.trim() || st.meta.name,
+          type: 'bt',
+          url: st.meta.path,
+          folder: st.folder,
+          selectFile: deriveSelectFile() || undefined,
+        }],
+        startDownload: true,
+      }),
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    st.visible = false;
+    setDlToast('已开始下载，可在下载中心「磁力」tab 查看进度');
+  } catch (err) {
+    console.warn('创建磁力下载任务失败:', err);
+    st.error = '创建下载任务失败，请稍后重试';
+  } finally {
+    st.creating = false;
   }
 };
 
@@ -920,6 +1048,92 @@ onUnmounted(() => {
         </div>
       </Transition>
     </Teleport>
+
+    <!-- 磁力下载确认弹层：原地解析（文件勾选 / 改名 / 选目录）→ 创建任务，
+         不跳转下载中心，搜索+下载行为不中断 -->
+    <Teleport to="body">
+      <Transition name="detail-fade">
+        <div v-if="magnetDialog.visible" class="detail-overlay" @click="closeMagnetDialog">
+          <div class="detail-dialog magnet-dialog" @click.stop>
+            <div class="detail-header">
+              <div class="detail-heading">
+                <p class="detail-label">下载到内置下载中心（磁力 / BT）</p>
+                <h3 class="detail-title magnet-url-line" :title="magnetDialog.url">{{ magnetDialog.url }}</h3>
+              </div>
+              <button type="button" class="detail-close" aria-label="关闭" @click="closeMagnetDialog">
+                <svg class="detail-close-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                </svg>
+              </button>
+            </div>
+
+            <!-- 解析中 -->
+            <div v-if="magnetDialog.resolving" class="magnet-resolving">
+              <span class="magnet-spinner"></span>
+              正在解析磁力内容（连接网络节点，最长约 45 秒）…
+            </div>
+
+            <!-- 解析失败 -->
+            <div v-else-if="magnetDialog.error && !magnetDialog.meta" class="magnet-error">
+              <p>{{ magnetDialog.error }}</p>
+              <div class="magnet-error-actions">
+                <button type="button" class="detail-copy-btn" @click="resolveMagnet(magnetDialog.url)">重试解析</button>
+                <button type="button" class="detail-copy-btn" @click="closeMagnetDialog">取消</button>
+              </div>
+            </div>
+
+            <!-- 解析成功：内容勾选 / 改名 / 选目录 → 创建 -->
+            <template v-else-if="magnetDialog.meta">
+              <div v-if="magnetDialog.error" class="magnet-error magnet-error-inline">{{ magnetDialog.error }}</div>
+              <div class="magnet-form-row">
+                <label class="magnet-label">任务名称</label>
+                <input v-model="magnetDialog.name" type="text" class="magnet-input" placeholder="留空使用种子名" />
+              </div>
+              <div v-if="magnetDialog.meta.files && magnetDialog.meta.files.length > 0" class="magnet-files">
+                <label class="magnet-check-all">
+                  <input
+                    type="checkbox"
+                    :checked="magnetAllSelected"
+                    @change="magnetSelectAll(($event.target as HTMLInputElement).checked)"
+                  />
+                  全选（{{ magnetDialog.selected.length }}/{{ magnetDialog.meta.files.length }}）
+                </label>
+                <div class="magnet-file-list">
+                  <label v-for="f in magnetDialog.meta.files" :key="f.index" class="magnet-file">
+                    <input
+                      type="checkbox"
+                      :checked="magnetDialog.selected.includes(f.index)"
+                      @change="toggleMagnetFile(f.index, ($event.target as HTMLInputElement).checked)"
+                    />
+                    <span class="magnet-file-path" :title="f.path">{{ f.path }}</span>
+                    <span class="magnet-file-size">{{ f.size }} B</span>
+                  </label>
+                </div>
+              </div>
+              <div class="magnet-form-row">
+                <label class="magnet-label">保存目录</label>
+                <select v-model="magnetDialog.folder" class="magnet-input">
+                  <option v-for="f in DL_FOLDERS" :key="f.value" :value="f.value">{{ f.label }}</option>
+                </select>
+              </div>
+              <div class="detail-actions magnet-actions">
+                <button type="button" class="detail-copy-btn" :disabled="magnetDialog.creating" @click="closeMagnetDialog">取消</button>
+                <button type="button" class="detail-copy-btn magnet-primary" :disabled="magnetDialog.creating" @click="createMagnetTask">
+                  {{ magnetDialog.creating ? '创建中…' : '开始下载' }}
+                </button>
+              </div>
+            </template>
+          </div>
+        </div>
+      </Transition>
+    </Teleport>
+
+    <!-- 原地下载结果轻提示 -->
+    <Teleport to="body">
+      <Transition name="detail-fade">
+        <div v-if="dlToast" class="dl-toast">{{ dlToast }}</div>
+      </Transition>
+    </Teleport>
   </div>
 </template>
 
@@ -1300,6 +1514,177 @@ onUnmounted(() => {
 .dl-center-icon-btn:focus-visible {
   outline: 2px solid #93c5fd;
   outline-offset: 2px;
+}
+
+/* ---- 磁力下载确认弹层（原地处理，不跳转） ---- */
+.magnet-dialog {
+  max-width: 520px;
+  width: calc(100vw - 32px);
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.magnet-url-line {
+  font-size: 12px;
+  font-weight: 500;
+  word-break: break-all;
+  opacity: 0.85;
+  line-height: 1.5;
+}
+
+.magnet-resolving {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+  color: #6b7280;
+  padding: 10px 0;
+}
+
+.magnet-spinner {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 2px solid #c7d2fe;
+  border-top-color: #6366f1;
+  animation: magnetSpin 0.8s linear infinite;
+  flex-shrink: 0;
+}
+
+@keyframes magnetSpin {
+  to { transform: rotate(360deg); }
+}
+
+.magnet-error {
+  font-size: 13px;
+  color: #dc2626;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 4px 0;
+}
+
+.magnet-error-inline {
+  padding: 8px 10px;
+  background: #fef2f2;
+  border-radius: 8px;
+  border: 1px solid #fecaca;
+}
+
+.magnet-error-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.magnet-form-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.magnet-label {
+  width: 64px;
+  flex-shrink: 0;
+  font-size: 13px;
+  color: #374151;
+}
+
+.magnet-input {
+  flex: 1;
+  min-width: 0;
+  height: 34px;
+  padding: 0 10px;
+  font-size: 13px;
+  color: #374151;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  outline: none;
+}
+
+.magnet-input:focus {
+  border-color: #a5b4fc;
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.12);
+}
+
+.magnet-files {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.magnet-check-all {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12.5px;
+  color: #374151;
+  cursor: pointer;
+}
+
+.magnet-file-list {
+  max-height: 200px;
+  overflow-y: auto;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.magnet-file {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  cursor: pointer;
+  color: #4b5563;
+}
+
+.magnet-file-path {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.magnet-file-size {
+  flex-shrink: 0;
+  color: #9ca3af;
+  font-variant-numeric: tabular-nums;
+}
+
+.magnet-actions {
+  justify-content: flex-end;
+}
+
+.magnet-primary {
+  background: #6366f1 !important;
+  color: #fff !important;
+  border: none;
+}
+
+.magnet-primary:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.dl-toast {
+  position: fixed;
+  left: 50%;
+  bottom: 32px;
+  transform: translateX(-50%);
+  z-index: 10001;
+  padding: 10px 20px;
+  border-radius: 999px;
+  background: rgba(13, 18, 32, 0.88);
+  color: #fff;
+  font-size: 13px;
+  box-shadow: 0 18px 52px rgba(23, 32, 56, 0.2);
+  pointer-events: none;
 }
 
 .detail-overlay {

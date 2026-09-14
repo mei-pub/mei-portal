@@ -204,6 +204,12 @@ export const zh = {
   torrentContent: "种子内容",
   torrentSelectAll: "全选",
   torrentParsed: "种子解析成功",
+  pleaseResolveMagnetFirst:
+    "请先解析磁力内容并确认下载文件后，再创建任务",
+  magnetResolving: "正在解析磁力内容（连接网络节点，最长约 45 秒）…",
+  magnetResolveHint:
+    "粘贴磁力链接后自动解析内容；解析完成并确认文件后才能创建任务",
+  magnetResolveFailed: "磁力解析失败，请检查链接或稍后重试",
   downloadToLocal: "下载到本地",
   fileLabel: "文件名称",
   fileLinkLabel: "下载链接",

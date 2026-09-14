@@ -7,6 +7,7 @@ import {
   resolveTaskDir,
   sanitizeFilename,
   sanitizeFolder,
+  taskTmpDir,
 } from "../core/downloader.ts";
 import { logger } from "../logger.ts";
 import type { TaskQueue } from "../core/queue.ts";
@@ -240,9 +241,7 @@ export class DownloadTaskService {
     const task = this.repo.findById(dbID);
     if (!task || task.type !== "bt") return; // direct 同走 aria2c，但 name 是用户指定的，不回写
 
-    let searchDir = localPath;
-    if (task.folder && task.folder !== "")
-      searchDir = resolveTaskDir(task.folder, localPath);
+    let searchDir = taskTmpDir(id, task.folder, localPath);
     let name = btNameFromPath(file, searchDir);
     if (name === "" || name === task.name) return;
     const existing = this.repo.findByName(name);
@@ -258,6 +257,65 @@ export class DownloadTaskService {
   /** 任务终态（success/failed/stopped）后释放回写去重记录 */
   forgetBtTask(id: string): void {
     this.btLastPath.delete(id);
+  }
+
+  /**
+   * 下载成功后落盘收敛（onSuccess 调用）：下载器把产物写在任务临时目录
+   * .meipart-<id>/ 内保护已存在文件 —— 这里把产物 rename 到任务目录的最终名，
+   * 并清掉临时目录的零碎残余。rename 同分区原子；目标已存在时按「重新下载
+   * 覆盖」语义先移除再 rename（目录情形 rename 会因非空失败）。
+   */
+  finalizeTask(id: string, localPath: string): void {
+    if (localPath === "") return;
+    const dbID = Number.parseInt(id, 10);
+    const task = Number.isNaN(dbID) ? null : this.repo.findById(dbID);
+    const folder = task?.folder ?? null;
+    const tmpDir = taskTmpDir(id, folder, localPath);
+    const targetDir = resolveTaskDir(folder, localPath);
+
+    let entries: fs.Dirent[];
+    try {
+      entries = fs.readdirSync(tmpDir, { withFileTypes: true });
+    } catch {
+      return; // 临时目录不存在（无产物可收敛）：交给既有落盘链路兜底
+    }
+    // 产物识别：优先目录（bt 多文件种子）；否则取最大的非控制文件
+    // （.aria2 续传控制、分片点文件都不算产物）
+    const dirs = entries.filter(
+      (e) => e.isDirectory() && !e.name.startsWith("."),
+    );
+    const files = entries
+      .filter(
+        (e) =>
+          e.isFile() && !e.name.startsWith(".") && !e.name.endsWith(".aria2"),
+      )
+      .map((e) => ({
+        name: e.name,
+        size: fs.statSync(path.join(tmpDir, e.name)).size,
+      }))
+      .sort((a, b) => b.size - a.size);
+    const pick = dirs[0]?.name ?? files[0]?.name;
+    if (!pick) {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+      return;
+    }
+
+    try {
+      fs.mkdirSync(targetDir, { recursive: true });
+      const src = path.join(tmpDir, pick);
+      const dst = path.join(targetDir, pick);
+      if (fs.existsSync(dst)) {
+        // 覆盖语义：删旧再移入（不 rename 直覆目录，避免 ENOTEMPTY）
+        fs.rmSync(dst, { recursive: true, force: true });
+      }
+      fs.renameSync(src, dst);
+      logger.info(`task ${id} finalized: ${pick} → ${targetDir}`);
+    } catch (err: any) {
+      logger.warn(`task ${id} finalize failed: ${err?.message ?? err}`);
+      return; // rename 失败保留临时目录，产物不丢
+    }
+    // 清理临时目录残余（分片/控制文件；rename 失败路径上方已 return）
+    fs.rmSync(tmpDir, { recursive: true, force: true });
   }
 
   /**
@@ -278,6 +336,21 @@ export class DownloadTaskService {
       this.queue.stop(String(id));
     } catch {
       // 非活动任务无需停止
+    }
+    // 半成品临时目录（.meipart-<id>）：无保留价值，删除任务时总是清理
+    // （deleteFiles=false 用户只是不想删成品文件，不代表保留半成品）
+    if (task) {
+      const localPathForTmp = opts?.localPath || "";
+      if (localPathForTmp !== "") {
+        try {
+          fs.rmSync(taskTmpDir(String(id), task.folder, localPathForTmp), {
+            recursive: true,
+            force: true,
+          });
+        } catch {
+          // 临时目录不存在：无事
+        }
+      }
     }
     if (task && opts?.deleteFiles) {
       const localPath = opts.localPath || "";

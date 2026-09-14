@@ -135,6 +135,13 @@ export function createServer(opts: RouterOptions): Server {
       handler: (c) => h.uploadTorrent(c),
     },
 
+    // 磁力链接内容解析（创建任务前的强制内容识别：名称/大小/文件清单）
+    {
+      method: "POST",
+      parts: ["api", "downloads", "resolve-magnet"],
+      handler: (c) => h.resolveMagnet(c),
+    },
+
     // downloads（静态段在前，:id 在后）
     {
       method: "POST",

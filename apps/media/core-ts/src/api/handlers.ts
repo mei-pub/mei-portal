@@ -17,7 +17,10 @@ import type { FavoriteService } from "../service/favorite.ts";
 import type { ConversionService } from "../service/conversion.ts";
 import type { VideoService } from "./video.ts";
 import { isPortalSession } from "./auth.ts";
-import { normalizeAria2Options } from "../core/downloader.ts";
+import {
+  normalizeAria2Options,
+  type DownloaderSvc,
+} from "../core/downloader.ts";
 
 export interface EnvPaths {
   configDir: string;
@@ -93,6 +96,7 @@ export class Handlers {
   private readonly conversionSvc: ConversionService | null;
   private readonly videoSvc: VideoService | null;
   private readonly env: EnvPaths;
+  private readonly downloaderSvc: DownloaderSvc | null;
 
   constructor(
     queue: TaskQueue,
@@ -104,6 +108,7 @@ export class Handlers {
     conversionSvc: ConversionService | null,
     videoSvc: VideoService | null,
     env: EnvPaths,
+    downloaderSvc: DownloaderSvc | null = null,
   ) {
     this.queue = queue;
     this.logs = logs;
@@ -114,6 +119,7 @@ export class Handlers {
     this.conversionSvc = conversionSvc;
     this.videoSvc = videoSvc;
     this.env = env;
+    this.downloaderSvc = downloaderSvc;
   }
 
   // ---- Health（/healthy）----
@@ -380,6 +386,40 @@ export class Handlers {
   }
 
   // ---- Downloads（DB 持久化主通道）----
+
+  /**
+   * 磁力链接内容解析（任务创建前的强制内容识别，对齐迅雷）：
+   * aria2c 只取 metadata 产出 .torrent → bencode 解析出名称/大小/文件清单。
+   * 返回的 path 在 torrents 目录内（bt url 白名单接纳），UI 勾选文件/改名/
+   * 选目录确认后用它作任务 url 创建任务 —— 创建磁力任务前必须先经过本流程。
+   */
+  resolveMagnet(c: Ctx): void {
+    const body = asObject(c.body);
+    const url = typeof body?.url === "string" ? body.url.trim() : "";
+    if (!/^magnet:\?.+urn:btih:[0-9a-fA-F]{40}/.test(url)) {
+      fail(c, 400, "invalid magnet link (magnet:?xt=urn:btih:<40-hex>)");
+      return;
+    }
+    if (!this.downloaderSvc) {
+      fail(c, 500, "downloader not configured");
+      return;
+    }
+    const torrentsDir = path.join(this.env.configDir, "torrents");
+    this.downloaderSvc
+      .resolveMagnet(url, torrentsDir)
+      .then((torrentPath) => {
+        const meta = extractTorrentMeta(fs.readFileSync(torrentPath));
+        ok(c, {
+          path: torrentPath,
+          name: meta.name,
+          size: meta.size,
+          files: meta.files,
+        });
+      })
+      .catch((err: any) =>
+        fail(c, 400, err?.message ?? "magnet resolve failed"),
+      );
+  }
 
   downloadCreate(c: Ctx): void {
     if (!this.downloadSvc) {

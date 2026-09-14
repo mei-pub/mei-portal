@@ -65,11 +65,20 @@ function mountPanel() {
     panel.querySelector(".p-info").onclick = () => { pushRoute("/search"); };
     panel.querySelectorAll(".p-item").forEach((btn) => {
       if (btn.dataset.act === "settings") {
-        // 播放设置页（settings.html）：新标签打开，不打断当前播放
+        // 播放设置：统一走门户设置后台「音乐播放设置」（/settings/solara），
+        // 应用内不再维护独立设置页。iframe 内经外壳承载路由跳转，不打断播放；
+        // 独立访问模式新标签打开
         btn.onclick = () => {
-          const url = "/music/settings.html";
-          const win = window.open(url, "_blank", "noopener");
-          if (!win) location.assign(url);
+          const url = "/settings/solara";
+          if (window.parent && window.parent !== window) {
+            window.parent.postMessage(
+              { source: "mei-iframe", type: "navigate", path: url },
+              window.location.origin
+            );
+          } else {
+            const win = window.open(url, "_blank", "noopener");
+            if (!win) location.assign(url);
+          }
         };
         return;
       }

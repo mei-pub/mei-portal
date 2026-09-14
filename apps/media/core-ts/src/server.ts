@@ -398,6 +398,12 @@ async function main(): Promise<void> {
   queue.onSuccess = (id) => {
     void taskLogs.append(id, "Task completed successfully").catch(() => {});
     downloadSvc.forgetBtTask(id);
+    // 临时目录产物收敛：rename 到任务目录最终名（失败仅告警，产物留在 .meipart-<id>）
+    try {
+      downloadSvc.finalizeTask(id, cfg.localDir);
+    } catch (err: any) {
+      logger.warn(`finalizeTask failed id=${id}: ${err?.message ?? err}`);
+    }
     const dbID = Number.parseInt(id, 10);
     if (!Number.isNaN(dbID)) {
       try {
@@ -471,6 +477,7 @@ async function main(): Promise<void> {
     conversionSvc,
     videoSvc,
     envPaths,
+    downloader,
   );
 
   // 播放器 UI 目录（Go 为二进制内嵌；TS 版以目录形式部署，默认取 static-dir 同级的 player/）
