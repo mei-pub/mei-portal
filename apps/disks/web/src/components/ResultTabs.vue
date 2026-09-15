@@ -1057,8 +1057,8 @@ onUnmounted(() => {
           <div class="detail-dialog magnet-dialog" @click.stop>
             <div class="detail-header">
               <div class="detail-heading">
-                <p class="detail-label">下载到内置下载中心（磁力 / BT）</p>
-                <h3 class="detail-title magnet-url-line" :title="magnetDialog.url">{{ magnetDialog.url }}</h3>
+                <p class="magnet-heading">下载到内置下载中心（磁力 / BT）</p>
+                <p class="magnet-url-line" :title="magnetDialog.url">{{ magnetDialog.url }}</p>
               </div>
               <button type="button" class="detail-close" aria-label="关闭" @click="closeMagnetDialog">
                 <svg class="detail-close-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1070,21 +1070,24 @@ onUnmounted(() => {
             <!-- 解析中 -->
             <div v-if="magnetDialog.resolving" class="magnet-resolving">
               <span class="magnet-spinner"></span>
-              正在解析磁力内容（连接网络节点，最长约 45 秒）…
+              <span>正在解析磁力内容，连接网络节点中（最长约 45 秒）…</span>
             </div>
 
             <!-- 解析失败 -->
-            <div v-else-if="magnetDialog.error && !magnetDialog.meta" class="magnet-error">
-              <p>{{ magnetDialog.error }}</p>
+            <div v-else-if="magnetDialog.error && !magnetDialog.meta" class="magnet-error-card">
+              <div class="magnet-error-main">
+                <p class="magnet-error-text">{{ magnetDialog.error }}</p>
+                <p class="magnet-error-hint">磁力资源可能已失效，可稍后重试或直接复制链接到其它下载器</p>
+              </div>
               <div class="magnet-error-actions">
-                <button type="button" class="detail-copy-btn" @click="resolveMagnet(magnetDialog.url)">重试解析</button>
-                <button type="button" class="detail-copy-btn" @click="closeMagnetDialog">取消</button>
+                <button type="button" class="magnet-btn magnet-btn-ghost" @click="closeMagnetDialog">取消</button>
+                <button type="button" class="magnet-btn magnet-btn-primary" @click="resolveMagnet(magnetDialog.url)">重试解析</button>
               </div>
             </div>
 
             <!-- 解析成功：内容勾选 / 改名 / 选目录 → 创建 -->
             <template v-else-if="magnetDialog.meta">
-              <div v-if="magnetDialog.error" class="magnet-error magnet-error-inline">{{ magnetDialog.error }}</div>
+              <div v-if="magnetDialog.error" class="magnet-error-inline">{{ magnetDialog.error }}</div>
               <div class="magnet-form-row">
                 <label class="magnet-label">任务名称</label>
                 <input v-model="magnetDialog.name" type="text" class="magnet-input" placeholder="留空使用种子名" />
@@ -1116,9 +1119,9 @@ onUnmounted(() => {
                   <option v-for="f in DL_FOLDERS" :key="f.value" :value="f.value">{{ f.label }}</option>
                 </select>
               </div>
-              <div class="detail-actions magnet-actions">
-                <button type="button" class="detail-copy-btn" :disabled="magnetDialog.creating" @click="closeMagnetDialog">取消</button>
-                <button type="button" class="detail-copy-btn magnet-primary" :disabled="magnetDialog.creating" @click="createMagnetTask">
+              <div class="magnet-actions">
+                <button type="button" class="magnet-btn magnet-btn-ghost" :disabled="magnetDialog.creating" @click="closeMagnetDialog">取消</button>
+                <button type="button" class="magnet-btn magnet-btn-primary" :disabled="magnetDialog.creating" @click="createMagnetTask">
                   {{ magnetDialog.creating ? '创建中…' : '开始下载' }}
                 </button>
               </div>
@@ -1518,28 +1521,44 @@ onUnmounted(() => {
 
 /* ---- 磁力下载确认弹层（原地处理，不跳转） ---- */
 .magnet-dialog {
-  max-width: 520px;
+  max-width: 480px;
   width: calc(100vw - 32px);
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 16px;
+  padding: 20px 22px;
+  box-sizing: border-box;
 }
 
+.magnet-heading {
+  margin: 0 0 6px;
+  font-size: 15px;
+  font-weight: 700;
+  color: #111827;
+  line-height: 1.4;
+}
+
+/* 磁力链接：小号弱化展示，单行截断（完整链接见 title 提示） */
 .magnet-url-line {
+  margin: 0;
   font-size: 12px;
-  font-weight: 500;
-  word-break: break-all;
-  opacity: 0.85;
+  font-weight: 400;
+  color: #9ca3af;
   line-height: 1.5;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 360px;
 }
 
 .magnet-resolving {
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: 10px;
   font-size: 13px;
   color: #6b7280;
-  padding: 10px 0;
+  padding: 26px 0;
 }
 
 .magnet-spinner {
@@ -1556,13 +1575,41 @@ onUnmounted(() => {
   to { transform: rotate(360deg); }
 }
 
-.magnet-error {
-  font-size: 13px;
-  color: #dc2626;
+/* 解析失败：错误卡片 + 右对齐操作按钮 */
+.magnet-error-card {
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  padding: 4px 0;
+  gap: 14px;
+  padding: 14px 16px;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  border-radius: 12px;
+}
+
+.magnet-error-main {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.magnet-error-text {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: #dc2626;
+}
+
+.magnet-error-hint {
+  margin: 0;
+  font-size: 12px;
+  color: #9ca3af;
+  line-height: 1.5;
+}
+
+.magnet-error-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
 }
 
 .magnet-error-inline {
@@ -1570,11 +1617,47 @@ onUnmounted(() => {
   background: #fef2f2;
   border-radius: 8px;
   border: 1px solid #fecaca;
+  font-size: 12.5px;
+  color: #dc2626;
 }
 
-.magnet-error-actions {
-  display: flex;
-  gap: 8px;
+/* 弹层内统一按钮：ghost 次要 / primary 主操作 */
+.magnet-btn {
+  appearance: none;
+  height: 34px;
+  padding: 0 16px;
+  font-size: 13px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  border: 1px solid transparent;
+}
+
+.magnet-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.magnet-btn-ghost {
+  background: #fff;
+  border-color: #e5e7eb;
+  color: #6b7280;
+}
+
+.magnet-btn-ghost:hover:not(:disabled) {
+  color: #374151;
+  border-color: #d1d5db;
+}
+
+.magnet-btn-primary {
+  background: #6366f1;
+  color: #fff;
+  border: none;
+  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
+}
+
+.magnet-btn-primary:hover:not(:disabled) {
+  background: #4f46e5;
 }
 
 .magnet-form-row {
@@ -1601,6 +1684,7 @@ onUnmounted(() => {
   border: 1px solid #e5e7eb;
   border-radius: 8px;
   outline: none;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
 
 .magnet-input:focus {
@@ -1658,18 +1742,10 @@ onUnmounted(() => {
 }
 
 .magnet-actions {
+  display: flex;
   justify-content: flex-end;
-}
-
-.magnet-primary {
-  background: #6366f1 !important;
-  color: #fff !important;
-  border: none;
-}
-
-.magnet-primary:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
+  gap: 8px;
+  margin-top: 2px;
 }
 
 .dl-toast {

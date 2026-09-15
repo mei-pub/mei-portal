@@ -309,6 +309,9 @@ async function main(): Promise<void> {
     getProxy: () => cfg.proxy,
     getUseProxy: () => cfg.useProxy,
     getAria2Options: () => cfg.aria2,
+    // DHT 路由表持久化（configDir/dht.dat）：aria2 进程退出保存 / 启动加载，
+    // 磁力解析与 BT 下载跨进程共享 —— 冷启动 bootstrap（10-30s）只发生一次
+    getDhtFile: () => path.join(cfg.configDir, "dht.dat"),
   };
   const downloader = new DownloaderSvc(binMap, schemas, downloaderCfg);
   const queue = new TaskQueue(downloader, cfg.maxRunner);

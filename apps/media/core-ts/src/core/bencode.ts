@@ -2,6 +2,8 @@
 // 只需读 info 字典的 name/length/files，容错优先：任何结构异常抛 Error 由
 // 调用方拒绝该文件。字符串值保留为 Buffer（文件路径段按 UTF-8 解码）。
 
+import crypto from "node:crypto";
+
 export interface TorrentFileEntry {
   /** 1-based 索引（与 aria2 --select-file 的文件编号一致） */
   index: number;
@@ -100,6 +102,57 @@ function toStr(v: unknown): string {
 
 function toNum(v: unknown): number {
   return typeof v === "number" && Number.isFinite(v) ? v : 0;
+}
+
+/**
+ * 计算种子文件的 infohash（info 字典原始字节的 sha1，小写 hex）。
+ * 不做完整解码 —— 按字节定位根字典的 `4:info` 键后扫描配对区间：
+ * 公共 torrent 缓存返回体必须与磁力 btih 一致（防缓存污染 / 错内容）。
+ * 结构异常返回 null，由调用方拒绝。
+ */
+export function torrentInfoHash(buf: Buffer): string | null {
+  const marker = buf.indexOf(Buffer.from("4:info"));
+  if (marker < 0) return null;
+  const start = marker + 6; // 跳过 "4:info"，指向 info 值（'d'）
+
+  /** 扫描一个容器（list/dict 已消费起始符）到配对 'e'；返回 e 的下一位，失败 -1 */
+  const scan = (p: number): number => {
+    for (;;) {
+      if (p < 0 || p >= buf.length) return -1;
+      const c = buf[p]!;
+      if (c === 0x69) {
+        // 'i' 整数到 'e'
+        p = buf.indexOf(0x65, p);
+        if (p < 0) return -1;
+        p += 1;
+      } else if (c === 0x6c || c === 0x64) {
+        // 'l'/'d' 进入嵌套容器
+        p = scan(p + 1);
+      } else if (c === 0x65) {
+        // 'e' 当前容器结束
+        return p + 1;
+      } else if (c >= 0x30 && c <= 0x39) {
+        // 字符串长度前缀
+        const colon = buf.indexOf(0x3a, p);
+        if (colon < 0) return -1;
+        const len = Number.parseInt(
+          buf.subarray(p, colon).toString("ascii"),
+          10,
+        );
+        if (!Number.isFinite(len) || len < 0) return -1;
+        p = colon + 1 + len;
+      } else {
+        return -1;
+      }
+    }
+  };
+
+  const end = scan(start);
+  if (end < 0) return null;
+  return crypto
+    .createHash("sha1")
+    .update(buf.subarray(start, end))
+    .digest("hex");
 }
 
 /**

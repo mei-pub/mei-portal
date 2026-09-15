@@ -113,4 +113,7 @@ export interface DownloaderConfig {
   getUseProxy(): boolean;
   /** aria2 引擎设置（direct/bt；热更新经闭包读最新值） */
   getAria2Options(): Aria2Options;
+  /** DHT 路由表持久化文件（IPv4；空 = 不持久化）。aria2 启动加载 / 正常退出
+   *  保存 —— 磁力解析与 BT 下载跨进程复用路由表，冷启动从 ~30s 降到秒级 */
+  getDhtFile?(): string;
 }

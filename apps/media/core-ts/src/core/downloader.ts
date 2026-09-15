@@ -4,6 +4,7 @@ import path from "node:path";
 import fs from "node:fs";
 import { logger } from "../logger.ts";
 import { execRun, CanceledError } from "./runner.ts";
+import { extractTorrentMeta, torrentInfoHash } from "./bencode.ts";
 import { LineParser, ProgressTracker, type ParseState } from "./parser.ts";
 import { getByType, type Schema, type SchemaList } from "./schema.ts";
 import type {
@@ -233,6 +234,81 @@ export function guessExtFromURL(u: string): string {
   return "mp4";
 }
 
+// ---- 磁力元数据加速（对齐迅雷「秒出」体验的公开手段）----
+// 冷启动的新 aria2c 进程：无 DHT 路由表（bootstrap 10-30s）、无 tracker，
+// 是磁力解析超时的根因。三件套加速：
+// 1) 结果缓存：同 infohash 之前解析过 → 直接返回 torrents/<hash>.torrent
+// 2) 公共 tracker：aria2 --bt-tracker 并行 announce（与链接自带 tr、用户设置合并）
+// 3) DHT 路由表持久化（--dht-file-path）+ 显式引导节点（--dht-entry-point）：
+//    进程退出保存路由表，下次秒级查表
+
+const PUBLIC_BT_TRACKERS = [
+  "udp://tracker.opentrackr.org:1337/announce",
+  "http://tracker.opentrackr.org:1337/announce",
+  "udp://open.demonii.com:1337/announce",
+  "udp://exodus.desync.com:6969/announce",
+  "udp://tracker.torrent.eu.org:451/announce",
+  "udp://open.stealth.si:80/announce",
+  "udp://tracker.tiny-vps.com:6969/announce",
+  "udp://tracker.dler.org:6969/announce",
+  "udp://opentracker.io:6969/announce",
+  "udp://tracker.openbittorrent.com:6969/announce",
+];
+
+/** DHT 引导节点（冷启动显式 ping，快于默认配置的被动发现） */
+const DHT_ENTRY_POINT = "router.bittorrent.com:6881";
+
+/**
+ * 公共 torrent 缓存（秒级第一跳，对齐迅雷「云索引秒出」的公开等价物）：
+ * 按 infohash 直取 .torrent（HTTP 1-2s）。itorrents（torcache 继任者，
+ * WebTorrent/instant.io 生态使用）。返回体必须能 bencode 解析且 infohash
+ * 与磁力 btih 一致（防缓存污染 / 错内容）；拉不到立即回落 aria2。
+ */
+const TORRENT_CACHE_URLS = [
+  (h: string) => `https://itorrents.org/torrent/${h.toUpperCase()}.torrent`,
+];
+
+async function fetchTorrentCache(
+  url: string,
+  timeoutMs = 4000,
+): Promise<Buffer | null> {
+  try {
+    const res = await fetch(url, {
+      redirect: "follow",
+      signal: AbortSignal.timeout(timeoutMs),
+    });
+    if (!res.ok) return null;
+    const buf = Buffer.from(await res.arrayBuffer());
+    return buf.length > 0 ? buf : null;
+  } catch {
+    return null; // 网络不通 / 超时：回落 aria2 路径
+  }
+}
+
+/** 用户 trackers（conf）∪ 公共 tracker —— 磁力解析与 BT 下载共用兜底 */
+function mergedTrackers(userTrackers: string): string {
+  const set = new Set<string>([
+    ...splitList(userTrackers),
+    ...PUBLIC_BT_TRACKERS,
+  ]);
+  return [...set].join(",");
+}
+
+/** DHT 持久化参数（dhtFile 为空返回空数组；IPv4/IPv6 双表） */
+function dhtArgs(dhtFile: string): string[] {
+  if (!dhtFile) return [];
+  return [
+    "--dht-file-path",
+    dhtFile,
+    "--dht-file-path6",
+    `${dhtFile}.v6`,
+    "--dht-entry-point",
+    DHT_ENTRY_POINT,
+    "--dht-entry-point6",
+    DHT_ENTRY_POINT,
+  ];
+}
+
 export class DownloaderSvc {
   private readonly binMap: { [t: string]: string };
   private readonly schemas: SchemaList;
@@ -277,14 +353,53 @@ export class DownloaderSvc {
     fs.mkdirSync(torrentsDir, { recursive: true });
     const target = path.join(torrentsDir, `${infoHash}.torrent`);
 
+    // 结果缓存：同 infohash 解析过 → 秒回（重试 / 去重 / 跨会话都受益）
+    if (fs.existsSync(target)) {
+      return target;
+    }
+
+    // 第一跳：公共 torrent 缓存按 infohash 直取（秒级）；
+    // 校验可解析 + infohash 一致后落盘即返回
+    for (const mk of TORRENT_CACHE_URLS) {
+      const buf = await fetchTorrentCache(mk(infoHash));
+      if (!buf) continue;
+      try {
+        extractTorrentMeta(buf);
+        const hash = torrentInfoHash(buf);
+        if (hash === infoHash) {
+          fs.writeFileSync(target, buf);
+          logger.info(`magnet resolved via torrent cache: ${infoHash}`);
+          return target;
+        }
+        logger.warn(
+          `torrent cache infohash mismatch: got=${hash} want=${infoHash}`,
+        );
+      } catch {
+        // 非 bencode 响应：试下一个源
+      }
+    }
+
+    const trackers = mergedTrackers(this.cfg.getAria2Options().bt.trackers);
+    const dhtFile = this.cfg.getDhtFile?.() ?? "";
     const args = [
       magnet,
       "-d",
       torrentsDir,
       "--bt-metadata-only=true",
       "--bt-save-metadata=true",
-      // 无 peer 供 metadata 时尽快放弃（外层 timeout 之外的第二道保险）
-      "--bt-stop-timeout=20",
+      // 公共 tracker + 用户 tracker 并行 announce（链接自带 tr 同样生效）
+      "--bt-tracker",
+      trackers,
+      ...dhtArgs(dhtFile),
+      // 网络超时压短：慢 tracker / 死 peer 快速放弃换下一个（aria2 默认 60s，
+      // 是磁力解析拖到数十秒的隐性原因）
+      "--bt-tracker-timeout=5",
+      "--bt-tracker-connect-timeout=5",
+      "--connect-timeout=10",
+      "--timeout=15",
+      // 无 peer 供 metadata 时放弃（外层 timeout 之外的第二道保险；
+      // 30s 给 DHT/tracker 慢 announce 留余地）
+      "--bt-stop-timeout=30",
       "--seed-time=0",
       "--console-log-level=notice",
       "--summary-interval=0",
@@ -384,7 +499,9 @@ export class DownloaderSvc {
           out.push("--retry-wait", String(clampNum(o.retryWait, 0, 0, 60)));
           break;
         }
-        // BT 参数（磁力）：DHT/LPD/PEX 开关、监听端口、上传限速、最大 Peer、补充 tracker
+        // BT 参数（磁力）：DHT/LPD/PEX 开关、监听端口、上传限速、最大 Peer、tracker
+        // tracker：用户设置 ∪ 公共 tracker 兜底（DHT 慢启动补救）；DHT 路由表
+        // 持久化 + 显式引导节点（与 resolve-magnet 共享同一张表，越用越快）
         case "aria2Bt": {
           const b = this.cfg.getAria2Options().bt;
           out.push("--enable-dht=" + (b.enableDht ? "true" : "false"));
@@ -403,8 +520,10 @@ export class DownloaderSvc {
               sanitizeSpeedSize(b.uploadLimit, ""),
             );
           out.push("--bt-max-peers", String(clampNum(b.maxPeers, 55, 1, 999)));
-          const trackers = splitList(b.trackers);
-          if (trackers.length > 0) out.push("--bt-tracker", trackers.join(","));
+          // tracker：用户设置 ∪ 公共 tracker 兜底（只加 announce 源，无副作用）
+          out.push("--bt-tracker", mergedTrackers(b.trackers));
+          // DHT 开启时注入路由表持久化 + 引导节点（关闭时无意义）
+          if (b.enableDht) out.push(...dhtArgs(this.cfg.getDhtFile?.() ?? ""));
           break;
         }
         // 种子文件勾选下载：--select-file 仅在 UI 解析出内容清单并勾选后携带；
