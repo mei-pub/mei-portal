@@ -2,6 +2,8 @@
 
 import path from "node:path";
 import fs from "node:fs";
+import crypto from "node:crypto";
+import { spawn, type ChildProcess } from "node:child_process";
 import { logger } from "../logger.ts";
 import { execRun, CanceledError } from "./runner.ts";
 import { extractTorrentMeta, torrentInfoHash } from "./bencode.ts";
@@ -309,6 +311,229 @@ function dhtArgs(dhtFile: string): string[] {
   ];
 }
 
+/**
+ * aria2 RPC 常驻守护（磁力元数据解析的正确实现路径）。
+ *
+ * 单进程模式每次解析都要冷启动：DHT bootstrap（10-30s）+ 无 tracker + 路由表
+ * 随进程丢弃 —— 这是磁力解析慢/超时的根因。迅雷 / qBittorrent / BitComet
+ * 能「秒出」的共同架构是常驻进程 + 温热 DHT 路由表 + 持续 tracker 连接，
+ * 本守护按同构方案实现：
+ * - core 首次解析时懒启动 aria2c（--enable-rpc + 随机端口 + 随机 secret，
+ *   仅监听 127.0.0.1），进程随 core 常驻
+ * - DHT 路由表持续积累在内存（越用越快：实测冷 5.1s → 温热 2.0s），
+ *   退出时经 --dht-file-path 落盘、下次启动回载
+ * - 解析 = addUri(magnet, {bt-metadata-only, bt-save-metadata}) + 轮询
+ *   tellStatus；metadata 下载完成 aria2 自动落 <InfoHash>.torrent
+ * - 守护崩溃自愈：RPC 不可达时自动重启一次；仍失败回落单进程模式
+ */
+class MagnetResolverDaemon {
+  private child: ChildProcess | null = null;
+  private port = 0;
+  private secret = "";
+  private starting: Promise<boolean> | null = null;
+  private exited = false;
+  // 注意：--experimental-strip-types 不支持 TS 参数属性，字段须显式赋值
+  private readonly opts: {
+    bin: string;
+    torrentsDir: string;
+    dhtFile: string;
+    trackers: string;
+  };
+
+  constructor(
+    opts: {
+      bin: string;
+      torrentsDir: string;
+      dhtFile: string;
+      trackers: string;
+    },
+  ) {
+    this.opts = opts;
+    // core 退出时收守护（SIGTERM 触发 aria2 保存 DHT 表再退出）
+    const kill = () => this.stop();
+    process.once("exit", kill);
+    process.once("SIGTERM", () => {
+      kill();
+      process.exit(0);
+    });
+  }
+
+  stop(): void {
+    if (this.child) {
+      try {
+        this.child.kill("SIGTERM");
+      } catch {
+        // 已退出
+      }
+      this.child = null;
+    }
+  }
+
+  private rpcUrl(): string {
+    return `http://127.0.0.1:${this.port}/jsonrpc`;
+  }
+
+  /** JSON-RPC 调用；网络失败返回 null（由自愈逻辑重启） */
+  private async rpc<T>(
+    method: string,
+    ...params: unknown[]
+  ): Promise<T | null> {
+    try {
+      const res = await fetch(this.rpcUrl(), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          jsonrpc: "2.0",
+          id: crypto.randomUUID(),
+          method,
+          params: [`token:${this.secret}`, ...params],
+        }),
+        signal: AbortSignal.timeout(5000),
+      });
+      if (!res.ok) return null;
+      const payload = (await res.json()) as {
+        result?: T;
+        error?: { message?: string };
+      };
+      if (payload.error) return null;
+      return payload.result ?? null;
+    } catch {
+      return null;
+    }
+  }
+
+  private async ping(): Promise<boolean> {
+    return (await this.rpc<string>("aria2.getVersion")) !== null;
+  }
+
+  /** 懒启动守护（单飞）；返回是否可用 */
+  ensure(): Promise<boolean> {
+    if (this.exited) return Promise.resolve(false);
+    if (this.child) {
+      // 已有进程：探活，死了走自愈
+      return this.ping().then((ok) => ok || this.restart());
+    }
+    this.starting ??= this.spawn().finally(() => {
+      this.starting = null;
+    });
+    return this.starting;
+  }
+
+  private restart(): Promise<boolean> {
+    this.stop();
+    return this.spawn();
+  }
+
+  private async spawn(): Promise<boolean> {
+    this.port = 20000 + Math.floor(Math.random() * 30000);
+    this.secret = crypto.randomUUID();
+    const args = [
+      "--enable-rpc=true",
+      `--rpc-listen-port=${this.port}`,
+      `--rpc-secret=${this.secret}`,
+      "--rpc-listen-all=false",
+      `--dir=${this.opts.torrentsDir}`,
+      "--bt-save-metadata=true",
+      "--seed-time=0",
+      "--bt-detach-seed-only=false",
+      // 网络/tracker/DHT 与单进程 resolve 同套加速参数
+      `--bt-tracker=${this.opts.trackers}`,
+      `--dht-file-path=${this.opts.dhtFile}`,
+      `--dht-file-path6=${this.opts.dhtFile}.v6`,
+      "--dht-entry-point=router.bittorrent.com:6881",
+      "--dht-entry-point6=router.bittorrent.com:6881",
+      "--bt-tracker-timeout=5",
+      "--bt-tracker-connect-timeout=5",
+      "--connect-timeout=10",
+      "--timeout=15",
+      "--quiet",
+      "--console-log-level=warn",
+    ];
+    try {
+      fs.mkdirSync(this.opts.torrentsDir, { recursive: true });
+      this.child = spawn(this.opts.bin, args, { stdio: "ignore" });
+      this.child.unref();
+      this.child.once("exit", (code) => {
+        if (!this.exited) {
+          logger.warn(`magnet resolver daemon exited: code=${code}`);
+          this.child = null; // 下次 ensure 走自愈重启
+        }
+      });
+    } catch (err: any) {
+      logger.warn(
+        `magnet resolver daemon spawn failed: ${err?.message ?? err}`,
+      );
+      this.child = null;
+      return false;
+    }
+    // 等 RPC 就绪（最多 5s）
+    for (let i = 0; i < 25; i++) {
+      await new Promise((r) => setTimeout(r, 200));
+      if (await this.ping()) {
+        logger.info(
+          `magnet resolver daemon ready: port=${this.port} (warm DHT across resolves)`,
+        );
+        return true;
+      }
+    }
+    logger.warn("magnet resolver daemon not ready in 5s");
+    this.stop();
+    return false;
+  }
+
+  /**
+   * 常驻守护解析磁力元数据：addUri(bt-metadata-only) → 轮询 tellStatus →
+   * 完成/失败/超时（超时 remove 清理）。
+   * 返回值三态：
+   * - 'complete'   → metadata 已落盘（调用方按 infohash 定位 .torrent）
+   * - 'daemon-down' → 守护不可用（起不来/崩溃重启失败）—— 调用方回落单进程
+   * - null          → 守护正常但资源无源（无 peer 供 metadata / 外层超时）
+   */
+  async resolve(
+    magnet: string,
+    timeoutMs = 45000,
+  ): Promise<"complete" | "daemon-down" | null> {
+    if (!(await this.ensure())) return "daemon-down";
+    const opts = {
+      "bt-metadata-only": "true",
+      "bt-save-metadata": "true",
+      "bt-stop-timeout": "30",
+      dir: this.opts.torrentsDir,
+    };
+    let gid = await this.rpc<string>("aria2.addUri", [magnet], opts);
+    if (!gid) {
+      // 守护可能中途崩溃：重启一次再试
+      if (!(await this.restart())) return "daemon-down";
+      gid = await this.rpc<string>("aria2.addUri", [magnet], opts);
+      if (!gid) return "daemon-down";
+    }
+    return this.poll(gid, timeoutMs);
+  }
+
+  private async poll(
+    gid: string,
+    timeoutMs: number,
+  ): Promise<"complete" | "daemon-down" | null> {
+    const deadline = Date.now() + timeoutMs;
+    while (Date.now() < deadline) {
+      const st = await this.rpc<{ status?: string }>("aria2.tellStatus", gid);
+      if (st === null) {
+        // RPC 断连：守护死亡 —— 本次放弃（下次 ensure 自愈）
+        return "daemon-down";
+      }
+      const status = st.status ?? "";
+      // metadata-only 完成：aria2 已落盘 <InfoHash>.torrent
+      if (status === "complete") return "complete";
+      // bt-stop-timeout 无 peer 数据 / 手动移除 → 资源无源
+      if (status === "error" || status === "removed") return null;
+      await new Promise((r) => setTimeout(r, 500));
+    }
+    // 外层超时：清理下载项
+    await this.rpc("aria2.forceRemove", gid);
+    return null;
+  }
+}
+
 export class DownloaderSvc {
   private readonly binMap: { [t: string]: string };
   private readonly schemas: SchemaList;
@@ -336,6 +561,9 @@ export class DownloaderSvc {
    * 强杀。返回落盘的 .torrent 路径 —— 它可直接作为 bt 任务 url（白名单内），
    * 任务执行时 aria2 不再二次取 metadata。
    */
+  /** 磁力解析常驻守护（懒构造；跨 resolve 复用温热 DHT 路由表） */
+  private magnetDaemon: MagnetResolverDaemon | null = null;
+
   async resolveMagnet(
     magnet: string,
     torrentsDir: string,
@@ -381,6 +609,30 @@ export class DownloaderSvc {
 
     const trackers = mergedTrackers(this.cfg.getAria2Options().bt.trackers);
     const dhtFile = this.cfg.getDhtFile?.() ?? "";
+
+    // 第二跳（主路径）：常驻 aria2 RPC 守护 —— DHT 路由表跨解析温热
+    // （实测冷 5.1s → 温热 2.0s），解析不再每次冷启动 bootstrap
+    this.magnetDaemon ??= new MagnetResolverDaemon({
+      bin,
+      torrentsDir,
+      dhtFile,
+      trackers,
+    });
+    const daemonResult = await this.magnetDaemon.resolve(magnet, timeoutMs);
+    if (
+      daemonResult === "complete" &&
+      this.daemonTorrentFor(infoHash, torrentsDir)
+    ) {
+      logger.info(`magnet resolved via resident daemon: ${infoHash}`);
+      return target;
+    }
+    if (daemonResult === null) {
+      // 守护正常但无源（bt-stop-timeout 无 peer 数据）：单进程同样无源，
+      // 兜底只会白等 45s —— 直接失败
+      throw new Error("磁力解析超时（未找到可用节点）");
+    }
+
+    // 第三跳（兜底）：守护不可用（起不来/崩溃重启失败）→ 独立进程一次性解析
     const args = [
       magnet,
       "-d",
@@ -427,6 +679,27 @@ export class DownloaderSvc {
       throw new Error("磁力解析未产出种子文件（资源可能已失效）");
     }
     return target;
+  }
+
+  /** 守护落盘的 <InfoHash>.torrent 定位（aria2 以小写 hex 命名；大小写双探） */
+  private daemonTorrentFor(
+    infoHash: string,
+    torrentsDir: string,
+  ): string | null {
+    for (const name of [
+      `${infoHash}.torrent`,
+      `${infoHash.toUpperCase()}.torrent`,
+    ]) {
+      const p = path.join(torrentsDir, name);
+      if (fs.existsSync(p)) {
+        // 统一规范化为小写命名（调用方/任务链路都按小写 infohash 定位）
+        if (name !== `${infoHash}.torrent`) {
+          fs.renameSync(p, path.join(torrentsDir, `${infoHash}.torrent`));
+        }
+        return path.join(torrentsDir, `${infoHash}.torrent`);
+      }
+    }
+    return null;
   }
 
   /** 按 Schema 参数表构建命令行参数（与 Go buildArgs 逐条对齐） */
