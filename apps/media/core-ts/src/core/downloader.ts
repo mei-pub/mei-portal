@@ -451,8 +451,10 @@ class MagnetResolverDaemon {
     ];
     try {
       fs.mkdirSync(this.opts.torrentsDir, { recursive: true });
+      this.killStaleDaemon();
       this.child = spawn(this.opts.bin, args, { stdio: "ignore" });
       this.child.unref();
+      this.writePidFile();
       this.child.once("exit", (code) => {
         if (!this.exited) {
           logger.warn(`magnet resolver daemon exited: code=${code}`);
@@ -479,6 +481,39 @@ class MagnetResolverDaemon {
     logger.warn("magnet resolver daemon not ready in 5s");
     this.stop();
     return false;
+  }
+
+  /** 守护 pid 存根（跨代识别：core 异常退出（SIGKILL）时旧守护成孤儿，
+   *  新一代守护启动时按此文件识别并清理，杜绝累积） */
+  private pidFile(): string {
+    return path.join(this.opts.torrentsDir, "magnet-daemon.pid");
+  }
+
+  private writePidFile(): void {
+    try {
+      if (this.child?.pid) {
+        fs.writeFileSync(this.pidFile(), String(this.child.pid));
+      }
+    } catch {
+      // pid 文件写失败不影响解析
+    }
+  }
+
+  /** 清理上一代孤儿守护：pid 文件存在、进程活着、cmdline 确为本守护
+   *  （aria2c + rpc-listen-port 双特征，防 pid 复用误杀）才发 SIGTERM */
+  private killStaleDaemon(): void {
+    try {
+      const raw = fs.readFileSync(this.pidFile(), "utf8").trim();
+      const old = Number.parseInt(raw, 10);
+      if (Number.isNaN(old) || old <= 0) return;
+      const cmd = fs.readFileSync(`/proc/${old}/cmdline`, "utf8");
+      if (cmd.includes("aria2c") && cmd.includes("--rpc-listen-port")) {
+        process.kill(old, "SIGTERM");
+        logger.info(`killed stale magnet resolver daemon: pid=${old}`);
+      }
+    } catch {
+      // 无 pid 文件 / 旧守护已退出（ESRCH）/ 非 Linux 无 /proc：无事
+    }
   }
 
   /**
