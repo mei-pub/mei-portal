@@ -53,6 +53,16 @@ services:
       # 7778 aria2 RPC / 7779 qBittorrent WebUI）
       MEI_ARIA2_RPC_PORT: "7778"
       MEI_QBIT_WEBUI_PORT: "7779"
+      # 跨子域名部署（生产示例）：
+      #   1) DNS 把 portal/dl/music/... 各子域 A 到同一台机器
+      #   2) 宿主反代每子域一个 server 块，规则统一「路径透传到 7777 + 根路径 302 到应用路径」：
+      #        server { server_name dl.example.com;
+      #                 location = / { return 302 /downloads/; }
+      #                 location / { proxy_pass http://127.0.0.1:7777; } }
+      #      其余子域同理（music → 302 /music/、tv → /tv/、novels → /novels/ …）
+      #   3) 取消下行注释并填父域：门户会话 cookie 跨子域共享（.example.com），
+      #      任一子域登录全线生效；不设 = host-only（本机/单域名，默认行为）
+      # MEI_COOKIE_DOMAIN: ".example.com"
       # 可选：自动 PO Token 服务异常时手工覆盖。
       YOUTUBE_PO_TOKEN: ${YOUTUBE_PO_TOKEN:-}
       YOUTUBE_VISITOR_DATA: ${YOUTUBE_VISITOR_DATA:-}

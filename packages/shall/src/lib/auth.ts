@@ -9,6 +9,10 @@ const DATA_DIR = process.env.DATA_DIR || '/data';
 const USER_FILE = path.join(DATA_DIR, 'shell', 'user.json');
 const COOKIE_NAME = 'mei-auth';
 const SESSION_MAX_AGE = 30 * 24 * 3600; // 30 天
+// 跨子域部署（portal.example.com / dl.example.com / …）时设为父域
+//（.example.com）：会话 cookie 带 Domain 写入，任一子域登录全线生效。
+// 缺省空 = host-only（单域名/本机默认，行为不变）
+const COOKIE_DOMAIN = process.env.MEI_COOKIE_DOMAIN || '';
 
 interface UserRecord {
   uid?: string;
@@ -110,12 +114,18 @@ export function setSession(): string {
     sameSite: 'lax',
     maxAge: SESSION_MAX_AGE,
     path: '/',
+    // 子域名部署时按 MEI_COOKIE_DOMAIN 跨域共享；删除也须带同一 Domain
+    ...(COOKIE_DOMAIN ? { domain: COOKIE_DOMAIN } : {}),
   });
   return token;
 }
 
 export function clearSession(): void {
-  cookies().delete(COOKIE_NAME);
+  cookies().delete({
+    name: COOKIE_NAME,
+    path: '/',
+    ...(COOKIE_DOMAIN ? { domain: COOKIE_DOMAIN } : {}),
+  });
 }
 
 export function getUsername(): string | null {

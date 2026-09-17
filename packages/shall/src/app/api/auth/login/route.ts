@@ -14,7 +14,14 @@ export async function POST(req: NextRequest) {
   }
   setSession();
   const res = NextResponse.json({ ok: true, username });
-  // tutorial 管理解锁：门户会话即解锁（解锁 cookie 与 mei-auth 同生命周期）
-  res.headers.append('Set-Cookie', 'mei-unlock=1; Path=/; Max-Age=2592000; SameSite=Lax');
+  // tutorial 管理解锁：门户会话即解锁（解锁 cookie 与 mei-auth 同生命周期）。
+  // 子域名部署（MEI_COOKIE_DOMAIN）时带 Domain 与 mei-auth 一致跨子域生效
+  const cookieDomain = process.env.MEI_COOKIE_DOMAIN
+    ? ` Domain=${process.env.MEI_COOKIE_DOMAIN};`
+    : '';
+  res.headers.append(
+    'Set-Cookie',
+    `mei-unlock=1; Path=/; Max-Age=2592000; SameSite=Lax;${cookieDomain}`,
+  );
   return res;
 }
