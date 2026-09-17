@@ -244,10 +244,12 @@ export class QBitClient {
     return (await res.text()).trim() !== "Fails.";
   }
 
-  /** 添加本地 .torrent 文件（filedata，返回 false = 已存在） */
+  /** 添加本地 .torrent 文件（filedata，返回 false = 已存在）。
+   * skipChecking：迁移/暂存 re-add 到全新空目录时跳过数据校验，种子
+   * 立即进入可操作状态（filePrio 无需等待，也省一遍全量 hash 检查） */
   async addTorrentFile(
     buf: Buffer,
-    opts: { savepath: string; name?: string },
+    opts: { savepath: string; name?: string; skipChecking?: boolean },
   ): Promise<boolean> {
     const form = new FormData();
     form.append(
@@ -256,6 +258,7 @@ export class QBitClient {
       opts.name ?? "seed.torrent",
     );
     form.append("savepath", opts.savepath);
+    if (opts.skipChecking) form.append("skip_checking", "true");
     const res = await this.request("/api/v2/torrents/add", {
       method: "POST",
       body: form,
@@ -264,20 +267,38 @@ export class QBitClient {
     return (await res.text()).trim() !== "Fails.";
   }
 
-  /** 文件优先级：ids 是 0-based 文件索引；priority 0 = 不下载 / 1 = 普通 */
+  /** 文件优先级：ids 是 0-based 文件索引；priority 0 = 不下载 / 1 = 普通。
+   * qB 4.5.2 坑一：POST 端点的 hash/id/priority 必须全部走 form body——
+   *   hash/priority 放 query 时 requireParams 读不到，永远 400 Bad Request
+   *   （与 setPreferences 的 Referer/参数坑同源；单文件任务从不调它，所以
+   *   之前从未暴露）；
+   * 坑二：种子刚 add（非运行态）时 filePrio 也 400——对 400 等待重试，
+   *   最多 6 次 × 800ms。 */
   async setFilePriority(
     hash: string,
     ids: number[],
     priority: 0 | 1,
   ): Promise<void> {
     if (ids.length === 0) return;
-    const body = new URLSearchParams();
-    for (const id of ids) body.append("id", String(id));
-    const res = await this.request(
-      `/api/v2/torrents/filePrio?hash=${hash}&priority=${priority}`,
-      { method: "POST", body },
-    );
-    await this.ensureOk(res, "文件优先级设置");
+    for (const id of ids) {
+      for (let attempt = 1; ; attempt++) {
+        const body = new URLSearchParams({
+          hash,
+          priority: String(priority),
+          id: String(id),
+        });
+        const res = await this.request("/api/v2/torrents/filePrio", {
+          method: "POST",
+          body,
+        });
+        if (res.ok) break;
+        if (res.status !== 400 || attempt >= 6) {
+          await this.ensureOk(res, "文件优先级设置");
+          break;
+        }
+        await new Promise((r) => setTimeout(r, 800));
+      }
+    }
   }
 
   /** 改种子名（下载中心任务名 → qB 种子名/落盘名） */

@@ -188,6 +188,23 @@ export function btStagingRoot(configDir: string): string {
 }
 
 /**
+ * 磁力链接只带 btih 不带 webseed/tracker，peer 发现全压 DHT 单通道——
+ * 网盘搜索来源的磁力多为 webseed 为主或半冷资源（如发行版 ISO），
+ * DHT 上 peer 稀少，等不到 metadata 就超时。add 前追加 tr= 参数让
+ * qB 走 DHT + tracker 双通道找 peer，冷种解析率大幅提升。
+ */
+/** 磁力不含 tracker 时追加公共 tracker（自带 tr= 的原样保留，尊重发布者） */
+export function withBtTrackers(magnet: string): string {
+  if (!/^magnet:/i.test(magnet) || /(^|[&?])tr=/.test(magnet)) return magnet;
+  const sep = magnet.includes("?") ? "&" : "?";
+  return (
+    magnet +
+    sep +
+    PUBLIC_BT_TRACKERS.map((t) => `tr=${encodeURIComponent(t)}`).join("&")
+  );
+}
+
+/**
  * aria2 RPC 对外引擎配置收敛（conf 值不可信）：enabled 默认开、端口夹在
  * [1024, 65535]（默认 6800）、secret 非空（空 = 服务端首启生成）。
  */
@@ -332,15 +349,17 @@ export function guessExtFromURL(u: string): string {
   return "mp4";
 }
 
-// ---- BT 网络加速参数（aria2 RPC 对外引擎的 BT 能力注入）----
+// ---- BT 网络加速参数 ----
 // 公共 tracker + DHT 路由表持久化 + 显式引导节点：aria2 守护的 BT 下载
-// （第三方客户端经 RPC 提交的磁力任务）开箱即用，不依赖冷启动 bootstrap。
-// 注：下载中心自身的 BT/磁力链路已切到 qBittorrent（专门 BT 栈，libtorrent
-// 常驻温热 DHT，磁力秒级解析）；aria2 只承担普通文件下载 + 对外 RPC 引擎。
+// （第三方客户端经 RPC 提交的磁力任务）与 qB 链路的磁力解析/任务 add
+// （withBtTrackers）共用这份公共 tracker 清单，开箱即用不依赖冷启动 bootstrap。
+// 注：下载中心自身的 BT/磁力链路走 qBittorrent（专门 BT 栈，libtorrent
+// 常驻温热 DHT）；aria2 只承担普通文件下载 + 对外 RPC 引擎。
 
 const PUBLIC_BT_TRACKERS = [
   "udp://tracker.opentrackr.org:1337/announce",
   "http://tracker.opentrackr.org:1337/announce",
+  "https://tracker.tamersunion.org:443/announce",
   "udp://open.demonii.com:1337/announce",
   "udp://exodus.desync.com:6969/announce",
   "udp://tracker.torrent.eu.org:451/announce",
@@ -349,6 +368,11 @@ const PUBLIC_BT_TRACKERS = [
   "udp://tracker.dler.org:6969/announce",
   "udp://opentracker.io:6969/announce",
   "udp://tracker.openbittorrent.com:6969/announce",
+  "udp://tracker.internetwarriors.net:1337/announce",
+  "udp://open.tracker.cl:1337/announce",
+  "udp://tracker.auctor.tv:6969/announce",
+  "udp://bt1.archive.org:6969/announce",
+  "udp://bt2.archive.org:6969/announce",
 ];
 
 /** DHT 引导节点（冷启动显式 ping，快于默认配置的被动发现） */
@@ -694,7 +718,7 @@ export class DownloaderSvc {
   async resolveMagnetBt(
     magnet: string,
     stagingRoot: string,
-    timeoutMs = 45000,
+    timeoutMs = 50000,
   ): Promise<BtResolveResult> {
     const qbit = this.qbit();
     const hashMatch = /urn:btih:([0-9a-fA-F]{40})/i.exec(magnet);
@@ -717,10 +741,13 @@ export class DownloaderSvc {
       };
     }
 
-    // add 到解析暂存目录（每 hash 独立子目录；running 抓 metadata）
+    // add 到解析暂存目录（每 hash 独立子目录；running 抓 metadata）。
+    // 追加公共 tracker：磁力不带 webseed，peer 发现不能只压 DHT 单通道
     const stagingDir = path.join(stagingRoot, hash);
     fs.mkdirSync(stagingDir, { recursive: true });
-    const added = await qbit.addMagnet(magnet, { savepath: stagingDir });
+    const added = await qbit.addMagnet(withBtTrackers(magnet), {
+      savepath: stagingDir,
+    });
     if (!added) {
       // 竞态（add 瞬间已存在）：按已存在语义返回
       const again = (await qbit.getInfo(hash))[0];
@@ -775,7 +802,9 @@ export class DownloaderSvc {
     await qbit
       .deleteTorrent(hash, true)
       .catch((err) => logger.warn(`staging cleanup failed: ${err}`));
-    throw new Error("磁力解析超时（未找到可用节点）");
+    throw new Error(
+      "磁力解析超时：DHT 与公共 tracker 均未发现做种节点，该资源可能已无人做种",
+    );
   }
 
   /**
@@ -829,22 +858,32 @@ export class DownloaderSvc {
       );
       let added = false;
       if (fs.existsSync(torrentCache)) {
+        // 迁移 re-add 到全新任务目录：跳过校验，种子立即就绪（filePrio 可用）
         added = await qbit.addTorrentFile(fs.readFileSync(torrentCache), {
           savepath: saveDir,
           name: `${hash}.torrent`,
+          skipChecking: true,
         });
       }
       if (!added && /^magnet:/i.test(p.url)) {
-        added = await qbit.addMagnet(p.url, { savepath: saveDir });
+        added = await qbit.addMagnet(withBtTrackers(p.url), {
+          savepath: saveDir,
+        });
       } else if (!added && /\.torrent$/i.test(p.url)) {
         const buf = fs.readFileSync(p.url); // 白名单已校验（torrents 目录内）
         added = await qbit.addTorrentFile(buf, {
           savepath: saveDir,
           name: path.basename(p.url),
+          skipChecking: true, // 新任务空目录，无需校验
         });
       }
       if (!added) throw new Error("BT 任务添加失败（种子已存在于引擎）");
     }
+
+    // 先启动再选文件：qB 4.5.2 对 stopped / missingFiles 状态的种子拒绝
+    // filePrio（HTTP 400）——任务重试续传、上轮失败残留等场景种子都处于
+    // 非运行态，必须先 start（missingFiles 会触发重新检查文件）再设置优先级
+    await qbit.startTorrent(hash);
 
     // 选文件（1-based 索引串 → qB 0-based 优先级；全选/空 = 全部，不调 prio）
     const sel = (p.selectFile ?? "").trim();
@@ -873,8 +912,7 @@ export class DownloaderSvc {
         .catch((err) => logger.warn(`bt rename failed: ${err}`));
     }
 
-    // 启动 + 轮询（1s；qB 短暂不可达容忍 60s，自愈恢复后续传）
-    await qbit.startTorrent(hash);
+    // （startTorrent 已提前到选文件之前）轮询（1s；qB 短暂不可达容忍 60s，自愈恢复后续传）
     cb.onProgress?.({
       id: p.id,
       type: "ready",

@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import MeiIcon from './MeiIcon';
 import { appendDiskSourceParams } from '@/lib/app-settings-client';
@@ -277,7 +277,13 @@ function MusicResults({
 }
 
 /** 网盘: compact card grid preserves source, link type and native copy semantics. */
-function DiskResultCard({ result }: { result: UnifiedSearchResult }) {
+function DiskResultCard({
+  result,
+  onDownload,
+}: {
+  result: UnifiedSearchResult;
+  onDownload?: () => void;
+}) {
   const [copied, setCopied] = useState<'link' | 'password' | null>(null);
   const url = String(result.meta?.url || (result.action.type === 'external' ? result.action.href : ''));
   const password = result.meta?.password ? String(result.meta.password) : '';
@@ -337,6 +343,17 @@ function DiskResultCard({ result }: { result: UnifiedSearchResult }) {
               <span>{password}</span>
             </button>
           )}
+          {onDownload && (
+            <button
+              type="button"
+              className="mei-disk-action"
+              onClick={onDownload}
+              title="磁力下载到服务器"
+              aria-label="磁力下载到服务器"
+            >
+              <MeiIcon icon="lucide:download" size={14} />
+            </button>
+          )}
           <button
             type="button"
             className={`mei-disk-action${copied === 'link' ? ' copied' : ''}`}
@@ -365,6 +382,8 @@ function DiskResults({
   onFilter: (key: string) => void;
   loadingType: boolean;
 }) {
+  // 磁力投递弹层（对齐网盘搜索应用内交互：原地弹层，不跳转不打断搜索）
+  const [magnetTarget, setMagnetTarget] = useState<{ url: string; title: string } | null>(null);
   const tabs = useMemo<Array<{ key: string; label: string; count: number }>>(() => {
     if (facets && facets.length > 0) {
       return [
@@ -420,11 +439,267 @@ function DiskResults({
       ) : (
         <>
           <ul className="mei-search-disk-grid">
-            {visible.map((r) => <DiskResultCard key={r.id} result={r} />)}
+            {visible.map((r) => (
+              <DiskResultCard
+                key={r.id}
+                result={r}
+                onDownload={
+                  r.meta?.linkType === 'magnet'
+                    ? () => setMagnetTarget({ url: String(r.meta?.url || ''), title: r.title })
+                    : undefined
+                }
+              />
+            ))}
           </ul>
           {visible.length === 0 && <p className="mei-search-group-status empty">该类型下暂无结果</p>}
         </>
       )}
+      {magnetTarget && (
+        <MagnetDownloadDialog url={magnetTarget.url} title={magnetTarget.title} onClose={() => setMagnetTarget(null)} />
+      )}
+    </div>
+  );
+}
+
+/** Magnet resolve/create payload from media core (`/downloads/api/...`). */
+interface MagnetMeta {
+  hash?: string;
+  name: string;
+  size: number;
+  files: Array<{ index: number; path: string; size: number }> | null;
+  existed?: boolean;
+  completed?: boolean;
+}
+
+function fmtMagnetSize(bytes: number): string {
+  if (!bytes || bytes <= 0) return '--';
+  const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+  let v = bytes;
+  let i = 0;
+  while (v >= 1024 && i < units.length - 1) {
+    v /= 1024;
+    i += 1;
+  }
+  return `${v >= 100 || i === 0 ? Math.round(v) : v.toFixed(1)} ${units[i]}`;
+}
+
+function magnetDisplayName(url: string): string {
+  try {
+    return (new URL(url).searchParams.get('dn') || '').trim();
+  } catch {
+    return '';
+  }
+}
+
+/**
+ * 磁力投递弹层（综合搜索 → 下载中心）：与网盘搜索应用内的磁力弹层同一套
+ * 交互——自动解析（DHT/tracker 抓元数据）→ 文件勾选 → 创建 bt 任务。
+ * 全程同源 /downloads/api/…（media core），完成后留在搜索页提示。
+ */
+function MagnetDownloadDialog({ url, title, onClose }: { url: string; title: string; onClose: () => void }) {
+  const [meta, setMeta] = useState<MagnetMeta | null>(null);
+  const [name, setName] = useState(() => magnetDisplayName(url) || title);
+  const [selected, setSelected] = useState<number[]>([]);
+  const [resolving, setResolving] = useState(true);
+  const [error, setError] = useState('');
+  const [creating, setCreating] = useState(false);
+  const [toast, setToast] = useState('');
+  const submittedRef = useRef(false);
+
+  const discardStaging = useCallback(async (hash: string) => {
+    try {
+      await fetch('/downloads/api/downloads/discard-magnet', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ hash }),
+      });
+    } catch {
+      // 引擎不可达：暂存种子由下次解析/超时兜底覆盖
+    }
+  }, []);
+
+  const resolve = useCallback(async (magnet: string) => {
+    setResolving(true);
+    setError('');
+    try {
+      const res = await fetch('/downloads/api/downloads/resolve-magnet', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url: magnet }),
+      });
+      const payload = await res.json().catch(() => null);
+      if (!res.ok || !payload?.data) throw new Error(payload?.message || `HTTP ${res.status}`);
+      const m = payload.data as MagnetMeta;
+      setMeta(m);
+      setName((cur) => cur || m.name || magnetDisplayName(magnet) || title);
+      setSelected(m.files?.map((f) => f.index) ?? []);
+      if (m.completed) {
+        // 已下载完成：重新下载 = 删旧重下（含引擎内文件），二次确认
+        if (window.confirm('该资源已在下载中心下载完成。重新下载将删除现有文件并重新下载，是否继续？')) {
+          if (m.hash) await discardStaging(m.hash);
+          setMeta(null);
+          setSelected([]);
+          await resolve(magnet);
+        }
+        // 取消重下：留在弹层（可改名后提交续传）
+      } else if (m.existed) {
+        setToast('已在 BT 引擎中存在未完成任务，提交后将续传');
+      }
+    } catch (err) {
+      setMeta(null);
+      setError((err instanceof Error && err.message) || '磁力解析失败，请稍后重试');
+    } finally {
+      setResolving(false);
+    }
+  }, [discardStaging, title]);
+
+  useEffect(() => {
+    void resolve(url);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [url]);
+
+  // 未提交就关闭：弃置解析暂存种子（不留 BT 引擎半成品）
+  const close = () => {
+    if (!submittedRef.current && meta?.hash && !meta.existed) {
+      void discardStaging(meta.hash);
+    }
+    onClose();
+  };
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') close();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [meta]);
+
+  const files = meta?.files ?? [];
+  const allSelected = files.length > 0 && selected.length === files.length;
+  const toggleAll = (checked: boolean) =>
+    setSelected(checked ? files.map((f) => f.index) : []);
+  const toggleFile = (index: number, checked: boolean) =>
+    setSelected((cur) => (checked ? [...cur, index] : cur.filter((i) => i !== index)));
+  // 勾选 → selectFile 索引串（全选/未选 = 全部文件，不传）
+  const selectFile =
+    files.length === 0 || selected.length === 0 || selected.length === files.length
+      ? undefined
+      : [...selected].sort((a, b) => a - b).join(',');
+
+  const createTask = async () => {
+    if (!meta) return;
+    setCreating(true);
+    setError('');
+    try {
+      const res = await fetch('/downloads/api/downloads', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          tasks: [{
+            name: name.trim() || meta.name,
+            type: 'bt',
+            // 磁力原文作任务 url（qBittorrent 按 btih 定位，解析暂存种子
+            // 迁移到任务目录续传）
+            url,
+            folder: 'bt',
+            selectFile,
+          }],
+          startDownload: true,
+        }),
+      });
+      const payload = await res.json().catch(() => null);
+      if (!res.ok || payload?.success === false) {
+        throw new Error(payload?.message || `HTTP ${res.status}`);
+      }
+      submittedRef.current = true;
+      setToast('已开始下载，可在下载中心「磁力」tab 查看进度');
+      window.setTimeout(onClose, 1600);
+    } catch (err) {
+      setError((err instanceof Error && err.message) || '创建下载任务失败，请稍后重试');
+    } finally {
+      setCreating(false);
+    }
+  };
+
+  return (
+    <div className="mei-magnet-backdrop" onMouseDown={(e) => { if (e.target === e.currentTarget) close(); }}>
+      <div className="mei-magnet-dialog" role="dialog" aria-modal="true" aria-label="磁力下载">
+        <header className="mei-magnet-head">
+          <MeiIcon icon="lucide:magnet" size={16} />
+          <h3>磁力下载到服务器</h3>
+          <button type="button" className="mei-magnet-close" onClick={close} aria-label="关闭">
+            <MeiIcon icon="lucide:x" size={15} />
+          </button>
+        </header>
+
+        <p className="mei-magnet-url" title={url}>{url}</p>
+
+        {resolving && (
+          <div className="mei-magnet-resolving">
+            <span className="mei-search-spinner" />
+            正在解析磁力内容（DHT / tracker 查找做种节点，冷门资源可能需要一分钟）…
+          </div>
+        )}
+
+        {error && <p className="mei-magnet-error">{error}</p>}
+
+        {meta && !resolving && (
+          <>
+            <label className="mei-magnet-name">
+              <span>任务名称</span>
+              <input value={name} onChange={(e) => setName(e.target.value)} placeholder={meta.name || title} />
+            </label>
+            <div className="mei-magnet-summary">
+              <span>{fmtMagnetSize(meta.size)}</span>
+              <span>{files.length > 0 ? `${files.length} 个文件` : '单文件'}</span>
+              {meta.existed && <span className="mei-magnet-badge">引擎中已存在</span>}
+            </div>
+            {files.length > 1 && (
+              <div className="mei-magnet-files">
+                <label className="mei-magnet-file all">
+                  <input
+                    type="checkbox"
+                    checked={allSelected}
+                    onChange={(e) => toggleAll(e.target.checked)}
+                  />
+                  <span>全选</span>
+                </label>
+                <div className="mei-magnet-file-list">
+                  {files.map((f) => (
+                    <label key={f.index} className="mei-magnet-file">
+                      <input
+                        type="checkbox"
+                        checked={selected.includes(f.index)}
+                        onChange={(e) => toggleFile(f.index, e.target.checked)}
+                      />
+                      <span className="mei-magnet-file-path" title={f.path}>{f.path}</span>
+                      <span className="mei-magnet-file-size">{fmtMagnetSize(f.size)}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            )}
+          </>
+        )}
+
+        {toast && <p className="mei-magnet-toast">{toast}</p>}
+
+        <footer className="mei-magnet-foot">
+          <button type="button" className="mei-magnet-btn" onClick={close}>取消</button>
+          <button
+            type="button"
+            className="mei-magnet-btn primary"
+            disabled={!meta || resolving || creating || files.length > 0 && selected.length === 0}
+            onClick={() => void createTask()}
+          >
+            {creating ? '创建中…' : '开始下载'}
+          </button>
+        </footer>
+      </div>
     </div>
   );
 }
