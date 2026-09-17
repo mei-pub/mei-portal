@@ -44,10 +44,17 @@ export type MagnetInputMode = "magnet" | "torrent";
 
 /** /api/upload/torrent 的响应（种子元数据） */
 export interface TorrentUploadResult {
-  path: string;
+  /** 种子文件上传模式：服务端落盘的 .torrent 路径（bt url 白名单内） */
+  path?: string;
+  /** 磁力解析模式：qBittorrent 种子 hash（discard/续用定位） */
+  hash?: string;
   name: string;
   size: number;
   files: Array<{ index: number; path: string; size: number }> | null;
+  /** 磁力解析：已在 BT 引擎中存在（含未完成续传 / qB WebUI 手加） */
+  existed?: boolean;
+  /** 已存在且下载完成（重新下载 = 删旧重下，UI 需二次确认） */
+  completed?: boolean;
 }
 
 /** 具体下载类型 → 大类（外部 ref 接口与编辑回填仍以 DownloadType 进出） */
@@ -162,6 +169,15 @@ export default forwardRef<DownloadFormRef, DownloadFormProps>(
           patch.category = category;
           // 非 video 大类的旧 subtype 残留不携带（切回视频类避免显示错值）
           if (category === "video") patch.subtype = subtype ?? type;
+          // 预选大类时保存目录跟随（setFieldsValue 不触发 onValuesChange，
+          // folder 会残留 initialValues 的 video → 磁力任务落错目录）
+          if (
+            value.folder === undefined &&
+            category !== "video" &&
+            DEFAULT_FOLDER_OF_CATEGORY[category]
+          ) {
+            patch.folder = DEFAULT_FOLDER_OF_CATEGORY[category];
+          }
         }
         form.setFieldsValue(patch);
       };
@@ -322,8 +338,22 @@ export default forwardRef<DownloadFormRef, DownloadFormProps>(
     });
 
     // 磁力链接内容解析（创建前强制流程，对齐迅雷）：POST /api/downloads/resolve-magnet
-    // → aria2 只取 metadata 产出 .torrent → 返回 path（白名单内，直接作任务 url）。
+    // → qBittorrent 引擎抓 metadata（常驻温热 DHT，秒级）→ 种子真名/大小/文件清单。
     // 解析成功后展示文件勾选/名称预填；失败清空 torrentMeta 强制校验拦截提交。
+    // 表单取消/关闭时 discard 暂存种子（不留引擎半成品）。
+    const discardMagnetStaging = useMemoizedFn(async (hash: string) => {
+      try {
+        await fetch("/api/downloads/discard-magnet", {
+          method: "POST",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ hash }),
+        });
+      } catch {
+        // 引擎不可达时暂存种子由超时/下次解析覆盖兜底
+      }
+    });
+
     const resolveMagnetUrl = useMemoizedFn(async (magnet: string) => {
       const url = magnet.trim();
       if (!/^magnet:\?.+/.test(url) || url === resolvedMagnetRef.current) {
@@ -345,13 +375,34 @@ export default forwardRef<DownloadFormRef, DownloadFormProps>(
         if (!res.ok || !payload?.data) {
           throw new Error(payload?.message || `HTTP ${res.status}`);
         }
+        const meta = payload.data;
         resolvedMagnetRef.current = url;
-        setTorrentMeta(payload.data);
-        setSelectedFiles(payload.data.files?.map((f) => f.index) ?? []);
+        setTorrentMeta(meta);
+        setSelectedFiles(meta.files?.map((f) => f.index) ?? []);
         if (!nameTouchedRef.current) {
-          form.setFieldValue("name", payload.data.name);
+          form.setFieldValue("name", meta.name);
         }
-        message.success(t("torrentParsed"));
+        if (meta.completed) {
+          // 已下载完成：重新下载 = 删旧重下（含引擎内文件），二次确认
+          Modal.confirm({
+            title: t("magnetAlreadyDownloaded"),
+            content: t("magnetAlreadyDownloadedDesc"),
+            okText: t("redownload"),
+            cancelText: t("cancel"),
+            onOk: async () => {
+              if (meta.hash) await discardMagnetStaging(meta.hash);
+              // 弃置后重新解析（引擎重新抓元数据，提交即全新任务）
+              setTorrentMeta(null);
+              setSelectedFiles([]);
+              resolvedMagnetRef.current = "";
+              await resolveMagnetUrl(url);
+            },
+          });
+        } else if (meta.existed) {
+          message.info(t("magnetExistedResume"));
+        } else {
+          message.success(t("torrentParsed"));
+        }
       } catch (e: unknown) {
         setTorrentMeta(null);
         setSelectedFiles([]);
@@ -388,6 +439,16 @@ export default forwardRef<DownloadFormRef, DownloadFormProps>(
       return true;
     });
 
+    // 关闭弹层：未提交且有磁力解析暂存种子 → 弃置（不留引擎半成品）；
+    // 提交成功路径（任务续用暂存种子迁移到任务目录）不弃置
+    const closeModal = useMemoizedFn((submitted: boolean) => {
+      setModalOpen(false);
+      const meta = torrentMeta;
+      if (!submitted && meta?.hash && !meta.existed) {
+        void discardMagnetStaging(meta.hash);
+      }
+    });
+
     const handleSave = useMemoizedFn(async () => {
       try {
         await form.validateFields();
@@ -402,7 +463,7 @@ export default forwardRef<DownloadFormRef, DownloadFormProps>(
         // Badge increments via the "download-create" SSE event
         // (apps/ui/src/api/events.ts); drives both the main window and
         // the overlay-dialog WebContents from a single source.
-        setModalOpen(false);
+        closeModal(true);
         onConfirm?.(form.getFieldsValue());
         tdApp.onEvent(ADD_TO_LIST, { id });
       } catch (e: unknown) {
@@ -440,7 +501,7 @@ export default forwardRef<DownloadFormRef, DownloadFormProps>(
         await createDownloadTasks(tasks, true);
         // Badge increments via the "download-create" SSE event; see
         // handleSave comment.
-        setModalOpen(false);
+        closeModal(true);
         onConfirm?.(form.getFieldsValue());
         tdApp.onEvent(DOWNLOAD_NOW, { id });
       } catch (e: unknown) {
@@ -471,11 +532,20 @@ export default forwardRef<DownloadFormRef, DownloadFormProps>(
       } else {
         const { name = "", headers, folder } = form.getFieldsValue();
         let { url = "" } = form.getFieldsValue();
-        // 磁力任务（链接已解析 / 种子文件上传）：任务 url = 服务端落盘的
-        // .torrent 路径（白名单内），内容勾选派生 --select-file（全选/未选 = 全部）
+        // 磁力任务：url = 磁力原文（qBittorrent 按 btih 定位，解析暂存种子
+        // 迁移到任务目录续传）；种子文件上传任务：url = 服务端落盘的
+        // .torrent 路径（白名单内）。内容勾选派生 select-file
+        // （全选/未选 = 全部）
         let selectFile: string | undefined;
         if (type === DownloadType.bt && torrentMeta) {
-          url = torrentMeta.path;
+          if (torrentMeta.path) {
+            url = torrentMeta.path;
+          } else if (!/^magnet:/i.test(url)) {
+            // antd store 竞态兜底：磁力输入框 DOM 仍有合法磁力时以 DOM 为准
+            const el = document.getElementById("url") as HTMLInputElement | null;
+            const domUrl = el?.value.trim() ?? "";
+            if (/^magnet:\?.+/i.test(domUrl)) url = domUrl;
+          }
           selectFile = deriveSelectFile() || undefined;
         }
 
@@ -498,11 +568,11 @@ export default forwardRef<DownloadFormRef, DownloadFormProps>(
         key={isEdit ? "edit" : "new"}
         title={isEdit ? t("editDownload") : t("newDownload")}
         width={500}
-        onCancel={() => setModalOpen(false)}
+        onCancel={() => closeModal(false)}
         afterOpenChange={afterOpenChange}
         destroyOnHidden={destroyOnClose}
         footer={[
-          <Button key="cancel" onClick={() => setModalOpen(false)}>
+          <Button key="cancel" onClick={() => closeModal(false)}>
             {t("cancel")}
           </Button>,
           enableDocker && (
@@ -889,7 +959,10 @@ export default forwardRef<DownloadFormRef, DownloadFormProps>(
                       ) : torrentMeta ? (
                         <div className="text-xs text-emerald-600 dark:text-emerald-400">
                           {t("torrentParsed")}：{torrentMeta.name} ·{" "}
-                          {torrentMeta.path}
+                          {t("engineQbittorrent")}
+                          {torrentMeta.existed
+                            ? ` · ${t("magnetExistedResume")}`
+                            : ""}
                         </div>
                       ) : (
                         <div className="text-xs text-gray-500 dark:text-gray-400">

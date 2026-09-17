@@ -22,6 +22,7 @@ import {
   Space,
   Switch,
   Tabs,
+  Typography,
 } from "antd";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -790,6 +791,9 @@ const SettingPage: React.FC = () => {
                         />
                       </Form.Item>
                     </Card>
+                    {/* 引擎接入（aria2 RPC 对外 / qBittorrent WebUI）：第三方
+                        客户端接入控制，独立接口读写（不走 conf 表单） */}
+                    <EngineAccessCards />
                   </div>
                 ),
               },
@@ -841,6 +845,222 @@ const SettingPage: React.FC = () => {
         </div>
       </Modal>
     </PageContainer>
+  );
+};
+
+// ---- 引擎接入面板（aria2 RPC 对外引擎 + qBittorrent BT 引擎）----
+// 独立于设置表单：配置走 /api/downloads/aria2-rpc（改端口/开关即时重启守护），
+// 信息走 /api/downloads/engines（RPC 地址 + secret / qB WebUI 凭据，第三方
+// 客户端接入控制用）
+
+interface EnginesInfo {
+  aria2Rpc?: {
+    enabled: boolean;
+    port: number;
+    secret: string;
+    rpcPath: string;
+    alive: boolean;
+  };
+  qbittorrent?: {
+    port: number;
+    username: string;
+    password: string;
+    version: string;
+    error?: string;
+  };
+}
+
+const EngineAccessCards = () => {
+  const { t } = useTranslation();
+  const { message } = App.useApp();
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [data, setData] = useState<EnginesInfo>({});
+  const [rpcEnabled, setRpcEnabled] = useState(true);
+  const [rpcPort, setRpcPort] = useState(6800);
+
+  const loadEngines = useMemoizedFn(async () => {
+    setLoading(true);
+    try {
+      const res = await fetch("/api/downloads/engines", {
+        credentials: "include",
+      });
+      const payload = (await res.json().catch(() => null)) as {
+        data?: EnginesInfo;
+      } | null;
+      if (payload?.data) {
+        setData(payload.data);
+        setRpcEnabled(payload.data.aria2Rpc?.enabled !== false);
+        setRpcPort(payload.data.aria2Rpc?.port ?? 6800);
+      }
+    } catch {
+      // 面板容错：显示空态
+    } finally {
+      setLoading(false);
+    }
+  });
+
+  useEffect(() => {
+    void loadEngines();
+  }, [loadEngines]);
+
+  const saveAria2Rpc = useMemoizedFn(async (patch: Record<string, unknown>) => {
+    setSaving(true);
+    try {
+      const res = await fetch("/api/downloads/aria2-rpc", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(patch),
+      });
+      const payload = (await res.json().catch(() => null)) as {
+        success?: boolean;
+        message?: string;
+      } | null;
+      if (!res.ok || payload?.success === false) {
+        throw new Error(payload?.message || `HTTP ${res.status}`);
+      }
+      message.success(t("aria2RpcSaved"));
+      await loadEngines();
+    } catch (e: unknown) {
+      message.error((e as Error)?.message || t("pleaseEnterCorrectFormInfo"));
+    } finally {
+      setSaving(false);
+    }
+  });
+
+  const host =
+    typeof window !== "undefined" ? window.location.hostname : "localhost";
+  const rpc = data.aria2Rpc;
+  const qb = data.qbittorrent;
+  const rpcUrl = `http://${host}:${rpcPort}/jsonrpc`;
+
+  return (
+    <div className="flex flex-col gap-4">
+      <Card
+        title={t("aria2RpcSection")}
+        size="small"
+        variant="borderless"
+        loading={loading}
+      >
+        <p className="mb-3 text-xs text-gray-500 dark:text-gray-400">
+          {t("aria2RpcSectionDesc")}
+        </p>
+        <Form layout="vertical" className="flex flex-col gap-1">
+          <Form.Item label={t("aria2RpcEnabled")} className="mb-2">
+            <Space>
+              <Switch
+                checked={rpcEnabled}
+                onChange={(v) => setRpcEnabled(v)}
+                loading={saving}
+              />
+              <span className="text-xs text-gray-500 dark:text-gray-400">
+                {rpc?.alive ? t("engineAlive") : t("engineDown")}
+              </span>
+            </Space>
+          </Form.Item>
+          <Form.Item label={t("aria2RpcPort")} className="mb-2">
+            <Space>
+              <InputNumber
+                min={1024}
+                max={65535}
+                precision={0}
+                value={rpcPort}
+                onChange={(v) => setRpcPort(v ?? 6800)}
+              />
+              <Button
+                type="primary"
+                size="small"
+                loading={saving}
+                onClick={() =>
+                  void saveAria2Rpc({ enabled: rpcEnabled, port: rpcPort })
+                }
+              >
+                {t("save")}
+              </Button>
+            </Space>
+          </Form.Item>
+          <Form.Item label={t("aria2RpcUrl")} className="mb-2">
+            <Space>
+              <Typography.Text copyable={{ text: rpcUrl }} className="text-xs">
+                {rpcUrl}
+              </Typography.Text>
+              <Button
+                size="small"
+                onClick={() => window.open("/downloads/ariang/", "_blank")}
+              >
+                {t("openAriaNg")}
+              </Button>
+            </Space>
+          </Form.Item>
+          <Form.Item label={t("aria2RpcSecret")} className="mb-0">
+            <Space>
+              <Typography.Text
+                copyable={{ text: rpc?.secret ?? "" }}
+                className="max-w-52 truncate text-xs"
+              >
+                {rpc?.secret ?? ""}
+              </Typography.Text>
+              <Button
+                size="small"
+                loading={saving}
+                onClick={() => void saveAria2Rpc({ resetSecret: true })}
+              >
+                {t("aria2RpcResetSecret")}
+              </Button>
+            </Space>
+          </Form.Item>
+        </Form>
+      </Card>
+      <Card
+        title={t("qbittorrentSection")}
+        size="small"
+        variant="borderless"
+        loading={loading}
+      >
+        <p className="mb-3 text-xs text-gray-500 dark:text-gray-400">
+          {t("qbittorrentSectionDesc")}
+        </p>
+        <Form layout="vertical" className="flex flex-col gap-1">
+          <Form.Item label={t("qbittorrentWebui")} className="mb-2">
+            <Space>
+              <Typography.Text className="text-xs">
+                http://{host}:{qb?.port ?? 8080}
+              </Typography.Text>
+              <Button
+                size="small"
+                onClick={() =>
+                  window.open(`http://${host}:${qb?.port ?? 8080}`, "_blank")
+                }
+              >
+                {t("open")}
+              </Button>
+            </Space>
+          </Form.Item>
+          <Form.Item label={t("qbittorrentAccount")} className="mb-2">
+            <Typography.Text copyable className="text-xs">
+              {qb?.username ?? "admin"}
+            </Typography.Text>
+          </Form.Item>
+          <Form.Item label={t("qbittorrentPassword")} className="mb-0">
+            <Space>
+              <Typography.Text
+                copyable={{ text: qb?.password ?? "" }}
+                className="max-w-52 truncate text-xs"
+              >
+                {qb?.password ?? ""}
+              </Typography.Text>
+              {qb?.version ? (
+                <Badge
+                  status={qb.error ? "error" : "success"}
+                  text={`${t("engineVersion")} ${qb.version}`}
+                />
+              ) : null}
+            </Space>
+          </Form.Item>
+        </Form>
+      </Card>
+    </div>
   );
 };
 

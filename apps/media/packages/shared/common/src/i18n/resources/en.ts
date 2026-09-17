@@ -212,11 +212,17 @@ export const en = {
   pleaseResolveMagnetFirst:
     "Resolve the magnet content and confirm files before creating the task",
   magnetResolving:
-    "Resolving magnet content (connecting to peers, up to ~45s)…",
+    "Resolving magnet content (BT engine fetching torrent info)…",
   magnetResolveHint:
     "The magnet link resolves automatically; confirm the files after resolving to create the task",
   magnetResolveFailed:
     "Magnet resolve failed; check the link or retry later",
+  magnetAlreadyDownloaded: "Magnet already downloaded",
+  magnetAlreadyDownloadedDesc:
+    "This resource has been downloaded. Re-download will delete the existing files and start over. Continue?",
+  magnetExistedResume:
+    "An unfinished task exists in the BT engine; submitting will resume it",
+  engineQbittorrent: "qBittorrent engine",
   downloadToLocal: "Download to this device",
   fileLabel: "File name",
   fileLinkLabel: "Download URL",
@@ -225,6 +231,25 @@ export const en = {
   generalSetting: "General",
   engineSetting: "Download Engine",
   aria2CommonSection: "Common (File / Magnet)",
+  aria2RpcSection: "aria2 RPC Access (third-party clients)",
+  aria2RpcSectionDesc:
+    "Full aria2 capability exposed: AriaNg, mobile clients and browser extensions connect with the RPC URL + secret; tasks submitted by third parties land directly in the download root.",
+  aria2RpcEnabled: "Enable external RPC",
+  aria2RpcPort: "RPC port",
+  aria2RpcUrl: "RPC URL (for third-party clients)",
+  aria2RpcSecret: "Secret",
+  aria2RpcResetSecret: "Reset secret",
+  aria2RpcSaved: "aria2 RPC config updated (daemon restarted)",
+  openAriaNg: "Open AriaNg Console",
+  qbittorrentSection: "qBittorrent (BT / Magnet engine)",
+  qbittorrentSectionDesc:
+    "Download center magnet / BT tasks run on qBittorrent (professional BT stack: instant metadata, file selection, rename, .!qB in-progress protection). Manage BT tasks directly in the qB Web UI if you like.",
+  qbittorrentWebui: "Web UI URL",
+  qbittorrentAccount: "Username",
+  qbittorrentPassword: "Password",
+  engineVersion: "Engine version",
+  engineAlive: "Running",
+  engineDown: "Not running",
   aria2BtSection: "BT / Magnet",
   aria2Connections: "Connections per server",
   aria2ConnectionsTooltip:

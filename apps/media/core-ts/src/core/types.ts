@@ -116,4 +116,19 @@ export interface DownloaderConfig {
   /** DHT 路由表持久化文件（IPv4；空 = 不持久化）。aria2 启动加载 / 正常退出
    *  保存 —— 磁力解析与 BT 下载跨进程复用路由表，冷启动从 ~30s 降到秒级 */
   getDhtFile?(): string;
+  /** 配置目录（torrents 缓存 / 解析暂存所在根；缺省 /data/media） */
+  getConfigDir?(): string;
+  /** aria2 RPC 对外引擎设置（端口/secret 可配，第三方客户端接入控制） */
+  getAria2Rpc(): Aria2RpcOptions;
 }
+
+/** aria2 RPC 对外引擎设置（conf.aria2Rpc；与 apps/ui 侧 shared/common 平行定义） */
+export interface Aria2RpcOptions {
+  /** 是否启用对外 RPC 守护 */
+  enabled: boolean;
+  /** RPC 监听端口（容器内；compose 映射到宿主） */
+  port: number;
+  /** RPC secret（第三方客户端接入凭证） */
+  secret: string;
+}
+

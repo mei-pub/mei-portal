@@ -112,47 +112,9 @@ export function defaultSchemas(): SchemaList {
           isLive: "",
         },
       },
-      {
-        // 磁力（BT）下载走 aria2c：seed-time=0 下载完成即退出（aria2 默认下载完
-        // 继续做种不退出，任务会永远停在 downloading；下载中心不做种）。
-        // 实测（aria2 1.36.0，管道输出 console-log-level=notice + summary-interval=1）：
-        //   metadata 阶段：[#gid 0B/0B CN:2 SD:0 DL:0B] / FILE: [MEMORY][METADATA]<dn>
-        //   下载阶段：[#gid 1.5MiB/3.7GiB(0%) CN:1 DL:0B] / FILE: <落盘绝对路径>
-        // percent/speed 正则与 direct 相同（(N%) / DL:xxx）；DL:0B 让 parser 自动 ready。
-        // 注意：不定义 name —— BT 落盘名由种子元数据决定（aria2c -o 只对单文件种子
-        // 有效且会强改文件名），实际种子名由 service 层解析 FILE:/Download Results 回写。
-        // DHT/LPD/PEX/端口/tracker 等由 aria2Bt 动态注入（conf.aria2.bt）。
-        // error 置空：首次运行 DHT 路由表不存在、IPv6 bind 失败都会打 [ERROR] errorCode=1
-        //（无害启动噪声，magnet/direct 共有），真失败由进程退出码判定；任务日志有全量输出。
-        type: "bt",
-        args: {
-          localDir: { argsName: ["-d"] },
-          url: { argsName: [] },
-          // 标记：通用引擎参数（限速/重试）+ BT 参数（DHT/端口/tracker）动态注入
-          aria2Common: { argsName: [] },
-          aria2Bt: { argsName: [] },
-          // 种子文件任务的下载文件索引（"1,3-5"；仅 torrent 文件任务有效，
-          // 由 UI 内容勾选生成；空 = 全部文件）。值条件注入见 buildArgs selectFile
-          selectFile: { argsName: ["--select-file"] },
-          __common__: {
-            argsName: [
-              "--seed-time=0",
-              "--console-log-level=notice",
-              "--summary-interval=1",
-              "--allow-overwrite=true",
-              "--auto-file-renaming=false",
-              "--check-certificate=false",
-            ],
-          },
-        },
-        consoleReg: {
-          percent: "\\((\\d+)%\\)",
-          speed: "DL:([^\\]\\s]+)",
-          error: "",
-          start: "Downloading \\d+ item",
-          isLive: "",
-        },
-      },
+      // bt（磁力）不再走 spawn aria2c —— BT 全链路切到 qBittorrent Web API
+      //（core/downloader.ts downloadBtViaQbit：磁力秒级解析/选文件/改名/.!qB
+      // 未完成保护/完成停种）。aria2 保留 direct 普通文件下载与对外 RPC 引擎。
       {
         type: "youtube",
         args: {

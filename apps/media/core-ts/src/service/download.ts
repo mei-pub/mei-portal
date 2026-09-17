@@ -4,6 +4,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { extractTorrentMeta } from "../core/bencode.ts";
 import {
+  btHashFor,
   resolveTaskDir,
   sanitizeFilename,
   sanitizeFolder,
@@ -349,6 +350,25 @@ export class DownloadTaskService {
           });
         } catch {
           // 临时目录不存在：无事
+        }
+      }
+      // BT 任务（qBittorrent 引擎）：删除任务记录时同步清引擎里的种子；
+      // deleteFiles 控制引擎是否连落盘文件一起删（文件由引擎管理，
+      // 引擎删除比本地按名猜测删除更准 —— 含 .!qB 半成品）
+      if (task.type === "bt") {
+        try {
+          const hash = btHashFor(task.url);
+          this.queue
+            .getDownloader()
+            .qbit()
+            .deleteTorrent(hash, opts?.deleteFiles === true)
+            .catch((err) =>
+              logger.warn(
+                `bt task ${id} engine cleanup failed: ${err?.message ?? err}`,
+              ),
+            );
+        } catch {
+          // 种子文件已被清理/磁力 hash 解析失败：引擎记录随下次同 hash 添加自然复用
         }
       }
     }

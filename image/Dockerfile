@@ -139,6 +139,19 @@ COPY apps/media/core-ts/package.json apps/media/core-ts/package-lock.json* ./
 RUN npm ci --no-audit --no-fund || npm install --no-audit --no-fund
 COPY apps/media/core-ts/ ./
 
+# ---- AriaNg（aria2 RPC 标准第三方客户端面板，纯静态 SPA）----
+FROM node:22-bookworm-slim AS ariang-builder
+ARG ARIANG_VERSION=1.3.10
+RUN set -eux; \
+    apt-get update && apt-get install -y --no-install-recommends ca-certificates curl unzip \
+    && rm -rf /var/lib/apt/lists/*; \
+    curl -fsSL -o /tmp/ariang.zip "https://github.com/mayswind/AriaNg/releases/download/${ARIANG_VERSION}/AriaNg-${ARIANG_VERSION}.zip"; \
+    mkdir -p /out; \
+    unzip -q /tmp/ariang.zip -d /out; \
+    rm /tmp/ariang.zip; \
+    test -f /out/index.html
+
+
 
 # ---- 运行时（必须最后一个 FROM）----
 # =============================================================================
@@ -149,13 +162,14 @@ FROM node:22-bookworm-slim AS runtime
 RUN apt-get update && apt-get install -y \
         nginx gettext-base ca-certificates curl python3 python3-pip python3-venv \
         libicu72 \
+        qbittorrent-nox \
     && rm -rf /var/lib/apt/lists/* /etc/nginx/sites-enabled/default \
     && python3 -m pip install --no-cache-dir --break-system-packages \
         supervisor \
         yt-dlp==2026.8.19 \
         yt-dlp-ejs==0.8.0 \
         bgutil-ytdlp-pot-provider==1.3.2 \
-    && which supervisord
+    && which supervisord && which qbittorrent-nox
 
 WORKDIR /app
 
@@ -203,6 +217,8 @@ COPY --from=disks-web-builder /build/dist ./apps/disks/frontend/dist
 # ---- media（TS core + 前端静态 + 播放页 + 下载工具）----
 COPY --from=media-engine-builder /build ./apps/media/core-ts
 COPY --from=media-node-builder /src/apps/ui/build/server ./apps/media/static
+# AriaNg（aria2 RPC 第三方客户端面板）：静态挂 /downloads/ariang/
+COPY --from=ariang-builder /out ./apps/media/static/ariang
 COPY --from=media-node-builder /src/apps/player-ui/dist ./apps/media/player
 ARG TARGETARCH
 COPY --from=media-node-builder /src/.deps/linux-* /app/deps-tmp/

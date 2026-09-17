@@ -9,7 +9,7 @@ import { MSG, tLang, type Lang } from "../i18n.ts";
 import type { Conf } from "../conf.ts";
 import type { TaskLogManager } from "../tasklog.ts";
 import type { TaskQueue } from "../core/queue.ts";
-import type { TaskInfo } from "../core/types.ts";
+import type { TaskInfo, Aria2RpcOptions } from "../core/types.ts";
 import { extractTorrentMeta } from "../core/bencode.ts";
 import type { Hub } from "./sse.ts";
 import type { DownloadTaskService } from "../service/download.ts";
@@ -18,9 +18,12 @@ import type { ConversionService } from "../service/conversion.ts";
 import type { VideoService } from "./video.ts";
 import { isPortalSession } from "./auth.ts";
 import {
+  btStagingRoot,
   normalizeAria2Options,
+  normalizeAria2Rpc,
   type DownloaderSvc,
 } from "../core/downloader.ts";
+import { loadQBitConfig } from "../core/qbit.ts";
 
 export interface EnvPaths {
   configDir: string;
@@ -389,9 +392,10 @@ export class Handlers {
 
   /**
    * 磁力链接内容解析（任务创建前的强制内容识别，对齐迅雷）：
-   * aria2c 只取 metadata 产出 .torrent → bencode 解析出名称/大小/文件清单。
-   * 返回的 path 在 torrents 目录内（bt url 白名单接纳），UI 勾选文件/改名/
-   * 选目录确认后用它作任务 url 创建任务 —— 创建磁力任务前必须先经过本流程。
+   * qBittorrent 引擎 add 到解析暂存目录抓 metadata（libtorrent 常驻温热
+   * DHT，秒级）→ stop → 返回种子真名/总大小/文件清单。任务 url 用磁力原文，
+   * 提交时按 hash 续用暂存种子迁移到任务目录。existed/completed 标识引擎
+   * 中已有该资源（UI 提示续传 / 重新下载）。
    */
   resolveMagnet(c: Ctx): void {
     const body = asObject(c.body);
@@ -404,21 +408,152 @@ export class Handlers {
       fail(c, 500, "downloader not configured");
       return;
     }
-    const torrentsDir = path.join(this.env.configDir, "torrents");
+    const stagingRoot = btStagingRoot(this.env.configDir);
     this.downloaderSvc
-      .resolveMagnet(url, torrentsDir)
-      .then((torrentPath) => {
-        const meta = extractTorrentMeta(fs.readFileSync(torrentPath));
+      .resolveMagnetBt(url, stagingRoot)
+      .then((r) =>
         ok(c, {
-          path: torrentPath,
-          name: meta.name,
-          size: meta.size,
-          files: meta.files,
+          hash: r.hash,
+          name: r.name,
+          size: r.size,
+          files: r.files,
+          existed: r.existed,
+          completed: r.completed,
+        }),
+      )
+      .catch((err: any) => {
+        if (err?.name === "QBitUnavailableError") {
+          fail(c, 503, err?.message ?? "BT 引擎不可用");
+          return;
+        }
+        fail(c, 400, err?.message ?? "magnet resolve failed");
+      });
+  }
+
+  /**
+   * 弃置解析暂存种子（表单取消/关闭时 UI 调用）：只删解析暂存目录内的
+   * 种子（save_path 前缀校验，防误删用户在 qB 的正式任务），连暂存半成品
+   * 文件一起清。
+   */
+  discardMagnet(c: Ctx): void {
+    const body = asObject(c.body);
+    const hash =
+      typeof body?.hash === "string" ? body.hash.trim().toLowerCase() : "";
+    if (!/^[0-9a-f]{40}$/.test(hash)) {
+      fail(c, 400, "invalid torrent hash (40-hex)");
+      return;
+    }
+    if (!this.downloaderSvc) {
+      fail(c, 500, "downloader not configured");
+      return;
+    }
+    const stagingRoot = btStagingRoot(this.env.configDir);
+    const qbit = this.downloaderSvc.qbit();
+    qbit
+      .getInfo(hash)
+      .then(async (list) => {
+        const t = list[0];
+        // 不在引擎 / 不在解析暂存目录（用户自己的 qB 任务）：不动
+        if (t && t.save_path.startsWith(stagingRoot)) {
+          await qbit.deleteTorrent(hash, true);
+          logger.info(`discarded magnet staging torrent: ${hash}`);
+        }
+        ok(c, { hash });
+      })
+      .catch((err: any) => fail(c, 400, err?.message ?? "discard failed"));
+  }
+
+  /**
+   * 下载引擎接入信息（设置页「下载引擎」展示）：
+   * - aria2 RPC：对外通用引擎（完整 aria2 能力），第三方客户端
+   *   （AriaNg / 手机 App / 浏览器扩展）填 RPC 地址 + secret 即可接入控制；
+   *   第三方提交的任务直接落下载根（/downloads）
+   * - qbittorrent：BT 下载中心引擎 + 独立 Web UI（浏览器直接管理 BT），
+   *   宿主访问端口经 compose 映射（env 声明）
+   */
+  getEngines(c: Ctx): void {
+    if (!this.downloaderSvc) {
+      fail(c, 500, "downloader not configured");
+      return;
+    }
+    const rpc = normalizeAria2Rpc(this.conf.get("aria2Rpc"));
+    const qbitCfg = loadQBitConfig(
+      process.env.MEI_QBIT_BASEURL ?? "http://127.0.0.1:8080",
+    );
+    // 宿主侧访问端口（compose 映射声明；容器内固定 6800/8080）
+    const aria2HostPort = Number.parseInt(
+      process.env.MEI_ARIA2_RPC_PORT ?? "6800",
+      10,
+    );
+    const qbitHostPort = Number.parseInt(
+      process.env.MEI_QBIT_WEBUI_PORT ?? "8080",
+      10,
+    );
+    const qbit = this.downloaderSvc.qbit();
+    qbit
+      .version()
+      .then((version) => {
+        ok(c, {
+          aria2Rpc: {
+            enabled: rpc.enabled,
+            port: aria2HostPort,
+            secret: rpc.secret,
+            rpcPath: "/jsonrpc",
+            alive: this.downloaderSvc!.aria2RpcAlive(),
+          },
+          qbittorrent: {
+            port: qbitHostPort,
+            username: qbitCfg.username,
+            password: qbitCfg.password,
+            version,
+          },
         });
       })
-      .catch((err: any) =>
-        fail(c, 400, err?.message ?? "magnet resolve failed"),
-      );
+      .catch((err: any) => {
+        ok(c, {
+          aria2Rpc: {
+            enabled: rpc.enabled,
+            port: aria2HostPort,
+            secret: rpc.secret,
+            rpcPath: "/jsonrpc",
+            alive: this.downloaderSvc!.aria2RpcAlive(),
+          },
+          qbittorrent: {
+            port: qbitHostPort,
+            username: qbitCfg.username,
+            password: qbitCfg.password,
+            version: "",
+            error: err?.message ?? "BT 引擎不可达",
+          },
+        });
+      });
+  }
+
+  /**
+   * aria2 RPC 对外引擎配置更新（设置页）：
+   * enabled / port 即时生效（server onDidChange('aria2Rpc') 重启守护），
+   * resetSecret 重置接入凭证（旧客户端全部失效）。
+   */
+  setAria2Rpc(c: Ctx): void {
+    const body = asObject(c.body);
+    const cur = normalizeAria2Rpc(this.conf.get("aria2Rpc"));
+    if (body === null) {
+      fail(c, 400, "body required");
+      return;
+    }
+    const next: Aria2RpcOptions = { ...cur };
+    if (typeof body.enabled === "boolean") next.enabled = body.enabled;
+    if (body.port !== undefined) {
+      const port = Number(body.port);
+      if (!Number.isInteger(port) || port < 1024 || port > 65535) {
+        fail(c, 400, "port must be 1024-65535");
+        return;
+      }
+      next.port = port;
+    }
+    if (body.resetSecret === true) next.secret = crypto.randomUUID();
+    void this.conf.set("aria2Rpc", next); // onDidChange 触发守护重启
+    ok(c, { ...next });
   }
 
   downloadCreate(c: Ctx): void {

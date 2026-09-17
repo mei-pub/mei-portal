@@ -15,11 +15,13 @@ import {
   BinaryNames,
   FFmpegBinaryName,
   type Aria2Options,
+  type Aria2RpcOptions,
 } from "./core/types.ts";
 import {
   DownloaderSvc,
-  type DownloaderConfig,
   normalizeAria2Options,
+  normalizeAria2Rpc,
+  type DownloaderConfig,
 } from "./core/downloader.ts";
 import { TaskQueue } from "./core/queue.ts";
 import {
@@ -29,6 +31,7 @@ import {
   ConversionRepository,
 } from "./db.ts";
 import { DownloadTaskService } from "./service/download.ts";
+import { ensureQbitClient } from "./core/qbit.ts";
 import { FavoriteService } from "./service/favorite.ts";
 import { Converter } from "./service/converter.ts";
 import { ConversionService } from "./service/conversion.ts";
@@ -53,6 +56,8 @@ interface AppConfig {
   useProxy: boolean;
   /** aria2 引擎设置（设置页「下载引擎」驱动，热更新） */
   aria2: Aria2Options;
+  /** aria2 RPC 对外引擎设置（第三方客户端接入；热更新经 onDidChange 重启守护） */
+  aria2Rpc: Aria2RpcOptions;
   dbPath: string;
   configDir: string;
   staticDir: string;
@@ -74,6 +79,7 @@ function defaultConfig(): AppConfig {
     proxy: "",
     useProxy: false,
     aria2: normalizeAria2Options(undefined),
+    aria2Rpc: normalizeAria2Rpc(undefined),
     dbPath: "/data/media/mediago.db",
     configDir: "", // 为空时回落到 logDir（与 Go 一致）
     staticDir: "",
@@ -191,6 +197,13 @@ const appStoreDefaults: Record<string, unknown> = {
       trackers: "",
     },
   },
+  // aria2 RPC 对外引擎（完整 aria2 能力，第三方客户端接入控制）；
+  // secret 空时首启生成并回写
+  aria2Rpc: {
+    enabled: true,
+    port: 6800,
+    secret: "",
+  },
 };
 
 /** 系统下载目录（$HOME/Downloads，缺失回落 $HOME） */
@@ -263,6 +276,27 @@ async function main(): Promise<void> {
   // aria2 引擎设置（外部手改 config.json 也要收敛，normalize 兜底类型/越界）
   cfg.aria2 = normalizeAria2Options(appStore.get("aria2"));
 
+  // aria2 RPC 对外引擎配置收敛；secret 首启生成并回写（conf 层默认空）
+  {
+    const rpc = normalizeAria2Rpc(appStore.get("aria2Rpc"));
+    // 防御：RPC 端口与 core HTTP 端口同值（历史污染/误配）时强制回落 6800
+    // ——否则 aria2 守护在 core 之前抢端口，core listen EADDRINUSE →
+    // supervisord 1s 快重启 → 永远撞在守护占用的端口上 → FATAL 死循环
+    if (rpc.port === Number.parseInt(cfg.port, 10)) {
+      logger.warn(
+        `aria2 rpc port ${rpc.port} conflicts with core port, resetting to 6800`,
+      );
+      rpc.port = 6800;
+      await appStore.set("aria2Rpc", rpc);
+    }
+    if (rpc.secret === "") {
+      rpc.secret = randomUUID();
+      await appStore.set("aria2Rpc", rpc);
+      logger.info(`generated aria2 rpc secret (port=${rpc.port})`);
+    }
+    cfg.aria2Rpc = rpc;
+  }
+
   // 3. 下载目录不可用时回落系统下载目录；appStore 缺 local 时补写
   {
     let needDefault = cfg.localDir === "" || cfg.localDir === "./downloads";
@@ -312,6 +346,10 @@ async function main(): Promise<void> {
     // DHT 路由表持久化（configDir/dht.dat）：aria2 进程退出保存 / 启动加载，
     // 磁力解析与 BT 下载跨进程共享 —— 冷启动 bootstrap（10-30s）只发生一次
     getDhtFile: () => path.join(cfg.configDir, "dht.dat"),
+    // 配置目录（torrents 缓存 / qB 解析暂存根）
+    getConfigDir: () => cfg.configDir,
+    // aria2 RPC 对外引擎（闭包读最新值：设置页改端口/开关立即生效）
+    getAria2Rpc: () => cfg.aria2Rpc,
   };
   const downloader = new DownloaderSvc(binMap, schemas, downloaderCfg);
   const queue = new TaskQueue(downloader, cfg.maxRunner);
@@ -357,6 +395,43 @@ async function main(): Promise<void> {
       `aria2 options updated via config change: ${JSON.stringify(cfg.aria2)}`,
     );
   });
+
+  // aria2 RPC 对外引擎热更新（设置页改端口/开关/重置 secret）→ 重启守护
+  appStore.onDidChange("aria2Rpc", (newVal) => {
+    const rpc = normalizeAria2Rpc(newVal);
+    cfg.aria2Rpc = rpc;
+    logger.info(
+      `aria2 rpc engine config changed: enabled=${rpc.enabled} port=${rpc.port}`,
+    );
+    void downloader.restartAria2Rpc();
+  });
+
+  // ---- 引擎启动（qBittorrent BT 引擎接管/偏好初始化 + aria2 RPC 对外守护拉起）----
+  // qB 与 core 同容器常驻（supervisord）；首启由 core 用出厂凭据登录后改强
+  // 密码（ensureQbitClient，凭据文件 /data/media/qbit-credentials.json）。
+  // supervisord 拉起顺序上 qB 可能晚于 core 几秒，初始化带重试
+  {
+    const initQbit = async (attempt: number): Promise<void> => {
+      try {
+        const qbit = await ensureQbitClient(
+          process.env.MEI_QBIT_BASEURL ?? "http://127.0.0.1:8080",
+        );
+        await qbit.ensureBtPreferences();
+        downloader.setQbitClient(qbit);
+      } catch (err: any) {
+        if (attempt < 5) {
+          logger.warn(
+            `qbittorrent init retry ${attempt + 1}: ${err?.message ?? err}`,
+          );
+          setTimeout(() => void initQbit(attempt + 1), 10_000);
+        } else {
+          logger.error(`qbittorrent init failed: ${err?.message ?? err}`);
+        }
+      }
+    };
+    void initQbit(0);
+    void downloader.ensureAria2Rpc();
+  }
 
   // 8. 数据库
   const dbPath = cfg.dbPath;
@@ -501,9 +576,29 @@ async function main(): Promise<void> {
   });
 
   const addr = `${cfg.host}:${cfg.port}`;
-  server.listen(Number.parseInt(cfg.port, 10), cfg.host, () => {
-    logger.info(`Starting HTTP server on ${addr}`);
-  });
+  // listen 竞态免疫：容器同 priority 程序并发拉起时 3000 可能被瞬态占用
+  //（邻居程序启动探测 / 上一代进程的 TIME_WAIT 残留，60s 才清）；直接崩会
+  // 触发 supervisord 1s 快速重启 → 永远撞在 TIME_WAIT 窗口里 → FATAL 死循环。
+  // EADDRINUSE 改为 2s 重试（最多 60s），其余错误照旧 fatal。
+  const tryListen = (attempt: number): void => {
+    const onError = (err: NodeJS.ErrnoException) => {
+      if (err.code === "EADDRINUSE" && attempt < 30) {
+        logger.warn(
+          `HTTP listen EADDRINUSE (${attempt + 1}/30), retrying in 2s (transient port conflict / TIME_WAIT)`,
+        );
+        setTimeout(() => tryListen(attempt + 1), 2000);
+      } else {
+        logger.fatal(`HTTP listen failed: ${err.message}`);
+        process.exit(1);
+      }
+    };
+    server.once("error", onError);
+    server.listen(Number.parseInt(cfg.port, 10), cfg.host, () => {
+      server.removeListener("error", onError);
+      logger.info(`Starting HTTP server on ${addr}`);
+    });
+  };
+  tryListen(0);
 
   // unhandledRejection 兜底：Node 默认会击穿进程；对常驻下载服务，记录后继续运行
   process.on("unhandledRejection", (err) => {

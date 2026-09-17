@@ -489,7 +489,14 @@ interface MagnetDialogState {
   url: string;
   resolving: boolean;
   error: string;
-  meta: { path: string; name: string; size: number; files: Array<{ index: number; path: string; size: number }> | null } | null;
+  meta: {
+    hash?: string;
+    name: string;
+    size: number;
+    files: Array<{ index: number; path: string; size: number }> | null;
+    existed?: boolean;
+    completed?: boolean;
+  } | null;
   name: string;
   selected: number[];
   folder: string;
@@ -507,6 +514,20 @@ const magnetDialog = ref<MagnetDialogState>({
   creating: false,
 });
 
+// 弃置解析暂存种子（表单取消/关闭时清理，不留 BT 引擎半成品）
+const discardMagnetStaging = async (hash: string) => {
+  try {
+    await fetch('/downloads/api/downloads/discard-magnet', {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ hash }),
+    });
+  } catch {
+    // 引擎不可达：暂存种子由下次解析/超时兜底覆盖
+  }
+};
+
 const resolveMagnet = async (url: string) => {
   magnetDialog.value.resolving = true;
   magnetDialog.value.error = '';
@@ -521,9 +542,21 @@ const resolveMagnet = async (url: string) => {
     if (!res.ok || !payload?.data) {
       throw new Error(payload?.message || `HTTP ${res.status}`);
     }
-    magnetDialog.value.meta = payload.data;
-    magnetDialog.value.name = payload.data.name || getMagnetDisplayName(url);
-    magnetDialog.value.selected = payload.data.files?.map((f: { index: number }) => f.index) ?? [];
+    const meta = payload.data;
+    magnetDialog.value.meta = meta;
+    magnetDialog.value.name = meta.name || getMagnetDisplayName(url);
+    magnetDialog.value.selected = meta.files?.map((f: { index: number }) => f.index) ?? [];
+    if (meta.completed) {
+      // 已下载完成：重新下载 = 删旧重下（含引擎内文件），二次确认
+      if (window.confirm('该资源已在下载中心下载完成。重新下载将删除现有文件并重新下载，是否继续？')) {
+        if (meta.hash) await discardMagnetStaging(meta.hash);
+        magnetDialog.value.meta = null;
+        magnetDialog.value.selected = [];
+        await resolveMagnet(url);
+      }
+    } else if (meta.existed) {
+      setDlToast('已在 BT 引擎中存在未完成任务，提交后将续传');
+    }
   } catch (err) {
     magnetDialog.value.meta = null;
     magnetDialog.value.error = (err instanceof Error && err.message) || '磁力解析失败，请稍后重试';
@@ -550,7 +583,12 @@ const downloadViaCenter = (item: MergedResultItem) => {
 };
 
 const closeMagnetDialog = () => {
-  magnetDialog.value.visible = false;
+  // 未提交的解析暂存种子 → 弃置（提交路径续用暂存种子迁移到任务目录）
+  const st = magnetDialog.value;
+  if (st.meta?.hash && !st.meta.existed) {
+    void discardMagnetStaging(st.meta.hash);
+  }
+  st.visible = false;
 };
 
 const toggleMagnetFile = (index: number, checked: boolean) => {
@@ -604,7 +642,9 @@ const createMagnetTask = async () => {
         tasks: [{
           name: st.name.trim() || st.meta.name,
           type: 'bt',
-          url: st.meta.path,
+          // 磁力原文作任务 url（qBittorrent 按 btih 定位，解析暂存种子
+          // 迁移到任务目录续传）
+          url: st.url,
           folder: st.folder,
           selectFile: deriveSelectFile() || undefined,
         }],
@@ -1070,7 +1110,7 @@ onUnmounted(() => {
             <!-- 解析中 -->
             <div v-if="magnetDialog.resolving" class="magnet-resolving">
               <span class="magnet-spinner"></span>
-              <span>正在解析磁力内容，连接网络节点中（最长约 45 秒）…</span>
+              <span>正在解析磁力内容（BT 引擎秒级抓取种子信息）…</span>
             </div>
 
             <!-- 解析失败 -->
@@ -1088,6 +1128,9 @@ onUnmounted(() => {
             <!-- 解析成功：内容勾选 / 改名 / 选目录 → 创建 -->
             <template v-else-if="magnetDialog.meta">
               <div v-if="magnetDialog.error" class="magnet-error-inline">{{ magnetDialog.error }}</div>
+              <div v-if="magnetDialog.meta.existed && !magnetDialog.meta.completed" class="magnet-existed-tip">
+                已在 BT 引擎中存在未完成任务，提交后将续传
+              </div>
               <div class="magnet-form-row">
                 <label class="magnet-label">任务名称</label>
                 <input v-model="magnetDialog.name" type="text" class="magnet-input" placeholder="留空使用种子名" />
@@ -1619,6 +1662,16 @@ onUnmounted(() => {
   border: 1px solid #fecaca;
   font-size: 12.5px;
   color: #dc2626;
+}
+
+/* 引擎已存在未完成任务（提交后续传）提示行 */
+.magnet-existed-tip {
+  padding: 8px 10px;
+  background: #eff6ff;
+  border-radius: 8px;
+  border: 1px solid #bfdbfe;
+  font-size: 12.5px;
+  color: #2563eb;
 }
 
 /* 弹层内统一按钮：ghost 次要 / primary 主操作 */

@@ -50,6 +50,35 @@ if [ -f "$DATA_DIR/media/config.json" ]; then
   sed -i 's/"port":[[:space:]]*[0-9]*/"port": 3000/' "$DATA_DIR/media/config.json" 2>/dev/null || true
 fi
 
+# ---- qBittorrent（BT/磁力引擎）配置生成 ----
+# 首启只写非凭据项（端口/保存路径/登录失败放宽——容器内 core 与 qB 同机，
+# 127.0.0.1 的失败重试不能把自己 ban 死）。**密码不写 conf**：qB 的
+# PBKDF2 序列化格式易错（实测手写 @ByteArray 值会被当纯字符串忽略、
+# 回退出厂凭据并连累重试触发 IP ban）——由 core 首启用出厂凭据登录后
+# 经 API 改强密码（qB 自己写格式），存 /data/media/qbit-credentials.json
+# 供 core 连接与设置页展示。
+# HOME=/data/qbittorrent 由 supervisord [program:qbittorrent] 指定 → 配置随卷持久。
+QB_CONF_DIR="/data/qbittorrent/.config/qBittorrent"
+QB_CONF="$QB_CONF_DIR/qBittorrent.conf"
+mkdir -p "$QB_CONF_DIR"
+if [ ! -f "$QB_CONF" ]; then
+  cat > "$QB_CONF" <<EOF
+[LegalNotice]
+Accepted=true
+
+[Preferences]
+WebUI\Address=0.0.0.0
+WebUI\Port=8080
+WebUI\MaxAuthenticationFailCount=100
+WebUI\BanDuration=60000
+
+[BitTorrent]
+Session\DefaultSavePath=/downloads/qbittorrent
+EOF
+  echo "[mei-portal] qBittorrent 首次初始化（凭据由下载中心 core 接管生成）"
+fi
+mkdir -p /downloads/qbittorrent
+
 # ---- 启动 ----
 echo "[mei-portal] 启动 supervisord（nginx + shell + 各应用）"
 exec "$@"

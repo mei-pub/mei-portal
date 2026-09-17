@@ -135,11 +135,30 @@ export function createServer(opts: RouterOptions): Server {
       handler: (c) => h.uploadTorrent(c),
     },
 
-    // 磁力链接内容解析（创建任务前的强制内容识别：名称/大小/文件清单）
+    // 磁力链接内容解析（创建任务前的强制内容识别：名称/大小/文件清单）——
+    // qBittorrent 引擎（专门 BT 栈，秒级 metadata）
     {
       method: "POST",
       parts: ["api", "downloads", "resolve-magnet"],
       handler: (c) => h.resolveMagnet(c),
+    },
+    // 弃置解析暂存种子（表单取消/关闭时清理，不留引擎半成品）
+    {
+      method: "POST",
+      parts: ["api", "downloads", "discard-magnet"],
+      handler: (c) => h.discardMagnet(c),
+    },
+    // 下载引擎接入信息（aria2 RPC / qBittorrent：第三方客户端接入用）
+    {
+      method: "GET",
+      parts: ["api", "downloads", "engines"],
+      handler: (c) => h.getEngines(c),
+    },
+    // aria2 RPC 对外引擎配置（启用/端口/secret 重置）
+    {
+      method: "POST",
+      parts: ["api", "downloads", "aria2-rpc"],
+      handler: (c) => h.setAria2Rpc(c),
     },
 
     // downloads（静态段在前，:id 在后）
@@ -377,6 +396,22 @@ async function handleRequest(
   // /player/* → 播放器 SPA（嵌入 UI 的等价物：目录形式部署，缺失时 404）
   if (pathname === "/player" || pathname.startsWith("/player/")) {
     serveSPA(req, res, opts.playerDir, pathname.slice("/player".length) || "/");
+    return;
+  }
+
+  // /ariang/* → AriaNg 控制台（aria2 RPC 第三方客户端标准面板，纯静态 SPA；
+  // 设置页「下载引擎」提供入口，浏览器内直接连 aria2 RPC 对外引擎）
+  if (pathname === "/ariang" || pathname.startsWith("/ariang/")) {
+    if (opts.staticDir === "") {
+      jsonError(res, 404, "404 page not found");
+      return;
+    }
+    serveSPA(
+      req,
+      res,
+      path.join(opts.staticDir, "ariang"),
+      pathname.slice("/ariang".length) || "/",
+    );
     return;
   }
 
