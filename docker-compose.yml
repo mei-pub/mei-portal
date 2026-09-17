@@ -26,10 +26,10 @@ services:
       # aria2 RPC 对外引擎（第三方客户端接入控制；容器内 6800，secret 见
       # 下载中心设置页「下载引擎」）。绑定 127.0.0.1：本机客户端接入，不经公网
       # 暴露；需要局域网接入时去掉 127.0.0.1: 前缀
-      - "127.0.0.1:16800:6800"
+      - "127.0.0.1:7778:6800"
       # qBittorrent Web UI（BT/磁力引擎管理界面；容器内 8080，凭据见下载中心
       # 设置页「下载引擎」）。默认限本机访问
-      - "127.0.0.1:16801:8080"
+      - "127.0.0.1:7779:8080"
     volumes:
       - mei-data:/data
       # 本地服务器下载库（强要求配置）：音乐/影视「下载到本地服务器」的保存目录。
@@ -49,9 +49,10 @@ services:
       MEI_ADMIN_USER: ${MEI_ADMIN_USER:-admin}
       MEI_ADMIN_PASSWORD: ${MEI_ADMIN_PASSWORD:-mei-portal}
       # 引擎宿主接入端口声明（下载中心设置页「下载引擎」展示接入地址用；
-      # 容器内固定 6800/8080，改这里要与 ports 映射一致）
-      MEI_ARIA2_RPC_PORT: "16800"
-      MEI_QBIT_WEBUI_PORT: "16801"
+      # 容器内固定 6800/8080，改这里要与 ports 映射一致：7777 门户 /
+      # 7778 aria2 RPC / 7779 qBittorrent WebUI）
+      MEI_ARIA2_RPC_PORT: "7778"
+      MEI_QBIT_WEBUI_PORT: "7779"
       # 可选：自动 PO Token 服务异常时手工覆盖。
       YOUTUBE_PO_TOKEN: ${YOUTUBE_PO_TOKEN:-}
       YOUTUBE_VISITOR_DATA: ${YOUTUBE_VISITOR_DATA:-}
