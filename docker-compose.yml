@@ -16,11 +16,26 @@ services:
     # 各留了 stopwaitsecs=20），默认 10s 宽限期会被 docker 直接 SIGKILL 截断
     stop_grace_period: 60s
     # 端口说明（镜像内全部监听端口已 Dockerfile EXPOSE 显式声明）：
-    #   内部应用（仅容器内，勿映射）：3010 shell / 3001 novels / 3002 link /
-    #     3003 tv / 3004 draw / 3005 music / 3008 disks / 3000 media core / 4416 bgutil
-    #   引擎控制面：6800 aria2 RPC / 8080 qBittorrent WebUI（下方映射到本机）
+    #   内部应用（容器内 nginx 聚合）：3010 shell / 3001 novels / 3002 link
+    #     / 3003 tv / 3004 draw / 3005 music / 3008 disks / 3000 media core / 4416 bgutil
+    #   引擎控制面：6800 aria2 RPC / 8080 qB WebUI（下方映射到本机）
     #   BT 数据面：6881 qB（TCP+UDP）/ 6891 aria2（TCP+UDP）——需要公网做种
     #     连通性时按需映射；未映射不影响下载中心内网下载
+    #
+    # 子域名部署（内网穿透）：下方把每个应用独立映射到宿主同号端口（仅本机
+    # 可达），穿透客户端把 子域名 → localhost:<端口>；容器内自带的 mei-link
+    # 也可直接用容器内地址（127.0.0.1:3000 等，无需宿主映射）。
+    #   portal.example.com → 7777（门户，路径聚合全应用）
+    #   dl.example.com     → 3000（下载中心，直连形态）
+    #   music.example.com  → 3005 / tv → 3003 / novels → 3001 / draw → 3004 …
+    # 直连路径形态：novels 需带前缀（novels.example.com/novels）、tv 同理
+    #   （tv.example.com/tv），其余应用根路径直达（下载中心 3000、music 3005、
+    #   draw 3004、link 3002 会各自 302/307 到登录页）。
+    # 注意：跨子域共享登录需在 environment 配 MEI_COOKIE_DOMAIN=.example.com；
+    #   qB WebUI（7779）经穿透子域名访问时需在其 conf 补 WebUI\ServerDomains
+    #   （qB 的 CSRF 域名校验），aria2 RPC 无此限制。
+    # disks（3008）仅绑容器内 127.0.0.1（无独立鉴权），经 7777 的 /disks/ 使用；
+    #   tools 为纯静态挂 nginx /tools/，无独立端口。
     ports:
       - "7777:7777"
       # aria2 RPC 对外引擎（第三方客户端接入控制；容器内 6800，secret 见
@@ -30,6 +45,14 @@ services:
       # qBittorrent Web UI（BT/磁力引擎管理界面；容器内 8080，凭据见下载中心
       # 设置页「下载引擎」）。默认限本机访问
       - "127.0.0.1:7779:8080"
+      # ---- 各应用独立端口（内网穿透子域名分配用，同号映射，仅本机）----
+      - "127.0.0.1:3010:3010"
+      - "127.0.0.1:3000:3000"
+      - "127.0.0.1:3001:3001"
+      - "127.0.0.1:3002:3002"
+      - "127.0.0.1:3003:3003"
+      - "127.0.0.1:3004:3004"
+      - "127.0.0.1:3005:3005"
     volumes:
       - mei-data:/data
       # 本地服务器下载库（强要求配置）：音乐/影视「下载到本地服务器」的保存目录。
@@ -53,15 +76,17 @@ services:
       # 7778 aria2 RPC / 7779 qBittorrent WebUI）
       MEI_ARIA2_RPC_PORT: "7778"
       MEI_QBIT_WEBUI_PORT: "7779"
-      # 跨子域名部署（生产示例）：
-      #   1) DNS 把 portal/dl/music/... 各子域 A 到同一台机器
-      #   2) 宿主反代每子域一个 server 块，规则统一「路径透传到 7777 + 根路径 302 到应用路径」：
+      # 跨子域名部署（如 portal.example.com / dl.example.com / music.example.com …）
+      # 两种途径（都要先 DNS 把各子域指向同一入口）：
+      #   A) 内网穿透：各子域 → 上方独立端口（推荐，见 ports 段说明）
+      #   B) 宿主反代：每子域一个 server 块，规则统一「路径透传到 7777 + 根路径
+      #      302 到应用路径」：
       #        server { server_name dl.example.com;
       #                 location = / { return 302 /downloads/; }
       #                 location / { proxy_pass http://127.0.0.1:7777; } }
       #      其余子域同理（music → 302 /music/、tv → /tv/、novels → /novels/ …）
-      #   3) 取消下行注释并填父域：门户会话 cookie 跨子域共享（.example.com），
-      #      任一子域登录全线生效；不设 = host-only（本机/单域名，默认行为）
+      # 取消下行注释并填父域：门户会话 cookie 跨子域共享（.example.com），
+      # 任一子域登录全线生效；不设 = host-only（本机/单域名，默认行为）
       # MEI_COOKIE_DOMAIN: ".example.com"
       # 可选：自动 PO Token 服务异常时手工覆盖。
       YOUTUBE_PO_TOKEN: ${YOUTUBE_PO_TOKEN:-}
