@@ -58,6 +58,8 @@ fi
 # 经 API 改强密码（qB 自己写格式），存 /data/media/qbit-credentials.json
 # 供 core 连接与设置页展示。
 # HOME=/data/qbittorrent 由 supervisord [program:qbittorrent] 指定 → 配置随卷持久。
+# 端口约定（镜像 EXPOSE 全量声明）：WebUI 8080 / BT 传输+DHT 6881（TCP+UDP，
+# 显式固定——缺省时 qB 首启随机分配，不可预知）。
 QB_CONF_DIR="/data/qbittorrent/.config/qBittorrent"
 QB_CONF="$QB_CONF_DIR/qBittorrent.conf"
 mkdir -p "$QB_CONF_DIR"
@@ -74,8 +76,17 @@ WebUI\BanDuration=60000
 
 [BitTorrent]
 Session\DefaultSavePath=/downloads/qbittorrent
+Session\Port=6881
 EOF
   echo "[mei-portal] qBittorrent 首次初始化（凭据由下载中心 core 接管生成）"
+else
+  # 存量 conf 迁移：早期部署 qB 首启随机分配过 BT 端口（Session\Port 非约定值）
+  # → 统一收敛到 6881（未显式配置过的默认值除外——qB 默认行为本身也是随机的）
+  QB_BT_PORT=$(grep -a "^Session.Port=" "$QB_CONF" | tail -1 | cut -d= -f2)
+  if [ -n "$QB_BT_PORT" ] && [ "$QB_BT_PORT" != "6881" ]; then
+    sed -i "s/^Session\\\\Port=.*/Session\\\\Port=6881/" "$QB_CONF"
+    echo "[mei-portal] qBittorrent BT 端口收敛: $QB_BT_PORT -> 6881（重启后生效）"
+  fi
 fi
 mkdir -p /downloads/qbittorrent
 

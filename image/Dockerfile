@@ -241,6 +241,24 @@ RUN chmod +x /entrypoint.sh
 
 VOLUME ["/data"]
 ENV NODE_ENV=production TZ=Asia/Shanghai
+
+# ---- 端口清单（镜像内全部监听端口的显式声明；EXPOSE 不自动映射，宿主接入
+# 由 compose ports 决定：7777 门户对外、16800/16801 引擎仅本机）----
+# 7777  nginx        统一入口（唯一需要对外映射的端口）
 EXPOSE 7777
+# 内部应用（nginx 反代/iframe 引用，全部只在本容器内可达，无需映射）：
+#   3010 shell 门户 / 3001 novels / 3002 link / 3003 tv / 3004 draw
+#   3005 music / 3008 disks（127.0.0.1）/ 3000 media 下载中心 core
+#   4416 bgutil PO-Token Provider
+EXPOSE 3010 3001 3002 3003 3004 3005 3008 3000 4416
+# 下载引擎控制面（宿主/第三方客户端经 compose 映射接入）：
+#   6800 aria2 RPC 对外引擎（映射 127.0.0.1:16800）
+#   8080 qBittorrent WebUI（映射 127.0.0.1:16801）
+EXPOSE 6800 8080
+# BT 数据面（TCP 传输 + UDP DHT/LSD；对等节点连接，公网映射后可提升连通性）：
+#   6881 qBittorrent BT（conf 固定） / 6891 aria2 BT+DHT（spawn 参数固定）
+EXPOSE 6881 6891
+EXPOSE 6881/udp 6891/udp
+
 ENTRYPOINT ["/entrypoint.sh"]
 CMD ["supervisord", "-n", "-c", "/etc/supervisor/conf.d/mei-portal.conf"]

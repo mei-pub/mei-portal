@@ -505,8 +505,12 @@ class Aria2RpcDaemon {
       // 对外引擎：监听全部接口（宿主经 compose 端口映射接入）
       "--rpc-listen-all=true",
       `--dir=${this.opts.dir}`,
-      // BT 全能力（第三方经 RPC 提交磁力任务）
+      // BT 全能力（第三方经 RPC 提交磁力任务）。BT/DHT 监听固定 6891
+      //（缺省时 aria2 在 6881-6999 随机选，端口不可预知；镜像 EXPOSE 声明
+      // 全部端口，与 qB 的 6881 错开）
       "--bt-save-metadata=true",
+      "--listen-port=6891",
+      "--dht-listen-port=6891",
       `--bt-tracker=${this.opts.trackers}`,
       `--dht-file-path=${this.opts.dhtFile}`,
       `--dht-file-path6=${this.opts.dhtFile}.v6`,
