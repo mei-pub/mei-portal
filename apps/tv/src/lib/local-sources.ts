@@ -3,7 +3,7 @@
 // 本地源服务端模块：
 // 1. 记录存储（/data/tv/local-sources.json，原子写 + 损坏容错，跨设备共享）
 // 2. 分类映射（豆瓣 type / CMS 分类字符串 → 电影/电视/动漫/综艺）
-// 3. media 下载服务客户端（容器内直连 127.0.0.1:3000，X-API-Key 携带门户会话令牌）
+// 3. media 下载服务客户端（容器内直连 127.0.0.1:7801，X-API-Key 携带门户会话令牌）
 //
 // 纯逻辑（键、分类映射）与文件存储分离，便于 node:test 确定性测试。
 
@@ -313,7 +313,7 @@ export class LocalSourceStore {
 // ---------------------------------------------------------------------------
 
 function mediaApiUrl(): string {
-  return process.env.MEDIA_API_URL || 'http://127.0.0.1:3000';
+  return process.env.MEDIA_API_URL || 'http://127.0.0.1:7801';
 }
 
 function shellUserFile(): string {

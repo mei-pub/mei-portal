@@ -557,7 +557,7 @@ class TvProvider implements SearchProvider {
   opts: FetchProviderOptions;
   constructor(opts: FetchProviderOptions) { this.opts = opts; }
   async search(query: string, limit: number, offset: number, cookie: string): Promise<ProviderPage> {
-    const base = process.env.LUNATV_INTERNAL_URL || 'http://127.0.0.1:3003';
+    const base = process.env.LUNATV_INTERNAL_URL || 'http://127.0.0.1:7804';
     // 统一身份：lunatv 鉴权模块校验主应用会话（mei-auth），直接透传浏览器 cookie
     const params = new URLSearchParams({ q: query });
     const data = (await fetchJson(`${base}/tv/api/search?${params}`, cookie, this.opts.fetchImpl)) as {
@@ -579,7 +579,7 @@ class MusicProvider implements SearchProvider {
   opts: FetchProviderOptions;
   constructor(opts: FetchProviderOptions) { this.opts = opts; }
   async search(query: string, limit: number, offset: number, cookie: string): Promise<ProviderPage> {
-    const base = process.env.SOLARA_INTERNAL_URL || 'http://127.0.0.1:3005';
+    const base = process.env.SOLARA_INTERNAL_URL || 'http://127.0.0.1:7806';
     // 统一身份：solara 鉴权模块校验主应用会话（mei-auth），直接透传浏览器 cookie
     const pageNumber = Math.floor(offset / limit) + 1;
     const tasks = MUSIC_SOURCES.map(async (source) => {
@@ -623,7 +623,7 @@ class DisksProvider implements SearchProvider {
   opts: FetchProviderOptions;
   constructor(opts: FetchProviderOptions) { this.opts = opts; }
   async search(query: string, limit: number, offset: number, cookie: string, diskType?: string, sources?: DiskSourceFilters): Promise<ProviderPage> {
-    const base = process.env.PANSOU_INTERNAL_URL || 'http://127.0.0.1:3008';
+    const base = process.env.PANSOU_INTERNAL_URL || 'http://127.0.0.1:7807';
     const params = new URLSearchParams({ kw: query, res: 'merge', src: 'all' });
     // Settings-driven source scoping. An explicitly empty list means the user
     // disabled every source in that dimension; pansou treats a missing/empty
@@ -684,7 +684,7 @@ class NovelsProvider implements SearchProvider {
   opts: FetchProviderOptions;
   constructor(opts: FetchProviderOptions) { this.opts = opts; }
   async search(query: string, limit: number, offset: number, cookie: string): Promise<ProviderPage> {
-    const base = process.env.TUTORIAL_INTERNAL_URL || 'http://127.0.0.1:3001';
+    const base = process.env.TUTORIAL_INTERNAL_URL || 'http://127.0.0.1:7802';
     const sites = (await fetchJson(`${base}/novels/api/sites`, cookie, this.opts.fetchImpl)) as Array<{
       slug: string;
       name: string;
@@ -708,7 +708,7 @@ class DrawProvider implements SearchProvider {
   constructor(opts: FetchProviderOptions) { this.opts = opts; }
   async search(query: string, limit: number, offset: number, cookie: string): Promise<ProviderPage> {
     const empty: ProviderPage = { results: [], hasMore: false };
-    const base = process.env.AIDRAW_INTERNAL_URL || 'http://127.0.0.1:3004';
+    const base = process.env.AIDRAW_INTERNAL_URL || 'http://127.0.0.1:7805';
     // 统一身份：以主应用会话令牌作为 Bearer 凭据（ai-draw 转发 /api/auth/verify 校验）
     const token = _getPortalToken();
     if (!token) return empty;

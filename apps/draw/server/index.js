@@ -25,7 +25,7 @@ if (fs.existsSync(devVarsPath)) {
 }
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 7805;
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-in-production';
 
 // Track last update time for each user to avoid excessive DB writes
@@ -248,7 +248,7 @@ async function initializeAdmin() {
 // mei-portal 统一身份：不再有独立用户体系/JWT。
 // 鉴权 = 校验主应用会话（Bearer 令牌或 mei-auth cookie），由门户 /api/auth/verify 裁决；
 // 会话有效时以门户 admin 账户作为 req.user（数据仍按该账户隔离）。
-const SHELL_URL = process.env.MEI_SHELL_URL || 'http://127.0.0.1:3010';
+const SHELL_URL = process.env.MEI_SHELL_URL || 'http://127.0.0.1:7808';
 const portalVerifyCache = new Map();
 const PORTAL_CACHE_TTL = 30 * 1000;
 const PORTAL_NEG_TTL = 5 * 1000;

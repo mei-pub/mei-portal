@@ -29,7 +29,7 @@ mkdir -p /downloads/music /downloads/movie
 
 # ---- Shell 配置 ----
 # 注意：不要在这里 export PORT——media core-ts 的 env PORT 优先级高于 --port 命令行参数，
-# 全局导出会覆盖 media 的 --port=3000。Shell 的端口（3010）由 supervisord 的
+# 全局导出会覆盖 media 的 --port=7801。Shell 的端口（7808）由 supervisord 的
 # [program:shell] environment 显式设置，无需入口导出。
 
 # 单一用户凭据（未初始化则用默认值，首次进入门户时设置）
@@ -45,10 +45,12 @@ if [ ! -d "$DATA_DIR/novels/fonts/css" ] && [ -f /app/apps/novels/scripts/downlo
   (cd /app/apps/novels && DATA_DIR="$DATA_DIR/novels" node scripts/download-fonts.mjs || echo "[mei-portal] 字体下载完成/跳过") &
 fi
 
-# ---- media 端口修正（TS core 统一鉴权，无独立 setup/signin 流程）----
-if [ -f "$DATA_DIR/media/config.json" ]; then
-  sed -i 's/"port":[[:space:]]*[0-9]*/"port": 3000/' "$DATA_DIR/media/config.json" 2>/dev/null || true
-fi
+# ---- media config 修正 ----
+# 历史遗留已清除：曾有 sed 把 config.json 的 "port" 统一重写（旧意图是修正
+# media http 端口），但现 config.json 里唯一的 port 字段是 aria2Rpc 的 6800，
+# 该 sed 每次启动都会把它污染成 core 端口值（当年的 3000 污染事故源头），
+# 一直靠 server.ts 的「RPC 端口与 core HTTP 端口同值回落 6800」防御掩盖。
+# media 的 HTTP 端口由 supervisord --port=7801 固定，不再需要入口修正。
 
 # ---- qBittorrent（BT/磁力引擎）配置生成 ----
 # 首启只写非凭据项（端口/保存路径/登录失败放宽——容器内 core 与 qB 同机，

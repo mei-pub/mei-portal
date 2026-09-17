@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 
 export const dynamic = 'force-dynamic';
 
-const TUTORIAL = process.env.TUTORIAL_INTERNAL_URL || 'http://127.0.0.1:3001';
+const TUTORIAL = process.env.TUTORIAL_INTERNAL_URL || 'http://127.0.0.1:7802';
 
 // GET /api/novels/sites — 可见小说站点列表（顶栏「小说阅读」面板数据源）
 // 转发浏览器的 ns-open cookie，由 tutorial 判定隐秘站点可见性

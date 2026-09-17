@@ -17,32 +17,33 @@
 nginx（唯一入口，监听 7777）
   │  sub_filter 向每个应用 HTML 注入 /__shell/topbar.js（统一顶栏 + 主题令牌）
   │  Sec-Fetch-Dest 判别：document 请求 → 418 内部跳 Shell 壳；iframe 请求 → 直进应用
-  ├─ /            Shell 门户（Next.js，:3010）── 统一登录 / iframe 承载页 / 搜索中心 / MusicDock
-  ├─ /tv         影视门户     (:3003)   ┐
-  ├─ /music      音乐播放     (:3005)   │
-  ├─ /disks      disks 引擎   (:3008)   │ 各应用独立进程，supervisord 守护
-  ├─ /downloads  media core-ts (:3000)  │ 目录名 = URL 子路径
-  ├─ /draw       AI 绘图     (:3004)   │
+  ├─ /            Shell 门户（Next.js，:7808）── 统一登录 / iframe 承载页 / 搜索中心 / MusicDock
+  ├─ /tv         影视门户     (:7804)   ┐
+  ├─ /music      音乐播放     (:7806)   │
+  ├─ /disks      disks 引擎   (:7807)   │ 各应用独立进程，supervisord 守护
+  ├─ /downloads  media core-ts (:7801)  │ 目录名 = URL 子路径
+  ├─ /draw       AI 绘图     (:7805)   │
   ├─ /tools      工具箱      （静态）    │
-  ├─ /link       mei-link    (:3002)   │
-  ├─ /novels     小说阅读     (:3001)   ┘
+  ├─ /link       mei-link    (:7803)   │
+  ├─ /novels     小说阅读     (:7802)   ┘
   └─ （bgutil PO Token 服务，:4416，音乐 YouTube 源加速，不经 nginx）
 ```
 
-进程与端口（`image/supervisord.conf`，共 10 个进程）：
+进程与端口（`image/supervisord.conf`，共 10 个进程；子应用统一 7801~7808 段，
+与宿主同号映射供内网穿透分配子域名，见 `docker-compose.yml`）：
 
 | 进程 | 端口 | 说明 |
 |---|---|---|
 | nginx | 7777 | 唯一对外入口，路由分发 + 缓存策略 + 顶栏注入 |
-| shell | 3010 | 门户外壳（Next.js standalone） |
-| novels | 3001 | 小说阅读（Next.js + SQLite） |
-| link | 3002 | mei-link 内网穿透（Node/TS） |
-| tv | 3003 | 影视门户（Next.js） |
-| draw | 3004 | AI 绘图（Express + Vite 静态） |
-| music | 3005 | 音乐播放（原生 JS + Node） |
+| media | 7801 | media core-ts 引擎（React UI 静态托管） |
+| novels | 7802 | 小说阅读（Next.js + SQLite） |
+| link | 7803 | mei-link 内网穿透（Node/TS） |
+| tv | 7804 | 影视门户（Next.js） |
+| draw | 7805 | AI 绘图（Express + Vite 静态） |
+| music | 7806 | 音乐播放（原生 JS + Node） |
+| disks | 7807 | 网盘搜索引擎（Node/TS + Vue 前端） |
+| shell | 7808 | 门户外壳（Next.js standalone） |
 | bgutil | 4416 | YouTube PO Token Provider（实验性音乐源） |
-| media | 3000 | media core-ts 引擎（React UI 静态托管） |
-| disks | 3008 | 网盘搜索引擎（Node/TS + Vue 前端） |
 
 ## 同源子路径 + Sec-Fetch-Dest 路由分发
 

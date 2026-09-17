@@ -20,7 +20,7 @@ export async function GET(
     return NextResponse.json({ error: 'Invalid cover' }, { status: 400 });
   }
 
-  const base = process.env.SOLARA_INTERNAL_URL || 'http://127.0.0.1:3005';
+  const base = process.env.SOLARA_INTERNAL_URL || 'http://127.0.0.1:7806';
   // 统一身份：solara 鉴权模块直接校验主应用会话，透传浏览器 cookie 即可
   const cookie = request.headers.get('cookie') || '';
 

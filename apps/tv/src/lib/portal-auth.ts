@@ -4,7 +4,7 @@ import { NextRequest, NextResponse } from 'next/server';
 // 鉴权 = 校验主应用会话（mei-auth cookie / Bearer），由门户 /api/auth/verify 裁决。
 // 会话有效时把 lunatv 自己的 auth cookie 注入请求头，下游 API 路由的旧校验逻辑无需改动。
 
-const SHELL_URL = process.env.MEI_SHELL_URL || 'http://127.0.0.1:3010';
+const SHELL_URL = process.env.MEI_SHELL_URL || 'http://127.0.0.1:7808';
 const CACHE_TTL = 30 * 1000;
 const NEGATIVE_TTL = 5 * 1000;
 

@@ -32,7 +32,7 @@ function isPublicPath(pathname) {
 }
 
 // mei-portal 统一身份：主应用会话校验（带短 TTL 缓存，避免每个请求都回调门户）
-const SHELL_URL = process.env.MEI_SHELL_URL || 'http://127.0.0.1:3010';
+const SHELL_URL = process.env.MEI_SHELL_URL || 'http://127.0.0.1:7808';
 const verifyCache = new Map();
 const CACHE_TTL = 30 * 1000;
 const NEGATIVE_TTL = 5 * 1000;

@@ -87,17 +87,21 @@ docker compose up -d --build
   ▼
 nginx（唯一入口，sub_filter 注入顶栏脚本）
   │  Sec-Fetch-Dest 判别：document 请求 → Shell 壳渲染；iframe 请求 → 直进应用
-  ├─ /            Shell 门户（Next.js，:3010）── 统一登录 / iframe 承载页 / 搜索中心
-  ├─ /tv         影视门户     (:3003)   ┐
-  ├─ /music      音乐播放     (:3005)   │
-  ├─ /disks      disks engine (:3008)   │ 各应用独立进程，supervisord 守护
-  ├─ /downloads  media core-ts (:3000) │ 顶栏/左面板由门户注入（旧 /media 301）
-  ├─ /draw       AI 绘图     (:3004)   │
+  ├─ /            Shell 门户（Next.js，:7808）── 统一登录 / iframe 承载页 / 搜索中心
+  ├─ /tv         影视门户     (:7804)   ┐
+  ├─ /music      音乐播放     (:7806)   │
+  ├─ /disks      disks engine (:7807)   │ 各应用独立进程，supervisord 守护
+  ├─ /downloads  media core-ts (:7801) │ 顶栏/左面板由门户注入（旧 /media 301）
+  ├─ /draw       AI 绘图     (:7805)   │
   ├─ /tools      工具箱      （静态）   │
-  ├─ /link       mei-link    (:3002)   │
-  ├─ /novels     小说阅读     (:3001)   ┘
+  ├─ /link       mei-link    (:7803)   │
+  ├─ /novels     小说阅读     (:7802)   ┘
   └─ bgutil PO Token 服务（:4416，音乐 YouTube 源加速）
 ```
+
+> 子应用统一占用 **7801~7808** 端口段（容器内与宿主同号，`docker-compose.yml`
+> 按需映射到本机供内网穿透分配子域名）；7777 门户 / 7778 aria2 RPC / 7779 qB
+> WebUI 与之连号成段。
 
 - **单镜像**：`image/Dockerfile` 多阶段构建，8 个应用全部本地源码编译，运行时 supervisord 编排（`image/supervisord.conf`）。
 - **路由分发**：同一 URL 下 nginx 用 `Sec-Fetch-Dest`（含头缺失时的 Accept 兜底）区分「顶级文档」与「iframe 内嵌」：前者跳 Shell 壳（有顶栏、可导航），后者直进应用原生页面——应用既可独立访问又无缝嵌入门户。

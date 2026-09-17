@@ -176,7 +176,7 @@ test('DisksProvider forwards source filters and dedupes cross-source links', asy
   _bindGetSessionTokens(() => ({ 'ai-draw': 'test-token' }));
   const seenUrls: string[] = [];
   const fetchImpl = (async (url: string) => {
-    if (url.includes('127.0.0.1:3008/api/search')) {
+    if (url.includes('127.0.0.1:7807/api/search')) {
       seenUrls.push(url);
       return { ok: true, status: 200, json: async () => ({ data: { merged_by_type: {
         quark: [
@@ -214,7 +214,7 @@ test('DisksProvider forwards source filters and dedupes cross-source links', asy
 test('DisksProvider applies the cloud-type whitelist to results and facets', async () => {
   _bindGetSessionTokens(() => ({ 'ai-draw': 'test-token' }));
   const fetchImpl = (async (url: string) => {
-    if (url.includes('127.0.0.1:3008/api/search')) {
+    if (url.includes('127.0.0.1:7807/api/search')) {
       return { ok: true, status: 200, json: async () => ({ data: { merged_by_type: {
         quark: [{ url: 'https://pan.quark.cn/s/q1', note: 'Q', source: 'plugin:melost' }],
         magnet: [{ url: 'magnet:?xt=urn:btih:A', note: 'M', source: 'plugin:clmao' }],
@@ -598,7 +598,7 @@ test('DisksProvider 超时降级不失败：网盘分组标记 timeout，其余�
   _bindGetPortalToken(() => 'test-token');
   // pansou 超时（AbortSignal.timeout 的 TimeoutError），tv 正常
   const fetchImpl = (async (url: string) => {
-    if (url.includes('127.0.0.1:3008/api/search')) {
+    if (url.includes('127.0.0.1:7807/api/search')) {
       const err = new Error('The operation was aborted due to timeout');
       err.name = 'TimeoutError';
       throw err;
