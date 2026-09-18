@@ -171,7 +171,11 @@ export class QBitClient {
     }).catch(() => {
       throw new QBitUnavailableError("BT 引擎不可达（qbittorrent 未启动？）");
     });
-    if (res.status === 401 && retry) {
+    // qB 对未认证（SID 过期/无效）返回的是 403 Forbidden 而非 401——
+    // 会话过期（WebUI SessionTimeout 默认 1h）后若无此分支，重登逻辑永不
+    // 触发，所有请求持续 403。403 也可能是 ban/CSRF：重登后仍失败则按原
+    // 状态上抛（login 自身对 ban 会报「登录失败」）。retry 限制只重登一次。
+    if ((res.status === 401 || res.status === 403) && retry) {
       await this.login();
       return this.request(apiPath, init, false);
     }
