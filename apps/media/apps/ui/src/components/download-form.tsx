@@ -19,7 +19,7 @@ import {
   Switch,
   Upload,
 } from "antd";
-import { forwardRef, useImperativeHandle, useRef, useState } from "react";
+import { forwardRef, useImperativeHandle, useRef, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { useShallow } from "zustand/react/shallow";
 import { ADD_TO_LIST, DOWNLOAD_NOW } from "@/const";
@@ -38,6 +38,90 @@ const { TextArea } = Input;
  *  三类执行路径与表单形态完全不同，先选大类再细分 —— 大类决定 URL 校验、
  *  名称可空性、headers 显隐；视频类内部再由 subtype 细分下载器 */
 export type DownloadCategory = "normal" | "video" | "magnet";
+
+// ---- 磁力内容文件树与类型筛选（与综合搜索磁力弹层同构逻辑）----
+
+interface MagnetTreeNode {
+  name: string;
+  path: string;
+  isDir: boolean;
+  size: number;
+  /** 子树全部文件 index（1-based，目录级勾选用） */
+  indexes: number[];
+  children: MagnetTreeNode[];
+}
+
+const MAGNET_FILE_TYPES: Array<{ key: string; label: string; exts: Set<string> }> = [
+  { key: "video", label: "视频", exts: new Set("mp4 mkv avi mov wmv flv ts m2ts webm rmvb mpg mpeg m4v vob 3gp".split(" ")) },
+  { key: "audio", label: "音频", exts: new Set("mp3 flac ape wav aac m4a ogg wma dsf opus".split(" ")) },
+  { key: "subtitle", label: "字幕", exts: new Set("srt ass ssa sub idx sup vtt scc".split(" ")) },
+  { key: "image", label: "图片", exts: new Set("jpg jpeg png gif webp bmp tif tiff svg".split(" ")) },
+  { key: "doc", label: "文档", exts: new Set("pdf epub mobi txt doc docx xls xlsx ppt pptx chm nfo md html".split(" ")) },
+  { key: "archive", label: "压缩包", exts: new Set("zip rar 7z tar gz bz2 xz iso exe apk dmg".split(" ")) },
+];
+
+function magnetFileTypeOf(path: string): string {
+  const last = path.split("/").pop() || "";
+  const dot = last.lastIndexOf(".");
+  const ext = dot >= 0 ? last.slice(dot + 1).toLowerCase() : "";
+  for (const t of MAGNET_FILE_TYPES) {
+    if (t.exts.has(ext)) return t.key;
+  }
+  return "other";
+}
+
+function buildMagnetTree(files: Array<{ index: number; path: string; size: number }>): MagnetTreeNode[] {
+  const root: MagnetTreeNode = { name: "", path: "", isDir: true, size: 0, indexes: [], children: [] };
+  for (const f of files) {
+    const parts = f.path.split("/").filter(Boolean);
+    let cur = root;
+    for (let i = 0; i < parts.length; i++) {
+      const isFile = i === parts.length - 1;
+      const pathSoFar = parts.slice(0, i + 1).join("/");
+      let next = cur.children.find((c) => c.isDir === !isFile && c.path === pathSoFar);
+      if (!next) {
+        next = { name: parts[i], path: pathSoFar, isDir: !isFile, size: 0, indexes: [], children: [] };
+        cur.children.push(next);
+      }
+      next.size += f.size;
+      next.indexes.push(f.index);
+      cur = next;
+    }
+  }
+  const sortNodes = (nodes: MagnetTreeNode[]) => {
+    nodes.sort((a, b) => (a.isDir === b.isDir ? a.name.localeCompare(b.name) : a.isDir ? -1 : 1));
+    nodes.forEach((n) => sortNodes(n.children));
+  };
+  sortNodes(root.children);
+  return root.children;
+}
+
+/** 类型筛选：保留匹配文件与其祖先目录；"all" = 原树 */
+function filterMagnetTree(nodes: MagnetTreeNode[], type: string): MagnetTreeNode[] {
+  if (type === "all") return nodes;
+  const out: MagnetTreeNode[] = [];
+  for (const n of nodes) {
+    if (!n.isDir) {
+      if (magnetFileTypeOf(n.path) === type) out.push(n);
+    } else {
+      const children = filterMagnetTree(n.children, type);
+      if (children.length > 0) out.push({ ...n, children });
+    }
+  }
+  return out;
+}
+
+function fmtTreeSize(bytes: number): string {
+  if (!bytes || bytes <= 0) return "--";
+  const units = ["B", "KB", "MB", "GB", "TB"];
+  let v = bytes;
+  let i = 0;
+  while (v >= 1024 && i < units.length - 1) {
+    v /= 1024;
+    i += 1;
+  }
+  return `${v >= 100 || i === 0 ? Math.round(v) : v.toFixed(1)} ${units[i]}`;
+}
 
 /** 磁力下载的输入方式：粘贴磁力链接 / 上传 BT 种子文件 */
 export type MagnetInputMode = "magnet" | "torrent";
@@ -148,6 +232,9 @@ export default forwardRef<DownloadFormRef, DownloadFormProps>(
       null,
     );
     const [selectedFiles, setSelectedFiles] = useState<number[]>([]);
+    // 内容清单的目录折叠与类型筛选（多层级目录树渲染）
+    const [typeFilter, setTypeFilter] = useState<string>("all");
+    const [collapsedDirs, setCollapsedDirs] = useState<Set<string>>(new Set());
     const [uploading, setUploading] = useState(false);
     // 用户手动改过任务名后，dn/种子名不再自动覆盖
     const nameTouchedRef = useRef(false);
@@ -324,6 +411,8 @@ export default forwardRef<DownloadFormRef, DownloadFormProps>(
           throw new Error(payload?.message || `HTTP ${res.status}`);
         }
         setTorrentMeta(payload.data);
+        setTypeFilter("all");
+        setCollapsedDirs(new Set());
         setSelectedFiles(payload.data.files?.map((f) => f.index) ?? []);
         if (!nameTouchedRef.current) {
           form.setFieldValue("name", payload.data.name);
@@ -378,6 +467,8 @@ export default forwardRef<DownloadFormRef, DownloadFormProps>(
         const meta = payload.data;
         resolvedMagnetRef.current = url;
         setTorrentMeta(meta);
+        setTypeFilter("all");
+        setCollapsedDirs(new Set());
         setSelectedFiles(meta.files?.map((f) => f.index) ?? []);
         if (!nameTouchedRef.current) {
           form.setFieldValue("name", meta.name);
@@ -824,43 +915,149 @@ export default forwardRef<DownloadFormRef, DownloadFormProps>(
               const allIndexes = files?.map((f) => f.index) ?? [];
               const allSelected =
                 files !== null && selectedFiles.length === allIndexes.length;
-              // 内容清单（磁力链接解析成功 / 种子文件上传 共用）：勾选 → --select-file
-              const renderFileList = () =>
-                files &&
-                files.length > 0 && (
-                  <Form.Item label={t("torrentContent")}>
-                    <div className="max-h-40 overflow-auto rounded-lg border border-black/5 p-2 dark:border-white/10">
-                      <Checkbox
-                        checked={allSelected}
-                        indeterminate={!allSelected && selectedFiles.length > 0}
-                        onChange={(e) =>
-                          setSelectedFiles(e.target.checked ? allIndexes : [])
-                        }
-                      >
-                        {t("torrentSelectAll")}
-                      </Checkbox>
-                      <div className="mt-1 flex flex-col gap-1">
-                        {files.map((f) => (
+              // 内容清单（磁力链接解析成功 / 种子文件上传 共用）：多层级
+              // 目录树渲染 + 分文件类型筛选 + 已选汇总，勾选 → --select-file
+              const renderFileList = () => {
+                if (!files || files.length === 0) return null;
+                const tree = buildMagnetTree(files);
+                const visibleTree = filterMagnetTree(tree, typeFilter);
+                const typeCounts = new Map<string, number>();
+                for (const f of files) {
+                  const tp = magnetFileTypeOf(f.path);
+                  typeCounts.set(tp, (typeCounts.get(tp) || 0) + 1);
+                }
+                const selectedSize = files
+                  .filter((f) => selectedFiles.includes(f.index))
+                  .reduce((s, f) => s + f.size, 0);
+                const toggleSubtree = (indexes: number[], checked: boolean) =>
+                  setSelectedFiles((prev) =>
+                    checked
+                      ? [...new Set([...prev, ...indexes])]
+                      : prev.filter((i) => !indexes.includes(i)),
+                  );
+                const toggleDir = (p: string) =>
+                  setCollapsedDirs((cur) => {
+                    const next = new Set(cur);
+                    if (next.has(p)) next.delete(p);
+                    else next.add(p);
+                    return next;
+                  });
+                const renderNodes = (nodes: MagnetTreeNode[], depth: number): ReactNode[] =>
+                  nodes.map((n) => {
+                    if (!n.isDir) {
+                      return (
+                        <label
+                          key={n.path}
+                          className="flex cursor-pointer items-center gap-2 py-0.5"
+                          style={{ paddingLeft: depth * 14 + 4 }}
+                        >
                           <Checkbox
-                            key={f.index}
-                            checked={selectedFiles.includes(f.index)}
+                            checked={selectedFiles.includes(n.indexes[0])}
                             onChange={(e) =>
                               setSelectedFiles((prev) =>
                                 e.target.checked
-                                  ? [...prev, f.index]
-                                  : prev.filter((i) => i !== f.index),
+                                  ? [...prev, n.indexes[0]]
+                                  : prev.filter((i) => i !== n.indexes[0]),
                               )
                             }
+                          />
+                          <span className="min-w-0 flex-1 truncate text-xs" title={n.path}>
+                            {n.name}
+                          </span>
+                          <span className="shrink-0 text-[11px] text-black/40 dark:text-white/40">
+                            {fmtTreeSize(n.size)}
+                          </span>
+                        </label>
+                      );
+                    }
+                    const collapsed = collapsedDirs.has(n.path);
+                    const checkedCount = n.indexes.filter((i) =>
+                      selectedFiles.includes(i),
+                    ).length;
+                    return [
+                      <div
+                        key={n.path}
+                        className="flex items-center gap-1.5 rounded bg-black/[0.03] py-1 pr-2 dark:bg-white/[0.06]"
+                        style={{ paddingLeft: depth * 14 + 4 }}
+                      >
+                        <button
+                          type="button"
+                          className="flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded text-black/40 hover:text-blue-500 dark:text-white/40"
+                          onClick={() => toggleDir(n.path)}
+                          aria-label={collapsed ? "展开目录" : "折叠目录"}
+                        >
+                          {collapsed ? "▸" : "▾"}
+                        </button>
+                        <Checkbox
+                          checked={checkedCount === n.indexes.length}
+                          indeterminate={checkedCount > 0 && checkedCount < n.indexes.length}
+                          onChange={(e) => toggleSubtree(n.indexes, e.target.checked)}
+                        />
+                        <span
+                          className="min-w-0 flex-1 cursor-pointer truncate text-xs font-semibold"
+                          onClick={() => toggleDir(n.path)}
+                          title={n.path}
+                        >
+                          {n.name}
+                        </span>
+                        <span className="shrink-0 text-[11px] text-black/40 dark:text-white/40">
+                          {n.children.length} 项 · {fmtTreeSize(n.size)}
+                        </span>
+                      </div>,
+                      ...(!collapsed ? renderNodes(n.children, depth + 1) : []),
+                    ];
+                  });
+                const rendered = renderNodes(visibleTree, 0);
+                return (
+                  <Form.Item label={t("torrentContent")}>
+                    <div className="rounded-lg border border-black/5 p-2 dark:border-white/10">
+                      <div className="mb-1.5 flex flex-wrap gap-1" aria-label="文件类型筛选">
+                        <button
+                          type="button"
+                          className={`rounded-full border px-2.5 py-0.5 text-[11px] ${typeFilter === "all" ? "border-transparent bg-blue-500 text-white" : "border-black/10 text-black/60 hover:border-blue-400 hover:text-blue-500 dark:border-white/15 dark:text-white/60"}`}
+                          onClick={() => setTypeFilter("all")}
+                        >
+                          全部 {files.length}
+                        </button>
+                        {MAGNET_FILE_TYPES.filter((tp) => (typeCounts.get(tp.key) || 0) > 0).map((tp) => (
+                          <button
+                            key={tp.key}
+                            type="button"
+                            className={`rounded-full border px-2.5 py-0.5 text-[11px] ${typeFilter === tp.key ? "border-transparent bg-blue-500 text-white" : "border-black/10 text-black/60 hover:border-blue-400 hover:text-blue-500 dark:border-white/15 dark:text-white/60"}`}
+                            onClick={() => setTypeFilter(typeFilter === tp.key ? "all" : tp.key)}
                           >
-                            <span className="text-xs">
-                              {f.path}（{f.size} B）
-                            </span>
-                          </Checkbox>
+                            {tp.label} {typeCounts.get(tp.key)}
+                          </button>
                         ))}
+                      </div>
+                      <div className="max-h-56 overflow-auto">
+                        {rendered.length > 0 ? (
+                          rendered
+                        ) : (
+                          <p className="py-3 text-center text-xs text-black/40 dark:text-white/40">
+                            该类型下没有文件
+                          </p>
+                        )}
+                      </div>
+                      <div className="mt-1.5 flex items-center gap-2 border-t border-black/5 pt-1.5 text-xs text-black/50 dark:border-white/10 dark:text-white/50">
+                        <Checkbox
+                          checked={allSelected}
+                          indeterminate={!allSelected && selectedFiles.length > 0}
+                          onChange={(e) =>
+                            setSelectedFiles(e.target.checked ? allIndexes : [])
+                          }
+                        >
+                          {t("torrentSelectAll")}
+                        </Checkbox>
+                        <span className="ml-auto">
+                          已选 {selectedFiles.length}/{files.length} 个 ·{" "}
+                          {fmtTreeSize(selectedSize)}
+                        </span>
                       </div>
                     </div>
                   </Form.Item>
                 );
+              };
               // 磁力（种子文件模式）：上传 .torrent → 服务端解析预填名称与
               // 内容清单；任务 url 用服务端落盘路径，不再手输链接
               if (isMagnet && magnetMode === "torrent") {

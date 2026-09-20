@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 
 import MeiIcon from './MeiIcon';
 import { appendDiskSourceParams } from '@/lib/app-settings-client';
@@ -491,6 +491,84 @@ function magnetDisplayName(url: string): string {
   }
 }
 
+// ---- 磁力内容文件树与类型筛选（与下载中心磁力表单同构逻辑）----
+
+type MagnetFileMeta = { index: number; path: string; size: number };
+
+interface MagnetTreeNode {
+  /** 目录名 / 文件名（路径最后一段） */
+  name: string;
+  /** 目录节点 = 目录完整路径；文件节点 = 文件 path */
+  path: string;
+  isDir: boolean;
+  /** 子树合计字节 */
+  size: number;
+  /** 子树全部文件 index（1-based，用于目录级勾选） */
+  indexes: number[];
+  children: MagnetTreeNode[];
+}
+
+const MAGNET_FILE_TYPES: Array<{ key: string; label: string; exts: Set<string> }> = [
+  { key: 'video', label: '视频', exts: new Set('mp4 mkv avi mov wmv flv ts m2ts webm rmvb mpg mpeg m4v vob 3gp'.split(' ')) },
+  { key: 'audio', label: '音频', exts: new Set('mp3 flac ape wav aac m4a ogg wma dsf opus'.split(' ')) },
+  { key: 'subtitle', label: '字幕', exts: new Set('srt ass ssa sub idx sup vtt scc'.split(' ')) },
+  { key: 'image', label: '图片', exts: new Set('jpg jpeg png gif webp bmp tif tiff svg'.split(' ')) },
+  { key: 'doc', label: '文档', exts: new Set('pdf epub mobi txt doc docx xls xlsx ppt pptx chm nfo md html'.split(' ')) },
+  { key: 'archive', label: '压缩包', exts: new Set('zip rar 7z tar gz bz2 xz iso exe apk dmg'.split(' ')) },
+];
+
+function magnetFileType(path: string): string {
+  const last = path.split('/').pop() || '';
+  const dot = last.lastIndexOf('.');
+  const ext = dot >= 0 ? last.slice(dot + 1).toLowerCase() : '';
+  for (const t of MAGNET_FILE_TYPES) {
+    if (t.exts.has(ext)) return t.key;
+  }
+  return 'other';
+}
+
+/** 平铺文件清单 → 目录树（多层级目录聚合，文件 index 保持 1-based） */
+function buildMagnetTree(files: MagnetFileMeta[]): MagnetTreeNode[] {
+  const root: MagnetTreeNode = { name: '', path: '', isDir: true, size: 0, indexes: [], children: [] };
+  for (const f of files) {
+    const parts = f.path.split('/').filter(Boolean);
+    let cur = root;
+    for (let i = 0; i < parts.length; i++) {
+      const isFile = i === parts.length - 1;
+      const pathSoFar = parts.slice(0, i + 1).join('/');
+      let next = cur.children.find((c) => c.isDir === !isFile && c.path === pathSoFar);
+      if (!next) {
+        next = { name: parts[i], path: pathSoFar, isDir: !isFile, size: 0, indexes: [], children: [] };
+        cur.children.push(next);
+      }
+      next.size += f.size;
+      next.indexes.push(f.index);
+      cur = next;
+    }
+  }
+  const sortNodes = (nodes: MagnetTreeNode[]) => {
+    nodes.sort((a, b) => (a.isDir === b.isDir ? a.name.localeCompare(b.name) : a.isDir ? -1 : 1));
+    nodes.forEach((n) => sortNodes(n.children));
+  };
+  sortNodes(root.children);
+  return root.children;
+}
+
+/** 类型筛选：保留匹配文件与其祖先目录（空目录不渲染）；all = 原树 */
+function filterMagnetTree(nodes: MagnetTreeNode[], type: string): MagnetTreeNode[] {
+  if (type === 'all') return nodes;
+  const out: MagnetTreeNode[] = [];
+  for (const n of nodes) {
+    if (!n.isDir) {
+      if (magnetFileType(n.path) === type) out.push(n);
+    } else {
+      const children = filterMagnetTree(n.children, type);
+      if (children.length > 0) out.push({ ...n, children });
+    }
+  }
+  return out;
+}
+
 /**
  * 磁力投递弹层（综合搜索 → 下载中心）：与网盘搜索应用内的磁力弹层同一套
  * 交互——自动解析（DHT/tracker 抓元数据）→ 文件勾选 → 创建 bt 任务。
@@ -578,11 +656,39 @@ function MagnetDownloadDialog({ url, title, onClose }: { url: string; title: str
   }, [meta]);
 
   const files = meta?.files ?? [];
+  const tree = useMemo(() => buildMagnetTree(files), [meta]);
+  const [typeFilter, setTypeFilter] = useState<string>('all');
+  const [collapsedDirs, setCollapsedDirs] = useState<Set<string>>(new Set());
+  const visibleTree = useMemo(() => filterMagnetTree(tree, typeFilter), [tree, typeFilter]);
+  const typeCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const f of files) {
+      const t = magnetFileType(f.path);
+      counts.set(t, (counts.get(t) || 0) + 1);
+    }
+    return counts;
+  }, [meta]);
   const allSelected = files.length > 0 && selected.length === files.length;
+  const selectedSize = useMemo(
+    () => files.filter((f) => selected.includes(f.index)).reduce((s, f) => s + f.size, 0),
+    [files, selected],
+  );
   const toggleAll = (checked: boolean) =>
     setSelected(checked ? files.map((f) => f.index) : []);
   const toggleFile = (index: number, checked: boolean) =>
     setSelected((cur) => (checked ? [...cur, index] : cur.filter((i) => i !== index)));
+  /** 目录级勾选：整棵子树的文件一起选/取消（目录 checkbox 三态） */
+  const toggleSubtree = (indexes: number[], checked: boolean) =>
+    setSelected((cur) =>
+      checked ? [...new Set([...cur, ...indexes])] : cur.filter((i) => !indexes.includes(i)),
+    );
+  const toggleDir = (path: string) =>
+    setCollapsedDirs((cur) => {
+      const next = new Set(cur);
+      if (next.has(path)) next.delete(path);
+      else next.add(path);
+      return next;
+    });
   // 勾选 → selectFile 索引串（全选/未选 = 全部文件，不传）
   const selectFile =
     files.length === 0 || selected.length === 0 || selected.length === files.length
@@ -668,26 +774,92 @@ function MagnetDownloadDialog({ url, title, onClose }: { url: string; title: str
             </div>
             {files.length > 1 && (
               <div className="mei-magnet-files">
-                <label className="mei-magnet-file all">
-                  <input
-                    type="checkbox"
-                    checked={allSelected}
-                    onChange={(e) => toggleAll(e.target.checked)}
-                  />
-                  <span>全选</span>
-                </label>
-                <div className="mei-magnet-file-list">
-                  {files.map((f) => (
-                    <label key={f.index} className="mei-magnet-file">
-                      <input
-                        type="checkbox"
-                        checked={selected.includes(f.index)}
-                        onChange={(e) => toggleFile(f.index, e.target.checked)}
-                      />
-                      <span className="mei-magnet-file-path" title={f.path}>{f.path}</span>
-                      <span className="mei-magnet-file-size">{fmtMagnetSize(f.size)}</span>
-                    </label>
+                <div className="mei-magnet-typebar" aria-label="文件类型筛选">
+                  <button
+                    type="button"
+                    className={`mei-magnet-type${typeFilter === 'all' ? ' active' : ''}`}
+                    onClick={() => setTypeFilter('all')}
+                  >
+                    全部 {files.length}
+                  </button>
+                  {MAGNET_FILE_TYPES.filter((t) => (typeCounts.get(t.key) || 0) > 0).map((t) => (
+                    <button
+                      key={t.key}
+                      type="button"
+                      className={`mei-magnet-type${typeFilter === t.key ? ' active' : ''}`}
+                      onClick={() => setTypeFilter(typeFilter === t.key ? 'all' : t.key)}
+                    >
+                      {t.label} {typeCounts.get(t.key)}
+                    </button>
                   ))}
+                </div>
+                <div className="mei-magnet-file-list">
+                  {(() => {
+                    const renderNodes = (nodes: MagnetTreeNode[], depth: number): ReactNode[] =>
+                      nodes.map((n) => {
+                        if (!n.isDir) {
+                          return (
+                            <label key={n.path} className="mei-magnet-file" style={{ paddingLeft: depth * 14 + 4 }}>
+                              <input
+                                type="checkbox"
+                                checked={selected.includes(n.indexes[0])}
+                                onChange={(e) => toggleFile(n.indexes[0], e.target.checked)}
+                              />
+                              <span className="mei-magnet-file-path" title={n.path}>{n.name}</span>
+                              <span className="mei-magnet-file-size">{fmtMagnetSize(n.size)}</span>
+                            </label>
+                          );
+                        }
+                        const collapsed = collapsedDirs.has(n.path);
+                        const checkedCount = n.indexes.filter((i) => selected.includes(i)).length;
+                        const dirChecked = checkedCount === n.indexes.length;
+                        return [
+                          <div key={n.path} className="mei-magnet-dir" style={{ paddingLeft: depth * 14 + 4 }}>
+                            <button
+                              type="button"
+                              className="mei-magnet-dir-arrow"
+                              onClick={() => toggleDir(n.path)}
+                              aria-label={collapsed ? '展开目录' : '折叠目录'}
+                            >
+                              <MeiIcon icon={collapsed ? 'lucide:chevron-right' : 'lucide:chevron-down'} size={13} />
+                            </button>
+                            <input
+                              type="checkbox"
+                              checked={dirChecked}
+                              ref={(el) => {
+                                if (el) el.indeterminate = checkedCount > 0 && !dirChecked;
+                              }}
+                              onChange={(e) => toggleSubtree(n.indexes, e.target.checked)}
+                            />
+                            <span
+                              className="mei-magnet-dir-name"
+                              onClick={() => toggleDir(n.path)}
+                              title={n.path}
+                            >
+                              {n.name}
+                            </span>
+                            <span className="mei-magnet-file-size">
+                              {n.children.length} 项 · {fmtMagnetSize(n.size)}
+                            </span>
+                          </div>,
+                          ...(!collapsed ? renderNodes(n.children, depth + 1) : []),
+                        ];
+                      });
+                    const rendered = renderNodes(visibleTree, 0);
+                    return rendered.length > 0 ? rendered : (
+                      <p className="mei-magnet-empty-filter">该类型下没有文件</p>
+                    );
+                  })()}
+                </div>
+                <div className="mei-magnet-picked">
+                  已选 {selected.length}/{files.length} 个文件 · {fmtMagnetSize(selectedSize)}
+                  <button
+                    type="button"
+                    className="mei-magnet-pick-all"
+                    onClick={() => toggleAll(!allSelected)}
+                  >
+                    {allSelected ? '全不选' : '全选'}
+                  </button>
                 </div>
               </div>
             )}
