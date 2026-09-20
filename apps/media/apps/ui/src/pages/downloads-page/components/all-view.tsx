@@ -36,8 +36,18 @@ import {
   deleteMusicFile,
   deleteMusicTask,
   getMusicLibrary,
+  listMediaVideos,
   listMovieSources,
 } from "@/api/download-center";
+import {
+  isEmbeddedInShell,
+  matchMediaVideo,
+  mediaVideoTarget,
+  movieFallbackVideo,
+  playMovieRecord,
+  playMusicFile,
+} from "@/utils/play-actions";
+import { useInlinePlayer } from "./inline-player";
 import { cn, fromatDateTime } from "@/utils";
 
 export type MixedKind = "media" | "movie" | "music" | "file" | "magnet";
@@ -59,6 +69,8 @@ interface MixedItem {
   statusNode: React.ReactNode;
   /** 操作载荷：媒体任务（media/file/magnet 共用） */
   mediaTask?: DownloadTask;
+  /** 影视记录（播放/删除用完整记录；key 仅作菜单去重） */
+  movieRecord?: MovieSourceRecord;
   /** 影视记录 key（deleteMovieSource） */
   movieKey?: string;
   /** 音乐下载中任务 id */
@@ -166,12 +178,54 @@ const AllView: FC<AllViewProps> = ({ onEnter }) => {
   );
   const { menu, openMenu } = useWebContextMenu();
   const { confirmDelete, deleteDialog } = useDeleteTasks();
+  const inlinePlayer = useInlinePlayer();
   /** 日志弹层目标（media 任务：失败/下载中排障用） */
   const [logTarget, setLogTarget] = useState<{ id: number; name: string } | null>(
     null,
   );
   /** 多选集合（MixedItem.key）——对齐磁力 tab 的批量交互 */
   const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set());
+  /** 门户账户音乐状态（播放列表/收藏）——音乐右键操作的目标数据 */
+  const { data: musicStateRes, mutate: mutateMusicState } = useSWR(
+    "download-center/all/music-state",
+    async () => {
+      const r = await fetch("/api/music/state");
+      if (!r.ok) return null;
+      return (await r.json()) as {
+        loggedIn: boolean;
+        state: {
+          revision: number;
+          playlists: Array<{ id: string; name: string; songs: Array<{ id: string }> }>;
+          favorites: Array<{ id: string }>;
+          temp: Array<{ id: string }>;
+          selectedPlaylistId: string;
+        };
+      } | null;
+    },
+    { refreshInterval: 15000, revalidateOnFocus: false },
+  );
+  const musicState = musicStateRes?.state;
+
+  /** 音乐文件条目 → 门户音乐引擎 MusicSong（server-local 同构；id=/<相对路径>） */
+  const musicFileSong = (item: MixedItem) => ({
+    id: `file:${item.musicFilePath ?? ""}`,
+    name: item.title,
+    artist: item.subtitle.split(" · ")[0] || "",
+    album: "",
+    pic_id: "",
+    lyric_id: "",
+    source: "server-local",
+  });
+
+  /** 向门户外壳音乐引擎发 guest 消息（非 embedded 部署时返回 false） */
+  const sendMusicGuest = (payload: Record<string, unknown>): boolean => {
+    if (!isEmbeddedInShell()) return false;
+    window.parent.postMessage(
+      { source: "mei-music-guest", ...payload },
+      window.location.origin,
+    );
+    return true;
+  };
 
   const refreshAll = useMemoizedFn(() => {
     void mutateMedia();
@@ -182,26 +236,50 @@ const AllView: FC<AllViewProps> = ({ onEnter }) => {
   /** 差异化管理菜单（按内容类型）：首项进入对应 tab，尾部刷新；
    *  中间操作块按 kind 提供——媒体任务（取消/日志/删除三选一确认）、
    *  影视记录（删记录含文件）、音乐任务（取消）、音乐文件（删文件） */
+  /** 差异化管理菜单：提供真正的内容操作——音乐文件=播放/收藏/加入
+   *  播放列表/删除；影视=直接播放/删除；媒体视频=播放/取消/日志/删除；
+   *  磁力·文件=取消/日志/删除。公共尾部进入 tab/刷新。 */
   const buildMenuItems = (item: MixedItem): ContextMenuItem[] => {
     const kindLabel = KIND_TAG[item.kind].text;
-    const items: ContextMenuItem[] = [
-      { key: "enter", label: `进入「${kindLabel}」` },
-      { key: "sep-1", label: "", separator: true },
-    ];
-    if (item.mediaTask) {
+    const items: ContextMenuItem[] = [];
+    if (item.musicFilePath) {
+      items.push({ key: "play-music", label: "播放" });
+      items.push({ key: "fav-music", label: "收藏" });
+      const playlists = musicState?.playlists ?? [];
+      if (playlists.length > 0) {
+        for (const pl of playlists) {
+          items.push({ key: `add-pl-${pl.id}`, label: `加入「${pl.name}」` });
+        }
+      } else {
+        items.push({ key: "no-pl", label: "暂无播放列表", disabled: true });
+      }
+      items.push({ key: "sep-music", label: "", separator: true });
+      items.push({ key: "del-music-file", label: "删除文件", danger: true });
+    } else if (item.movieRecord) {
+      const playable =
+        !!item.movieRecord.playRoute || !!movieFallbackVideo(item.movieRecord);
+      items.push({ key: "play-movie", label: "立即播放", disabled: !playable });
+      items.push({ key: "sep-movie", label: "", separator: true });
+      items.push({ key: "del-movie", label: "删除记录（含文件）", danger: true });
+    } else if (item.mediaTask && item.kind === "media") {
+      if (item.active) {
+        items.push({ key: "cancel", label: "取消下载" });
+      }
+      if (item.mediaTask.status === DownloadStatus.Success) {
+        items.push({ key: "play-media", label: "播放" });
+      }
+      items.push({ key: "log", label: "查看日志" });
+      items.push({ key: "delete", label: "删除…", danger: true });
+    } else if (item.mediaTask) {
+      // 磁力 / 文件任务
       if (item.active) {
         items.push({ key: "cancel", label: "取消下载" });
       }
       items.push({ key: "log", label: "查看日志" });
       items.push({ key: "delete", label: "删除…", danger: true });
-    } else if (item.movieKey) {
-      items.push({ key: "del-movie", label: "删除记录（含文件）", danger: true });
-    } else if (item.musicTaskId !== undefined) {
-      items.push({ key: "cancel-music", label: "取消任务", danger: true });
-    } else if (item.musicFilePath) {
-      items.push({ key: "del-music-file", label: "删除文件", danger: true });
     }
     items.push({ key: "sep-2", label: "", separator: true });
+    items.push({ key: "enter", label: `进入「${kindLabel}」` });
     items.push({ key: "refresh", label: "刷新列表" });
     return items;
   };
@@ -216,6 +294,114 @@ const AllView: FC<AllViewProps> = ({ onEnter }) => {
         case "refresh":
           refreshAll();
           break;
+        case "play-music":
+          // 外壳引擎立即播放（play-now 进临时队列，不动播放列表/收藏）
+          playMusicFile({
+            path: item.musicFilePath ?? "",
+            name: item.title,
+            fileName: "",
+            artist: item.subtitle.split(" · ")[0] || "",
+            size: 0,
+            mtime: "",
+          });
+          break;
+        case "fav-music": {
+          const song = musicFileSong(item);
+          if (sendMusicGuest({ type: "toggle-favorite", song })) {
+            message.success("已在门户音乐引擎中切换收藏");
+          }
+          break;
+        }
+        case key.startsWith("add-pl-") ? key : "": {
+          // 加入播放列表：实时读账户状态（SWR 缓存的 revision 会 409）→
+          // 改 playlists → PUT 持久化 → replace-data 同步外壳引擎
+          const pid = key.slice("add-pl-".length);
+          const song = musicFileSong(item);
+          let done = false;
+          // 乐观并发（revision 落后 409）最多重试 2 次
+          for (let attempt = 0; attempt < 3 && !done; attempt++) {
+            let st: {
+              revision: number;
+              playlists: Array<{ id: string; name: string; songs: Array<{ id: string }> }>;
+              favorites: Array<{ id: string }>;
+              temp: Array<{ id: string }>;
+              selectedPlaylistId: string;
+            } | null = null;
+            try {
+              const gr = await fetch("/api/music/state");
+              st = gr.ok ? (await gr.json()).state : null;
+            } catch {
+              st = null;
+            }
+            if (!st) {
+              message.error("读取音乐状态失败");
+              break;
+            }
+            const pl = (st.playlists ?? []).find((p) => p.id === pid);
+            if (!pl) break;
+            if ((pl.songs ?? []).some((s) => s.id === song.id)) {
+              message.info(`已在「${pl.name}」中`);
+              done = true;
+              break;
+            }
+            const playlists = (st.playlists ?? []).map((p) =>
+              p.id === pid ? { ...p, songs: [song, ...(p.songs ?? [])] } : p,
+            );
+            try {
+              const r = await fetch("/api/music/state", {
+                method: "PUT",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ revision: st.revision, playlists }),
+              });
+              if (r.status === 409) continue; // 并发冲突：重读重试
+              if (!r.ok) throw new Error(`HTTP ${r.status}`);
+              sendMusicGuest({
+                type: "replace-data",
+                data: {
+                  playlists,
+                  favorites: st.favorites ?? [],
+                  temp: st.temp ?? [],
+                  selectedPlaylistId: st.selectedPlaylistId ?? "",
+                },
+              });
+              message.success(`已加入「${pl.name}」`);
+              done = true;
+            } catch {
+              message.error("加入播放列表失败");
+              break;
+            }
+          }
+          if (!done) message.warning("未能加入播放列表，请稍后重试");
+          void mutateMusicState();
+          break;
+        }
+        case "play-movie": {
+          const record = item.movieRecord;
+          if (!record) break;
+          if (record.playRoute) {
+            playMovieRecord(record);
+            break;
+          }
+          const target = movieFallbackVideo(record);
+          if (target) inlinePlayer.play(target);
+          else message.info("该记录没有可播放的文件");
+          break;
+        }
+        case "play-media": {
+          if (!item.mediaTask) break;
+          try {
+            const videos = await listMediaVideos();
+            const video = matchMediaVideo(videos, item.mediaTask.name);
+            if (video) {
+              inlinePlayer.play(mediaVideoTarget(video));
+            } else {
+              message.info("未找到该任务对应的可播放视频");
+            }
+          } catch {
+            message.error("获取视频信息失败");
+          }
+          break;
+        }
         case "cancel": {
           if (!item.mediaTask) break;
           await stopDownload(item.mediaTask.id);
@@ -336,6 +522,7 @@ const AllView: FC<AllViewProps> = ({ onEnter }) => {
         subtitle: record.category || "影视",
         active: record.status === "downloading",
         statusNode: movieStatusNode(record),
+        movieRecord: record,
         movieKey: record.key,
       });
     }
