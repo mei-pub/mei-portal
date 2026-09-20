@@ -18,10 +18,16 @@ import {
 } from "@mediago/shared-common";
 import { DownloadIcon } from "@/assets/svg";
 import { DownloadTag } from "@/components/download-tag";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Button } from "antd";
 import { useWebContextMenu, type ContextMenuItem } from "@/components/web-context-menu";
 import Terminal from "@/components/download-terminal";
 import { useDeleteTasks } from "@/components/delete-tasks-dialog";
-import { stopDownload, getDownloadTasks as fetchMediaTasks } from "@/api/download-task";
+import {
+  startDownload,
+  stopDownload,
+  getDownloadTasks as fetchMediaTasks,
+} from "@/api/download-task";
 import {
   type MovieSourceRecord,
   type MusicLibrary,
@@ -164,6 +170,8 @@ const AllView: FC<AllViewProps> = ({ onEnter }) => {
   const [logTarget, setLogTarget] = useState<{ id: number; name: string } | null>(
     null,
   );
+  /** 多选集合（MixedItem.key）——对齐磁力 tab 的批量交互 */
+  const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set());
 
   const refreshAll = useMemoizedFn(() => {
     void mutateMedia();
@@ -377,6 +385,85 @@ const AllView: FC<AllViewProps> = ({ onEnter }) => {
     });
   }, [mediaData, movieData, musicData]);
 
+  // ---- 多选与批量操作（对齐磁力 tab：全选 / 批量删除 / 清除选择 / 批量启动）----
+  const selectedItems = useMemo(
+    () => items.filter((i) => selectedKeys.has(i.key)),
+    [items, selectedKeys],
+  );
+  const allChecked = items.length > 0 && selectedKeys.size === items.length;
+  const someChecked = selectedKeys.size > 0 && !allChecked;
+  const toggleAll = (checked: boolean) =>
+    setSelectedKeys(checked ? new Set(items.map((i) => i.key)) : new Set());
+  const toggleOne = (key: string, checked: boolean) =>
+    setSelectedKeys((cur) => {
+      const next = new Set(cur);
+      if (checked) next.add(key);
+      else next.delete(key);
+      return next;
+    });
+
+  /** 批量删除（跨类型分发）：media 任务按三选一语义（choice 决定是否删
+   *  文件），影视记录同 choice，音乐任务总是停止并删记录，音乐文件仅在
+   *  含文件语义下删除（它本身就是内容） */
+  const onDeleteBatch = useMemoizedFn(async () => {
+    const sel = selectedItems;
+    if (sel.length === 0) return;
+    const mediaTasks = sel
+      .map((i) => i.mediaTask)
+      .filter((t): t is DownloadTask => !!t);
+    const unfinished = mediaTasks.filter(
+      (t) => t.status !== DownloadStatus.Success,
+    ).length;
+    const movieCount = sel.filter((i) => i.movieKey).length;
+    const musicTaskCount = sel.filter((i) => i.musicTaskId !== undefined).length;
+    const musicFileCount = sel.filter((i) => i.musicFilePath).length;
+    const choice = await confirmDelete({
+      unfinished,
+      done:
+        mediaTasks.length - unfinished + movieCount + musicTaskCount + musicFileCount,
+      label: `${sel.length} 项内容`,
+    });
+    if (choice === null) return;
+    const results = await Promise.allSettled([
+      ...mediaTasks.map((t) => deleteMediaTask(t.id, choice)),
+      ...sel
+        .filter((i) => i.movieKey)
+        .map((i) => deleteMovieSource(i.movieKey!, choice)),
+      ...sel
+        .filter((i) => i.musicTaskId !== undefined)
+        .map((i) => deleteMusicTask(i.musicTaskId!)),
+      ...(choice
+        ? sel
+            .filter((i) => i.musicFilePath)
+            .map((i) => deleteMusicFile(i.musicFilePath!))
+        : []),
+    ]);
+    const failed = results.filter((r) => r.status === "rejected").length;
+    if (failed > 0) message.error(`删除失败 ${failed} 项`);
+    else message.success("已删除");
+    setSelectedKeys(new Set());
+    refreshAll();
+  });
+
+  /** 批量启动：选中项里所有非下载中的媒体任务（failed/stopped/success 重下） */
+  const onDownloadBatch = useMemoizedFn(async () => {
+    const ids = selectedItems
+      .map((i) => i.mediaTask)
+      .filter(
+        (t): t is DownloadTask =>
+          !!t && t.status !== DownloadStatus.Downloading,
+      )
+      .map((t) => t.id);
+    if (ids.length === 0) {
+      message.info("选中项中没有可启动的下载任务");
+      return;
+    }
+    await Promise.allSettled(ids.map((id) => startDownload(id)));
+    message.success("已开始下载");
+    setSelectedKeys(new Set());
+    refreshAll();
+  });
+
   if (items.length === 0) {
     return (
       <div className="flex flex-1 items-center justify-center">
@@ -387,38 +474,96 @@ const AllView: FC<AllViewProps> = ({ onEnter }) => {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-auto pr-1">
+      {/* 批量操作条（对齐磁力 tab：全选 / 批量删除 / 清除选择 / 批量启动） */}
+      <div className="flex flex-row items-center justify-between pb-1 pl-1">
+        <div className="flex flex-row items-center gap-3">
+          <Checkbox
+            checked={allChecked}
+            {...(someChecked ? { checked: "indeterminate" as const } : {})}
+            onCheckedChange={(v) => toggleAll(v === true)}
+          />
+          <span
+            className="cursor-pointer text-sm text-[#343434] dark:text-white"
+            onClick={() => toggleAll(!allChecked)}
+          >
+            全选
+          </span>
+          {selectedKeys.size > 0 && (
+            <span className="text-xs text-[#A4A4A4]">
+              已选 {selectedKeys.size} 项
+            </span>
+          )}
+        </div>
+        <div className="flex flex-row items-center gap-3">
+          <Button
+            size="small"
+            disabled={selectedKeys.size === 0}
+            onClick={() => void onDeleteBatch()}
+          >
+            删 除
+          </Button>
+          <Button
+            size="small"
+            disabled={selectedKeys.size === 0}
+            onClick={() => setSelectedKeys(new Set())}
+          >
+            取 消
+          </Button>
+          <Button
+            size="small"
+            type="primary"
+            disabled={selectedKeys.size === 0}
+            onClick={() => void onDownloadBatch()}
+          >
+            下 载
+          </Button>
+        </div>
+      </div>
       {items.map((item) => {
         const tag = KIND_TAG[item.kind];
+        const checked = selectedKeys.has(item.key);
         return (
-          <button
+          <div
             key={item.key}
-            type="button"
-            onClick={() => onEnter(item.kind)}
             onContextMenu={(e) => onRowContextMenu(e, item)}
             className={cn(
-              "flex flex-row items-center gap-2 rounded-lg bg-[#FAFCFF] px-3 py-2 text-left transition-colors hover:bg-[#F0F4FA] dark:bg-[#27292F] dark:hover:bg-[#2E3138]",
+              "flex flex-row items-center gap-2 rounded-lg px-2 transition-colors",
+              checked
+                ? "bg-[#EAF1FB] dark:bg-[#2C3550]"
+                : "bg-[#FAFCFF] hover:bg-[#F0F4FA] dark:bg-[#27292F] dark:hover:bg-[#2E3138]",
             )}
           >
-            <DownloadTag text={tag.text} color={tag.color} />
-            <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-              <div
-                className="truncate text-sm text-[rgba(0,0,0,0.88)] dark:text-[rgba(255,255,255,0.85)]"
-                title={item.title}
-              >
-                {item.title}
+            <Checkbox
+              checked={checked}
+              onClick={(e) => e.stopPropagation()}
+              onCheckedChange={(v) => toggleOne(item.key, v === true)}
+            />
+            <button
+              type="button"
+              onClick={() => onEnter(item.kind)}
+              className="flex min-w-0 flex-1 flex-row items-center gap-2 py-2 text-left"
+            >
+              <DownloadTag text={tag.text} color={tag.color} />
+              <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+                <div
+                  className="truncate text-sm text-[rgba(0,0,0,0.88)] dark:text-[rgba(255,255,255,0.85)]"
+                  title={item.title}
+                >
+                  {item.title}
+                </div>
+                <div className="flex flex-row gap-2 text-xs text-[#B3B3B3] dark:text-[#515257]">
+                  <span className="shrink-0">
+                    {fromatDateTime(
+                      item.ts > 0 ? new Date(item.ts) : undefined,
+                      "YYYY/MM/DD HH:mm",
+                    )}
+                  </span>
+                  <span className="truncate">{item.subtitle}</span>
+                </div>
               </div>
-              <div className="flex flex-row gap-2 text-xs text-[#B3B3B3] dark:text-[#515257]">
-                <span className="shrink-0">
-                  {fromatDateTime(
-                    item.ts > 0 ? new Date(item.ts) : undefined,
-                    "YYYY/MM/DD HH:mm",
-                  )}
-                </span>
-                <span className="truncate">{item.subtitle}</span>
-              </div>
-            </div>
-            {item.statusNode}
-          </button>
+              {item.statusNode}
+            </button>
+          </div>
         );
       })}
       {menu}
