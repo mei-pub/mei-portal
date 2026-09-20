@@ -641,11 +641,19 @@ function MagnetDownloadDialog({ url, title, onClose }: { url: string; title: str
         {resolving && (
           <div className="mei-magnet-resolving">
             <span className="mei-search-spinner" />
-            正在解析磁力内容（DHT / tracker 查找做种节点，冷门资源可能需要一分钟）…
+            正在解析磁力内容（DHT / tracker 查找做种节点，冷门资源可能需要一两分钟）…
           </div>
         )}
 
-        {error && <p className="mei-magnet-error">{error}</p>}
+        {error && !resolving && (
+          <div className="mei-magnet-error-wrap">
+            <p className="mei-magnet-error">{error}</p>
+            <button type="button" className="mei-magnet-btn" onClick={() => void resolve(url)}>
+              <MeiIcon icon="lucide:refresh-cw" size={13} />
+              重试
+            </button>
+          </div>
+        )}
 
         {meta && !resolving && (
           <>

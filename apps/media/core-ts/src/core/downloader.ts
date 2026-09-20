@@ -718,7 +718,7 @@ export class DownloaderSvc {
   async resolveMagnetBt(
     magnet: string,
     stagingRoot: string,
-    timeoutMs = 50000,
+    timeoutMs = 100000,
   ): Promise<BtResolveResult> {
     const qbit = this.qbit();
     const hashMatch = /urn:btih:([0-9a-fA-F]{40})/i.exec(magnet);
@@ -748,6 +748,13 @@ export class DownloaderSvc {
     const added = await qbit.addMagnet(withBtTrackers(magnet), {
       savepath: stagingDir,
     });
+    if (added) {
+      // 新任务首轮 tracker announce 有随机间隔（数十秒），立即强制通告，
+      // 让 tracker 通道在解析窗口内尽早返回 peer
+      await qbit
+        .reannounceTorrent(hash)
+        .catch((err) => logger.warn(`reannounce failed: ${err}`));
+    }
     if (!added) {
       // 竞态（add 瞬间已存在）：按已存在语义返回
       const again = (await qbit.getInfo(hash))[0];

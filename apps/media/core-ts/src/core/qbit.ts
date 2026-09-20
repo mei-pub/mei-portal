@@ -305,9 +305,18 @@ export class QBitClient {
     }
   }
 
+  /** 强制立即向全部 tracker announce（qB 新任务首轮 announce 有随机间隔，
+   *  解析场景等不起——立即 announce 让 tracker 通道尽早返回 peer） */
+  async reannounceTorrent(hash: string): Promise<void> {
+    const res = await this.request("/api/v2/torrents/reannounce", {
+      method: "POST",
+      body: new URLSearchParams({ hashes: hash }),
+    });
+    await this.ensureOk(res, "tracker 重通告");
+  }
+
   /** 改种子名（下载中心任务名 → qB 种子名/落盘名） */
-  async renameTorrent(hash: string, name: string): Promise<void> {
-    const body = new URLSearchParams({ hash, name });
+  async renameTorrent(hash: string, name: string): Promise<void> {    const body = new URLSearchParams({ hash, name });
     const res = await this.request("/api/v2/torrents/rename", {
       method: "POST",
       body,

@@ -1019,6 +1019,18 @@ html:not(.mei-topbar-off) .mei-search-page {
   color: var(--mei-text-muted);
   font-size: 13px;
 }
+.mei-magnet-error-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.mei-magnet-error-wrap .mei-magnet-btn {
+  align-self: flex-end;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+}
 .mei-magnet-error {
   margin: 0;
   padding: 10px 12px;
