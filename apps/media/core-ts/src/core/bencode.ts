@@ -106,31 +106,36 @@ function toNum(v: unknown): number {
 
 /**
  * 计算种子文件的 infohash（info 字典原始字节的 sha1，小写 hex）。
- * 不做完整解码 —— 按字节定位根字典的 `4:info` 键后扫描配对区间：
- * 公共 torrent 缓存返回体必须与磁力 btih 一致（防缓存污染 / 错内容）。
+ * 不做完整解码 —— 从根字典起按 bencode 键值对齐遍历定位 `info` 键后
+ * 扫描配对区间：公共 torrent 缓存返回体必须与磁力 btih 一致（防缓存
+ * 污染 / 错内容）。不能用 indexOf("4:info")——文件路径等字符串内容里
+ * 恰好出现 "4:info" 字节时会被误导（实测踩过：75 文件种子算出错 hash）。
  * 结构异常返回 null，由调用方拒绝。
  */
 export function torrentInfoHash(buf: Buffer): string | null {
-  const marker = buf.indexOf(Buffer.from("4:info"));
-  if (marker < 0) return null;
-  const start = marker + 6; // 跳过 "4:info"，指向 info 值（'d'）
+  if (buf[0] !== 0x64) return null; // 根必须是 dict 'd'
 
-  /** 扫描一个容器（list/dict 已消费起始符）到配对 'e'；返回 e 的下一位，失败 -1 */
-  const scan = (p: number): number => {
+  /** 读取 p 处的一个完整 bencode 值；返回结束位（'e'/串尾的下一位），失败 -1。
+   *  注意标量（整数/字符串）读到一个即返回——不能像容器那样继续循环，
+   *  否则字符串 value 之后的顶层结构会被当作容器成员整体吞掉（实测踩过：
+   *  comment 字符串后接 created by 键，扁平扫描一路吞到文件尾）。 */
+  const readValue = (p: number): number => {
     for (;;) {
       if (p < 0 || p >= buf.length) return -1;
       const c = buf[p]!;
       if (c === 0x69) {
         // 'i' 整数到 'e'
-        p = buf.indexOf(0x65, p);
-        if (p < 0) return -1;
-        p += 1;
+        const e = buf.indexOf(0x65, p);
+        return e < 0 ? -1 : e + 1;
       } else if (c === 0x6c || c === 0x64) {
-        // 'l'/'d' 进入嵌套容器
-        p = scan(p + 1);
-      } else if (c === 0x65) {
-        // 'e' 当前容器结束
-        return p + 1;
+        // 'l'/'d' 容器：内部成员依次读取直到配对 'e'
+        let q = p + 1;
+        for (;;) {
+          if (q >= buf.length) return -1;
+          if (buf[q] === 0x65) return q + 1;
+          q = readValue(q);
+          if (q < 0) return -1;
+        }
       } else if (c >= 0x30 && c <= 0x39) {
         // 字符串长度前缀
         const colon = buf.indexOf(0x3a, p);
@@ -140,19 +145,42 @@ export function torrentInfoHash(buf: Buffer): string | null {
           10,
         );
         if (!Number.isFinite(len) || len < 0) return -1;
-        p = colon + 1 + len;
+        return colon + 1 + len;
       } else {
         return -1;
       }
     }
   };
 
-  const end = scan(start);
-  if (end < 0) return null;
-  return crypto
-    .createHash("sha1")
-    .update(buf.subarray(start, end))
-    .digest("hex");
+  /** 读取 p 处的 bencode 字符串键；返回 [key 字节, value 起始位]，失败 null */
+  const readKey = (p: number): [Buffer, number] | null => {
+    const colon = buf.indexOf(0x3a, p);
+    if (colon < 0) return null;
+    const len = Number.parseInt(buf.subarray(p, colon).toString("ascii"), 10);
+    if (!Number.isFinite(len) || len < 0) return null;
+    const keyStart = colon + 1;
+    return [buf.subarray(keyStart, keyStart + len), keyStart + len];
+  };
+
+  // 顶层键值对齐遍历：只有根字典的键 "info" 才是目标，字符串内容不算
+  let p = 1;
+  const infoKey = Buffer.from("info");
+  for (;;) {
+    if (p >= buf.length || buf[p] === 0x65) return null; // 遍历完没找到
+    const kv = readKey(p);
+    if (!kv) return null;
+    const [key, valStart] = kv;
+    if (key.equals(infoKey)) {
+      const end = readValue(valStart);
+      if (end < 0) return null;
+      return crypto
+        .createHash("sha1")
+        .update(buf.subarray(valStart, end))
+        .digest("hex");
+    }
+    p = readValue(valStart); // 跳过该键的 value，继续下一键
+    if (p < 0) return null;
+  }
 }
 
 /**

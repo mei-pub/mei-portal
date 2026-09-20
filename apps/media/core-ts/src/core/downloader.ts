@@ -6,7 +6,7 @@ import crypto from "node:crypto";
 import { spawn, type ChildProcess } from "node:child_process";
 import { logger } from "../logger.ts";
 import { execRun, CanceledError } from "./runner.ts";
-import { torrentInfoHash, type TorrentFileEntry } from "./bencode.ts";
+import { extractTorrentMeta, torrentInfoHash, type TorrentFileEntry } from "./bencode.ts";
 import {
   QBitClient,
   QBitUnavailableError,
@@ -805,13 +805,73 @@ export class DownloaderSvc {
       }
       await new Promise((r) => setTimeout(r, 500));
     }
-    // 超时：清掉暂存种子，不留半成品
+    // 超时：qB/aria2 双通道都没等到 metadata——最后试一次公共 .torrent
+    // 索引网关（大量 DHT 死链在 itorrents 等索引站有完整 metadata 存档，
+    // 按 infohash 直拉即可），拿到即无需任何 peer
+    const viaIndex = await this.resolveMagnetViaIndexGateway(
+      hash,
+      stagingRoot,
+    ).catch((err) => {
+      logger.warn(`index gateway resolve failed: ${err}`);
+      return null;
+    });
+    // 无论网关成败：清掉暂存种子，不留半成品
     await qbit
       .deleteTorrent(hash, true)
       .catch((err) => logger.warn(`staging cleanup failed: ${err}`));
+    if (viaIndex) return viaIndex;
     throw new Error(
       "磁力解析超时：DHT 与公共 tracker 均未发现做种节点，该资源可能已无人做种",
     );
+  }
+
+  /**
+   * 公共 .torrent 索引网关兜底（itorrents.org → 301 → itorrents.net）：
+   * 按大写 HEX infohash 直拉历史存档，校验 infohash 匹配（防错档/投毒）
+   * 后提取元数据并落 torrents 缓存——后续提交任务直接用该 .torrent
+   * re-add（免重抓 metadata），全程不经 qB、无 staging 残留。
+   */
+  private async resolveMagnetViaIndexGateway(
+    hash: string,
+    stagingRoot: string,
+  ): Promise<BtResolveResult | null> {
+    const url = `https://itorrents.org/torrent/${hash.toUpperCase()}.torrent`;
+    const res = await fetch(url, {
+      redirect: "follow",
+      signal: AbortSignal.timeout(20000),
+    });
+    if (!res.ok) return null;
+    const buf = Buffer.from(await res.arrayBuffer());
+    // sanity：过小不是种子，过大（>20MB）异常拒绝
+    if (buf.length < 100 || buf.length > 20_000_000) return null;
+    // infohash 校验：网关返回的必须就是请求的那个种子
+    const got = torrentInfoHash(buf);
+    if (got !== hash) {
+      logger.warn(
+        `index gateway infohash mismatch: want=${hash} got=${got}`,
+      );
+      return null;
+    }
+    const meta = extractTorrentMeta(buf);
+    if (!meta.name || meta.size <= 0) return null;
+    // 落 torrents 缓存：提交任务时免重抓（downloadBtViaQbit 的
+    // torrentCache 命中即用，skipChecking re-add 到任务目录）
+    const torrentCache = path.join(
+      path.dirname(stagingRoot),
+      `${hash}.torrent`,
+    );
+    fs.writeFileSync(torrentCache, buf);
+    logger.info(
+      `magnet resolved via index gateway: ${hash} (${meta.name}, ${(buf.length / 1024).toFixed(1)}KB archive)`,
+    );
+    return {
+      hash,
+      name: meta.name,
+      size: meta.size,
+      files: meta.files,
+      existed: false,
+      completed: false,
+    };
   }
 
   /**
