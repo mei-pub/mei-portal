@@ -1014,6 +1014,7 @@ export class DownloaderSvc {
     } satisfies ProgressEvent);
 
     let unavailableStreak = 0;
+    let verifyAttempts = 0;
     for (;;) {
       await new Promise((r) => setTimeout(r, 1000));
       if (signal.aborted) {
@@ -1046,7 +1047,47 @@ export class DownloaderSvc {
         } satisfies ProgressEvent);
         return;
       }
-      if (info.state === "error" || info.state === "missingFiles") {
+      if (info.state === "missingFiles") {
+        // qB 对「add 后尚未创建文件即重启」的种子恢复失败标记 missingFiles
+        //（日志 Failed to restore torrent）。4.5.2 没有 torrents/verify
+        //（5.x 才有，实测 404）——恢复 = delete（保留文件）+ re-add，
+        // 已下数据在 re-add 后经检查归位；限 3 次
+        if (verifyAttempts < 3) {
+          verifyAttempts += 1;
+          logger.warn(
+            `bt task ${p.id}: missingFiles detected, re-adding torrent (attempt ${verifyAttempts})`,
+          );
+          await qbit
+            .deleteTorrent(hash, false)
+            .catch((err) => logger.warn(`bt readd delete failed: ${err}`));
+          const torrentCache = path.join(
+            path.dirname(btStagingRoot(this.cfg.getConfigDir?.() ?? "/data/media")),
+            `${hash}.torrent`,
+          );
+          try {
+            if (fs.existsSync(torrentCache)) {
+              await qbit.addTorrentFile(fs.readFileSync(torrentCache), {
+                savepath: saveDir,
+                name: `${hash}.torrent`,
+                skipChecking: true,
+              });
+            } else if (/^magnet:/i.test(p.url)) {
+              await qbit.addMagnet(withBtTrackers(p.url), {
+                savepath: saveDir,
+              });
+            }
+            await qbit.startTorrent(hash);
+          } catch (err) {
+            logger.warn(`bt readd failed: ${err}`);
+          }
+          await new Promise((r) => setTimeout(r, 2000));
+          continue;
+        }
+        throw new Error(
+          `BT 下载出错（missingFiles，重加 ${verifyAttempts} 次未恢复）`,
+        );
+      }
+      if (info.state === "error") {
         throw new Error(`BT 下载出错（${info.state}）`);
       }
       cb.onProgress?.({
