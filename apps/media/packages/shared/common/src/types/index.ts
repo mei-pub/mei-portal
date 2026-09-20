@@ -17,8 +17,12 @@ export interface DownloadTask {
 }
 
 export enum DownloadFilter {
+  /** 进行中（status != success）——媒体/文件面板用（完成品有专门的管理页） */
   list = "list",
+  /** 仅已完成 */
   done = "done",
+  /** 全部状态——磁力面板用：磁力任务没有独立已下载页，完成品留在本列表 */
+  all = "",
 }
 
 export interface DownloadTaskPagination {

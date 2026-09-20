@@ -7,7 +7,7 @@ import { DownloadList } from "@/pages/home-page/components/download-list";
 const MagnetPanel: FC = () => {
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <DownloadList filter={DownloadFilter.list} taskType="bt" />
+      <DownloadList filter={DownloadFilter.all} taskType="bt" />
     </div>
   );
 };
