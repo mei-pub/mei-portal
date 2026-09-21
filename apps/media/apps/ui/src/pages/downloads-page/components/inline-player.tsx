@@ -22,7 +22,7 @@ export interface InlineVideoTarget {
   url: string;
 }
 
-interface InlinePlayerApi {
+export interface InlinePlayerApi {
   play: (target: InlineVideoTarget) => void;
 }
 

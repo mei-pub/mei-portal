@@ -21,6 +21,8 @@ import {
 import { playMusicFile } from "@/utils/play-actions";
 import { cn, fromatDateTime } from "@/utils";
 import { useDeleteTasks } from "@/components/delete-tasks-dialog";
+import { useContentMenu } from "./content-menu";
+import { useInlinePlayer } from "./inline-player";
 import { useSharedPoll } from "./shared-poll";
 
 const EMPTY_LIBRARY: MusicLibrary = { tasks: [], files: [] };
@@ -37,6 +39,12 @@ const MusicPanel: FC = () => {
   const { confirmDelete, deleteDialog } = useDeleteTasks();
   const { message, modal } = App.useApp();
   const { t } = useTranslation();
+  // 内容级右键菜单（播放/收藏/加入播放列表/取消/删除）——能力对齐全部 tab
+  const { menu, openMusicFileMenu, openMusicTaskMenu } = useContentMenu({
+    refresh: useMemoizedFn(() => void mutate()),
+    inlinePlayer: useInlinePlayer(),
+    confirmDelete,
+  });
   const { data, error, isLoading, mutate } = useSWR(
     "download-center/music",
     getMusicLibrary,
@@ -106,6 +114,9 @@ const MusicPanel: FC = () => {
             <div
               key={String(task.id)}
               className="flex flex-row items-center gap-2 rounded-lg bg-[#FAFCFF] px-3 py-2 dark:bg-[#27292F]"
+              onContextMenu={(e) =>
+                openMusicTaskMenu(e, task.id, task.song?.name ?? "-")
+              }
             >
               <div className="flex min-w-0 flex-1 flex-col gap-1">
                 <div className="flex flex-row items-center gap-2">
@@ -168,6 +179,13 @@ const MusicPanel: FC = () => {
           <div
             key={file.path || file.fileName}
             className="flex flex-row items-center gap-2 rounded-lg bg-[#FAFCFF] px-3 py-2 dark:bg-[#27292F]"
+            onContextMenu={(e) =>
+              openMusicFileMenu(e, {
+                path: file.path,
+                name: file.name || file.fileName,
+                artist: file.artist || "",
+              })
+            }
           >
             <div className="flex min-w-0 flex-1 flex-col gap-1">
               <div
@@ -231,6 +249,7 @@ const MusicPanel: FC = () => {
     <div className="flex flex-1 flex-col gap-3 overflow-auto pr-1">
       {renderTasks()}
       {renderFiles()}
+      {menu}
       {deleteDialog}
     </div>
   );

@@ -4,7 +4,7 @@
 // 进行中任务稳定置前。每行展示来源类别徽标 + 状态 + 名称 + 时间，点击行跳转
 // 对应分类 tab；右键行弹出差异化管理菜单（按内容类型提供操作，web 自绘）。
 // 数据 5s 轻轮询保持状态新鲜（三源合计数据量小）。
-import { App, Empty, Modal } from "antd";
+import { App, Empty } from "antd";
 import { useMemoizedFn } from "ahooks";
 import {
   type FC,
@@ -21,11 +21,10 @@ import { DownloadTag } from "@/components/download-tag";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Button } from "antd";
 import { useWebContextMenu, type ContextMenuItem } from "@/components/web-context-menu";
-import Terminal from "@/components/download-terminal";
+import { useContentMenu } from "./content-menu";
 import { useDeleteTasks } from "@/components/delete-tasks-dialog";
 import {
   startDownload,
-  stopDownload,
   getDownloadTasks as fetchMediaTasks,
 } from "@/api/download-task";
 import {
@@ -36,17 +35,9 @@ import {
   deleteMusicFile,
   deleteMusicTask,
   getMusicLibrary,
-  listMediaVideos,
   listMovieSources,
 } from "@/api/download-center";
-import {
-  isEmbeddedInShell,
-  matchMediaVideo,
-  mediaVideoTarget,
-  movieFallbackVideo,
-  playMovieRecord,
-  playMusicFile,
-} from "@/utils/play-actions";
+import { movieFallbackVideo } from "@/utils/play-actions";
 import { useInlinePlayer } from "./inline-player";
 import { cn, fromatDateTime } from "@/utils";
 
@@ -179,59 +170,26 @@ const AllView: FC<AllViewProps> = ({ onEnter }) => {
   const { menu, openMenu } = useWebContextMenu();
   const { confirmDelete, deleteDialog } = useDeleteTasks();
   const inlinePlayer = useInlinePlayer();
-  /** 日志弹层目标（media 任务：失败/下载中排障用） */
-  const [logTarget, setLogTarget] = useState<{ id: number; name: string } | null>(
-    null,
-  );
   /** 多选集合（MixedItem.key）——对齐磁力 tab 的批量交互 */
   const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set());
-  /** 门户账户音乐状态（播放列表/收藏）——音乐右键操作的目标数据 */
-  const { data: musicStateRes, mutate: mutateMusicState } = useSWR(
-    "download-center/all/music-state",
-    async () => {
-      const r = await fetch("/api/music/state");
-      if (!r.ok) return null;
-      return (await r.json()) as {
-        loggedIn: boolean;
-        state: {
-          revision: number;
-          playlists: Array<{ id: string; name: string; songs: Array<{ id: string }> }>;
-          favorites: Array<{ id: string }>;
-          temp: Array<{ id: string }>;
-          selectedPlaylistId: string;
-        };
-      } | null;
-    },
-    { refreshInterval: 15000, revalidateOnFocus: false },
-  );
-  const musicState = musicStateRes?.state;
-
-  /** 音乐文件条目 → 门户音乐引擎 MusicSong（server-local 同构；id=/<相对路径>） */
-  const musicFileSong = (item: MixedItem) => ({
-    id: `file:${item.musicFilePath ?? ""}`,
-    name: item.title,
-    artist: item.subtitle.split(" · ")[0] || "",
-    album: "",
-    pic_id: "",
-    lyric_id: "",
-    source: "server-local",
-  });
-
-  /** 向门户外壳音乐引擎发 guest 消息（非 embedded 部署时返回 false） */
-  const sendMusicGuest = (payload: Record<string, unknown>): boolean => {
-    if (!isEmbeddedInShell()) return false;
-    window.parent.postMessage(
-      { source: "mei-music-guest", ...payload },
-      window.location.origin,
-    );
-    return true;
-  };
 
   const refreshAll = useMemoizedFn(() => {
     void mutateMedia();
     void mutateMovie();
     void mutateMusic();
   });
+
+  // 内容级菜单/动作共享底座（与各分类 tab 同源）：音乐 guest 协议、
+  // 任务/影视/音乐的载荷级动作、日志弹层
+  const {
+    menu: _sharedMenu,
+    logModal,
+    music,
+    taskAction,
+    movieAction,
+    musicFileAction,
+    musicTaskAction,
+  } = useContentMenu({ refresh: refreshAll, inlinePlayer, confirmDelete });
 
   /** 差异化管理菜单（按内容类型）：首项进入对应 tab，尾部刷新；
    *  中间操作块按 kind 提供——媒体任务（取消/日志/删除三选一确认）、
@@ -245,7 +203,7 @@ const AllView: FC<AllViewProps> = ({ onEnter }) => {
     if (item.musicFilePath) {
       items.push({ key: "play-music", label: "播放" });
       items.push({ key: "fav-music", label: "收藏" });
-      const playlists = musicState?.playlists ?? [];
+      const playlists = music.musicState?.playlists ?? [];
       if (playlists.length > 0) {
         for (const pl of playlists) {
           items.push({ key: `add-pl-${pl.id}`, label: `加入「${pl.name}」` });
@@ -284,203 +242,45 @@ const AllView: FC<AllViewProps> = ({ onEnter }) => {
     return items;
   };
 
-  /** 菜单动作分发 */
+  /** 菜单动作分发（载荷级动作复用共享实现；进入/刷新为本视图特有） */
   const handleMenuAction = useMemoizedFn(
     async (item: MixedItem, key: string) => {
-      switch (key) {
-        case "enter":
-          onEnter(item.kind);
-          break;
-        case "refresh":
-          refreshAll();
-          break;
-        case "play-music":
-          // 外壳引擎立即播放（play-now 进临时队列，不动播放列表/收藏）
-          playMusicFile({
-            path: item.musicFilePath ?? "",
-            name: item.title,
-            fileName: "",
-            artist: item.subtitle.split(" · ")[0] || "",
-            size: 0,
-            mtime: "",
-          });
-          break;
-        case "fav-music": {
-          const song = musicFileSong(item);
-          if (sendMusicGuest({ type: "toggle-favorite", song })) {
-            message.success("已在门户音乐引擎中切换收藏");
-          }
-          break;
-        }
-        case key.startsWith("add-pl-") ? key : "": {
-          // 加入播放列表：实时读账户状态（SWR 缓存的 revision 会 409）→
-          // 改 playlists → PUT 持久化 → replace-data 同步外壳引擎
-          const pid = key.slice("add-pl-".length);
-          const song = musicFileSong(item);
-          let done = false;
-          // 乐观并发（revision 落后 409）最多重试 2 次
-          for (let attempt = 0; attempt < 3 && !done; attempt++) {
-            let st: {
-              revision: number;
-              playlists: Array<{ id: string; name: string; songs: Array<{ id: string }> }>;
-              favorites: Array<{ id: string }>;
-              temp: Array<{ id: string }>;
-              selectedPlaylistId: string;
-            } | null = null;
-            try {
-              const gr = await fetch("/api/music/state");
-              st = gr.ok ? (await gr.json()).state : null;
-            } catch {
-              st = null;
-            }
-            if (!st) {
-              message.error("读取音乐状态失败");
-              break;
-            }
-            const pl = (st.playlists ?? []).find((p) => p.id === pid);
-            if (!pl) break;
-            if ((pl.songs ?? []).some((s) => s.id === song.id)) {
-              message.info(`已在「${pl.name}」中`);
-              done = true;
-              break;
-            }
-            const playlists = (st.playlists ?? []).map((p) =>
-              p.id === pid ? { ...p, songs: [song, ...(p.songs ?? [])] } : p,
-            );
-            try {
-              const r = await fetch("/api/music/state", {
-                method: "PUT",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ revision: st.revision, playlists }),
-              });
-              if (r.status === 409) continue; // 并发冲突：重读重试
-              if (!r.ok) throw new Error(`HTTP ${r.status}`);
-              sendMusicGuest({
-                type: "replace-data",
-                data: {
-                  playlists,
-                  favorites: st.favorites ?? [],
-                  temp: st.temp ?? [],
-                  selectedPlaylistId: st.selectedPlaylistId ?? "",
-                },
-              });
-              message.success(`已加入「${pl.name}」`);
-              done = true;
-            } catch {
-              message.error("加入播放列表失败");
-              break;
-            }
-          }
-          if (!done) message.warning("未能加入播放列表，请稍后重试");
-          void mutateMusicState();
-          break;
-        }
-        case "play-movie": {
-          const record = item.movieRecord;
-          if (!record) break;
-          if (record.playRoute) {
-            playMovieRecord(record);
-            break;
-          }
-          const target = movieFallbackVideo(record);
-          if (target) inlinePlayer.play(target);
-          else message.info("该记录没有可播放的文件");
-          break;
-        }
-        case "play-media": {
-          if (!item.mediaTask) break;
-          try {
-            const videos = await listMediaVideos();
-            const video = matchMediaVideo(videos, item.mediaTask.name);
-            if (video) {
-              inlinePlayer.play(mediaVideoTarget(video));
-            } else {
-              message.info("未找到该任务对应的可播放视频");
-            }
-          } catch {
-            message.error("获取视频信息失败");
-          }
-          break;
-        }
-        case "cancel": {
-          if (!item.mediaTask) break;
-          await stopDownload(item.mediaTask.id);
-          message.success("已取消下载");
-          refreshAll();
-          break;
-        }
-        case "log":
-          if (item.mediaTask) {
-            setLogTarget({ id: item.mediaTask.id, name: item.mediaTask.name });
-          }
-          break;
-        case "delete": {
-          if (!item.mediaTask) break;
-          const task = item.mediaTask;
-          const unfinished = task.status !== DownloadStatus.Success ? 1 : 0;
-          const choice = await confirmDelete({
-            unfinished,
-            done: 1 - unfinished,
-            label: `任务「${task.name}」`,
-          });
-          if (choice === null) break;
-          try {
-            await deleteMediaTask(task.id, choice);
-            message.success("已删除");
-          } catch {
-            message.error("删除失败");
-          }
-          refreshAll();
-          break;
-        }
-        case "del-movie": {
-          if (!item.movieKey) break;
-          modal.confirm({
-            title: `删除《${item.title}》的下载记录？`,
-            content: "将同时删除已下载的视频文件。",
-            okText: "删除",
-            okButtonProps: { danger: true },
-            onOk: async () => {
-              try {
-                await deleteMovieSource(item.movieKey!, true);
-                message.success("已删除");
-              } catch {
-                message.error("删除失败");
-              }
-              refreshAll();
-            },
-          });
-          break;
-        }
-        case "cancel-music": {
-          if (item.musicTaskId === undefined) break;
-          try {
-            await deleteMusicTask(item.musicTaskId);
-            message.success("已取消");
-          } catch {
-            message.error("操作失败");
-          }
-          refreshAll();
-          break;
-        }
-        case "del-music-file": {
-          if (!item.musicFilePath) break;
-          modal.confirm({
-            title: `删除音乐文件「${item.title}」？`,
-            okText: "删除",
-            okButtonProps: { danger: true },
-            onOk: async () => {
-              try {
-                await deleteMusicFile(item.musicFilePath!);
-                message.success("已删除");
-              } catch {
-                message.error("删除失败");
-              }
-              refreshAll();
-            },
-          });
-          break;
-        }
+      if (key === "enter") {
+        onEnter(item.kind);
+        return;
+      }
+      if (key === "refresh") {
+        refreshAll();
+        return;
+      }
+      if (item.musicFilePath) {
+        // 音乐文件：播放/收藏/加入播放列表/删除文件（含 409 并发重试链路）
+        await musicFileAction(key, {
+          path: item.musicFilePath,
+          name: item.title,
+          artist: item.subtitle.split(" · ")[0] || "",
+        });
+        return;
+      }
+      if (
+        item.movieRecord &&
+        (key === "play-movie" || key === "del-movie")
+      ) {
+        await movieAction(key, item.movieRecord);
+        return;
+      }
+      if (
+        item.mediaTask &&
+        (key === "play-media" ||
+          key === "cancel" ||
+          key === "log" ||
+          key === "delete")
+      ) {
+        await taskAction(key, item.mediaTask);
+        return;
+      }
+      if (item.musicTaskId !== undefined && key === "cancel-music") {
+        await musicTaskAction(key, item.musicTaskId);
       }
     },
   );
@@ -755,21 +555,7 @@ const AllView: FC<AllViewProps> = ({ onEnter }) => {
       })}
       {menu}
       {deleteDialog}
-      <Modal
-        open={logTarget !== null}
-        title="下载日志"
-        onCancel={() => setLogTarget(null)}
-        footer={null}
-        width={720}
-        styles={{ body: { paddingTop: 8 } }}
-      >
-        <p className="mb-2 truncate text-xs text-black/45 dark:text-white/45">
-          {logTarget?.name}
-        </p>
-        <div className="h-[46vh] overflow-hidden rounded-lg bg-black">
-          {logTarget && <Terminal id={logTarget.id} />}
-        </div>
-      </Modal>
+      {logModal}
     </div>
   );
 };

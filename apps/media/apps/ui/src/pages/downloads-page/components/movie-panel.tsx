@@ -18,6 +18,7 @@ import {
 } from "@/api/download-center";
 import { movieFallbackVideo, playMovieRecord } from "@/utils/play-actions";
 import { useInlinePlayer } from "./inline-player";
+import { useContentMenu } from "./content-menu";
 import { useDeleteTasks } from "@/components/delete-tasks-dialog";
 import { cn } from "@/utils";
 import { useSharedPoll } from "./shared-poll";
@@ -59,6 +60,12 @@ const MoviePanel: FC = () => {
   const inlinePlayer = useInlinePlayer();
   const { confirmDelete, deleteDialog } = useDeleteTasks();
   const { message } = App.useApp();
+  // 内容级右键菜单（立即播放/删除含文件）——能力对齐全部 tab
+  const { menu, openMovieMenu } = useContentMenu({
+    refresh: useMemoizedFn(() => void mutate()),
+    inlinePlayer,
+    confirmDelete,
+  });
   const { t } = useTranslation();
   const { data, error, isLoading, mutate } = useSWR(
     "download-center/movie",
@@ -139,6 +146,7 @@ const MoviePanel: FC = () => {
           "flex flex-row items-center gap-2 rounded-lg bg-[#FAFCFF] px-3 py-2 dark:bg-[#27292F]",
           isFailed && "opacity-90",
         )}
+        onContextMenu={(e) => openMovieMenu(e, record)}
       >
         <div className="flex min-w-0 flex-1 flex-col gap-1">
           <div
@@ -251,6 +259,7 @@ const MoviePanel: FC = () => {
   return (
     <div className="flex flex-1 flex-col gap-4 overflow-auto pr-1">
       {renderGroups()}
+      {menu}
       {deleteDialog}
     </div>
   );

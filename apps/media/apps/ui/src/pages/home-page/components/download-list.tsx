@@ -13,9 +13,11 @@ import { startDownload, stopDownload } from "@/api/download-task";
 import { deleteMediaTask } from "@/api/download-center";
 import { useDeleteTasks } from "@/components/delete-tasks-dialog";
 import { useTasks } from "@/hooks/use-tasks";
-import { cn, tdApp } from "@/utils";
+import { cn, isWeb, tdApp } from "@/utils";
 import { DownloadTaskItem } from "./download-item";
 import { ListHeader } from "./list-header";
+import { useContentMenu, type ContextMenuItem } from "@/pages/downloads-page/components/content-menu";
+import { useInlinePlayer } from "@/pages/downloads-page/components/inline-player";
 
 interface Props {
   filter: DownloadFilter;
@@ -36,7 +38,7 @@ export function DownloadTaskList({
   const { message } = App.useApp();
   const { t } = useTranslation();
   const editFormRef = useRef<DownloadFormRef>(null);
-  const refreshTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const refreshTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const downloadListId = useId();
   const { mutate, isLoading, data } = useTasks(filter, taskType);
 
@@ -117,25 +119,38 @@ export function DownloadTaskList({
     mutate();
   });
 
-  const handleContext = useMemoizedFn(async (id: number) => {
-    const action = await contextMenu.show([
-      { key: "select", label: t("select") },
-      { key: "download", label: t("download") },
-      { key: "refresh", label: t("refresh") },
-      { key: "separator", label: "", type: "separator" },
-      { key: "delete", label: t("delete") },
-    ]);
-    if (action === "select") {
-      setSelected((keys) => [...keys, id]);
-    } else if (action === "download") {
-      onStartDownload(id);
-    } else if (action === "refresh") {
-      mutate();
-    } else if (action === "delete") {
-      const target = data.find((task) => task.id === id);
-      if (target) await confirmAndDelete([target]);
-    }
-  });
+  const handleContext = useMemoizedFn(
+    async (e: React.MouseEvent, task: DownloadTask) => {
+      // web/门户环境：内容级浮层菜单（能力对齐全部 tab，多选/编辑为列表个性化项）
+      if (isWeb) {
+        const extra: ContextMenuItem[] = [
+          { key: "dl-select", label: t("select") },
+        ];
+        if (task.status !== DownloadStatus.Success) {
+          extra.push({ key: "dl-edit", label: "编辑…" });
+        }
+        openTaskMenu(e, task, extra);
+        return;
+      }
+      // electron 桌面：原生菜单（IPC）
+      const action = await contextMenu.show([
+        { key: "select", label: t("select") },
+        { key: "download", label: t("download") },
+        { key: "refresh", label: t("refresh") },
+        { key: "separator", label: "", type: "separator" },
+        { key: "delete", label: t("delete") },
+      ]);
+      if (action === "select") {
+        setSelected((keys) => [...keys, task.id]);
+      } else if (action === "download") {
+        onStartDownload(task.id);
+      } else if (action === "refresh") {
+        mutate();
+      } else if (action === "delete") {
+        await confirmAndDelete([task]);
+      }
+    },
+  );
 
   // 删除交互（单条/批量/右键共用）：全未完成 → 确认级联清理临时文件；
   // 含已完成 → 三选一（仅删记录 / 删记录和文件 / 取消）。
@@ -201,6 +216,22 @@ export function DownloadTaskList({
     editFormRef.current?.openModal(values);
   });
 
+  // 内容级右键菜单 + 日志弹层（media/file/magnet 三 tab 经本组件获得与全部 tab
+  // 一致的操作能力：取消/开始/播放/日志/删除；多选与编辑为本列表个性化项）
+  const { menu, logModal, openTaskMenu } = useContentMenu({
+    refresh: useMemoizedFn(() => void mutate()),
+    inlinePlayer: useInlinePlayer(),
+    confirmDelete,
+    onEditTask: handleShowDownloadForm,
+    onSelectTask: useMemoizedFn((id: number) => {
+      setSelected(
+        produce((draft) => {
+          if (!draft.includes(id)) draft.push(id);
+        }),
+      );
+    }),
+  });
+
   return (
     <div className="flex flex-col flex-1 overflow-auto">
       <ListHeader
@@ -246,6 +277,8 @@ export function DownloadTaskList({
         isEdit
         onConfirm={handleFormConfirm}
       />
+      {menu}
+      {logModal}
       {deleteDialog}
     </div>
   );

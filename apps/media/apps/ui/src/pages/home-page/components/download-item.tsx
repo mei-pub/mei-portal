@@ -51,7 +51,7 @@ interface Props {
   selected: boolean;
   onStartDownload: (id: number) => void;
   onStopDownload: (taskId: number) => void;
-  onContextMenu: (taskId: number) => void;
+  onContextMenu: (e: React.MouseEvent, task: DownloadTask) => void;
   progress?: DownloadProgress;
   onShowEditForm?: (value: DownloadTask) => void;
   downloadStatus?: DownloadStatus;
@@ -402,7 +402,7 @@ export const DownloadTaskItem = memo(function DownloadTaskItem({
           "opacity-70": task.status === DownloadStatus.Success && !task.exists,
         },
       )}
-      onContextMenu={() => onContextMenu(task.id)}
+      onContextMenu={(e) => onContextMenu(e, task)}
     >
       <Checkbox
         className="mt-2"
