@@ -4,13 +4,14 @@
 import { App, Empty, Progress } from "antd";
 import { PlayCircleOutlined } from "@ant-design/icons";
 import { useMemoizedFn } from "ahooks";
-import { type FC, useMemo } from "react";
+import { type FC, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import useSWR from "swr";
 import { DeleteIcon, DownloadIcon, FailedIcon } from "@/assets/svg";
 import { DownloadTag } from "@/components/download-tag";
 import { IconButton } from "@/components/icon-button";
 import Loading from "@/components/loading";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   deleteMovieSource,
   type MovieSourceRecord,
@@ -19,6 +20,7 @@ import {
 import { movieFallbackVideo, playMovieRecord } from "@/utils/play-actions";
 import { useInlinePlayer } from "./inline-player";
 import { useContentMenu } from "./content-menu";
+import { BulkBar, BulkButton, ListSearch, triState } from "./bulk-bar";
 import { useDeleteTasks } from "@/components/delete-tasks-dialog";
 import { cn } from "@/utils";
 import { useSharedPoll } from "./shared-poll";
@@ -75,13 +77,57 @@ const MoviePanel: FC = () => {
 
   const records = useMemo(() => data ?? [], [data]);
 
+  // 多选批量（对标迅雷）：选中集合 + 搜索过滤
+  const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set());
+  const [searchText, setSearchText] = useState("");
+
+  const visibleRecords = useMemo(() => {
+    const kw = searchText.trim().toLowerCase();
+    if (!kw) return records;
+    return records.filter(
+      (r) =>
+        (r.title ?? "").toLowerCase().includes(kw) ||
+        (r.name ?? "").toLowerCase().includes(kw),
+    );
+  }, [records, searchText]);
+
+  const toggleSelect = useMemoizedFn((key: string) => {
+    setSelectedKeys((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  });
+
+  // 批量删除：一次三选一确认 → 逐条删除
+  const handleBulkDelete = useMemoizedFn(async () => {
+    const targets = visibleRecords.filter((r) => selectedKeys.has(r.key));
+    if (targets.length === 0) return;
+    const unfinished = targets.filter((r) => r.status !== "done").length;
+    const choice = await confirmDelete({
+      unfinished,
+      done: targets.length - unfinished,
+      label: `${targets.length} 条影视记录`,
+    });
+    if (choice === null) return;
+    const results = await Promise.allSettled(
+      targets.map((record) => deleteMovieSource(record.key, choice)),
+    );
+    const failed = results.filter((r) => r.status === "rejected").length;
+    if (failed > 0) message.error(`删除失败 ${failed} 项`);
+    else message.success("已删除");
+    setSelectedKeys(new Set());
+    mutate();
+  });
+
   // 下载中 → 3s 轮询刷新进度/速度（页面级共享计时器）；无下载任务时停止轮询
   const hasDownloading = useMemo(() => records.some(isDownloading), [records]);
   useSharedPoll(hasDownloading, mutate);
 
   const groups = useMemo(() => {
     const map = new Map<string, Group>();
-    for (const record of records) {
+    for (const record of visibleRecords) {
       const yearStr = record.year ? String(record.year) : "";
       const groupKey = `${record.title}__${yearStr}`;
       let group = map.get(groupKey);
@@ -92,7 +138,7 @@ const MoviePanel: FC = () => {
       group.records.push(record);
     }
     return [...map.values()];
-  }, [records]);
+  }, [visibleRecords]);
 
   // 删除交互：未完成（downloading/pending/failed）必然停止下载并清理临时文件；
   // 已完成由用户选择是否连文件删除（deleteMovieSource 的 files 参数）
@@ -148,6 +194,11 @@ const MoviePanel: FC = () => {
         )}
         onContextMenu={(e) => openMovieMenu(e, record)}
       >
+        <Checkbox
+          className="shrink-0"
+          checked={selectedKeys.has(record.key)}
+          onCheckedChange={() => toggleSelect(record.key)}
+        />
         <div className="flex min-w-0 flex-1 flex-col gap-1">
           <div
             className={cn(
@@ -258,6 +309,29 @@ const MoviePanel: FC = () => {
 
   return (
     <div className="flex flex-1 flex-col gap-4 overflow-auto pr-1">
+      <BulkBar
+        checked={triState(selectedKeys.size, visibleRecords.length)}
+        selectedCount={selectedKeys.size}
+        total={visibleRecords.length}
+        onSelectAll={(checked) =>
+          setSelectedKeys(
+            checked ? new Set(visibleRecords.map((r) => r.key)) : new Set(),
+          )
+        }
+      >
+        <ListSearch
+          value={searchText}
+          onChange={setSearchText}
+          placeholder="搜索剧名/集名"
+        />
+        <BulkButton
+          disabled={selectedKeys.size === 0}
+          danger
+          onClick={() => void handleBulkDelete()}
+        >
+          删除
+        </BulkButton>
+      </BulkBar>
       {renderGroups()}
       {menu}
       {deleteDialog}

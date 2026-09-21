@@ -1,7 +1,7 @@
 import { DownloadStatus } from "@mediago/shared-common";
 import type { DownloadFilter, DownloadTask } from "@mediago/shared-common";
 import { useMemoizedFn } from "ahooks";
-import { App, Empty } from "antd";
+import { App, Empty, Segmented } from "antd";
 import { produce } from "immer";
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -18,6 +18,36 @@ import { DownloadTaskItem } from "./download-item";
 import { ListHeader } from "./list-header";
 import { useContentMenu, type ContextMenuItem } from "@/pages/downloads-page/components/content-menu";
 import { useInlinePlayer } from "@/pages/downloads-page/components/inline-player";
+import { ListSearch } from "@/pages/downloads-page/components/bulk-bar";
+
+/** 状态过滤（对标迅雷：全部/进行中/已完成/失败） */
+type StatusFilterKey = "all" | "downloading" | "done" | "failed";
+
+const STATUS_FILTER_OPTIONS: { label: string; value: StatusFilterKey }[] = [
+  { label: "全部", value: "all" },
+  { label: "进行中", value: "downloading" },
+  { label: "已完成", value: "done" },
+  { label: "失败", value: "failed" },
+];
+
+const matchStatusFilter = (
+  task: DownloadTask,
+  key: StatusFilterKey,
+): boolean => {
+  switch (key) {
+    case "downloading":
+      return (
+        task.status !== DownloadStatus.Success &&
+        task.status !== DownloadStatus.Failed
+      );
+    case "done":
+      return task.status === DownloadStatus.Success;
+    case "failed":
+      return task.status === DownloadStatus.Failed;
+    default:
+      return true;
+  }
+};
 
 interface Props {
   filter: DownloadFilter;
@@ -65,32 +95,51 @@ export function DownloadTaskList({
     );
   });
 
+  // 搜索 + 状态过滤（前端过滤，数据量小无性能问题）
+  const [searchText, setSearchText] = useState("");
+  const [statusFilter, setStatusFilter] = useState<StatusFilterKey>("all");
+
+  const filteredData = useMemo(() => {
+    let list = data;
+    if (searchText.trim()) {
+      const kw = searchText.trim().toLowerCase();
+      list = list.filter((task) =>
+        (task.name ?? "").toLowerCase().includes(kw),
+      );
+    }
+    if (statusFilter !== "all") {
+      list = list.filter((task) => matchStatusFilter(task, statusFilter));
+    }
+    return list;
+  }, [data, searchText, statusFilter]);
+
   const handleSelectAll = useMemoizedFn(() => {
     setSelected(
       produce((draft) => {
         if (draft.length) {
           draft.splice(0, draft.length);
         } else {
-          draft.push(...data.map((task) => task.id));
+          // 只全选可见行（搜索/状态过滤后的结果，对齐迅雷语义）
+          draft.push(...filteredData.map((task) => task.id));
         }
       }),
     );
   });
 
   const listChecked = useMemo(() => {
-    if (selected.length === 0) {
+    if (selected.length === 0 || filteredData.length === 0) {
       return false;
     }
-    if (selected.length === data.length) {
+    if (filteredData.every((task) => selected.includes(task.id))) {
       return true;
     }
     return "indeterminate";
-  }, [selected, data.length]);
+  }, [selected, filteredData]);
 
   // 进行中置前（可选）：downloading 优先，其余条目保持服务端原有相对顺序（稳定排序）
   const orderedData = useMemo(() => {
-    if (!prioritizeActive) return data;
-    return data
+    if (!prioritizeActive) return filteredData;
+    return filteredData
       .map((task, index) => ({ task, index }))
       .sort((a, b) => {
         const aActive = a.task.status === DownloadStatus.Downloading ? 0 : 1;
@@ -98,7 +147,7 @@ export function DownloadTaskList({
         return aActive - bActive || a.index - b.index;
       })
       .map((item) => item.task);
-  }, [data, prioritizeActive]);
+  }, [filteredData, prioritizeActive]);
 
   const onStartDownload = useMemoizedFn(async (id: number) => {
     await startDownload(id);
@@ -234,6 +283,15 @@ export function DownloadTaskList({
 
   return (
     <div className="flex flex-col flex-1 overflow-auto">
+      <div className="flex flex-row items-center justify-end gap-2 pb-2">
+        <ListSearch value={searchText} onChange={setSearchText} placeholder="搜索任务" />
+        <Segmented
+          size="small"
+          value={statusFilter}
+          onChange={(v) => setStatusFilter(v as StatusFilterKey)}
+          options={STATUS_FILTER_OPTIONS}
+        />
+      </div>
       <ListHeader
         selected={selected}
         checked={listChecked}

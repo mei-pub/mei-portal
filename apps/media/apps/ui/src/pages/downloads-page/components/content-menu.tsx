@@ -224,19 +224,26 @@ export function useContentMenu(deps: ContentMenuDeps) {
 
   const buildTaskMenu = (task: DownloadTask): ContextMenuItem[] => {
     const items: ContextMenuItem[] = [];
-    if (task.status === DownloadStatus.Downloading) {
-      items.push({ key: "cancel", label: "取消下载" });
-    } else if (
-      task.status === DownloadStatus.Stopped ||
-      task.status === DownloadStatus.Pending
-    ) {
-      items.push({ key: "start", label: "开始下载" });
-    }
-    if (
-      task.status === DownloadStatus.Success &&
-      isMediaVideoTask(task)
-    ) {
-      items.push({ key: "play-media", label: "播放" });
+    // 生命周期语义对齐迅雷：暂停（可继续）/ 继续 / 重试（失败）/ 播放 / 删除
+    switch (task.status) {
+      case DownloadStatus.Downloading:
+        items.push({ key: "pause", label: "暂停下载" });
+        break;
+      case DownloadStatus.Stopped:
+      case DownloadStatus.Pending:
+        items.push({ key: "start", label: "继续下载" });
+        break;
+      case DownloadStatus.Failed:
+        items.push({ key: "start", label: "重试" });
+        break;
+      case DownloadStatus.Ready:
+        items.push({ key: "start", label: "开始下载" });
+        break;
+      case DownloadStatus.Success:
+        if (isMediaVideoTask(task)) {
+          items.push({ key: "play-media", label: "播放" });
+        }
+        break;
     }
     items.push({ key: "log", label: "查看日志" });
     items.push({ key: "delete", label: "删除…", danger: true });
@@ -264,16 +271,18 @@ export function useContentMenu(deps: ContentMenuDeps) {
         case "start":
           try {
             await startDownload(task.id);
-            message.success("已开始下载");
+            message.success(
+              task.status === DownloadStatus.Failed ? "已重试" : "已开始下载",
+            );
             deps.refresh();
           } catch {
             message.error("操作失败");
           }
           break;
-        case "cancel":
+        case "pause":
           try {
             await stopDownload(task.id);
-            message.success("已取消下载");
+            message.success("已暂停");
             deps.refresh();
           } catch {
             message.error("操作失败");

@@ -4,13 +4,14 @@
 import { App, Empty, Progress } from "antd";
 import { PlayCircleOutlined } from "@ant-design/icons";
 import { useMemoizedFn } from "ahooks";
-import { type FC, useMemo } from "react";
+import { type FC, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import useSWR from "swr";
 import { DeleteIcon, DownloadIcon } from "@/assets/svg";
 import { DownloadTag } from "@/components/download-tag";
 import { IconButton } from "@/components/icon-button";
 import Loading from "@/components/loading";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   deleteMusicFile,
   deleteMusicTask,
@@ -23,17 +24,12 @@ import { cn, fromatDateTime } from "@/utils";
 import { useDeleteTasks } from "@/components/delete-tasks-dialog";
 import { useContentMenu } from "./content-menu";
 import { useInlinePlayer } from "./inline-player";
+import { BulkBar, BulkButton, ListSearch, triState } from "./bulk-bar";
 import { useSharedPoll } from "./shared-poll";
 
 const EMPTY_LIBRARY: MusicLibrary = { tasks: [], files: [] };
 const PANEL_ERROR_STYLE =
   "flex flex-1 flex-col items-center justify-center gap-3";
-
-const SectionTitle: FC<{ text: string }> = ({ text }) => (
-  <div className="shrink-0 px-1 text-sm font-medium text-[#343434] dark:text-white">
-    {text}
-  </div>
-);
 
 const MusicPanel: FC = () => {
   const { confirmDelete, deleteDialog } = useDeleteTasks();
@@ -55,6 +51,91 @@ const MusicPanel: FC = () => {
 
   const tasks = library.tasks ?? [];
   const files = library.files ?? [];
+
+  // 多选批量（对标迅雷）+ 搜索过滤：任务段与已下载段各自管理选中集合
+  const [selectedTaskIds, setSelectedTaskIds] = useState<Set<string>>(new Set());
+  const [selectedFileKeys, setSelectedFileKeys] = useState<Set<string>>(new Set());
+  const [searchText, setSearchText] = useState("");
+
+  const visibleTasks = useMemo(() => {
+    const kw = searchText.trim().toLowerCase();
+    if (!kw) return tasks;
+    return tasks.filter((t) =>
+      `${t.song?.name ?? ""}${t.song?.artist ?? ""}`.toLowerCase().includes(kw),
+    );
+  }, [tasks, searchText]);
+
+  const visibleFiles = useMemo(() => {
+    const kw = searchText.trim().toLowerCase();
+    if (!kw) return files;
+    return files.filter((f) =>
+      `${f.name ?? ""}${f.fileName ?? ""}${f.artist ?? ""}`
+        .toLowerCase()
+        .includes(kw),
+    );
+  }, [files, searchText]);
+
+  const toggleTask = useMemoizedFn((id: string) => {
+    setSelectedTaskIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  });
+
+  const toggleFile = useMemoizedFn((key: string) => {
+    setSelectedFileKeys((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  });
+
+  // 批量取消任务（= 删除任务并清理临时文件，音乐任务无独立「暂停」态）
+  const handleBulkCancelTasks = useMemoizedFn(async () => {
+    const targets = visibleTasks.filter((t) =>
+      selectedTaskIds.has(String(t.id)),
+    );
+    if (targets.length === 0) return;
+    const results = await Promise.allSettled(
+      targets.map((t) => deleteMusicTask(t.id)),
+    );
+    const failed = results.filter((r) => r.status === "rejected").length;
+    if (failed > 0) message.error(`取消失败 ${failed} 项`);
+    else message.success("已取消所选任务");
+    setSelectedTaskIds(new Set());
+    mutate();
+  });
+
+  // 批量删除文件：一次确认 → 逐条删除
+  const handleBulkDeleteFiles = useMemoizedFn(async () => {
+    const targets = visibleFiles.filter((f) =>
+      selectedFileKeys.has(f.path || f.fileName),
+    );
+    if (targets.length === 0) return;
+    const ok = await new Promise<boolean>((resolve) => {
+      modal.confirm({
+        title: `删除 ${targets.length} 个音乐文件？`,
+        content: "将从服务器删除这些音频文件，不可恢复。",
+        okText: "删除",
+        okButtonProps: { danger: true },
+        cancelText: "取消",
+        onOk: () => resolve(true),
+        onCancel: () => resolve(false),
+      });
+    });
+    if (!ok) return;
+    const results = await Promise.allSettled(
+      targets.map((f) => deleteMusicFile(f.path)),
+    );
+    const failed = results.filter((r) => r.status === "rejected").length;
+    if (failed > 0) message.error(`删除失败 ${failed} 项`);
+    else message.success("已删除");
+    setSelectedFileKeys(new Set());
+    mutate();
+  });
 
   // 有进行中任务 → 3s 轮询进度（页面级共享计时器）；空闲时停止轮询
   useSharedPoll(tasks.length > 0, mutate);
@@ -101,10 +182,33 @@ const MusicPanel: FC = () => {
   );
 
   const renderTasks = () =>
-    tasks.length > 0 && (
+    visibleTasks.length > 0 && (
       <div className="flex flex-col gap-2 rounded-xl border border-black/5 bg-white/85 p-3 shadow-sm dark:border-white/10 dark:bg-[#1F2024]">
-        <SectionTitle text={`下载任务（${tasks.length}）`} />
-        {tasks.map((task) => {
+        <BulkBar
+          checked={triState(
+            visibleTasks.filter((t) => selectedTaskIds.has(String(t.id))).length,
+            visibleTasks.length,
+          )}
+          selectedCount={
+            visibleTasks.filter((t) => selectedTaskIds.has(String(t.id))).length
+          }
+          total={visibleTasks.length}
+          onSelectAll={(checked) =>
+            setSelectedTaskIds(
+              checked
+                ? new Set(visibleTasks.map((t) => String(t.id)))
+                : new Set(),
+            )
+          }
+        >
+          <BulkButton
+            disabled={selectedTaskIds.size === 0}
+            onClick={() => void handleBulkCancelTasks()}
+          >
+            取消所选
+          </BulkButton>
+        </BulkBar>
+        {visibleTasks.map((task) => {
           const percent = Math.max(
             0,
             Math.min(100, Math.round(task.percent ?? 0)),
@@ -118,6 +222,11 @@ const MusicPanel: FC = () => {
                 openMusicTaskMenu(e, task.id, task.song?.name ?? "-")
               }
             >
+              <Checkbox
+                className="shrink-0"
+                checked={selectedTaskIds.has(String(task.id))}
+                onCheckedChange={() => toggleTask(String(task.id))}
+              />
               <div className="flex min-w-0 flex-1 flex-col gap-1">
                 <div className="flex flex-row items-center gap-2">
                   <span
@@ -172,10 +281,39 @@ const MusicPanel: FC = () => {
     );
 
   const renderFiles = () =>
-    files.length > 0 && (
+    visibleFiles.length > 0 && (
       <div className="flex flex-col gap-2 rounded-xl border border-black/5 bg-white/85 p-3 shadow-sm dark:border-white/10 dark:bg-[#1F2024]">
-        <SectionTitle text={`已下载（${files.length}）`} />
-        {files.map((file) => (
+        <BulkBar
+          checked={triState(
+            visibleFiles.filter((f) =>
+              selectedFileKeys.has(f.path || f.fileName),
+            ).length,
+            visibleFiles.length,
+          )}
+          selectedCount={
+            visibleFiles.filter((f) => selectedFileKeys.has(f.path || f.fileName))
+              .length
+          }
+          total={visibleFiles.length}
+          onSelectAll={(checked) =>
+            setSelectedFileKeys(
+              checked
+                ? new Set(
+                    visibleFiles.map((f) => f.path || f.fileName),
+                  )
+                : new Set(),
+            )
+          }
+        >
+          <BulkButton
+            disabled={selectedFileKeys.size === 0}
+            danger
+            onClick={() => void handleBulkDeleteFiles()}
+          >
+            删除
+          </BulkButton>
+        </BulkBar>
+        {visibleFiles.map((file) => (
           <div
             key={file.path || file.fileName}
             className="flex flex-row items-center gap-2 rounded-lg bg-[#FAFCFF] px-3 py-2 dark:bg-[#27292F]"
@@ -187,6 +325,11 @@ const MusicPanel: FC = () => {
               })
             }
           >
+            <Checkbox
+              className="shrink-0"
+              checked={selectedFileKeys.has(file.path || file.fileName)}
+              onCheckedChange={() => toggleFile(file.path || file.fileName)}
+            />
             <div className="flex min-w-0 flex-1 flex-col gap-1">
               <div
                 className="truncate text-sm text-[rgba(0,0,0,0.88)] dark:text-[rgba(255,255,255,0.85)]"
@@ -247,6 +390,13 @@ const MusicPanel: FC = () => {
 
   return (
     <div className="flex flex-1 flex-col gap-3 overflow-auto pr-1">
+      <div className="flex flex-row justify-end">
+        <ListSearch
+          value={searchText}
+          onChange={setSearchText}
+          placeholder="搜索歌名/歌手"
+        />
+      </div>
       {renderTasks()}
       {renderFiles()}
       {menu}

@@ -38,6 +38,7 @@ import {
   listMovieSources,
 } from "@/api/download-center";
 import { movieFallbackVideo } from "@/utils/play-actions";
+import { ListSearch } from "./bulk-bar";
 import { useInlinePlayer } from "./inline-player";
 import { cn, fromatDateTime } from "@/utils";
 
@@ -221,7 +222,7 @@ const AllView: FC<AllViewProps> = ({ onEnter }) => {
       items.push({ key: "del-movie", label: "删除记录（含文件）", danger: true });
     } else if (item.mediaTask && item.kind === "media") {
       if (item.active) {
-        items.push({ key: "cancel", label: "取消下载" });
+        items.push({ key: "pause", label: "暂停下载" });
       }
       if (item.mediaTask.status === DownloadStatus.Success) {
         items.push({ key: "play-media", label: "播放" });
@@ -231,7 +232,7 @@ const AllView: FC<AllViewProps> = ({ onEnter }) => {
     } else if (item.mediaTask) {
       // 磁力 / 文件任务
       if (item.active) {
-        items.push({ key: "cancel", label: "取消下载" });
+        items.push({ key: "pause", label: "暂停下载" });
       }
       items.push({ key: "log", label: "查看日志" });
       items.push({ key: "delete", label: "删除…", danger: true });
@@ -272,7 +273,7 @@ const AllView: FC<AllViewProps> = ({ onEnter }) => {
       if (
         item.mediaTask &&
         (key === "play-media" ||
-          key === "cancel" ||
+          key === "pause" ||
           key === "log" ||
           key === "delete")
       ) {
@@ -373,14 +374,28 @@ const AllView: FC<AllViewProps> = ({ onEnter }) => {
   }, [mediaData, movieData, musicData]);
 
   // ---- 多选与批量操作（对齐磁力 tab：全选 / 批量删除 / 清除选择 / 批量启动）----
+  const [searchText, setSearchText] = useState("");
+
+  // 搜索过滤（title/subtitle 前端匹配；全选只作用于可见行）
+  const visibleItems = useMemo(() => {
+    const kw = searchText.trim().toLowerCase();
+    if (!kw) return items;
+    return items.filter((i) =>
+      `${i.title}${i.subtitle}`.toLowerCase().includes(kw),
+    );
+  }, [items, searchText]);
+
   const selectedItems = useMemo(
-    () => items.filter((i) => selectedKeys.has(i.key)),
-    [items, selectedKeys],
+    () => visibleItems.filter((i) => selectedKeys.has(i.key)),
+    [visibleItems, selectedKeys],
   );
-  const allChecked = items.length > 0 && selectedKeys.size === items.length;
+  const allChecked =
+    visibleItems.length > 0 && selectedKeys.size === visibleItems.length;
   const someChecked = selectedKeys.size > 0 && !allChecked;
   const toggleAll = (checked: boolean) =>
-    setSelectedKeys(checked ? new Set(items.map((i) => i.key)) : new Set());
+    setSelectedKeys(
+      checked ? new Set(visibleItems.map((i) => i.key)) : new Set(),
+    );
   const toggleOne = (key: string, checked: boolean) =>
     setSelectedKeys((cur) => {
       const next = new Set(cur);
@@ -482,6 +497,11 @@ const AllView: FC<AllViewProps> = ({ onEnter }) => {
           )}
         </div>
         <div className="flex flex-row items-center gap-3">
+          <ListSearch
+            value={searchText}
+            onChange={setSearchText}
+            placeholder="搜索全部内容"
+          />
           <Button
             size="small"
             disabled={selectedKeys.size === 0}
@@ -506,7 +526,7 @@ const AllView: FC<AllViewProps> = ({ onEnter }) => {
           </Button>
         </div>
       </div>
-      {items.map((item) => {
+      {visibleItems.map((item) => {
         const tag = KIND_TAG[item.kind];
         const checked = selectedKeys.has(item.key);
         return (
