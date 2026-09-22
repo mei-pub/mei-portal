@@ -176,7 +176,7 @@ test('DisksProvider forwards source filters and dedupes cross-source links', asy
   _bindGetSessionTokens(() => ({ 'ai-draw': 'test-token' }));
   const seenUrls: string[] = [];
   const fetchImpl = (async (url: string) => {
-    if (url.includes('127.0.0.1:3008/api/search')) {
+    if (url.includes('127.0.0.1:7807/api/search')) {
       seenUrls.push(url);
       return { ok: true, status: 200, json: async () => ({ data: { merged_by_type: {
         quark: [
@@ -214,7 +214,7 @@ test('DisksProvider forwards source filters and dedupes cross-source links', asy
 test('DisksProvider applies the cloud-type whitelist to results and facets', async () => {
   _bindGetSessionTokens(() => ({ 'ai-draw': 'test-token' }));
   const fetchImpl = (async (url: string) => {
-    if (url.includes('127.0.0.1:3008/api/search')) {
+    if (url.includes('127.0.0.1:7807/api/search')) {
       return { ok: true, status: 200, json: async () => ({ data: { merged_by_type: {
         quark: [{ url: 'https://pan.quark.cn/s/q1', note: 'Q', source: 'plugin:melost' }],
         magnet: [{ url: 'magnet:?xt=urn:btih:A', note: 'M', source: 'plugin:clmao' }],
@@ -240,7 +240,7 @@ test('DisksProvider applies the cloud-type whitelist to results and facets', asy
 
 test('disk type channel filters results while keeping global facets', async () => {
   _bindGetSessionTokens(() => ({ 'ai-draw': 'test-token' }));
-  const toolsDir = path.resolve('third_party/omni-tools/public/locales/zh');
+  const toolsDir = path.resolve('apps/tools/public/locales/zh');
   const fetchImpl = makeFetchImpl({ toolsDir });
   const groups = await searchServerGroups({
     query: 'abc',
@@ -271,6 +271,21 @@ test('builds disk facet tabs with canonical order, short labels and unknown last
   );
   assert.deepEqual(buildDiskFacets({ quark: 0, baidu: 1 }), [{ key: 'baidu', label: '百度', count: 1 }]);
   assert.deepEqual(buildDiskFacets({}), []);
+});
+
+test('engine-native bucket keys (guangya/pikpak/others) get readable labels and tail order', () => {
+  const facets = buildDiskFacets({ guangya: 5, pikpak: 1, others: 9, baidu: 2, unknown: 3 });
+  assert.deepEqual(
+    facets.map((f) => `${f.key}:${f.label}:${f.count}`),
+    ['baidu:百度:2', 'guangya:光鸭:5', 'pikpak:PikPak:1', 'others:其他:9', 'unknown:其他:3'],
+  );
+  // 结果卡上的类型徽标同样不再回落成裸 key / 泛化文案
+  const guangya = normalizeDiskResult({ url: 'https://guangyapan.com/s/abc', note: 'G', source: 'plugin:x' }, 'guangya');
+  assert.equal(guangya.meta?.linkTypeLabel, '光鸭网盘');
+  const pikpak = normalizeDiskResult({ url: 'https://mypikpak.com/s/abc', note: 'P', source: 'plugin:x' }, 'pikpak');
+  assert.equal(pikpak.meta?.linkTypeLabel, 'PikPak');
+  const others = normalizeDiskResult({ url: 'https://example.com/s/a', note: 'O', source: 'plugin:x' }, 'others');
+  assert.equal(others.meta?.linkTypeLabel, '其他网盘');
 });
 
 // Build a fake fetch that returns canned JSON per URL pattern.
@@ -310,7 +325,7 @@ function makeFetchImpl(opts: {
 
 test('searches all providers in parallel and isolates failures', async () => {
   // Point ToolsProvider at the repo's omni-tools locale files
-  const toolsDir = path.resolve('third_party/omni-tools/public/locales/zh');
+  const toolsDir = path.resolve('apps/tools/public/locales/zh');
   _setOmniToolsLocalesDir(toolsDir);
   // Inject a fake token getter for DrawProvider
   _bindGetSessionTokens(() => ({ 'ai-draw': 'test-token' }));
@@ -404,7 +419,7 @@ test('DrawProvider degrades to empty when the portal session is missing or rejec
 });
 
 test('ToolsProvider searches tool names from locale files', async () => {
-  const toolsDir = path.resolve('third_party/omni-tools/public/locales/zh');
+  const toolsDir = path.resolve('apps/tools/public/locales/zh');
   if (!fs.existsSync(toolsDir)) {
     // Skip in environments without the repo checkout
     return;
@@ -429,7 +444,7 @@ test('ToolsProvider searches tool names from locale files', async () => {
 });
 
 test('tools manifest maps camelCase locale keys to real kebab-case routes', async () => {
-  const toolsDir = path.resolve('third_party/omni-tools/public/locales/zh');
+  const toolsDir = path.resolve('apps/tools/public/locales/zh');
   if (!fs.existsSync(toolsDir)) return; // skip without repo checkout
   _setOmniToolsLocalesDir(toolsDir);
   _bindGetSessionTokens(() => ({}));
@@ -575,4 +590,40 @@ test('appends a page into one provider channel without touching other channels',
   });
   assert.equal(duplicated.results.length, 2);
   assert.equal(duplicated.hasMore, false);
+});
+
+test('DisksProvider 超时降级不失败：网盘分组标记 timeout，其余分组照常返回', async () => {
+  _setOmniToolsLocalesDir(path.resolve('apps/tools/public/locales/zh'));
+  _bindGetSessionTokens(() => ({ 'ai-draw': 'test-token' }));
+  _bindGetPortalToken(() => 'test-token');
+  // pansou 超时（AbortSignal.timeout 的 TimeoutError），tv 正常
+  const fetchImpl = (async (url: string) => {
+    if (url.includes('127.0.0.1:7807/api/search')) {
+      const err = new Error('The operation was aborted due to timeout');
+      err.name = 'TimeoutError';
+      throw err;
+    }
+    if (url.includes('/tv/api/search')) {
+      return { ok: true, status: 200, json: async () => ({ results: [{ id: 'v1', title: 'abc Movie', source: 's', source_name: 'S' }] }) };
+    }
+    return { ok: true, status: 200, json: async () => ({ results: [] }) };
+  }) as unknown as typeof fetch;
+  const groups = await searchServerGroups({
+    query: 'abc',
+    scope: 'all',
+    limit: 5,
+    cookie: '',
+    fetchImpl,
+  });
+  const byApp = new Map(groups.map((group) => [group.appId, group]));
+  // 综合搜索整体不失败：全部分组正常返回
+  assert.equal(groups.length > 1, true);
+  // 网盘分组降级为 timeout（空结果 + 提示），不是整体 error
+  const disk = byApp.get('pansou');
+  assert.equal(disk?.status, 'timeout');
+  assert.equal(disk?.results.length, 0);
+  assert.match(disk?.error || '', /timeout/i);
+  // 其余分组不受影响
+  assert.equal(byApp.get('lunatv')?.status, 'ok');
+  assert.equal(byApp.get('lunatv')?.results[0]?.title, 'abc Movie');
 });

@@ -4,12 +4,8 @@ description: 沉浸式音乐播放器，专辑配色动态背景
 icon: lucide:music
 category: media
 weight: 20
+path: /music
 endpoint: http://solara:8787
-ingress:
-  mode: subdomain
-  host: ${SUBDOMAIN_MUSIC}.${ROOT_DOMAIN}
-auth:
-  strategy: independent
 embed:
   iframe: true
   strip_headers: [X-Frame-Options, Content-Security-Policy]
@@ -19,6 +15,3 @@ theme:
 health:
   path: /
   expect: 200
-upgrade:
-  image: ghcr.io/akudamatata/solara:latest
-  repo: https://github.com/akudamatata/Solara

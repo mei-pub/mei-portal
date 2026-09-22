@@ -19,6 +19,7 @@ import {
   type BackupMode,
   type BackupScope,
 } from '@/lib/backup-scopes';
+import { triggerBrowserDownload } from '@/lib/browser-download';
 
 type CloudTarget = 'webdav' | 's3';
 type Tab = 'local' | 'cloud';
@@ -123,12 +124,11 @@ export default function BackupSettings() {
         throw new Error((body as { error?: string }).error || '导出失败');
       }
       const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = `mei-portal-backup-${new Date().toISOString().slice(0, 10)}.zip`;
-      link.click();
-      URL.revokeObjectURL(url);
+      // 延迟释放 object URL：同步 revoke 会让浏览器下载永远停在下载中（zip 备份同理）
+      triggerBrowserDownload(
+        blob,
+        `mei-portal-backup-${new Date().toISOString().slice(0, 10)}.zip`,
+      );
       setMessage(`已导出 ${scopes.length} 项数据的 Zip 备份包`);
     } catch (err) {
       setError((err as Error).message || '导出失败');

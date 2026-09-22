@@ -24,15 +24,27 @@ const SOURCES = [
 ];
 const DEFAULT_SOURCES = ['netease', 'qq', 'kugou', 'kuwo', 'migu', 'joox', 'youtube'];
 
+const DOWNLOAD_MODES = [
+  { value: 'local', label: '本地电脑', desc: '触发浏览器下载，保存到当前设备' },
+  { value: 'server', label: '本地服务器', desc: '保存到服务器 /downloads/music/<歌手>/，可跨设备播放' },
+  { value: 'both', label: '两者都要', desc: '本地与服务器同时各存一份' },
+  { value: 'ask', label: '每次询问', desc: '每次下载时弹层选择去向' },
+];
+
 export default function SolaraSettings() {
   const [genres, setGenres] = useState<string[]>(GENRES);
   const [sources, setSources] = useState<string[]>(DEFAULT_SOURCES);
+  // 下载方式（音乐应用 js/mei/api.js 的 getDownloadMode 同一 localStorage key）：
+  // 下载按钮的默认去向。所有音乐配置统一在设置后台维护（应用内不再设独立设置页）
+  const [downloadMode, setDownloadMode] = useState<string>('local');
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
 
   useEffect(() => {
     setGenres(readJsonStorage('radarSettings', { genres: GENRES }).genres || GENRES);
     setSources(readJsonStorage('mei-music-sources', DEFAULT_SOURCES));
+    const mode = localStorage.getItem('mei-download-mode');
+    setDownloadMode(DOWNLOAD_MODES.some((m) => m.value === mode) ? mode! : 'local');
   }, []);
 
   function toggleGenre(name: string) {
@@ -59,6 +71,7 @@ export default function SolaraSettings() {
     }
     writeJsonStorage('radarSettings', { genres });
     writeJsonStorage('mei-music-sources', sources);
+    localStorage.setItem('mei-download-mode', downloadMode);
     localStorage.setItem('mei-youtube-source-migrated-v1', '1');
     const current = localStorage.getItem('searchSource');
     if (current && !sources.includes(current)) localStorage.setItem('searchSource', sources[0]);
@@ -70,7 +83,7 @@ export default function SolaraSettings() {
     <SettingsPage
       icon="lucide:music"
       title="音乐播放设置"
-      description="管理探索雷达风格与音乐源启停。"
+      description="管理探索雷达风格、音乐源启停与下载方式。"
       actions={
         <>
           <Pill tone="neutral">{sources.length} 个源启用</Pill>
@@ -99,6 +112,23 @@ export default function SolaraSettings() {
               onChange={() => toggleSource(s.value)}
               label={s.label}
               description={s.desc}
+            />
+          ))}
+        </div>
+      </SettingsSection>
+
+      <SettingsSection
+        title="下载方式"
+        description="应用内各下载入口（搜索结果 / 播放列表 / 收藏 / 播放页 / 播放条）的默认去向。"
+      >
+        <div className="source-grid">
+          {DOWNLOAD_MODES.map((m) => (
+            <Toggle
+              key={m.value}
+              checked={downloadMode === m.value}
+              onChange={() => setDownloadMode(m.value)}
+              label={m.label}
+              description={m.desc}
             />
           ))}
         </div>

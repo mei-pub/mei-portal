@@ -36,11 +36,11 @@ export default function MediagoSettings() {
   async function load() {
     setLoading(true);
     try {
-      const d = await authorizedJsonFetch<Wrapped<MediagoConfig>>('/media/api/config', 'mediago');
+      const d = await authorizedJsonFetch<Wrapped<MediagoConfig>>('/downloads/api/config', 'mediago');
       setConfig(d.data || {});
       setError('');
     } catch (err) {
-      setError((err as Error).message || '读取媒体下载配置失败');
+      setError((err as Error).message || '读取下载中心配置失败');
     } finally {
       setLoading(false);
     }
@@ -55,7 +55,7 @@ export default function MediagoSettings() {
     if (!silent) setMessage('');
     setError('');
     try {
-      const d = await authorizedJsonFetch<Wrapped<{ message?: string }>>(`/media/api/config/${key}`, 'mediago', {
+      const d = await authorizedJsonFetch<Wrapped<{ message?: string }>>(`/downloads/api/config/${key}`, 'mediago', {
         method: 'PUT',
         body: JSON.stringify({ value: config[key] }),
       });
@@ -90,7 +90,7 @@ export default function MediagoSettings() {
   return (
     <SettingsPage
       icon="lucide:download"
-      title="媒体下载设置"
+      title="下载中心设置"
       description="配置下载目录、代理与任务执行策略。"
       actions={
         <>

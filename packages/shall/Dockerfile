@@ -1,4 +1,4 @@
-# mei-allin Shell —— Next.js standalone
+# mei-portal Shell —— Next.js standalone
 FROM node:20-alpine AS deps
 WORKDIR /app
 COPY package.json package-lock.json* ./
@@ -21,6 +21,7 @@ COPY --from=builder /app/public ./public
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 USER nextjs
-EXPOSE 3000
-ENV PORT=3000 HOSTNAME=0.0.0.0
+EXPOSE 7808
+# 与单镜像体系一致：shell 统一占 7808（容器内/宿主同号）
+ENV PORT=7808 HOSTNAME=0.0.0.0
 CMD ["node", "server.js"]

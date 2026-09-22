@@ -5,7 +5,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 
 const APP_PREFIXES = [
-  '/tv', '/music', '/media', '/disks', '/draw', '/tools', '/link', '/novels',
+  '/tv', '/music', '/downloads', '/disks', '/draw', '/tools', '/link', '/novels',
 ];
 
 export function middleware(req: NextRequest) {

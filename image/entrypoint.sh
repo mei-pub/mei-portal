@@ -1,5 +1,5 @@
 #!/bin/bash
-# mei-allin 单镜像入口
+# mei-portal 单镜像入口
 # 职责：1) 初始化数据目录  2) 生成配置  3) 首次初始化各应用账户  4) 启动 supervisor
 set -e
 
@@ -9,62 +9,89 @@ mkdir -p "$DATA_DIR"
 # 统一管理员凭据（各应用共用，单用户模式）
 # 首次启动用默认值，可通过环境变量覆盖
 export MEI_ADMIN_USER="${MEI_ADMIN_USER:-admin}"
-export MEI_ADMIN_PASSWORD="${MEI_ADMIN_PASSWORD:-mei-allin}"
-
-# 单镜像模式标记（Shell 据此返回子路径 url）
-export MEI_MODE="single"
+export MEI_ADMIN_PASSWORD="${MEI_ADMIN_PASSWORD:-mei-portal}"
 
 # 用单镜像专属插件清单覆盖（只含已接入应用）
 if [ -f /etc/mei-plugins.json ]; then
   mkdir -p /app/public/__theme
-  cp /etc/mei-plugins.json /app/public/__theme/plugins.json 2>/dev/null || echo "[mei-allin] plugins.json 拷贝跳过"
+  cp /etc/mei-plugins.json /app/public/__theme/plugins.json 2>/dev/null || echo "[mei-portal] plugins.json 拷贝跳过"
 fi
 
-echo "[mei-allin] 数据目录: $DATA_DIR  管理员: $MEI_ADMIN_USER  模式: single"
+echo "[mei-portal] 数据目录: $DATA_DIR  管理员: $MEI_ADMIN_USER  模式: single"
 
 # ---- 初始化各应用数据目录 ----
-mkdir -p "$DATA_DIR/tutorial" "$DATA_DIR/mei-link" "$DATA_DIR/shell" "$DATA_DIR/mediago/logs" "$DATA_DIR/mediago/downloads" "$DATA_DIR/mediago" "$DATA_DIR/pansou/cache" "$DATA_DIR/pansou/logs"
+# tv/draw/music 应用自身启动时也会自建，这里预先创建保证卷属主正确
+mkdir -p "$DATA_DIR/novels" "$DATA_DIR/link" "$DATA_DIR/shell" "$DATA_DIR/tv" "$DATA_DIR/draw" "$DATA_DIR/music" "$DATA_DIR/media" "$DATA_DIR/media/logs" "$DATA_DIR/disks" "$DATA_DIR/disks/cache" "$DATA_DIR/disks/logs"
+
+# ---- 本地服务器下载库（强要求，宿主经 compose 卷映射到 /downloads）----
+# music 服务器下载 → /downloads/music/<歌手>/；media（影视）下载 localDir → /downloads/movie/<分类>/<剧名>/
+mkdir -p /downloads/music /downloads/movie
 
 # ---- Shell 配置 ----
-export PORT="${PORT:-3000}"
-export HOSTNAME="${HOSTNAME:-0.0.0.0}"
+# 注意：不要在这里 export PORT——media core-ts 的 env PORT 优先级高于 --port 命令行参数，
+# 全局导出会覆盖 media 的 --port=7801。Shell 的端口（7808）由 supervisord 的
+# [program:shell] environment 显式设置，无需入口导出。
 
 # 单一用户凭据（未初始化则用默认值，首次进入门户时设置）
 if [ ! -f "$DATA_DIR/shell/user.json" ]; then
-  echo "[mei-allin] 首次启动，初始化默认账户 admin（请在门户修改密码）"
+  echo "[mei-portal] 首次启动，初始化默认账户 admin（请在门户修改密码）"
 fi
 
-# ---- tutorial 字体（首启预下载，后台进行不阻塞）----
-if [ ! -d "$DATA_DIR/tutorial/fonts/css" ] && [ -f /app/apps/tutorial/scripts/download-fonts.mjs ]; then
-  echo "[mei-allin] tutorial 字体首次下载（后台）..."
-  (cd /app/apps/tutorial && DATA_DIR="$DATA_DIR/tutorial" node scripts/download-fonts.mjs || echo "[mei-allin] 字体下载完成/跳过") &
+# ---- novels 字体（首启预下载，后台进行不阻塞）----
+# 下载脚本写入 $DATA_DIR/novels/fonts（DATA_DIR 参数指向 novels 子目录），
+# 幂等检查必须用同一路径——此前误查旧名 $DATA_DIR/tutorial，导致每次启动都重新下载
+if [ ! -d "$DATA_DIR/novels/fonts/css" ] && [ -f /app/apps/novels/scripts/download-fonts.mjs ]; then
+  echo "[mei-portal] novels 字体首次下载（后台）..."
+  (cd /app/apps/novels && DATA_DIR="$DATA_DIR/novels" node scripts/download-fonts.mjs || echo "[mei-portal] 字体下载完成/跳过") &
 fi
 
-# ---- mediago 端口修正 + 自动 setup ----
-if [ -f "$DATA_DIR/mediago/config.json" ]; then
-  sed -i 's/"port":[[:space:]]*[0-9]*/"port": 3000/' "$DATA_DIR/mediago/config.json" 2>/dev/null || true
+# ---- media config 修正 ----
+# 历史遗留已清除：曾有 sed 把 config.json 的 "port" 统一重写（旧意图是修正
+# media http 端口），但现 config.json 里唯一的 port 字段是 aria2Rpc 的 6800，
+# 该 sed 每次启动都会把它污染成 core 端口值（当年的 3000 污染事故源头），
+# 一直靠 server.ts 的「RPC 端口与 core HTTP 端口同值回落 6800」防御掩盖。
+# media 的 HTTP 端口由 supervisord --port=7801 固定，不再需要入口修正。
+
+# ---- qBittorrent（BT/磁力引擎）配置生成 ----
+# 首启只写非凭据项（端口/保存路径/登录失败放宽——容器内 core 与 qB 同机，
+# 127.0.0.1 的失败重试不能把自己 ban 死）。**密码不写 conf**：qB 的
+# PBKDF2 序列化格式易错（实测手写 @ByteArray 值会被当纯字符串忽略、
+# 回退出厂凭据并连累重试触发 IP ban）——由 core 首启用出厂凭据登录后
+# 经 API 改强密码（qB 自己写格式），存 /data/media/qbit-credentials.json
+# 供 core 连接与设置页展示。
+# HOME=/data/qbittorrent 由 supervisord [program:qbittorrent] 指定 → 配置随卷持久。
+# 端口约定（镜像 EXPOSE 全量声明）：WebUI 8080 / BT 传输+DHT 6881（TCP+UDP，
+# 显式固定——缺省时 qB 首启随机分配，不可预知）。
+QB_CONF_DIR="/data/qbittorrent/.config/qBittorrent"
+QB_CONF="$QB_CONF_DIR/qBittorrent.conf"
+mkdir -p "$QB_CONF_DIR"
+if [ ! -f "$QB_CONF" ]; then
+  cat > "$QB_CONF" <<EOF
+[LegalNotice]
+Accepted=true
+
+[Preferences]
+WebUI\Address=0.0.0.0
+WebUI\Port=8080
+WebUI\MaxAuthenticationFailCount=100
+WebUI\BanDuration=60000
+
+[BitTorrent]
+Session\DefaultSavePath=/downloads/qbittorrent
+Session\Port=6881
+EOF
+  echo "[mei-portal] qBittorrent 首次初始化（凭据由下载中心 core 接管生成）"
+else
+  # 存量 conf 迁移：早期部署 qB 首启随机分配过 BT 端口（Session\Port 非约定值）
+  # → 统一收敛到 6881（未显式配置过的默认值除外——qB 默认行为本身也是随机的）
+  QB_BT_PORT=$(grep -a "^Session.Port=" "$QB_CONF" | tail -1 | cut -d= -f2)
+  if [ -n "$QB_BT_PORT" ] && [ "$QB_BT_PORT" != "6881" ]; then
+    sed -i "s/^Session\\\\Port=.*/Session\\\\Port=6881/" "$QB_CONF"
+    echo "[mei-portal] qBittorrent BT 端口收敛: $QB_BT_PORT -> 6881（重启后生效）"
+  fi
 fi
-
-# mediago 首次 setup（后台等待启动后自动设置密码）
-(
-  for i in $(seq 1 30); do
-    sleep 2
-    STATUS=$(curl -s http://127.0.0.1:3000/api/auth/status 2>/dev/null)
-    if echo "$STATUS" | grep -q '"setuped":false'; then
-      curl -s -X POST http://127.0.0.1:3000/api/auth/setup \
-        -H 'Content-Type: application/json' \
-        -d "{\"password\":\"${MEI_ADMIN_PASSWORD}\"}" >/dev/null 2>&1
-      echo "[mei-allin] mediago setup 完成"
-      break
-    elif echo "$STATUS" | grep -q '"setuped":true'; then
-      echo "[mei-allin] mediago 已 setup"
-      break
-    fi
-  done
-) &
-
-
+mkdir -p /downloads/qbittorrent
 
 # ---- 启动 ----
-echo "[mei-allin] 启动 supervisord（nginx + shell + 各应用）"
+echo "[mei-portal] 启动 supervisord（nginx + shell + 各应用）"
 exec "$@"

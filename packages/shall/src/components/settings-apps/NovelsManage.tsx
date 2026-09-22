@@ -12,7 +12,7 @@ import {
   TextInput,
 } from '@/components/SettingsUI';
 
-// 小说站点管理（统一设置页）：复刻 third_party/tutorial/src/app/manage/page.tsx 的逻辑，
+// 小说站点管理（统一设置页）：复刻 apps/novels/src/app/manage/page.tsx 的逻辑，
 // 但 UI 全部走 SettingsUI，不再跳转到 tutorial 子应用。
 
 interface SiteRow {

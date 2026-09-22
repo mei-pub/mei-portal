@@ -11,7 +11,10 @@ export function useRecents() {
   useEffect(() => {
     try {
       const raw = localStorage.getItem(KEY);
-      if (raw) setRecents(JSON.parse(raw));
+      if (!raw) return;
+      const parsed = JSON.parse(raw) as unknown;
+      // 旧值损坏/非数组时忽略，避免 record() 里 prev.filter 抛错
+      if (Array.isArray(parsed)) setRecents(parsed.filter((x) => typeof x === 'string'));
     } catch (e) {
       /* ignore */
     }

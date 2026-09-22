@@ -1,108 +1,151 @@
 # mei-portal
 
-> 把多个异构开源 Web 应用，整合为一个统一门户的 docker-compose 项目。
-> **不动任何上游源码**，只做交互层「皮」的协调与统一，保留各应用完整功能。
+> 多应用聚合门户·单镜像交付：影视、音乐、网盘搜索、下载中心、AI 绘图、工具箱、内网穿透、小说阅读——一个容器全带走。
+> 前身 mei-allin，2026-09 更名 mei-portal（GitHub 旧地址自动重定向）。
 
-[![status](https://img.shields.io/badge/status-实测可用-brightgreen)](#实测验证) [![apps](https://img.shields.io/badge/apps-8-blue)](#整合的应用) [![license](https://img.shields.io/badge/license-Apache--2.0-lightgrey)](LICENSE)
+[![apps](https://img.shields.io/badge/apps-8-blue)](#整合的应用) [![deploy](https://img.shields.io/badge/deploy-单镜像-9cf)](#快速开始) [![status](https://img.shields.io/badge/status-生产可用-brightgreen)](#核心特性) [![license](https://img.shields.io/badge/license-Apache--2.0-lightgrey)](LICENSE)
 
-## 实测验证
+## 核心特性
 
-本项目已通过完整的浏览器端到端实测（Docker 全量启动 + Chrome 真实访问）：
-
-| 验证项 | 结果 |
-|---|---|
-| 9 服务全量启动 | ✅ 全部 Up |
-| 门户首页渲染 | ✅ 暗色玻璃拟态，8 应用卡片，健康徽标 |
-| 应用 iframe 嵌入 | ✅ tutorial/mei-link/ai-draw 实测渲染完整界面 |
-| 主题 loader 注入 | ✅ 8 应用全部注入 `data-app` |
-| 安全头剥离 | ✅ 8 应用 X-Frame-Options / CSP 全部剥离 |
-| 主题切换广播 | ✅ Shell 切换 → iframe 同步（postMessage） |
-
+- **单镜像单端口**：nginx + 门户外壳 + 8 个应用全部本地源码构建，打进一个镜像，只暴露 `7777`，`docker run` 即用，零外部镜像依赖。
+- **统一登录**：单账户门禁，登录一次全应用通行；子应用不再各自维护登录（音乐、下载、搜索等内部应用共用门户会话）。
+- **应用秒切**：访问过的应用 iframe 保活驻留、顶栏悬停即预热、静态资源长缓存——切应用不重载，音乐跨应用不断播。
+- **网盘搜索**：自研聚合引擎（Node/TS，51 个网页/磁力插件全量对齐：剧透社/盘搜/小酷盘等网盘源 + 电影天堂/磁力狗/磁力帝等磁力引擎）+ 113 个 TG 资源频道，夸克/阿里/百度/迅雷/UC/115 等网盘链接与 magnet/ed2k 聚合检索、跨源去重、按类型筛选。
+- **音乐常驻**：MusicDock 悬浮播放条跨应用常驻，切到影视/工具页背景不断播；音乐应用内有完整播放页。
+- **内网穿透**：mei-link（frp 客户端）Web 管理，故障引导弹层 + 自动重连/重启两段式策略。
+- **视觉统一**：悬浮玻璃顶栏与应用内标准左侧导航面板由门户统一注入，各应用（React/Vue/原生 JS/静态页）保持一套观感。
 
 ## 快速开始
 
-```bash
-# 1. 克隆（含 submodule —— tutorial / mei-link 从源码本地构建）
-git clone --recurse-submodules <repo-url> mei-allin
-cd mei-allin
-# 已克隆但缺 submodule？运行： git submodule update --init
-
-# 2. 生成根域名（自动用 nip.io 免配置泛解析）
-cp .env.example .env
-bash scripts/setup-ip.sh
-
-# 3. 生成配置 + 主题资产
-npm install && npm run build
-
-# 4. 启动
-docker compose up -d
-
-# 5. 访问门户（域名见 .env 的 ROOT_DOMAIN）
-#    http://<ROOT_DOMAIN>  默认密码见 .env 的 SHELL_PASSWORD
-```
-
-### HTTPS（可选）
+### 直接用发布镜像（推荐）
 
 ```bash
-brew install mkcert && mkcert -install   # 一次性；Linux 见 mkcert 官方文档
-bash scripts/setup-certs.sh              # 生成通配证书并设 USE_TLS=true
-docker compose up -d                      # 网关将同时监听 443 并把 80 跳转到 443
+docker run -d --name mei-portal --restart unless-stopped \
+  -p 7777:7777 -v mei-portal-data:/data \
+  ghcr.io/mei-pub/mei-portal:latest
+
+# 国内走阿里云 ACR 镜像（内容同 GHCR）：
+# crpi-s6cwk4b9c6s5zn5q.cn-hangzhou.personal.cr.aliyuncs.com/meilink/mei-portal:latest
 ```
 
-## 架构（四层抽象）
+浏览器打开 `http://<服务器IP>:7777`，默认账户：
 
-```
-用户 → Nginx 网关（反代+剥头+注入 loader） → { Shell 门户 | 各应用容器 }
-                  ↓ sub_filter 注入
-          theme loader（iframe 内运行）→ 应用 tokens.css + 协调 CSS
+| 用户名 | 密码 |
+|---|---|
+| `admin` | `mei-portal` |
+
+### 从源码构建（docker compose）
+
+```bash
+git clone https://github.com/mei-pub/mei-portal.git
+cd mei-portal
+docker compose up -d --build
 ```
 
-| 层 | 职责 | 升级影响 |
+### 环境变量
+
+| 变量 | 默认值 | 说明 |
 |---|---|---|
-| L1 网关 | 反代、剥离 X-Frame/CSP、注入 loader | 仅 nginx 配置片段 |
-| L2 Shell | 门户、导航、主题源、iframe 宿主 | 自有代码，与 app 解耦 |
-| L3 主题 | tokens.css + 每 app 协调 CSS | 改 token 全局，改 app.css 局部 |
-| L4 插件清单 | 每 app 一个 `manifest.yml` | 新增 app = 加清单 + 1 个 service |
+| `MEI_ADMIN_USER` | `admin` | 管理员用户名（仅首次初始化生效） |
+| `MEI_ADMIN_PASSWORD` | `mei-portal` | 管理员密码（仅首次初始化生效） |
+| `YOUTUBE_PO_TOKEN` | 空 | bgutil PO Token 服务异常时手工覆盖（音乐 YouTube 源） |
+| `YOUTUBE_VISITOR_DATA` | 空 | 同上 |
+| `TZ` | `Asia/Shanghai` | 时区 |
+
+> **账户机制**：凭据只在 `$DATA_DIR/shell/user.json` 不存在时初始化一次，之后请登录门户在设置里修改密码（改环境变量不会再生效）。忘记密码时：`docker exec <容器> rm /data/shell/user.json && docker restart <容器>`，账户回到当时的默认值/环境变量重新初始化（注意：账户级数据按 uid 归档，重置后旧 uid 关联的数据如音乐进度会失联）。
+
+### 数据持久化
+
+全部状态落在 `/data`（`shell/` 账户与音乐状态、`disks/` 搜索缓存、`media/` 配置、`novels/` 书架、`link/` 穿透配置、`tv/` 影视配置与本地源记录、`music/` `draw/` 各应用自有数据，目录名与 apps/ 一致）。**备份该卷即备份一切。**
+
+### 本地服务器下载库（/downloads 卷）
+
+「下载到本地服务器」的保存目录（compose 强要求卷，默认映射宿主 `./downloads`，可用 `MEI_DOWNLOADS_DIR` 指向 NAS/移动硬盘）：
+
+- `/downloads/music/<歌手>/` —— 音乐应用「下载方式」设为服务器/两者时的落盘（`MUSIC_DOWNLOAD_DIR` 可调）
+- `/downloads/movie/<分类>/<剧名>/` —— 影视播放页「下载到服务器」按 电影/电视/动漫/综艺 分目录（media 下载引擎，`--local-dir`）；已下载的集在详情页置顶出现「本地服务器」源并**自动优先播放**
+
+## 架构
+
+```
+浏览器
+  │  http://host:7777
+  ▼
+nginx（唯一入口，sub_filter 注入顶栏脚本）
+  │  Sec-Fetch-Dest 判别：document 请求 → Shell 壳渲染；iframe 请求 → 直进应用
+  ├─ /            Shell 门户（Next.js，:7808）── 统一登录 / iframe 承载页 / 搜索中心
+  ├─ /tv         影视门户     (:7804)   ┐
+  ├─ /music      音乐播放     (:7806)   │
+  ├─ /disks      disks engine (:7807)   │ 各应用独立进程，supervisord 守护
+  ├─ /downloads  media core-ts (:7801) │ 顶栏/左面板由门户注入（旧 /media 301）
+  ├─ /draw       AI 绘图     (:7805)   │
+  ├─ /tools      工具箱      （静态）   │
+  ├─ /link       mei-link    (:7803)   │
+  ├─ /novels     小说阅读     (:7802)   ┘
+  └─ bgutil PO Token 服务（:4416，音乐 YouTube 源加速）
+```
+
+> 子应用统一占用 **7801~7808** 端口段（容器内与宿主同号，`docker-compose.yml`
+> 按需映射到本机供内网穿透分配子域名）；7777 门户 / 7778 aria2 RPC / 7779 qB
+> WebUI 与之连号成段。
+
+- **单镜像**：`image/Dockerfile` 多阶段构建，8 个应用全部本地源码编译，运行时 supervisord 编排（`image/supervisord.conf`）。
+- **路由分发**：同一 URL 下 nginx 用 `Sec-Fetch-Dest`（含头缺失时的 Accept 兜底）区分「顶级文档」与「iframe 内嵌」：前者跳 Shell 壳（有顶栏、可导航），后者直进应用原生页面——应用既可独立访问又无缝嵌入门户。
+- **应用切换**：承载页客户端路由（`packages/shall/src/components/AppFrame.tsx`），iframe 保活 + LRU 淘汰 + 顶栏预热 + nginx 静态缓存策略，切换已访问应用零重载。
+- **顶栏避让**：悬浮玻璃胶囊设计，应用在自身文档内部用 `--mei-topbar-space` 让位，背景自然延伸到胶囊下方（详见 `AGENTS.md` 顶部空间契约）。
 
 ## 目录结构
 
 ```
 mei-portal/
 ├── packages/
-│   ├── shall/            # Next.js 统一外壳（自研）
-│   ├── tutorial/         # git submodule —— 小说站，本地构建
-│   └── mei-link/         # git submodule —— 内网穿透，client/docker 本地构建
-├── plugins/              # 每应用一目录：manifest.yml + theme.css
-│   └── _schema/          # 清单 JSON Schema
-├── gateway/nginx/        # 网关配置（gen-nginx 自动生成 conf.d）
-├── scripts/              # setup-ip / setup-certs / build-theme / gen-nginx / validate
-├── docs/                 # 架构 / 排障 / 主题文档
-├── docker-compose.yml
-└── .env.example
+│   └── shall/              # 门户外壳（Next.js）：登录、顶栏、iframe 宿主、
+│                           #   综合搜索（含网盘/磁力源注册表 disk-sources.ts）、
+│                           #   MusicDock 音乐引擎 music-engine.ts
+├── apps/                   # 各应用——全部为一等公民本地代码（目录名 = URL 子路径，
+│                           #   例外：media 目录对外前缀为 /downloads）
+│   ├── tv/                 #   影视门户（Next.js，原 LunaTV 魔改演进）
+│   ├── music/              #   音乐播放（原生 JS + Node 服务，原 Solara）
+│   ├── disks/              #   网盘搜索：web/（Vue 前端）+ engine/（Node/TS 引擎，
+│   │                       #   51 个启用插件全量移植，含 gying/qqpd/weibo/panlian
+│   │                       #   四个账号型源的管理页 Web 路由）
+│   ├── media/              #   下载中心（core-ts/ Node 复刻引擎 + React UI；
+│   │                       #   鉴权统一走门户会话，无独立 setup/signin）
+│   ├── draw/               #   AI 绘图（Vite + React + Express，原 ai-draw）
+│   ├── tools/              #   工具箱（Vite + React + MUI，纯静态，原 omni-tools）
+│   ├── link/               #   内网穿透（Node + TS + frp 客户端管理）
+│   └── novels/             #   小说阅读（Next.js + SQLite，自研）
+├── image/                  # 单镜像定义
+│   ├── Dockerfile          #   多阶段构建（10+ 构建器 → 单运行时）
+│   ├── supervisord.conf    #   进程编排（nginx/shell/各应用，含插件与频道清单）
+│   ├── nginx/              #   路由与缓存策略（conf.d/00-main.conf 为核心）
+│   ├── entrypoint.sh       #   首启初始化（数据目录、默认账户）
+│   └── plugins.json        #   应用清单（门户首页卡片）
+├── docs/                   # 架构/排障/主题文档
+├── scripts/                # 构建辅助
+├── AGENTS.md               # AI 智能体协作强约束（顶栏/左面板/搜索源/穿透/缓存等架构契约）
+└── docker-compose.yml      # 源码构建 + 运行
 ```
 
-> **关于镜像**：除 tutorial 与 mei-link 外，其余 6 个应用均使用官方公开镜像，无需认证。
-> tutorial（私有仓库）与 mei-link（私有仓库）通过 git submodule 从源码本地构建，零认证依赖。
+## 发布流程
 
-## 扩展指南（加第 9 个应用）
+push `v*` tag（或 workflow_dispatch）触发 `.github/workflows/release.yml`：
 
-1. 新建 `plugins/<id>/manifest.yml`（参考 `plugins/_schema` 或现有应用）。
-2. 如需视觉协调，新建 `plugins/<id>/theme.css` 并在 manifest 设 `theme.has_skin: true`。
-3. 在 `docker-compose.yml` 加一个 service（指向官方镜像，加入 `mei-net` 网络）。
-4. 在 `gateway/nginx/conf.d/` 加 `<id>.conf`（复制现有文件，改 server_name 和 proxy_pass）。
-5. 运行 `node scripts/validate-manifests.mjs && node scripts/build-theme.mjs`。
-6. 重启：`docker compose up -d <id> gateway shall`。
+1. 多架构镜像 `linux/amd64 + linux/arm64` 构建并推送 GHCR（`:版本号` + `:latest`）与阿里云 ACR；
+2. 导出多架构 OCI 离线包挂 Release 附件（离线环境 `docker load` 即用）；
+3. Release 说明自动附 `docker run` 用法。
 
-**无需改动 Shell 代码**——门户会自动发现并展示新应用。
+```bash
+git tag v0.1.0 && git push origin v0.1.0
+```
 
-## 升级指南（升级某应用）
+## 开发
 
-1. 改 `docker-compose.yml` 中该 service 的 `image` tag。
-2. `docker compose pull <service> && docker compose up -d <service>`。
-3. 视觉冒烟：若上游 DOM/类名变化导致 `plugins/<id>/theme.css` 失效，更新对应选择器。
-4. manifest 的 `upgrade.image` / `upgrade.repo` 字段记录了官方来源便于检索。
+- **本地验证**：`docker compose up -d --build` 后访问 `http://127.0.0.1:7777`；单服务调试可 `docker exec mei-portal supervisorctl status`。
+- **搜索插件**（disks 引擎）：`apps/disks/engine/src/plugins/<name>.ts`，用 `definePlugin({ name, priority, skipServiceFilter, search })` 注册后在 `plugins/index.ts` 导入即可；账号型源可用 `webRoutes` 注册管理页路由（见 gying/qqpd/weibo/panlian）。运行：`cd apps/disks/engine && npm install && npm start`；单测 `npm test`。
+- **智能体协作**：任何 AI 辅助改动请先读 `AGENTS.md`——顶栏/左侧面板组件化、顶部空间契约、播放组件与播放页职责分离、mei-link 故障引导、iframe 保活与缓存策略、nginx 路由判别等强约束均在其中，违规判定标准也写明。
 
-## 主题定制
+## 许可
 
 - 全局视觉令牌集中在 `packages/shall/src/theme/tokens.css`（主色、圆角、暗/亮双色板）。
 - 改 token → 所有应用焕新；改某应用 `plugins/<id>/theme.css` → 仅局部生效。
@@ -139,4 +182,4 @@ mei-portal/
 
 ## 许可与致谢
 
-本项目仅为整合层代码（Apache-2.0）。各上游应用保留各自许可，请遵守对应项目要求。
+本项目仅为整合层代码（Apache-2.0）。`apps/` 下 tv / music / media / draw / tools / disks 等应用源自开源项目并经大量魔改演进为本地一等公民代码，仓库内仍保留其原始许可文件，使用时请一并遵守，勿用于盈利目的。

@@ -47,9 +47,9 @@ export const BACKUP_SCOPE_META: Record<BackupScope, BackupScopeMeta> = {
     description: '音乐设置、播放列表与收藏',
   },
   mediago: {
-    name: '媒体下载',
+    name: '下载中心',
     icon: 'lucide:download',
-    description: '媒体下载设置与下载历史',
+    description: '下载中心设置与下载历史',
   },
   pansou: {
     name: '网盘搜索',

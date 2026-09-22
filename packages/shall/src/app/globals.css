@@ -946,6 +946,295 @@ html:not(.mei-topbar-off) .mei-search-page {
   color: var(--mei-primary);
   background: rgba(99, 102, 241, 0.06);
 }
+
+/* ===== 磁力投递弹层（综合搜索 → 下载中心）===== */
+.mei-magnet-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--mei-space-4);
+  background: var(--mei-overlay);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+.mei-magnet-dialog {
+  width: min(560px, 100%);
+  max-height: min(78vh, 640px);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 18px;
+  border-radius: var(--mei-radius-lg, 18px);
+  border: 1px solid var(--mei-border);
+  background: var(--mei-surface-hover, rgba(22, 29, 50, 0.92));
+  backdrop-filter: blur(22px) saturate(1.4);
+  -webkit-backdrop-filter: blur(22px) saturate(1.4);
+  box-shadow: var(--mei-shadow-lg);
+  overflow: hidden;
+}
+.mei-magnet-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--mei-text);
+}
+.mei-magnet-head h3 {
+  flex: 1;
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+}
+.mei-magnet-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border: none;
+  border-radius: var(--mei-radius-full, 999px);
+  background: var(--mei-surface);
+  color: var(--mei-text-muted);
+  cursor: pointer;
+  transition: all var(--mei-transition);
+}
+.mei-magnet-close:hover { color: var(--mei-text); background: var(--mei-surface-hover); }
+.mei-magnet-url {
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11.5px;
+  color: var(--mei-text-faint);
+}
+.mei-magnet-resolving {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 12px;
+  border-radius: var(--mei-radius, 12px);
+  background: var(--mei-surface);
+  color: var(--mei-text-muted);
+  font-size: 13px;
+}
+.mei-magnet-error-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.mei-magnet-error-wrap .mei-magnet-btn {
+  align-self: flex-end;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+}
+.mei-magnet-error {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: var(--mei-radius, 12px);
+  border: 1px solid rgba(248, 113, 113, 0.4);
+  background: rgba(248, 113, 113, 0.12);
+  color: #fca5a5;
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+.mei-magnet-toast {
+  margin: 0;
+  padding: 8px 12px;
+  border-radius: var(--mei-radius, 12px);
+  background: rgba(74, 222, 128, 0.14);
+  color: #86efac;
+  font-size: 12.5px;
+}
+.mei-magnet-name {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 12.5px;
+  color: var(--mei-text-muted);
+}
+.mei-magnet-name span { flex-shrink: 0; }
+.mei-magnet-name input {
+  flex: 1;
+  min-width: 0;
+  padding: 7px 10px;
+  border-radius: var(--mei-radius, 12px);
+  border: 1px solid var(--mei-border);
+  background: var(--mei-surface);
+  color: var(--mei-text);
+  font-size: 13px;
+  outline: none;
+  transition: border-color var(--mei-transition);
+}
+.mei-magnet-name input:focus { border-color: var(--mei-primary); }
+.mei-magnet-summary {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 12px;
+  color: var(--mei-text-muted);
+}
+.mei-magnet-badge {
+  padding: 2px 8px;
+  border-radius: var(--mei-radius-full, 999px);
+  border: 1px solid var(--mei-border-strong);
+  font-size: 11px;
+  color: var(--mei-text-muted);
+}
+.mei-magnet-files {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-height: 0;
+}
+.mei-magnet-typebar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+.mei-magnet-type {
+  padding: 3px 10px;
+  border-radius: var(--mei-radius-full, 999px);
+  border: 1px solid var(--mei-border);
+  background: var(--mei-surface);
+  color: var(--mei-text-muted);
+  font-size: 11.5px;
+  cursor: pointer;
+  transition: all var(--mei-transition);
+}
+.mei-magnet-type:hover { border-color: var(--mei-primary); color: var(--mei-primary); }
+.mei-magnet-type.active {
+  border-color: transparent;
+  background: var(--mei-primary);
+  color: #fff;
+}
+.mei-magnet-dir {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 8px;
+  border-radius: 8px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--mei-text);
+  background: var(--mei-surface);
+}
+.mei-magnet-dir-arrow {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--mei-text-muted);
+  cursor: pointer;
+  transition: all var(--mei-transition);
+}
+.mei-magnet-dir-arrow:hover { color: var(--mei-primary); background: var(--mei-surface-hover); }
+.mei-magnet-dir-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.mei-magnet-dir .mei-magnet-file-size { flex-shrink: 0; font-size: 11px; color: var(--mei-text-faint); }
+.mei-magnet-empty-filter {
+  margin: 0;
+  padding: 12px;
+  text-align: center;
+  font-size: 12px;
+  color: var(--mei-text-faint);
+}
+.mei-magnet-picked {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--mei-text-muted);
+}
+.mei-magnet-pick-all {
+  margin-left: auto;
+  border: none;
+  background: transparent;
+  color: var(--mei-primary);
+  font-size: 12px;
+  cursor: pointer;
+  padding: 2px 4px;
+}
+.mei-magnet-pick-all:hover { text-decoration: underline; }
+.mei-magnet-file-list {
+  max-height: 200px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding-right: 4px;
+}
+.mei-magnet-file {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 8px;
+  border-radius: 8px;
+  font-size: 12.5px;
+  color: var(--mei-text);
+  cursor: pointer;
+}
+.mei-magnet-file.all {
+  color: var(--mei-text-muted);
+  font-weight: 600;
+}
+.mei-magnet-file:hover { background: var(--mei-surface); }
+.mei-magnet-file input { flex-shrink: 0; accent-color: var(--mei-primary); }
+.mei-magnet-file-path {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.mei-magnet-file-size {
+  flex-shrink: 0;
+  font-size: 11px;
+  color: var(--mei-text-faint);
+}
+.mei-magnet-foot {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 2px;
+}
+.mei-magnet-btn {
+  padding: 8px 18px;
+  border-radius: var(--mei-radius-full, 999px);
+  border: 1px solid var(--mei-border-strong);
+  background: var(--mei-surface);
+  color: var(--mei-text);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--mei-transition);
+}
+.mei-magnet-btn:hover { border-color: var(--mei-primary); color: var(--mei-primary); }
+.mei-magnet-btn.primary {
+  border-color: transparent;
+  background: var(--mei-primary);
+  color: #fff;
+}
+.mei-magnet-btn.primary:hover { filter: brightness(1.08); color: #fff; }
+.mei-magnet-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  filter: none;
+}
 .mei-search-draw-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));

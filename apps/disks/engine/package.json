@@ -1,0 +1,18 @@
+{
+  "name": "@mei/disks-engine",
+  "version": "0.1.0",
+  "private": true,
+  "description": "网盘搜索聚合引擎（pansou 的 Node/TS 代码级复刻版，API 与 Go 版完全兼容）",
+  "type": "module",
+  "scripts": {
+    "start": "node --experimental-strip-types src/server.ts",
+    "test": "node --experimental-strip-types --test 'test/**/*.test.ts'"
+  },
+  "engines": {
+    "node": ">=22.6"
+  },
+  "dependencies": {
+    "cheerio": "^1.0.0",
+    "iconv-lite": "^0.6.3"
+  }
+}

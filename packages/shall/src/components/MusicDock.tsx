@@ -71,6 +71,20 @@ export default function MusicDock() {
         case 'play-index':
           void eng.playIndex(Number(data.index));
           break;
+        case 'play-now': {
+          // 下载中心等外部应用触发：立即播单曲进临时队列（playNow 不动播放列表/收藏）
+          const s = (data.song || {}) as Record<string, unknown>;
+          eng.playNow({
+            id: String(s.id || ''),
+            name: String(s.name || ''),
+            artist: String(s.artist || ''),
+            album: String(s.album || ''),
+            pic_id: String(s.pic_id || ''),
+            lyric_id: String(s.lyric_id || ''),
+            source: String(s.source || ''),
+          });
+          break;
+        }
         case 'toggle':
           eng.toggle();
           break;
@@ -101,6 +115,12 @@ export default function MusicDock() {
         case 'cycle-dock-mode':
           eng.cycleDockMode();
           break;
+        case 'toast': {
+          // 音乐 iframe 的轻量反馈（如下载失败提示）借道播放条 toast 展示
+          const message = String(data.message || '');
+          if (message) setToast(message);
+          break;
+        }
         default:
           break;
       }
@@ -336,15 +356,47 @@ export default function MusicDock() {
           <span className="mei-dock-time">{fmt(snap.duration)}</span>
         </div>
         <div className="mei-dock-right">
+          {/* 下载：转发给音乐应用 iframe（providers 解析 + 「下载方式」设置分发
+              本地电脑 / 本地服务器），下载链路与音乐应用内各入口完全一致 */}
           <button
-            className={`mei-dock-btn${faved ? ' faved' : ''}`}
+            className="mei-dock-btn mei-dock-opt-dl"
+            title={`下载「${song.name}」（按音乐应用「下载方式」设置分发）`}
+            onClick={() => {
+              // 音乐应用的 iframe appId 是 solara（注册表 /lib/app-routes）；
+              // 查 music 找不到 contentWindow，按钮会静默失效
+              const frame = document.querySelector<HTMLIFrameElement>('iframe[data-mei-app="solara"]');
+              if (!frame?.contentWindow) return;
+              frame.contentWindow.postMessage(
+                {
+                  source: 'mei-shell',
+                  type: 'music-download',
+                  song: {
+                    id: String(song.id || ''),
+                    name: String(song.name || ''),
+                    artist: String(song.artist || ''),
+                    album: String(song.album || ''),
+                    pic_id: String(song.pic_id || ''),
+                    lyric_id: String(song.lyric_id || ''),
+                    source: String(song.source || ''),
+                  },
+                },
+                window.location.origin,
+              );
+              setToast('已发起下载（按音乐应用「下载方式」设置分发）');
+            }}
+          >
+            <MeiIcon icon="lucide:download" size={16} />
+          </button>
+          <button
+            className={`mei-dock-btn mei-dock-opt-fav${faved ? ' faved' : ''}`}
             title={faved ? '取消收藏' : '加入收藏'}
             onClick={() => {
               const added = engine.toggleFavorite(song);
               setToast(added ? '已加入收藏' : '已取消收藏');
             }}
           >
-            <MeiIcon icon={faved ? 'lucide:heart' : 'lucide:heart'} size={16} />
+            {/* 已收藏 = 红色实心爱心（.faved 样式给 svg fill currentColor） */}
+            <MeiIcon icon="lucide:heart" size={16} />
           </button>
           {/* 音量：常驻图标，hover 展开滑杆，避免占满播放条宽度 */}
           <div className="mei-dock-volume">
@@ -425,10 +477,10 @@ export default function MusicDock() {
               </div>
             )}
           </div>
-          <a className="mei-dock-btn" href={engine.playerPageHref()} title="打开音乐播放页">
+          <a className="mei-dock-btn mei-dock-opt-page" href={engine.playerPageHref()} title="打开音乐播放页">
             <MeiIcon icon="lucide:music" size={16} />
           </a>
-          <button className="mei-dock-btn" title="缩小为小球" onClick={() => engine.setDockMode('mini')}>
+          <button className="mei-dock-btn mei-dock-opt-mini" title="缩小为小球" onClick={() => engine.setDockMode('mini')}>
             <MeiIcon icon="lucide:minimize-2" size={16} />
           </button>
           <button className="mei-dock-btn" title="隐藏播放条" onClick={() => engine.setDockMode('hidden')}>
@@ -468,6 +520,8 @@ const dockStyles = (
   .mei-dock-btn.main { width: 44px; height: 44px; color: #fff;
     background: linear-gradient(135deg,#6366f1,#a855f7); box-shadow: 0 4px 14px rgba(99,102,241,0.4); }
   .mei-dock-btn.faved { color: #ec4899; background: rgba(236,72,153,0.10); }
+  /* 已收藏实心爱心：iconify lucide 是描边路径，fill currentColor 即实心 */
+  .mei-dock-btn.faved svg { fill: currentColor; }
   .mei-dock-progress { flex: 1; min-width: 0; display: flex; align-items: center; gap: 10px; }
   .mei-dock-time { font-size: 11px; color: #98a1b3; font-variant-numeric: tabular-nums; flex-shrink: 0; }
   .mei-dock-slider { flex: 1; -webkit-appearance: none; appearance: none; height: 5px; border-radius: 99px;
@@ -557,10 +611,22 @@ const dockStyles = (
   .mei-dock-toast { position: fixed; left: 50%; bottom: 106px; transform: translateX(-50%); z-index: 9999;
     padding: 9px 22px; border-radius: 999px; background: rgba(13,18,32,0.88); color: #fff; font-size: 13px;
     box-shadow: 0 18px 52px rgba(23,32,56,0.20); pointer-events: none; }
+  /* ---- 窄屏渐进降级：按「次要 → 核心」次序隐藏，杜绝元素挤压重叠。
+     页面入口 / 缩小球 → 收藏 / 音量 → 下载 / 队列标签 → 时间文本。
+     播放控制、进度条、隐藏把手任何宽度下都保留 */
+  @media (max-width: 980px) {
+    .mei-dock { gap: 10px; padding: 0 14px; }
+    .mei-dock-meta { width: 122px; }
+    .mei-dock-opt-page, .mei-dock-opt-mini { display: none; }
+  }
+  @media (max-width: 860px) {
+    .mei-dock-volume, .mei-dock-opt-fav { display: none; }
+  }
   @media (max-width: 760px) {
     .mei-dock { gap: 8px; padding: 0 12px; }
-    .mei-dock-meta { width: 110px; }
-    .mei-dock-time, .mei-dock-tag { display: none; }
+    .mei-dock-meta { width: 96px; }
+    .mei-dock-controls { gap: 2px; }
+    .mei-dock-time, .mei-dock-tag, .mei-dock-opt-dl { display: none; }
   }
   `}</style>
 );

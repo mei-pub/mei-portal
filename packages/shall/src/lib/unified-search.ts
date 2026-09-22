@@ -181,6 +181,8 @@ const DISK_TYPE_NAMES: Record<string, string> = {
   ali: '阿里云盘',
   tianyi: '天翼云盘',
   cloud189: '天翼云盘',
+  guangya: '光鸭网盘',
+  pikpak: 'PikPak',
   xunlei: '迅雷云盘',
   mobile: '移动云盘',
   caiyun: '移动云盘',
@@ -192,6 +194,7 @@ const DISK_TYPE_NAMES: Record<string, string> = {
   lanzou: '蓝奏云',
   magnet: '磁力链接',
   ed2k: '电驴链接',
+  others: '其他网盘',
 };
 
 /** Deterministic URL host -> brand, only consulted when the backend type key is missing. */
@@ -223,8 +226,10 @@ function diskSourceName(raw: string): string {
 /** Short tab labels for cloud types, mirroring the pansou app's filter tabs. */
 const DISK_TYPE_TAB_ORDER = [
   'baidu', 'magnet', 'quark', 'aliyun', 'tianyi', 'uc', 'xunlei',
-  'mobile', '115', '123', 'weiyun', 'lanzou', 'ed2k',
+  'mobile', '115', '123', 'weiyun', 'lanzou', 'guangya', 'pikpak', 'ed2k',
 ];
+/** Tail buckets that always sort last (engine fallback buckets). */
+const DISK_TYPE_TAIL = ['others', 'unknown'];
 const DISK_TYPE_TAB_LABELS: Record<string, string> = {
   baidu: '百度',
   quark: '夸克',
@@ -243,8 +248,11 @@ const DISK_TYPE_TAB_LABELS: Record<string, string> = {
   '123pan': '123',
   weiyun: '微云',
   lanzou: '蓝奏',
+  guangya: '光鸭',
+  pikpak: 'PikPak',
   magnet: '磁力',
   ed2k: '电驴',
+  others: '其他',
 };
 
 /** Order and label per-type counts into facet tabs; unknown types go last. */
@@ -253,9 +261,9 @@ export function buildDiskFacets(counts: Record<string, number>): SearchFacet[] {
   const ordered = [
     ...DISK_TYPE_TAB_ORDER.filter((key) => keys.includes(key)),
     ...keys
-      .filter((key) => !DISK_TYPE_TAB_ORDER.includes(key) && key !== 'unknown')
+      .filter((key) => !DISK_TYPE_TAB_ORDER.includes(key) && !DISK_TYPE_TAIL.includes(key))
       .sort(),
-    ...(keys.includes('unknown') ? ['unknown'] : []),
+    ...DISK_TYPE_TAIL.filter((key) => keys.includes(key)),
   ];
   return ordered.map((key) => ({
     key,
@@ -425,19 +433,20 @@ const NAMESPACE_CATEGORY_MAP: Record<string, string> = {
   converters: 'converters',
 };
 
-// Container: /app/apps/omni-tools/locales/zh ; dev fallback: third_party/omni-tools/public/locales/zh
+// Container: /app/apps/tools/locales/zh ; dev fallback: apps/tools/public/locales/zh
 const OMNI_TOOLS_LOCALES_DIR =
-  process.env.OMNI_TOOLS_LOCALES_DIR || '/app/apps/omni-tools/locales/zh';
+  process.env.OMNI_TOOLS_LOCALES_DIR || '/app/apps/tools/locales/zh';
 
 async function fetchJson(
   url: string,
   cookie: string,
-  fetchImpl: FetchLike
+  fetchImpl: FetchLike,
+  timeoutMs = 10000,
 ): Promise<unknown> {
   const response = await fetchImpl(url, {
     headers: { Cookie: cookie, Accept: 'application/json' },
     cache: 'no-store',
-    signal: AbortSignal.timeout(10000),
+    signal: AbortSignal.timeout(timeoutMs),
   });
   if (!response.ok) throw new Error(`upstream ${response.status}`);
   return response.json();
@@ -548,7 +557,7 @@ class TvProvider implements SearchProvider {
   opts: FetchProviderOptions;
   constructor(opts: FetchProviderOptions) { this.opts = opts; }
   async search(query: string, limit: number, offset: number, cookie: string): Promise<ProviderPage> {
-    const base = process.env.LUNATV_INTERNAL_URL || 'http://127.0.0.1:3003';
+    const base = process.env.LUNATV_INTERNAL_URL || 'http://127.0.0.1:7804';
     // 统一身份：lunatv 鉴权模块校验主应用会话（mei-auth），直接透传浏览器 cookie
     const params = new URLSearchParams({ q: query });
     const data = (await fetchJson(`${base}/tv/api/search?${params}`, cookie, this.opts.fetchImpl)) as {
@@ -570,7 +579,7 @@ class MusicProvider implements SearchProvider {
   opts: FetchProviderOptions;
   constructor(opts: FetchProviderOptions) { this.opts = opts; }
   async search(query: string, limit: number, offset: number, cookie: string): Promise<ProviderPage> {
-    const base = process.env.SOLARA_INTERNAL_URL || 'http://127.0.0.1:3005';
+    const base = process.env.SOLARA_INTERNAL_URL || 'http://127.0.0.1:7806';
     // 统一身份：solara 鉴权模块校验主应用会话（mei-auth），直接透传浏览器 cookie
     const pageNumber = Math.floor(offset / limit) + 1;
     const tasks = MUSIC_SOURCES.map(async (source) => {
@@ -600,6 +609,13 @@ class MusicProvider implements SearchProvider {
   }
 }
 
+/**
+ * 网盘 provider 超时：引擎侧已有 TG 5s / 请求 7s 两级硬 deadline（软超时被事件
+ * 循环压住时兜底），8s 只作为最外层保险。超时由 guardProvider 降级为该分组
+ * status:'timeout'（空结果 + 提示文案），不影响综合搜索整体返回。
+ */
+const DISKS_PROVIDER_TIMEOUT_MS = 8000;
+
 class DisksProvider implements SearchProvider {
   appId = 'pansou';
   label = '网盘';
@@ -607,7 +623,7 @@ class DisksProvider implements SearchProvider {
   opts: FetchProviderOptions;
   constructor(opts: FetchProviderOptions) { this.opts = opts; }
   async search(query: string, limit: number, offset: number, cookie: string, diskType?: string, sources?: DiskSourceFilters): Promise<ProviderPage> {
-    const base = process.env.PANSOU_INTERNAL_URL || 'http://127.0.0.1:3008';
+    const base = process.env.PANSOU_INTERNAL_URL || 'http://127.0.0.1:7807';
     const params = new URLSearchParams({ kw: query, res: 'merge', src: 'all' });
     // Settings-driven source scoping. An explicitly empty list means the user
     // disabled every source in that dimension; pansou treats a missing/empty
@@ -618,7 +634,7 @@ class DisksProvider implements SearchProvider {
     if (sources?.channels !== undefined) {
       params.set('channels', sources.channels.length ? sources.channels.join(',') : '__none__');
     }
-    const payload = (await fetchJson(`${base}/api/search?${params}`, cookie, this.opts.fetchImpl)) as {
+    const payload = (await fetchJson(`${base}/api/search?${params}`, cookie, this.opts.fetchImpl, DISKS_PROVIDER_TIMEOUT_MS)) as {
       data?: { merged_by_type?: Record<string, unknown[]> };
       merged_by_type?: Record<string, unknown[]>;
     };
@@ -668,7 +684,7 @@ class NovelsProvider implements SearchProvider {
   opts: FetchProviderOptions;
   constructor(opts: FetchProviderOptions) { this.opts = opts; }
   async search(query: string, limit: number, offset: number, cookie: string): Promise<ProviderPage> {
-    const base = process.env.TUTORIAL_INTERNAL_URL || 'http://127.0.0.1:3001';
+    const base = process.env.TUTORIAL_INTERNAL_URL || 'http://127.0.0.1:7802';
     const sites = (await fetchJson(`${base}/novels/api/sites`, cookie, this.opts.fetchImpl)) as Array<{
       slug: string;
       name: string;
@@ -692,7 +708,7 @@ class DrawProvider implements SearchProvider {
   constructor(opts: FetchProviderOptions) { this.opts = opts; }
   async search(query: string, limit: number, offset: number, cookie: string): Promise<ProviderPage> {
     const empty: ProviderPage = { results: [], hasMore: false };
-    const base = process.env.AIDRAW_INTERNAL_URL || 'http://127.0.0.1:3004';
+    const base = process.env.AIDRAW_INTERNAL_URL || 'http://127.0.0.1:7805';
     // 统一身份：以主应用会话令牌作为 Bearer 凭据（ai-draw 转发 /api/auth/verify 校验）
     const token = _getPortalToken();
     if (!token) return empty;

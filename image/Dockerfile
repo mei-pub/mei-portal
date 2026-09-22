@@ -1,5 +1,5 @@
-# mei-allin 单镜像（全源码本地构建版）
-# 所有应用源码 vendored 在 third_party/ 引用项目目录，构建期不依赖官方镜像/git clone
+# mei-portal 单镜像（全源码本地构建版）
+# 所有应用为一等公民本地源码（apps/），构建期不依赖官方镜像/git clone
 # 新增应用 = 加一个 builder stage + COPY 产物 + nginx location + supervisor 服务
 # =============================================================================
 
@@ -10,23 +10,22 @@ WORKDIR /build
 COPY packages/shall/package.json packages/shall/package-lock.json* ./
 RUN npm install --no-audit --no-fund
 COPY packages/shall/ ./
-ENV NEXT_PUBLIC_MEI_MODE=single
 RUN npm run build
 
-# ---- tutorial（Next.js，basePath=/novels，vendored）----
-FROM node:22-bookworm-slim AS tutorial-builder
+# ---- novels 小说阅读（Next.js，basePath=/novels）----
+FROM node:22-bookworm-slim AS novels-builder
 WORKDIR /build
 RUN apt-get update && apt-get install -y --no-install-recommends python3 make g++ \
     && rm -rf /var/lib/apt/lists/*
-COPY third_party/tutorial/ ./
+COPY apps/novels/ ./
 # 字体下载脚本首次启动会跑，构建时跳过
 ENV SKIP_FONT_DOWNLOAD=1
 RUN npm ci --no-audit --no-fund || npm install --no-audit --no-fund
 RUN npm run build
 
-# ---- mei-link（Node + 原生 JS，vendored，frpc 外部工具 Release 下载）----
+# ---- link 内网穿透（Node + 原生 JS，frpc 外部工具经 GitHub Release 下载）----
 # 用 alpine 基础（su-exec 在 alpine 有），只下载 frpc 二进制
-FROM node:22-alpine AS meilink-builder
+FROM node:22-alpine AS link-builder
 WORKDIR /build
 ARG TARGETARCH
 ARG FRP_VERSION=0.70.0
@@ -41,42 +40,42 @@ RUN set -eux; \
     tar -xzf /tmp/frp.tgz --strip-components=1 -C /usr/local/bin "frp_${FRP_VERSION}_linux_${TARGETARCH}/frpc"; \
     rm /tmp/frp.tgz; \
     frpc --version
-COPY third_party/mei-link/client/docker/ ./
+COPY apps/link/client/docker/ ./
 
-# ---- lunatv（Next.js 14，basePath=/tv，单密码模式，vendored）----
-FROM node:22-bookworm-slim AS lunatv-builder
+# ---- tv 影视门户（Next.js 14，basePath=/tv，单密码模式）----
+FROM node:22-bookworm-slim AS tv-builder
 WORKDIR /build
 RUN apt-get update && apt-get install -y --no-install-recommends git ca-certificates \
     && rm -rf /var/lib/apt/lists/*
-COPY third_party/lunatv/ ./
+COPY apps/tv/ ./
 # localstorage 单密码模式（零外部依赖），密码由运行时 env 设
 ENV NEXT_PUBLIC_STORAGE_TYPE=localstorage
 RUN corepack enable && corepack prepare pnpm@10.14.0 --activate
 RUN pnpm install --no-frozen-lockfile
 RUN pnpm run build
 
-# ---- omni-tools（Vite + React + MUI，纯静态，basePath=/tools，vendored）----
-FROM node:22-bookworm-slim AS omni-tools-builder
+# ---- tools 工具箱（Vite + React + MUI，纯静态，basePath=/tools）----
+FROM node:22-bookworm-slim AS tools-builder
 WORKDIR /build
-COPY third_party/omni-tools/ ./
+COPY apps/tools/ ./
 RUN npm ci --no-audit --no-fund || npm install --no-audit --no-fund
 RUN npm run build
 # 生成真实工具路径清单（locale 键是 camelCase，与 kebab-case 路由不一致，不能直接当 href 用）
 RUN node scripts/generate-tool-manifest.mjs
 
-# ---- ai-draw（Vite + React + Express，basePath=/draw，sqlite3，vendored）----
-FROM node:22-bookworm-slim AS ai-draw-builder
+# ---- draw AI 绘图（Vite + React + Express，basePath=/draw，sqlite3）----
+FROM node:22-bookworm-slim AS draw-builder
 WORKDIR /build
 RUN apt-get update && apt-get install -y --no-install-recommends python3 make g++ \
     && rm -rf /var/lib/apt/lists/*
-COPY third_party/ai-draw/ ./
+COPY apps/draw/ ./
 RUN npm ci --no-audit --no-fund || npm install --no-audit --no-fund
 RUN npm run build
 
-# ---- solara（Node + 原生 JS 音乐播放，vendored）----
-FROM node:22-bookworm-slim AS solara-builder
+# ---- music 音乐播放（Node + 原生 JS）----
+FROM node:22-bookworm-slim AS music-builder
 WORKDIR /build
-COPY third_party/solara/ ./
+COPY apps/music/ ./
 # solara 的 package.json 在 server/ 子目录
 WORKDIR /build/server
 RUN npm install --no-audit --no-fund --legacy-peer-deps
@@ -94,24 +93,21 @@ RUN echo "3545ac7ffc0869498755cb3b4760a72fa2f176689d0890a6f5b898d163012ba2  /tmp
     && npx tsc \
     && npm prune --omit=dev
 
-# ---- pansou 网盘搜索（Go 后端 + Vue 前端，vendored 本地编译）----
-FROM golang:1.25-bookworm AS pansou-builder
+# ---- disks 网盘搜索（Node/TS 复刻引擎 + Vue 前端；Go 引擎已退役）----
+FROM node:22-bookworm-slim AS disks-engine-builder
 WORKDIR /build
-# Go 模块代理：默认官方源（CI 海外 runner 直连最快）；国内本地构建经
-# docker-compose 传 goproxy.cn。写死单代理曾致 CI 绕道国内 TLS 握手超时。
-ARG GOPROXY=https://proxy.golang.org,direct
-ENV GOPROXY=${GOPROXY}
-COPY third_party/pansou/ ./
-RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/pansou .
-FROM node:22-bookworm-slim AS pansou-web-builder
+COPY apps/disks/engine/package.json apps/disks/engine/package-lock.json* ./
+RUN npm ci --no-audit --no-fund || npm install --no-audit --no-fund
+COPY apps/disks/engine/ ./
+FROM node:22-bookworm-slim AS disks-web-builder
 WORKDIR /build
-COPY third_party/pansou-web/ ./
+COPY apps/disks/web/ ./
 RUN npm ci --no-audit --no-fund || npm install --no-audit --no-fund
 RUN npm run build
 
-# ---- mediago 流媒体下载（Go core + React UI + 外部下载工具，vendored 本地编译）----
-# 参考官方 Dockerfile 结构，全部从 vendored 源码构建
-FROM node:22-bookworm-slim AS mediago-node-builder
+# ---- media 下载中心（core-ts Node 引擎 + React UI + 外部下载工具；Go core 已退役）----
+# 全部从本地源码构建
+FROM node:22-bookworm-slim AS media-node-builder
 WORKDIR /src
 RUN apt-get update && apt-get install -y --no-install-recommends unzip \
     && rm -rf /var/lib/apt/lists/*
@@ -122,9 +118,10 @@ RUN if [ "$TARGETARCH" = "amd64" ]; then \
     else \
       echo "linux-${TARGETARCH}" > /tmp/deps-platform; \
     fi
-COPY third_party/mediago/ ./
+COPY apps/media/ ./
+RUN rm -rf core-ts
 RUN pnpm install --frozen-lockfile || pnpm install
-# 构建 player-ui（嵌入 Go core）
+# 构建 player-ui（播放页，目录形式部署到 /app/apps/media/player）
 RUN pnpm --filter @mediago/player-ui run build
 # 构建 web UI（server 模式静态产物）
 ENV APP_TARGET=server
@@ -132,31 +129,47 @@ ENV NODE_ENV=production
 RUN pnpm build:web
 # 下载第三方下载工具（yt-dlp/ffmpeg/N_m3u8DL-RE/BBDown/aria2 等，GitHub Release + in-tree 本地源）
 RUN pnpm deps:download --platform $(cat /tmp/deps-platform)
-FROM golang:1.25-bookworm AS mediago-go-builder
-WORKDIR /src
-ARG GOPROXY=https://proxy.golang.org,direct
-ENV GOPROXY=${GOPROXY}
-COPY third_party/mediago/apps/core/go.mod third_party/mediago/apps/core/go.sum apps/core/
-RUN cd apps/core && go mod download
-COPY third_party/mediago/apps/core/ apps/core/
-COPY --from=mediago-node-builder /src/apps/player-ui/dist apps/core/assets/player/
-RUN cd apps/core && go mod download
-RUN cd apps/core && CGO_ENABLED=0 GOOS=linux GOARCH=${TARGETARCH} \
-    go build -trimpath -ldflags="-s -w" -o /out/mediago-core ./cmd/server
+
+# ---- media core（Node/TS 复刻版，Go core 已退役；better-sqlite3 原生依赖）----
+FROM node:22-bookworm-slim AS media-engine-builder
+WORKDIR /build
+RUN apt-get update && apt-get install -y --no-install-recommends python3 make g++ \
+    && rm -rf /var/lib/apt/lists/*
+COPY apps/media/core-ts/package.json apps/media/core-ts/package-lock.json* ./
+RUN npm ci --no-audit --no-fund || npm install --no-audit --no-fund
+COPY apps/media/core-ts/ ./
+
+# ---- AriaNg（aria2 RPC 标准第三方客户端面板，纯静态 SPA）----
+FROM node:22-bookworm-slim AS ariang-builder
+ARG ARIANG_VERSION=1.3.10
+RUN set -eux; \
+    apt-get update && apt-get install -y --no-install-recommends ca-certificates curl unzip \
+    && rm -rf /var/lib/apt/lists/*; \
+    curl -fsSL -o /tmp/ariang.zip "https://github.com/mayswind/AriaNg/releases/download/${ARIANG_VERSION}/AriaNg-${ARIANG_VERSION}.zip"; \
+    mkdir -p /out; \
+    unzip -q /tmp/ariang.zip -d /out; \
+    rm /tmp/ariang.zip; \
+    test -f /out/index.html
+
 
 
 # ---- 运行时（必须最后一个 FROM）----
 # =============================================================================
 FROM node:22-bookworm-slim AS runtime
+# libicu72：N_m3u8DL-RE（.NET AOT，m3u8 下载主路径）运行时必需，
+# 缺失时报 "Couldn't find a valid ICU package"，且 schema 的 --ui-language zh-CN
+# 在 invariant 模式下也会被拒
 RUN apt-get update && apt-get install -y \
         nginx gettext-base ca-certificates curl python3 python3-pip python3-venv \
+        libicu72 \
+        qbittorrent-nox \
     && rm -rf /var/lib/apt/lists/* /etc/nginx/sites-enabled/default \
     && python3 -m pip install --no-cache-dir --break-system-packages \
         supervisor \
         yt-dlp==2026.8.19 \
         yt-dlp-ejs==0.8.0 \
         bgutil-ytdlp-pot-provider==1.3.2 \
-    && which supervisord
+    && which supervisord && which qbittorrent-nox
 
 WORKDIR /app
 
@@ -166,50 +179,52 @@ COPY --from=shell-builder /build/.next/static ./.next/static
 COPY --from=shell-builder /build/public ./public
 COPY --from=shell-builder /build/node_modules ./node_modules
 
-# ---- tutorial ----
-COPY --from=tutorial-builder /build/.next/standalone ./apps/tutorial/
-COPY --from=tutorial-builder /build/.next/static ./apps/tutorial/.next/static
-COPY --from=tutorial-builder /build/public ./apps/tutorial/public
-COPY --from=tutorial-builder /build/scripts ./apps/tutorial/scripts
+# ---- novels ----
+COPY --from=novels-builder /build/.next/standalone ./apps/novels/
+COPY --from=novels-builder /build/.next/static ./apps/novels/.next/static
+COPY --from=novels-builder /build/public ./apps/novels/public
+COPY --from=novels-builder /build/scripts ./apps/novels/scripts
 
-# ---- mei-link ----
-COPY --from=meilink-builder /usr/local/bin/frpc /usr/local/bin/frpc
-COPY --from=meilink-builder /build ./apps/mei-link
+# ---- link ----
+COPY --from=link-builder /usr/local/bin/frpc /usr/local/bin/frpc
+COPY --from=link-builder /build ./apps/link
 
-# ---- lunatv ----
-COPY --from=lunatv-builder /build/.next/standalone ./apps/lunatv/
-COPY --from=lunatv-builder /build/.next/static ./apps/lunatv/.next/static
-COPY --from=lunatv-builder /build/public ./apps/lunatv/public
+# ---- tv ----
+COPY --from=tv-builder /build/.next/standalone ./apps/tv/
+COPY --from=tv-builder /build/.next/static ./apps/tv/.next/static
+COPY --from=tv-builder /build/public ./apps/tv/public
 
-# ---- omni-tools（静态文件）----
-COPY --from=omni-tools-builder /build/dist ./apps/omni-tools
-COPY --from=omni-tools-builder /build/tool-manifest.json ./apps/omni-tools/tool-manifest.json
+# ---- tools（静态文件）----
+COPY --from=tools-builder /build/dist ./apps/tools
+COPY --from=tools-builder /build/tool-manifest.json ./apps/tools/tool-manifest.json
 
-# ---- ai-draw（Express + dist）----
-COPY --from=ai-draw-builder /build/dist ./apps/ai-draw/dist
-COPY --from=ai-draw-builder /build/server ./apps/ai-draw/server
-COPY --from=ai-draw-builder /build/package.json ./apps/ai-draw/package.json
-COPY --from=ai-draw-builder /build/node_modules ./apps/ai-draw/node_modules
+# ---- draw（Express + dist）----
+COPY --from=draw-builder /build/dist ./apps/draw/dist
+COPY --from=draw-builder /build/server ./apps/draw/server
+COPY --from=draw-builder /build/package.json ./apps/draw/package.json
+COPY --from=draw-builder /build/node_modules ./apps/draw/node_modules
 
-# ---- solara ----
-COPY --from=solara-builder /build ./apps/solara
+# ---- music ----
+COPY --from=music-builder /build ./apps/music
 COPY --from=bgutil-builder /build/build ./apps/bgutil/build
 COPY --from=bgutil-builder /build/node_modules ./apps/bgutil/node_modules
 COPY --from=bgutil-builder /build/package.json ./apps/bgutil/package.json
 
-# ---- pansou（本地编译 Go 二进制 + Vue 前端 dist）----
-COPY --from=pansou-builder /out/pansou ./apps/pansou/pansou
-COPY --from=pansou-web-builder /build/dist ./apps/pansou/frontend/dist
+# ---- disks（TS 引擎 + Vue 前端 dist）----
+COPY --from=disks-engine-builder /build ./apps/disks/engine
+COPY --from=disks-web-builder /build/dist ./apps/disks/frontend/dist
 
-# ---- mediago（本地编译 core + 前端静态 + 下载工具）----
-COPY --from=mediago-go-builder /out/mediago-core ./apps/mediago/mediago-core
-
-COPY --from=mediago-node-builder /src/apps/ui/build/server ./apps/mediago/static
+# ---- media（TS core + 前端静态 + 播放页 + 下载工具）----
+COPY --from=media-engine-builder /build ./apps/media/core-ts
+COPY --from=media-node-builder /src/apps/ui/build/server ./apps/media/static
+# AriaNg（aria2 RPC 第三方客户端面板）：静态挂 /downloads/ariang/
+COPY --from=ariang-builder /out ./apps/media/static/ariang
+COPY --from=media-node-builder /src/apps/player-ui/dist ./apps/media/player
 ARG TARGETARCH
-COPY --from=mediago-node-builder /src/.deps/linux-* /app/deps-tmp/
-RUN mkdir -p /app/apps/mediago/deps && \
-    find /app/deps-tmp -type f -exec cp {} /app/apps/mediago/deps/ \; && \
-    chmod +x /app/apps/mediago/deps/* && \
+COPY --from=media-node-builder /src/.deps/linux-* /app/deps-tmp/
+RUN mkdir -p /app/apps/media/deps && \
+    find /app/deps-tmp -type f -exec cp {} /app/apps/media/deps/ \; && \
+    chmod +x /app/apps/media/deps/* && \
     rm -rf /app/deps-tmp
 
 # ---- 配置 ----
@@ -219,13 +234,32 @@ COPY image/nginx/conf.d/ /etc/nginx/conf.d/
 COPY image/nginx/snippets/ /etc/nginx/snippets/
 RUN rm -rf /etc/nginx/sites-enabled
 COPY image/plugins.json /etc/mei-plugins.json
-COPY image/supervisord.conf /etc/supervisor/conf.d/mei-allin.conf
-RUN mkdir -p /etc/supervisor && ln -sf /etc/supervisor/conf.d/mei-allin.conf /etc/supervisor/supervisord.conf
+COPY image/supervisord.conf /etc/supervisor/conf.d/mei-portal.conf
+RUN mkdir -p /etc/supervisor && ln -sf /etc/supervisor/conf.d/mei-portal.conf /etc/supervisor/supervisord.conf
 COPY image/entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
 VOLUME ["/data"]
 ENV NODE_ENV=production TZ=Asia/Shanghai
+
+# ---- 端口清单（镜像内全部监听端口的显式声明；EXPOSE 不自动映射，宿主接入
+# 由 compose ports 决定：7777 门户对外、7778/7779 引擎与 7801~7808 子应用仅本机）----
+# 7777  nginx        统一入口（唯一需要对外映射的端口）
 EXPOSE 7777
+# 内部子应用（7801~7808 段，nginx 反代/iframe 引用；宿主同号映射供内网穿透
+# 分配子域名，见 compose ports 说明）：
+#   7801 media 下载中心 core / 7802 novels / 7803 link / 7804 tv
+#   7805 draw / 7806 music / 7807 disks（127.0.0.1）/ 7808 shell 门户
+#   4416 bgutil PO-Token Provider
+EXPOSE 7801 7802 7803 7804 7805 7806 7807 7808 4416
+# 下载引擎控制面（宿主/第三方客户端经 compose 映射接入）：
+#   6800 aria2 RPC 对外引擎（映射 127.0.0.1:7778）
+#   8080 qBittorrent WebUI（映射 127.0.0.1:7779）
+EXPOSE 6800 8080
+# BT 数据面（TCP 传输 + UDP DHT/LSD；对等节点连接，公网映射后可提升连通性）：
+#   6881 qBittorrent BT（conf 固定） / 6891 aria2 BT+DHT（spawn 参数固定）
+EXPOSE 6881 6891
+EXPOSE 6881/udp 6891/udp
+
 ENTRYPOINT ["/entrypoint.sh"]
-CMD ["supervisord", "-n", "-c", "/etc/supervisor/conf.d/mei-allin.conf"]
+CMD ["supervisord", "-n", "-c", "/etc/supervisor/conf.d/mei-portal.conf"]

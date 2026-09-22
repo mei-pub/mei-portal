@@ -4,12 +4,8 @@ description: 个人小说站点（普通/隐秘站点）
 icon: lucide:book-open
 category: productivity
 weight: 80
+path: /novels
 endpoint: http://tutorial:3000
-ingress:
-  mode: subdomain
-  host: ${SUBDOMAIN_NOVELS}.${ROOT_DOMAIN}
-auth:
-  strategy: independent
 embed:
   iframe: true
   strip_headers: [X-Frame-Options, Content-Security-Policy]
@@ -19,6 +15,3 @@ theme:
 health:
   path: /
   expect: 200
-upgrade:
-  image: ghcr.io/tomtrije/tutorial:latest
-  repo: https://github.com/tomtrije/tutorial

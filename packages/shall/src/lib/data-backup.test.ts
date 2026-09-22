@@ -6,6 +6,7 @@ import { test } from 'node:test';
 import { DatabaseSync } from 'node:sqlite';
 
 import { buildBackupZip, restoreBackupZip } from './data-backup.ts';
+import AdmZip from 'adm-zip';
 
 function tempData(): string {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'mei-backup-test-'));
@@ -81,8 +82,8 @@ test('merge restore keeps current-only panel data', () => {
 
 test('merge restore dedupes music playlists by id and song', () => {
   const root = tempData();
-  fs.mkdirSync(path.join(root, 'solara'), { recursive: true });
-  const db = new DatabaseSync(path.join(root, 'solara', 'solara.db'));
+  fs.mkdirSync(path.join(root, 'music'), { recursive: true });
+  const db = new DatabaseSync(path.join(root, 'music', 'solara.db'));
   db.exec(`
     CREATE TABLE playback_store (key TEXT PRIMARY KEY, value TEXT, updated_at TEXT);
     CREATE TABLE favorites_store (key TEXT PRIMARY KEY, value TEXT, updated_at TEXT);
@@ -95,7 +96,7 @@ test('merge restore dedupes music playlists by id and song', () => {
   db.close();
 
   const zip = buildBackupZip({ scopes: ['solara'], browserData: {} });
-  const current = new DatabaseSync(path.join(root, 'solara', 'solara.db'));
+  const current = new DatabaseSync(path.join(root, 'music', 'solara.db'));
   current
     .prepare('UPDATE playback_store SET value = ? WHERE key = ?')
     .run(
@@ -108,7 +109,7 @@ test('merge restore dedupes music playlists by id and song', () => {
   current.close();
 
   restoreBackupZip(zip, 'merge');
-  const merged = new DatabaseSync(path.join(root, 'solara', 'solara.db'));
+  const merged = new DatabaseSync(path.join(root, 'music', 'solara.db'));
   const row = merged.prepare('SELECT value FROM playback_store WHERE key = ?').get('meiMusicPlaylists.v1');
   merged.close();
   const playlists = JSON.parse(String(row?.value)) as Array<{ id: string; songs: Array<{ id: string }> }>;
@@ -118,19 +119,47 @@ test('merge restore dedupes music playlists by id and song', () => {
 
 test('merge restore keeps tunnel arrays as arrays', () => {
   const root = tempData();
-  fs.mkdirSync(path.join(root, 'mei-link'), { recursive: true });
+  fs.mkdirSync(path.join(root, 'link'), { recursive: true });
   fs.writeFileSync(
-    path.join(root, 'mei-link', 'tunnels.json'),
+    path.join(root, 'link', 'tunnels.json'),
     JSON.stringify([{ id: 't1', name: 'A' }, { id: 't2', name: 'B' }]),
   );
   const zip = buildBackupZip({ scopes: ['mei-link'], browserData: {} });
   fs.writeFileSync(
-    path.join(root, 'mei-link', 'tunnels.json'),
+    path.join(root, 'link', 'tunnels.json'),
     JSON.stringify([{ id: 't1', name: 'A', localPort: 1 }, { id: 't3', name: 'C' }]),
   );
   restoreBackupZip(zip, 'merge');
-  const tunnels = JSON.parse(fs.readFileSync(path.join(root, 'mei-link', 'tunnels.json'), 'utf8')) as Array<{
+  const tunnels = JSON.parse(fs.readFileSync(path.join(root, 'link', 'tunnels.json'), 'utf8')) as Array<{
     id: string;
   }>;
   assert.deepEqual(tunnels.map((t) => t.id), ['t1', 't3', 't2']);
+});
+
+test('restores legacy zips written with pre-rename directory prefixes', () => {
+  const root = tempData();
+  // 大一统改造前的备份包：顶层目录沿用旧 scope 名（lunatv/solara/tutorial/…）
+  const zip = new AdmZip();
+  zip.addFile('meta.json', Buffer.from(JSON.stringify({
+    app: 'mei-portal',
+    version: 1,
+    exportedAt: new Date().toISOString(),
+    scopes: ['lunatv', 'solara', 'tutorial', 'mei-link'],
+    accounts: [],
+  })));
+  zip.addFile('lunatv/admin-config.json', Buffer.from('{}'));
+  zip.addFile('solara/music/state.json', Buffer.from('{"revision":1}'));
+  zip.addFile('tutorial/novels.db', Buffer.from('legacy'));
+  zip.addFile('mei-link/config.json', Buffer.from('{"server":"a"}'));
+  const result = restoreBackupZip(zip.toBuffer(), 'replace');
+  assert.equal(result.ok, true);
+  // 旧前缀被归一到新数据路径，而不是静默落空
+  assert.equal(fs.readFileSync(path.join(root, 'tv', 'admin-config.json'), 'utf8'), '{}');
+  assert.equal(
+    fs.readFileSync(path.join(root, 'shell', 'music', 'state.json'), 'utf8'),
+    '{"revision":1}',
+  );
+  assert.equal(fs.readFileSync(path.join(root, 'novels', 'novels.db'), 'utf8'), 'legacy');
+  assert.equal(fs.readFileSync(path.join(root, 'link', 'config.json'), 'utf8'), '{"server":"a"}');
+  assert.deepEqual(result.restored.tutorial, { files: 1 });
 });

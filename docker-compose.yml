@@ -1,26 +1,95 @@
 # =============================================================================
-# mei-allin 单镜像部署
-# 所有应用 + Shell + nginx 打包在一个镜像，仅暴露 7777 端口
+# mei-portal 单镜像部署
+# 所有应用 + Shell + nginx 打包在一个镜像；7777 门户对外，7778/7779 引擎与
+# 7801~7808 子应用端口按需映射（默认仅本机）
 # =============================================================================
+name: mei-portal
+
 services:
-  mei-allin:
+  mei-portal:
     build:
       context: .
       dockerfile: image/Dockerfile
-      # 国内本地构建走 goproxy.cn；CI（release.yml）不传，用默认官方源
-      args:
-        GOPROXY: https://goproxy.cn,direct
-    image: mei-allin:latest
-    container_name: mei-allin
+    image: mei-portal:latest
+    container_name: mei-portal
     restart: unless-stopped
+    # 优雅停机：supervisord 需按程序逐个走 SIGTERM（disks 缓存落盘 / media 杀下载子进程
+    # 各留了 stopwaitsecs=20），默认 10s 宽限期会被 docker 直接 SIGKILL 截断
+    stop_grace_period: 60s
+    # 端口说明（镜像内全部监听端口已 Dockerfile EXPOSE 显式声明）：
+    #   子应用 7801~7808 段（容器内 nginx 聚合；独立端口见下方映射）：
+    #     7801 media core / 7802 novels / 7803 link / 7804 tv / 7805 draw
+    #     / 7806 music / 7807 disks（绑 127.0.0.1）/ 7808 shell；4416 bgutil
+    #   引擎控制面：6800 aria2 RPC / 8080 qB WebUI（下方映射到本机）
+    #   BT 数据面：6881 qB（TCP+UDP）/ 6891 aria2（TCP+UDP）——需要公网做种
+    #     连通性时按需映射；未映射不影响下载中心内网下载
+    #
+    # 子域名部署（内网穿透）：下方把每个应用独立映射到宿主同号端口（仅本机
+    # 可达），穿透客户端把 子域名 → localhost:<端口>；容器内自带的 mei-link
+    # 也可直接用容器内地址（127.0.0.1:7801 等，无需宿主映射）。
+    #   portal.example.com → 7777（门户，路径聚合全应用）
+    #   dl.example.com     → 7801（下载中心，直连形态）
+    #   music.example.com  → 7806 / tv → 7804 / novels → 7802 / draw → 7805 …
+    # 直连路径形态：novels 需带前缀（novels.example.com/novels）、tv 同理
+    #   （tv.example.com/tv），其余应用根路径直达（下载中心 7801、music 7806、
+    #   draw 7805、link 7803 会各自 302/307 到登录页）。
+    # 注意：跨子域共享登录需在 environment 配 MEI_COOKIE_DOMAIN=.example.com；
+    #   qB WebUI（7779）经穿透子域名访问时需在其 conf 补 WebUI\ServerDomains
+    #   （qB 的 CSRF 域名校验），aria2 RPC 无此限制。
+    # disks（7807）仅绑容器内 127.0.0.1（无独立鉴权），经 7777 的 /disks/ 使用；
+    #   tools 为纯静态挂 nginx /tools/，无独立端口。
     ports:
       - "7777:7777"
+      # aria2 RPC 对外引擎（第三方客户端接入控制；容器内 6800，secret 见
+      # 下载中心设置页「下载引擎」）。绑定 127.0.0.1：本机客户端接入，不经公网
+      # 暴露；需要局域网接入时去掉 127.0.0.1: 前缀
+      - "127.0.0.1:7778:6800"
+      # qBittorrent Web UI（BT/磁力引擎管理界面；容器内 8080，凭据见下载中心
+      # 设置页「下载引擎」）。默认限本机访问
+      - "127.0.0.1:7779:8080"
+      # ---- 子应用端口 7801~7808（内网穿透子域名分配用，同号映射，仅本机）----
+      - "127.0.0.1:7801:7801"   # media 下载中心 core
+      - "127.0.0.1:7802:7802"   # novels 小说阅读
+      - "127.0.0.1:7803:7803"   # link 内网穿透
+      - "127.0.0.1:7804:7804"   # tv 影视
+      - "127.0.0.1:7805:7805"   # draw AI 绘图
+      - "127.0.0.1:7806:7806"   # music 音乐
+      - "127.0.0.1:7808:7808"   # shell 门户（不经 nginx 包装的直连形态）
     volumes:
       - mei-data:/data
+      # 本地服务器下载库（强要求配置）：音乐/影视「下载到本地服务器」的保存目录。
+      # 默认落在本仓库 ./downloads（首次 up 自动创建）；指向 NAS/移动硬盘时改
+      # MEI_DOWNLOADS_DIR 即可。容器内布局：/downloads/music/<歌手>/、/downloads/movie/<分类>/<剧名>/
+      - ${MEI_DOWNLOADS_DIR:-./downloads}:/downloads
+    # /healthy 经 nginx 反代到 media core（白名单端点）：同时覆盖 nginx 存活与 core 就绪，
+    # 不用 Shell 的 /api/health（它会并发探活全部应用，不适合做容器级心跳）
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "-o", "/dev/null", "http://127.0.0.1:7777/healthy"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 90s
     environment:
       # 统一管理员凭据（单用户，首次启动后可在门户修改密码）
       MEI_ADMIN_USER: ${MEI_ADMIN_USER:-admin}
-      MEI_ADMIN_PASSWORD: ${MEI_ADMIN_PASSWORD:-mei-allin}
+      MEI_ADMIN_PASSWORD: ${MEI_ADMIN_PASSWORD:-mei-portal}
+      # 引擎宿主接入端口声明（下载中心设置页「下载引擎」展示接入地址用；
+      # 容器内固定 6800/8080，改这里要与 ports 映射一致：7777 门户 /
+      # 7778 aria2 RPC / 7779 qBittorrent WebUI）
+      MEI_ARIA2_RPC_PORT: "7778"
+      MEI_QBIT_WEBUI_PORT: "7779"
+      # 跨子域名部署（如 portal.example.com / dl.example.com / music.example.com …）
+      # 两种途径（都要先 DNS 把各子域指向同一入口）：
+      #   A) 内网穿透：各子域 → 上方独立端口（推荐，见 ports 段说明）
+      #   B) 宿主反代：每子域一个 server 块，规则统一「路径透传到 7777 + 根路径
+      #      302 到应用路径」：
+      #        server { server_name dl.example.com;
+      #                 location = / { return 302 /downloads/; }
+      #                 location / { proxy_pass http://127.0.0.1:7777; } }
+      #      其余子域同理（music → 302 /music/、tv → /tv/、novels → /novels/ …）
+      # 取消下行注释并填父域：门户会话 cookie 跨子域共享（.example.com），
+      # 任一子域登录全线生效；不设 = host-only（本机/单域名，默认行为）
+      # MEI_COOKIE_DOMAIN: ".example.com"
       # 可选：自动 PO Token 服务异常时手工覆盖。
       YOUTUBE_PO_TOKEN: ${YOUTUBE_PO_TOKEN:-}
       YOUTUBE_VISITOR_DATA: ${YOUTUBE_VISITOR_DATA:-}

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 
 export const dynamic = 'force-dynamic';
 
-const TUTORIAL = process.env.TUTORIAL_INTERNAL_URL || 'http://127.0.0.1:3001';
+const TUTORIAL = process.env.TUTORIAL_INTERNAL_URL || 'http://127.0.0.1:7802';
 
 // POST /api/novels/gate — 隐秘站点开启/关闭（首页搜索框 open:/close: 命令）
 // 代理到 tutorial /novels/api/gate，并透传 ns-open cookie 回浏览器

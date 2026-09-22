@@ -12,6 +12,7 @@ import {
   TextInput,
 } from '@/components/SettingsUI';
 import { ensureAppSession, jsonFetch } from '@/lib/app-settings-client';
+import { triggerBrowserDownload } from '@/lib/browser-download';
 
 interface LogEvent {
   timestamp: string;
@@ -86,12 +87,11 @@ export default function LinkLogs() {
       .map((e) => `[${new Date(e.timestamp).toLocaleString()}] [${e.level.toUpperCase()}] ${e.message}`)
       .join('\n');
     const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `meilink-log-${new Date().toISOString().replace(/[:.]/g, '-')}.txt`;
-    a.click();
-    URL.revokeObjectURL(url);
+    // 延迟释放 object URL：同步 revoke 会让浏览器下载永远停在下载中
+    triggerBrowserDownload(
+      blob,
+      `meilink-log-${new Date().toISOString().replace(/[:.]/g, '-')}.txt`,
+    );
   }
 
   return (

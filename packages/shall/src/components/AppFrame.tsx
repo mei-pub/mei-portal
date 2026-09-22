@@ -7,7 +7,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import IframeHost from './IframeHost';
-import { appendEmbedParam, parseAppRoute, sameAppPath } from '@/lib/app-routes';
+import { appCarrierHref, appendEmbedParam, parseAppRoute, parseCarrierRoute, sameAppPath } from '@/lib/app-routes';
+import { pickEvictionVictim } from '@/lib/keepalive';
 import { syncAppTokens } from '@/lib/token-sync';
 
 interface Plugin {
@@ -48,10 +49,22 @@ export default function AppFrame() {
   // 上一次「路由级」导航目标，用于区分真实跳转与 URL 回写
   const navKeyRef = useRef('');
 
-  const parsedRoute = parseAppRoute(currentPath, plugins);
+  // 承载页优先：/app?app=<id>&path=<应用内路径>（客户端导航的统一入口），
+  // 其余按顶层应用资源路径解析（直接整页访问 /tv 等规范路径）。
+  const carrierParsed = parseCarrierRoute(pathname, search, plugins);
+  const parsedRoute = carrierParsed ?? parseAppRoute(currentPath, plugins);
   const appId = parsedRoute?.appId || '';
   const plugin = plugins.find((p) => p.id === appId) || null;
-  const targetPath = activePath || plugin?.url || '';
+  // src 依据必须与「当前要挂载的应用」同源：应用切换后的第一轮渲染里
+  // activePath 还是上一个应用的路径（setActivePath 的 effect 尚未落地），
+  // 直接拿它当 targetPath 会把新挂的 iframe 装进上一个应用（切到 B 却加载出 A）。
+  // 只有 activePath 仍属于当前应用时才优先用它（它比 URL 派生值更新，跟随子应用内部导航）。
+  const activeParsed = activePath ? parseAppRoute(activePath, plugins) : null;
+  const targetPath =
+    (activeParsed && activeParsed.appId === appId ? activePath : '') ||
+    parsedRoute?.path ||
+    plugin?.url ||
+    '';
   // src 直接由当前 URL 推导，不经过 state：
   // 走 state 的话，同一轮渲染里保活列表读到的还是上一个应用的 src，
   // 新挂的 iframe 会装错应用（表现为切到 B 却加载出 A）。
@@ -95,8 +108,9 @@ export default function AppFrame() {
       if (prev.some((m) => m.appId === appId)) return prev;
       const next = [...prev, { appId, src: desiredSrc }];
       if (next.length <= MAX_LIVE_FRAMES) return next;
-      // 按访问顺序淘汰最久未用的（当前应用除外），避免无限堆积后台 iframe
-      const victim = orderRef.current.find((a) => a !== appId && next.some((m) => m.appId === a));
+      // 淘汰顺序与预热策略一致：纯预热（未访问）应用最先，其次最久未访问。
+      // 否则后台正在放音乐的已访问应用会被预热应用挤出保活名单。
+      const victim = pickEvictionVictim(next, appId, orderRef.current);
       return victim ? next.filter((m) => m.appId !== victim) : next;
     });
   }, [appId, desiredSrc]);
@@ -104,25 +118,29 @@ export default function AppFrame() {
   // 深链跳转：目标应用已在保活列表里时，把它的 iframe 导到请求的路径。
   // 顶栏切换应用给的是应用根路径，这种情况只切显示、不打断该应用的现场
   // （否则保活就没意义了：每次切回都把应用打回首页并重启一遍）。
+  // 「是否根路径切换」必须用本次导航请求的路径（由当前 URL 推导）判断：
+  // 应用切换后的第一轮渲染里 activePath 还是上一个应用的路径，
+  // 拿它比对会把切回操作误判成深链，把已挂载应用的现场 loc.replace 回首页
+  // （音乐应用曾因此每次切回都重启、正在播放页丢失）。
   useEffect(() => {
     if (!appId || !desiredSrc) return;
     const key = `${appId}|${desiredSrc}`;
     if (navKeyRef.current === key) return;
     navKeyRef.current = key;
-    if (!activePath) return;
     const rootPath = plugin?.url || '';
-    if (rootPath && sameAppPath(activePath, rootPath)) return;
+    const requestedPath = parsedRoute?.path || '';
+    if (rootPath && sameAppPath(requestedPath, rootPath)) return; // 根路径：只切显示
     const frame = document.querySelector<HTMLIFrameElement>(`iframe[data-mei-app="${appId}"]`);
     if (!frame) return; // 首次挂载：src 已经是目标路径
     try {
       const loc = frame.contentWindow?.location;
       if (!loc) return;
-      if (sameAppPath(`${loc.pathname}${loc.search}${loc.hash}`, activePath)) return;
+      if (sameAppPath(`${loc.pathname}${loc.search}${loc.hash}`, requestedPath)) return;
       loc.replace(desiredSrc);
     } catch {
       /* 跨域应用：忽略 */
     }
-  }, [activePath, appId, desiredSrc, plugin?.url]);
+  }, [appId, desiredSrc, parsedRoute?.path, plugin?.url]);
 
   // 预热：顶栏按钮悬停时提前挂目标应用的隐藏 iframe。
   // 用户真正点击时资源已在下载或已就绪，切换接近瞬时。
@@ -134,7 +152,11 @@ export default function AppFrame() {
       // 子应用请求外壳导航（如内网穿透引导弹层跳设置中心的隧道服务器设置页）
       if (d.source === 'mei-iframe' && d.type === 'navigate') {
         const path = String(d.path || '');
-        if (path.startsWith('/') && !path.startsWith('//')) router.push(path);
+        if (path.startsWith('/') && !path.startsWith('//')) {
+          // 应用路径走承载页，避免 RSC fetch 被 nginx 分流打回整页加载
+          const carrier = appCarrierHref(path, pluginsRef.current);
+          router.push(carrier || path);
+        }
         return;
       }
       if (d.source !== 'mei-topbar' || d.type !== 'prefetch-app') return;
@@ -148,9 +170,12 @@ export default function AppFrame() {
         // 预热不进 orderRef：没被真正访问过的应用应当最先被淘汰
         const next = [...prev, { appId: id, src }];
         if (next.length <= MAX_LIVE_FRAMES) return next;
-        const victim =
-          next.find((m) => m.appId !== appId && m.appId !== id && !orderRef.current.includes(m.appId))?.appId ||
-          orderRef.current.find((a) => a !== appId && next.some((m) => m.appId === a));
+        // 本次刚预热的应用（id）不作为受害者，否则边挂边拆等于没预热
+        const victim = pickEvictionVictim(
+          next.filter((m) => m.appId !== id),
+          appId,
+          orderRef.current
+        );
         return victim ? next.filter((m) => m.appId !== victim) : next;
       });
     }

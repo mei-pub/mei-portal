@@ -17,18 +17,13 @@ export interface PluginManifest {
   icon: string;
   category: Category;
   weight: number;
+  path?: string; // 单镜像下的 URL 子路径（如 /tv）
   endpoint: string;
-  subdomainPrefix?: string; // 由 plugins.json 预计算，运行时优先用
-  url?: string; // 显式 URL（覆盖 subdomainPrefix 计算，如 spider → /games/spider）
-  ingress: {
-    mode: 'subdomain' | 'external';
-    host: string;
-  };
-  auth?: { strategy: 'independent' | 'token_inject' | 'sso' };
+  subdomainPrefix?: string; // 由 plugins.json 预计算的子路径前缀，运行时优先用
+  url?: string; // 显式 URL（覆盖 path 计算，如 spider → /games/spider）
   embed?: { iframe: boolean; strip_headers?: string[] };
   theme?: { has_skin: boolean; entry?: string };
   health?: { path: string; expect: number };
-  upgrade?: { image?: string; repo?: string };
 }
 
 // 构建期：扫描仓库根的 plugins/
@@ -59,7 +54,6 @@ function loadManifests(): PluginManifest[] {
       category: p.category,
       weight: p.weight,
       endpoint: p.endpoint,
-      ingress: { mode: 'subdomain' as const, host: '' },
       subdomainPrefix: p.subdomainPrefix,
       url: p.url, // 透传显式 URL
       health: { path: p.healthPath || '/', expect: p.healthExpect || 200 },
@@ -78,7 +72,7 @@ function loadManifests(): PluginManifest[] {
     const file = path.join(pluginsDir, dir, 'manifest.yml');
     if (!fs.existsSync(file)) continue;
     const doc = yaml.load(fs.readFileSync(file, 'utf8')) as PluginManifest;
-    if (doc.ingress?.mode === 'subdomain') list.push(doc);
+    list.push(doc);
   }
   list.sort(
     (a, b) =>
@@ -101,22 +95,10 @@ export function getPlugins(): PluginManifest[] {
 export function getPluginUrl(manifest: PluginManifest, _rootDomain: string): string {
   // 显式 URL 优先（如 spider → /games/spider）
   if (manifest.url) return manifest.url;
-  // 单镜像模式：url 为同源子路径（/novels, /link 等）
-  if (process.env.MEI_MODE === 'single') {
-    const path = manifest.subdomainPrefix || manifest.id;
-    return `/${path}`;
-  }
-  // 多容器模式：url 为子域名
-  if (manifest.subdomainPrefix) {
-    return `http://${manifest.subdomainPrefix}.${_rootDomain}`;
-  }
-  const host = manifest.ingress.host || '';
-  if (host && !host.includes('${')) {
-    return `http://${host}`;
-  }
-  const prefix = (host.match(/\$\{SUBDOMAIN_([A-Z0-9_]+)\}/) || [])[1];
-  const sub = prefix ? prefix.toLowerCase() : manifest.id;
-  return `http://${sub}.${_rootDomain}`;
+  // 单镜像模式：url 为同源子路径（/novels、/link 等）
+  const prefix =
+    manifest.subdomainPrefix || manifest.path?.replace(/^\//, '') || manifest.id;
+  return `/${prefix}`;
 }
 
 /**

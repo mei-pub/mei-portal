@@ -23,7 +23,7 @@ const dirs = readdirSync(PLUGINS_DIR).filter((d) => {
 });
 
 const ids = new Set();
-const hosts = new Set();
+const paths = new Set();
 let hasError = false;
 
 for (const dir of dirs) {
@@ -53,13 +53,12 @@ for (const dir of dirs) {
     hasError = true;
   }
   ids.add(doc.id);
-  if (doc.ingress?.host) {
-    if (hosts.has(doc.ingress.host)) {
-      console.error(`✗ ${dir}: 重复的 ingress.host "${doc.ingress.host}"`);
-      hasError = true;
-    }
-    hosts.add(doc.ingress.host);
+  // 子路径是 nginx location 前缀，两个应用撞路径会互相吞流量
+  if (paths.has(doc.path)) {
+    console.error(`✗ ${dir}: 重复的 path "${doc.path}"`);
+    hasError = true;
   }
+  paths.add(doc.path);
   if (doc.theme?.has_skin) {
     const css = join(PLUGINS_DIR, dir, 'theme.css');
     try {

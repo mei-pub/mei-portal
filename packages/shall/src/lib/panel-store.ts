@@ -208,6 +208,17 @@ export function syncBuiltinItems(
     if (i.builtin && !pluginIds.has(i.builtin)) { changed = true; return false; }
     return true;
   });
+  // 应用名与描述是系统级（跟随插件清单）：改名后所有已物化的内置卡片同步更新。
+  // 自定义图标项（无 builtin 标记）不受影响，用户自定义标题保留。
+  items = items.map((i) => {
+    const plugin = i.builtin ? pluginById.get(i.builtin) : undefined;
+    if (!plugin) return i;
+    if (i.title !== plugin.name || (i.description || '') !== (plugin.description || '')) {
+      changed = true;
+      return { ...i, title: plugin.name, description: plugin.description || '' };
+    }
+    return i;
+  });
   // 旧版本曾把插件 id 当作相对路径（例如 /lunatv）。内置应用的相对路径必须跟随插件清单，
   // 自定义外部域名则继续保留给用户。
   items = items.map((i) => {

@@ -1,13 +1,14 @@
 # AGENTS.md
 
-本文件是 mei-allin 仓库的智能体（Agent）协作强约束。所有智能体（OpenAI Codex、
+本文件是 mei-portal 仓库的智能体（Agent）协作强约束。所有智能体（OpenAI Codex、
 Cursor、Claude Code、Copilot 等）在本仓库内工作时必须遵守。
 
 ## 顶栏与左侧面板组件化强约束
 
-mei-allin 是多应用聚合门户：`packages/shall` 为门户外壳，`third_party/*` 为各子应用
-（不同技术栈：React / Vue / 原生 JS / 静态页）。顶栏与左侧面板是全应用共享的门户级
-组件，**不允许任何子应用自行重写一套样式**。
+mei-portal 是多应用聚合门户：`packages/shall` 为门户外壳，`apps/*` 为各子应用（全部为
+一等公民本地代码，不同技术栈：React / Vue / 原生 JS / 静态页；目录名与 URL 子路径
+对齐：novels/tv/music/link/draw/tools/disks；例外：media 目录对外前缀为 /downloads）。顶栏与左侧面板是全应用共享的
+门户级组件，**不允许任何子应用自行重写一套样式**。
 
 ### 1. 顶部导航栏
 
@@ -55,7 +56,7 @@ mei-allin 是多应用聚合门户：`packages/shall` 为门户外壳，`third_p
 }
 ```
 
-标准视觉规格（各实现必须对齐，参考 `third_party/tutorial/src/components/SitePanel.tsx`）：
+标准视觉规格（各实现必须对齐，参考 `apps/novels/src/components/SitePanel.tsx`）：
 
 - 展开态：`fixed left-2 top-1/2 -translate-y-1/2 z-40`，窄胶囊
   `gap-1 rounded-2xl border border-black/10 bg-white/75 p-1 shadow-lg backdrop-blur-xl`
@@ -75,10 +76,10 @@ mei-allin 是多应用聚合门户：`packages/shall` 为门户外壳，`third_p
 
 | 技术栈 | 参考实现 |
 |---|---|
-| React | `third_party/tutorial/src/components/SitePanel.tsx`、`third_party/mediago/apps/ui/src/layout/mediago-sidebar.tsx` |
-| React (Tailwind) | `third_party/lunatv/src/components/FloatingNav.tsx`、`third_party/ai-draw/src/components/layout/AppSidebar.tsx` |
-| Vue | `third_party/pansou-web/src/components/MeiPanel.vue` |
-| 原生 JS | `third_party/solara/js/mei/main.js`（mountPanel）、`third_party/mei-link/client/docker/web/index.html`（#meiPanel） |
+| React | `apps/novels/src/components/SitePanel.tsx`、`apps/media/apps/ui/src/layout/mediago-sidebar.tsx` |
+| React (Tailwind) | `apps/tv/src/components/FloatingNav.tsx`、`apps/draw/src/components/layout/AppSidebar.tsx` |
+| Vue | `apps/disks/web/src/components/MeiPanel.vue` |
+| 原生 JS | `apps/music/js/mei/main.js`（mountPanel）、`apps/link/client/docker/web/index.html`（#meiPanel） |
 
 ### 3. 违规判定
 
@@ -98,7 +99,7 @@ mei-allin 是多应用聚合门户：`packages/shall` 为门户外壳，`third_p
 
 | | 播放组件（Dock） | 播放页 |
 |---|---|---|
-| 实现 | `packages/shall/src/components/MusicDock.tsx` | `third_party/solara/js/mei/views.js` 的 `renderPlayer` |
+| 实现 | `packages/shall/src/components/MusicDock.tsx` | `apps/music/js/mei/views.js` 的 `renderPlayer` |
 | 归属 | 门户外壳，跨应用常驻 | 音乐应用内页 `#/player` |
 | 定位 | 后台播放 + 最小控制，只渲染少量信息 | 整体垂直居中的大组件，局部完整能力 |
 | 形态 | 完整 / 缩小 / 隐藏 三态（`ui.dockMode`） | 唱片 / 歌词 双形态（`#ppViewToggle`） |
@@ -170,6 +171,11 @@ mei-allin 是多应用聚合门户：`packages/shall` 为门户外壳，`third_p
 ## 应用切换性能：iframe 保活、预热与静态缓存
 
 承载页 `/app?app=<id>&path=<路径>` 走客户端路由（外壳不卸载，音乐才能连续播放）。
+**禁止**把 NavBridge / openTarget / iframe 导航消息直接 `router.push` 应用路径
+（如 `/tv`）：nginx 按 Sec-Fetch-Dest 把应用路径的非 document 请求直通到各应用，
+Next 客户端路由的 RSC fetch 拿不到 shell 的路由数据，只会回退整页加载——
+常驻音乐引擎与全部保活 iframe 随之销毁。统一用 `appCarrierHref()`（app-routes.ts）；
+地址栏的规范路径由 AppFrame 的 URL 回写 effect 用 `replaceState` 维持。
 「点了好几秒才打开」的根因有三个，各自的修法都不能退化：
 
 ### 1. iframe 保活（`AppFrame.tsx`）
@@ -225,7 +231,7 @@ mei-allin 是多应用聚合门户：`packages/shall` 为门户外壳，`third_p
 - map 的 `default` 不能设 `no-store`：会打到 `/music/proxy` 音频代理流上，干扰 range
   请求与播放缓冲
 - 含 `{n,}` 量词的 map 正则必须整体加引号，否则 nginx 把 `{` 当块起始，直接拒绝启动
-- `alias` 静态 location（`/tools/`、`/draw/`、`/search/`）由 nginx 自己发头，没有上游
+- `alias` 静态 location（`/tools/`、`/draw/`、`/disks/`）由 nginx 自己发头，没有上游
   头可隐藏，直接 `add_header Cache-Control $mei_cache_control` 即可
 
 违规判定：切回访问过的应用仍出现完整重载（白屏 + 应用重启）；切换应用时装载出上一个
@@ -258,3 +264,52 @@ document 与 iframe 请求，所有请求都直接代理到子应用，Shell 不
 
 违规判定：外网域名下访问应用路径时页面标题是子应用名称而非门户名称；MusicDock 播放栏
 或顶栏不出现；`document.getElementById('mei-shell-slot')` 返回 null。
+
+## 统一下载中心：跨应用契约（/downloads 卷）
+
+「下载到本地服务器」的落盘与管理的跨应用契约，三端字段/路由不得漂移：
+
+- **落盘布局**：`/downloads/music/<歌手>/<歌名> - <源>.mp3`（music 服务端，
+  `MUSIC_DOWNLOAD_DIR`）；`/downloads/movie/<电影|电视|动漫|综艺>/<剧名>/`（media
+  下载引擎，`--local-dir`；tv 按 `分类/剧名` 组 folder）
+- **media 下载中心**（统一下载管理 UI，应用显示名为「下载中心」，但路由与插件 id 仍
+  是 `/downloads` 与 `mediago`，不得因改名改动）：`/downloads?type=media|movie|music`
+  是唯一对外深链路由格式——影视/音乐应用里的「下载中」引导跳转一律 postMessage
+  `{source:'mei-iframe',type:'navigate',path:'/downloads?type=…'}`（走外壳
+  承载路由，禁止直接改 location）；页面为四 tab（全部/媒体/影视/音乐），「全部」为
+  默认 tab 且规范 URL 不带 query（`?type=all` 也接受并归一到无 query）；三个数据面板
+  分别消费：`GET /tv/api/local-sources/list`、`GET /music/api/download/library`、
+  media 自身任务（SSE）。删除分别走各自 DELETE
+- **防穿越**：music 的 serve/DELETE/library 三口共享 resolveWithin（realpath +
+  path.relative 双校验）；tv 的删除段消毒 + resolve 后必须位于 `/downloads/movie`
+  内——任何新增的文件下发/删除端点必须同款双保险
+- **删除交互**（统一，三面板 + 媒体任务列表共用 `useDeleteTasks` 弹层）：
+  未完成任务（downloading/pending/failed/stopped）删除必然级联——停止下载 +
+  清理临时文件，**不询问文件去留**（半成品无保留价值）；已完成任务才由用户
+  三选一（仅删记录 / 删记录和文件 / 取消）。对应服务端：
+  `DELETE /tv/api/local-sources?key=&files=1|0`（未完成记录总是级联停 media
+  任务）、`DELETE /music/api/download/server?id=`（中断流+清 .part）、
+  `DELETE /api/downloads/:id?deleteFiles=1|0`（media core，停队列+可选清盘）。
+  **禁止任何删除入口绕过确认弹层直删**
+- **server-local 播放体系**（music）：已下载条目 `id='file:<相对路径>'`、
+  `source='server-local'`，`resolvePlayUrl` 首分支零网络直出 serve URL；iframe 宿主
+  模式经 `/music/proxy?types=url&source=server-local` 分支——两条路径都必须保活
+- **播放操作契约**（下载中心已完成条目「去播放」）：音乐走
+  `{source:'mei-music-guest', type:'play-now', song:{id:'file:<path>',name,artist,source:'server-local'}}`
+  ——外壳引擎 `playNow()` 进临时队列立即播（不打扰播放列表/收藏，MusicDock 常驻）；
+  影视有 playRoute 时 postMessage navigate（tv 播放页本地源自动优先）；旧记录与
+  媒体任务**就地内嵌弹层播放**（`/videos/<id>` 直播流，useInlinePlayer Context，
+  关闭即回列表）——**禁止再跳独立播放器页**（原 `/media/player` 路径已随前缀迁移废弃）：该页无返回路径
+- **本地优先播放**：engine（music-engine.ts tryLocalFile）与 api.js
+  （matchLocalDownload）双侧在走网络源之前先查已下载曲库
+  （`/music/api/download/library`，60s 缓存、失败静默降级），同名+同歌手命中即用
+  serve 流——播放列表/收藏里播放已下载过的歌不再拉网络流
+- **tv 本地文件缺失引导**（play-client.tsx，三触发点共用一弹层）：观看历史以
+  `mei-local` 伪源进入但记录/文件已不在（no-local，网络源优选接管）、换集自动切
+  本地源时记录 done 但文件不在（auto，拦截切换）、本地流起播即失败（play-error，
+  Artplayer error 兜底）。判定基准 = media `/api/v1/videos` 可播集合（localUrl
+  `/videos/<id>` 不在集合即缺失；列表拉取失败一律不判缺失，防误报）。弹层两选项：
+  在线播放（auto/no-local 接管网络源、play-error 切回原源、无源跳聚合优选页）/
+  重新下载（auto/play-error 先删缺失记录绕 POST 幂等再重建下载）。伪源生成对缺失
+  集退回网络源 URL，不产生黑屏集
+

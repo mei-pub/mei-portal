@@ -1,8 +1,8 @@
 {
-  "name": "@mei-allin/shall",
+  "name": "@mei-portal/shall",
   "version": "0.1.0",
   "private": true,
-  "description": "mei-allin 统一外壳 Shell",
+  "description": "mei-portal 统一外壳 Shell",
   "scripts": {
     "dev": "next dev -p 3000",
     "prebuild": "node ../../scripts/build-theme.mjs || echo '[prebuild] 跳过主题生成（缺少根依赖，使用源码树中已有资产）'",

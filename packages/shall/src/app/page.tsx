@@ -54,7 +54,7 @@ export default async function HomePage() {
     },
   }));
 
-  // 主页面板配置（背景 + 风格 + 分组 + 图标项），mei-allin 自研主页
+  // 主页面板配置（背景 + 风格 + 分组 + 图标项），mei-portal 自研主页
   let panel = getPanelConfig();
   // 内置应用物化：新增自动导入、消失自动移除、已存在不覆盖（归用户管理）
   // tutorial（小说阅读）除外：首页不展示「小说阅读」图标项，

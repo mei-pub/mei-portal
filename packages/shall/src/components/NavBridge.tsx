@@ -6,7 +6,7 @@
 // 子应用路径统一改写到承载页 /app，门户自身路径走 router.push。
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { appHostHref } from '@/lib/app-host';
+import { appCarrierHref } from '@/lib/app-routes';
 
 export default function NavBridge() {
   const router = useRouter();
@@ -35,7 +35,10 @@ export default function NavBridge() {
       }
       if (url.origin !== window.location.origin) return;
       const path = `${url.pathname}${url.search}${url.hash}`;
-      const hosted = appHostHref(path, plugins);
+      // 应用路径必须走 /app 承载页：直接 push 应用路径时 RSC fetch 会被
+      // nginx 按非 document 请求分流到应用本身，拉不到 shell 的路由数据，
+      // Next 只能回退整页加载，常驻播放引擎随之销毁。
+      const hosted = appCarrierHref(path, plugins);
       ev.preventDefault();
       router.push(hosted || path);
     }

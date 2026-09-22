@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 
 import { initUserIfNeeded, isLoggedIn } from '@/lib/auth';
 
-const MUSIC_SOURCES = new Set(['netease', 'qq', 'kugou', 'kuwo', 'migu', 'joox', 'youtube']);
+// 与 music-engine ALL_SOURCES 对齐（含 bilibili），否则启用该源的歌曲封面被 400 拒掉
+const MUSIC_SOURCES = new Set(['netease', 'qq', 'kugou', 'kuwo', 'migu', 'joox', 'bilibili', 'youtube']);
 
 export const dynamic = 'force-dynamic';
 
@@ -19,7 +20,7 @@ export async function GET(
     return NextResponse.json({ error: 'Invalid cover' }, { status: 400 });
   }
 
-  const base = process.env.SOLARA_INTERNAL_URL || 'http://127.0.0.1:3005';
+  const base = process.env.SOLARA_INTERNAL_URL || 'http://127.0.0.1:7806';
   // 统一身份：solara 鉴权模块直接校验主应用会话，透传浏览器 cookie 即可
   const cookie = request.headers.get('cookie') || '';
 

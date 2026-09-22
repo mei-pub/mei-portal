@@ -10,7 +10,7 @@ import { isSwitchable, isAppEnabled } from '@/lib/app-toggles';
 import { useHealth } from '@/lib/use-health';
 import type { PanelConfig, PanelItem, PanelGroup } from '@/lib/panel-store';
 import ItemIconPicker, { isImgIcon, isTextIcon, textIconContent, contrastColor } from './ItemIconPicker';
-import { appHostHref } from '@/lib/app-host';
+import { appCarrierHref } from '@/lib/app-routes';
 import {
   HOME_SEARCH_MODE_KEY,
   HOME_SEARCH_SCOPE_KEY,
@@ -61,8 +61,10 @@ function itemHref(item: PanelItem, lanMode: boolean): string {
 }
 
 /**
- * 同源子应用统一走承载页 /app（外壳不卸载，音乐连续播放）；外链新窗口。
- * navigate 传入时用客户端路由跳转 —— 整页加载会销毁常驻播放引擎。
+ * 同源子应用统一走承载页 /app?app=<id>&path=（外壳不卸载，音乐连续播放）；
+ * 外链新窗口。navigate 传入时用客户端路由跳转 —— 整页加载会销毁常驻播放引擎。
+ * 应用路径必须经承载页：裸 push 应用路径的 RSC fetch 会被 nginx 分流到
+ * 应用本身，Next 回退整页加载（详见 app-routes.ts appCarrierHref 注释）。
  */
 function openTarget(
   href: string,
@@ -73,7 +75,7 @@ function openTarget(
     window.open(href, '_blank');
     return;
   }
-  const target = appHostHref(href, plugins) || href;
+  const target = appCarrierHref(href, plugins) || href;
   if (navigate) navigate(target);
   else window.open(target, '_self');
 }
