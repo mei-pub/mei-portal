@@ -1,6 +1,6 @@
 'use client';
 // 图标选择器 —— 对齐 Sun-Panel 图标能力：图标库 / 在线 iconify / 文字 / 图片(上传+网址favicon) / 底色 / 实时预览
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import MeiIcon from './MeiIcon';
 import 'iconify-icon';
 
@@ -106,24 +106,29 @@ export default function ItemIconPicker({
   const [onlineCollections, setOnlineCollections] = useState<Record<string, { name?: string }>>({});
   const [onlineLoading, setOnlineLoading] = useState(false);
   const [onlineError, setOnlineError] = useState('');
+  // 请求序号：慢的旧响应不得覆盖新的搜索结果（竞态防护）
+  const searchSeqRef = useRef(0);
 
   async function searchOnline(q?: string) {
     const query = (q ?? onlineQuery).trim();
     if (!query) return;
+    const seq = ++searchSeqRef.current;
     setOnlineLoading(true);
     setOnlineError('');
     try {
       const res = await fetch(`https://api.iconify.design/search?query=${encodeURIComponent(query)}&limit=60`);
       const data = await res.json();
+      if (seq !== searchSeqRef.current) return; // 已有更新的搜索发出，丢弃旧响应
       setOnlineIcons(Array.isArray(data.icons) ? data.icons : []);
       setOnlineCollections(data.collections || {});
       if (!data.icons || data.icons.length === 0) setOnlineError('无匹配图标');
     } catch {
+      if (seq !== searchSeqRef.current) return;
       setOnlineError('搜索失败（需外网访问 api.iconify.design）');
       setOnlineIcons([]);
       setOnlineCollections({});
     } finally {
-      setOnlineLoading(false);
+      if (seq === searchSeqRef.current) setOnlineLoading(false);
     }
   }
 
@@ -343,10 +348,13 @@ export default function ItemIconPicker({
                 type="file" accept="image/*" hidden
                 onChange={(e) => {
                   const f = e.target.files?.[0];
+                  // 重置 value：同一张图选两次时 change 事件才会再次触发
+                  e.target.value = '';
                   if (!f) return;
                   if (f.size > 30 * 1024 * 1024) { alert('图片过大（>30MB）'); return; }
                   const r = new FileReader();
                   r.onload = () => onIcon(String(r.result));
+                  r.onerror = () => alert('图片读取失败，请重试');
                   r.readAsDataURL(f);
                 }}
               />

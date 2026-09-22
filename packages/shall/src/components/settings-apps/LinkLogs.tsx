@@ -34,6 +34,7 @@ export default function LinkLogs() {
   const [keyword, setKeyword] = useState('');
   const [level, setLevel] = useState<'all' | LogEvent['level']>('all');
   const [error, setError] = useState('');
+  const [message, setMessage] = useState('');
 
   const load = useCallback(async () => {
     try {
@@ -46,6 +47,7 @@ export default function LinkLogs() {
       setStatus(st);
       setError('');
     } catch (err) {
+      setMessage('');
       setError((err as Error).message || '读取日志失败');
     } finally {
       setLoading(false);
@@ -76,10 +78,38 @@ export default function LinkLogs() {
   }
 
   async function copyLogs() {
+    if (filtered.length === 0) {
+      setMessage('');
+      setError('没有可复制的日志（当前筛选条件下为空）');
+      return;
+    }
     const text = filtered
       .map((e) => `[${new Date(e.timestamp).toLocaleString()}] [${e.level.toUpperCase()}] ${e.message}`)
       .join('\n');
-    await navigator.clipboard.writeText(text);
+    try {
+      // 非安全上下文（HTTP 访问）下 navigator.clipboard 不存在，直接调用会抛错
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(text);
+      } else {
+        const textarea = document.createElement('textarea');
+        textarea.value = text;
+        textarea.setAttribute('readonly', 'true');
+        textarea.style.position = 'fixed';
+        textarea.style.opacity = '0';
+        textarea.style.left = '-9999px';
+        document.body.appendChild(textarea);
+        textarea.select();
+        const ok = document.execCommand('copy');
+        document.body.removeChild(textarea);
+        if (!ok) throw new Error('浏览器拒绝复制');
+      }
+      setError('');
+      setMessage(`已复制 ${filtered.length} 条日志`);
+      window.setTimeout(() => setMessage(''), 3000);
+    } catch (err) {
+      setMessage('');
+      setError((err as Error).message || '复制失败，请改用「导出」');
+    }
   }
 
   function downloadLogs() {
@@ -136,7 +166,12 @@ export default function LinkLogs() {
       </SettingsSection>
 
       <SettingsSection title="日志流" description="最新日志在最上方，每 3 秒自动刷新。">
-        {error ? <Alert tone="error" title={error} /> : loading ? <EmptyState title="正在读取日志…" /> : filtered.length === 0 ? <EmptyState title="暂无日志" description="当前筛选条件下没有匹配记录。" /> : (
+        {(error || message) && <Alert tone={error ? 'error' : 'success'} title={error || message} />}
+        {loading ? (
+          <EmptyState title="正在读取日志…" />
+        ) : filtered.length === 0 ? (
+          <EmptyState title="暂无日志" description="当前筛选条件下没有匹配记录。" />
+        ) : (
           <div className="mei-logs">
             {filtered.map((e, i) => (
               <div key={`${e.timestamp}-${i}`} className={`mei-log ${e.level}`}>

@@ -26,6 +26,10 @@ const SAFE_RESPONSE_HEADERS = [
   'content-length', 'content-range', 'etag', 'last-modified', 'expires',
 ];
 
+// 音乐 API 上游（gdstudio / wrangler）硬超时：上游挂起时不能让请求无限等，
+// 与 pic 解析分支的 15s 超时语义一致
+const API_TIMEOUT_MS = 15000;
+
 function isAllowedAudioHost(hostname) {
   return hostname && AUDIO_HOST_PATTERN.test(hostname);
 }
@@ -251,6 +255,7 @@ async function proxyApiRequest(reqUrl, req, res) {
           'User-Agent': req.headers['user-agent'] || 'Mozilla/5.0',
           'Accept': 'application/json',
         },
+        signal: AbortSignal.timeout(API_TIMEOUT_MS),
       });
       responseText = await upstream.text();
       contentType = upstream.headers.get('content-type') || 'application/json; charset=utf-8';
@@ -276,6 +281,7 @@ async function proxyApiRequest(reqUrl, req, res) {
           'User-Agent': req.headers['user-agent'] || 'Mozilla/5.0',
           'Accept': 'application/json',
         },
+        signal: AbortSignal.timeout(API_TIMEOUT_MS),
       });
       responseText = await upstream.text();
       contentType = upstream.headers.get('content-type') || 'application/json; charset=utf-8';

@@ -62,7 +62,9 @@ test('resolvePlayUrl prefers the downloaded local file by name+artist (本地优
     return { ok: true, text: async () => JSON.stringify({ url: 'https://example.com/net.mp3' }) };
   };
 
-  const { resolvePlayUrl } = await import('../js/mei/api.js');
+  const { resolvePlayUrl, _resetLocalDownloadIndex } = await import('../js/mei/api.js');
+  // 本地优先索引是模块级缓存（60s TTL），测试间必须重置隔离
+  _resetLocalDownloadIndex();
   const url = await resolvePlayUrl({ id: 'netease-1', name: '晴天', artist: '周杰伦', source: 'qq' }, '320');
 
   // 命中本地：直接返回 serve 流地址，且零网络源请求
@@ -81,7 +83,8 @@ test('resolvePlayUrl falls through to network when local library has no match', 
     return { ok: true, text: async () => JSON.stringify({ url: 'https://example.com/net.mp3' }) };
   };
 
-  const { resolvePlayUrl } = await import('../js/mei/api.js');
+  const { resolvePlayUrl, _resetLocalDownloadIndex } = await import('../js/mei/api.js');
+  _resetLocalDownloadIndex();
   const url = await resolvePlayUrl({ id: 'netease-2', name: '未下载的歌', artist: '某人', source: 'qq' }, '320');
 
   // 未命中本地（库里只有 晴天）→ 走网络源

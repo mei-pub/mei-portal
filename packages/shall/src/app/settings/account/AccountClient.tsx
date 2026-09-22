@@ -43,8 +43,9 @@ export default function AccountClient() {
       });
       const data = await res.json();
       afterChange(res.ok, res.ok ? '账户名已修改，请重新登录…' : data.error || '修改失败', setNameMsg);
-    } catch { setNameMsg('修改失败'); }
-    setBusy('');
+      // 成功后保持 busy（1.2s 内跳登录页）：复位按钮会留下重复提交窗口
+      if (!res.ok) setBusy('');
+    } catch { setBusy(''); setNameMsg('修改失败'); }
   }
 
   async function submitPassword(e: React.FormEvent) {
@@ -61,8 +62,9 @@ export default function AccountClient() {
       });
       const data = await res.json();
       afterChange(res.ok, res.ok ? '密码已修改，请重新登录…' : data.error || '修改失败', setPwMsg);
-    } catch { setPwMsg('修改失败'); }
-    setBusy('');
+      // 成功后保持 busy（1.2s 内跳登录页）：复位按钮会留下重复提交窗口
+      if (!res.ok) setBusy('');
+    } catch { setBusy(''); setPwMsg('修改失败'); }
   }
 
   return (
