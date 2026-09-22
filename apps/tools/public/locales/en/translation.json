@@ -15,6 +15,7 @@
     "copyFailed": "Failed to copy: {{error}}",
     "dropFileHere": "Drop your {{type}} here",
     "fileCopied": "File copied",
+    "fileNameCopied": "File name copied",
     "selectFileDescription": "Click here to select a {{type}} from your device, press Ctrl+V to use a {{type}} from your clipboard, or drag and drop a file from desktop"
   },
   "categories": {

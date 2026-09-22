@@ -9,8 +9,10 @@ const useUpdateEffect = (effect: EffectCallback, deps?: DependencyList) => {
   const isInitialMount = useRef(true);
 
   useEffect(() => {
+    // 首次挂载只翻过标记、不执行 effect；否则该 hook 与 useEffect 完全等价
     if (isInitialMount.current) {
       isInitialMount.current = false;
+      return;
     }
     return effect();
   }, deps);

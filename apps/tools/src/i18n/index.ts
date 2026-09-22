@@ -35,7 +35,9 @@ i18n
       escapeValue: false // react already safes from xss => https://www.i18next.com/translation-function/interpolation#unescape
     },
     backend: {
-      loadPath: '/tools/locales/{{lng}}/{{ns}}.json'
+      // 跟随构建 base（vite.config.ts base: '/tools/'），行为与写死前缀一致，
+      // 但换 base 部署时不再需要同步改这里
+      loadPath: `${import.meta.env.BASE_URL}locales/{{lng}}/{{ns}}.json`
     },
     detection: {
       lookupLocalStorage: 'lang',

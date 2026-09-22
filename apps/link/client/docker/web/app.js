@@ -272,13 +272,29 @@ function fillReconnect(settings) {
   field(form, "reconnectEnabled").checked = enabled;
   setSwitch(form.querySelector('[data-switch="reconnectEnabled"]'), enabled);
 }
+// 轮询失败提示：连续失败才提示一次（不刷屏），恢复后自动消失
+let pollFailures = 0;
+let pollFailNotified = false;
+const POLL_FAIL_THRESHOLD = 3;
 function beginPolling() {
   clearInterval(polling);
   polling = setInterval(() => {
-    load().catch(error => {
+    load().then(() => {
+      pollFailures = 0;
+      if (pollFailNotified) {
+        pollFailNotified = false;
+        notify("状态刷新已恢复");
+      }
+    }).catch(error => {
       // 会话失效（门户 mei-auth 过期）：停掉轮询并切回登录视图，
       // 否则页面静默停更，用户面对的是一份陈旧的假状态
-      if (error && error.status === 401) sessionExpired();
+      if (error && error.status === 401) { sessionExpired(); return; }
+      // 其余错误（服务端重启/网络抖动）静默重试，但连续失败要给用户一句话交代
+      pollFailures += 1;
+      if (pollFailures >= POLL_FAIL_THRESHOLD && !pollFailNotified) {
+        pollFailNotified = true;
+        notify("状态刷新失败，正在持续重试…", true);
+      }
     });
   }, 3000);
 }
@@ -353,7 +369,8 @@ function renderDomainSection() {
   $("#directoryGroup").classList.remove("hidden");
   $("#manualDomainFields").classList.add("hidden");
   const sel = $("#baseDomain");
-  sel.innerHTML = domainEntries.map(d => `<option value="${d.domain}">${d.domain}（${d.kind === "wildcard" ? "泛域名" : "主域名"}）</option>`).join("");
+  // value 必须与正文一致转义：域名来自服务端配置，含引号/尖括号会截断 HTML
+  sel.innerHTML = domainEntries.map(d => `<option value="${escapeHtml(d.domain)}">${escapeHtml(d.domain)}（${d.kind === "wildcard" ? "泛域名" : "主域名"}）</option>`).join("");
   // 编辑已有隧道时回填
   if (editingTunnelForDomain) {
     const sub = editingTunnelForDomain.subdomain;
@@ -482,8 +499,14 @@ $("#panelRelogin").addEventListener("click", async event => {
     notify("登录态有效，已刷新");
     await load();
   } catch (error) {
-    if (error && error.status === 401) sessionExpired();
-    notify("门户会话已过期，请重新登录门户", true);
+    // 仅 401 才是会话过期，走重登引导；其余错误（网络/服务端）展示真实原因，
+    // 统一经 reportError 出口（设置类故障弹引导层）
+    if (error && error.status === 401) {
+      sessionExpired();
+      notify("门户会话已过期，请重新登录门户", true);
+    } else {
+      reportError(error);
+    }
   }
   finally { setBusy(button, false); }
 });

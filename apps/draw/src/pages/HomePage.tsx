@@ -74,7 +74,7 @@ export function HomePage() {
         } else {
           // Already registered locally, check if exists in cloud
           try {
-            const response = await fetch('/draw//api/local-users/check', {
+            const response = await fetch('/draw/api/local-users/check', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ userId: localUserId })

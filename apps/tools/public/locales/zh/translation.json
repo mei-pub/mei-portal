@@ -15,6 +15,7 @@
     "copyFailed": "复制失败： {{error}}",
     "dropFileHere": "放下你的 {{type}} 这里",
     "fileCopied": "文件已复制",
+    "fileNameCopied": "文件名已复制",
     "selectFileDescription": "单击此处选择一个 {{type}} 在您的设备上，按 Ctrl+V 使用 {{type}} 从剪贴板中，或从桌面拖放文件"
   },
   "categories": {
