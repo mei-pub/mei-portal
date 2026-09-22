@@ -528,6 +528,15 @@ const discardMagnetStaging = async (hash: string) => {
   }
 };
 
+// 解析失败提示分类：引擎存储/内部异常不该误导为「磁力资源已失效」
+const magnetErrorHint = computed(() => {
+  const e = magnetDialog.value.error || '';
+  if (/ENOENT|EACCES|EPERM|ENOSPC|EROFS|存储异常/.test(e)) {
+    return '下载中心引擎存储异常，请到下载中心设置检查引擎状态后重试';
+  }
+  return '磁力资源可能已失效，可稍后重试或直接复制链接到其它下载器';
+});
+
 const resolveMagnet = async (url: string) => {
   magnetDialog.value.resolving = true;
   magnetDialog.value.error = '';
@@ -1117,7 +1126,7 @@ onUnmounted(() => {
             <div v-else-if="magnetDialog.error && !magnetDialog.meta" class="magnet-error-card">
               <div class="magnet-error-main">
                 <p class="magnet-error-text">{{ magnetDialog.error }}</p>
-                <p class="magnet-error-hint">磁力资源可能已失效，可稍后重试或直接复制链接到其它下载器</p>
+                <p class="magnet-error-hint">{{ magnetErrorHint }}</p>
               </div>
               <div class="magnet-error-actions">
                 <button type="button" class="magnet-btn magnet-btn-ghost" @click="closeMagnetDialog">取消</button>

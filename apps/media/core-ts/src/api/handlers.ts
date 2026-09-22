@@ -426,7 +426,18 @@ export class Handlers {
           fail(c, 503, err?.message ?? "BT 引擎不可用");
           return;
         }
-        fail(c, 400, err?.message ?? "magnet resolve failed");
+        const msg = String(err?.message ?? err ?? "magnet resolve failed");
+        // 存储类异常是引擎自身故障而非资源失效——语义化报错，避免 UI
+        // 把 ENOENT/EACCES 之类的原始系统错误配进「磁力已失效」引导
+        if (/^(ENOENT|EACCES|EPERM|ENOSPC|EROFS)\b/.test(msg)) {
+          fail(
+            c,
+            500,
+            `下载中心引擎存储异常（${msg.split(",")[0]}），请检查 /data 挂载与磁盘空间后重试`,
+          );
+          return;
+        }
+        fail(c, 400, msg);
       });
   }
 
