@@ -474,6 +474,10 @@ function LivePageClient({ pathSource, pathId }: { pathSource?: string; pathId?: 
       try {
         setIsEpgLoading(true); // 开始加载 EPG 数据
         const response = await fetch(`/api/live/epg?source=${currentSource.key}&tvgId=${channel.tvgId}`);
+        // 竞态防护：等待期间用户可能又切了频道，过期响应不能覆盖新频道的节目单
+        if (currentChannelRef.current?.id !== channel.id) {
+          return;
+        }
         if (response.ok) {
           const result = await response.json();
           if (result.success) {
@@ -847,6 +851,9 @@ function LivePageClient({ pathSource, pathId }: { pathSource?: string; pathId?: 
 
   // 播放器初始化
   useEffect(() => {
+    // 竞态防护：频道快速切换时上一轮 preload 的异步 precheck 仍可能在途，
+    // 不做取消的话旧响应回来后会创建一个指向旧频道的播放器，覆盖新一轮播放
+    let cancelled = false;
     const preload = async () => {
       if (
         !Artplayer ||
@@ -858,8 +865,6 @@ function LivePageClient({ pathSource, pathId }: { pathSource?: string; pathId?: 
         return;
       }
 
-      console.log('视频URL:', videoUrl);
-
       // 销毁之前的播放器实例并创建新的
       if (artPlayerRef.current) {
         cleanupPlayer();
@@ -869,11 +874,13 @@ function LivePageClient({ pathSource, pathId }: { pathSource?: string; pathId?: 
       let type = 'm3u8';
       const precheckUrl = `/api/live/precheck?url=${encodeURIComponent(videoUrl)}&moontv-source=${currentSourceRef.current?.key || ''}`;
       const precheckResponse = await fetch(precheckUrl);
+      if (cancelled) return;
       if (!precheckResponse.ok) {
         console.error('预检查失败:', precheckResponse.statusText);
         return;
       }
       const precheckResult = await precheckResponse.json();
+      if (cancelled) return;
       if (precheckResult.success) {
         type = precheckResult.type;
       }
@@ -895,7 +902,7 @@ function LivePageClient({ pathSource, pathId }: { pathSource?: string; pathId?: 
         Artplayer.USE_RAF = false;
         Artplayer.FULLSCREEN_WEB_IN_BODY = true;
 
-        artPlayerRef.current = new Artplayer({
+        const player = new Artplayer({
           container: artRef.current,
           url: targetUrl,
           poster: currentChannel.logo,
@@ -938,6 +945,16 @@ function LivePageClient({ pathSource, pathId }: { pathSource?: string; pathId?: 
           },
         });
 
+        // 若本轮已过期（期间频道又切了），立即销毁刚创建的播放器，
+        // 避免它顶着旧频道内容接管容器
+        if (cancelled) {
+          try {
+            player.destroy();
+          } catch { /* 忽略 */ }
+          return;
+        }
+        artPlayerRef.current = player;
+
         // 监听播放器事件
         artPlayerRef.current.on('ready', () => {
           setError(null);
@@ -973,11 +990,16 @@ function LivePageClient({ pathSource, pathId }: { pathSource?: string; pathId?: 
         }
 
       } catch (err) {
-        console.error('创建播放器失败:', err);
-        // 不设置错误，只记录日志
+        if (!cancelled) {
+          console.error('创建播放器失败:', err);
+          // 不设置错误，只记录日志
+        }
       }
     }
     preload();
+    return () => {
+      cancelled = true;
+    };
   }, [Artplayer, Hls, videoUrl, currentChannel, loading]);
 
   // 清理播放器资源

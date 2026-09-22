@@ -16,6 +16,20 @@ interface CachedCheck extends CheckResult {}
 
 const checkCache = new Map<string, CachedCheck>();
 const CHECK_TTL_MS = 30 * 60 * 1000;
+// 内存缓存上限：进程常驻且条目永不过期清理（读取时才惰性淘汰），
+// 不设上限的话长期运行会随每次检查无限增长（泄漏）
+const CHECK_CACHE_MAX = 5000;
+
+/** 写入并按插入顺序淘汰最旧条目（Map 迭代序 = 插入序） */
+function cacheSet(key: string, result: CachedCheck): void {
+  checkCache.delete(key);
+  checkCache.set(key, result);
+  while (checkCache.size > CHECK_CACHE_MAX) {
+    const oldest = checkCache.keys().next().value;
+    if (oldest === undefined) break;
+    checkCache.delete(oldest);
+  }
+}
 
 /** 私有 API 探测并发上限（同一网盘接口不宜打太猛） */
 const CHECK_CONCURRENCY = 6;
@@ -136,7 +150,7 @@ export async function checkLinks(items: CheckItem[]): Promise<{ results: CheckRe
         return;
       }
       const result = await probeLimit(() => probeOne(item));
-      checkCache.set(cacheKey, result);
+      cacheSet(cacheKey, result);
       results[index] = result;
     }),
   );

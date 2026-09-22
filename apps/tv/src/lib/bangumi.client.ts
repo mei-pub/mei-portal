@@ -28,9 +28,12 @@ export async function GetBangumiCalendarData(): Promise<BangumiCalendarData[]> {
     throw new Error(`获取番剧日历失败: HTTP ${response.status}`);
   }
   const data = await response.json();
-  const filteredData = data.map((item: BangumiCalendarData) => ({
+  // 上游异常时可能返回非数组（错误对象/HTML 网关页），直接 map 会抛
+  // TypeError 且信息不可读，这里归一为空列表交给上层空态处理
+  const safeData: BangumiCalendarData[] = Array.isArray(data) ? data : [];
+  const filteredData = safeData.map((item: BangumiCalendarData) => ({
     ...item,
-    items: item.items.filter(bangumiItem => bangumiItem.images)
+    items: (item.items ?? []).filter(bangumiItem => bangumiItem.images)
   }));
 
   return filteredData;
