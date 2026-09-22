@@ -90,18 +90,22 @@ export function PlayPageClient({ pathSource, pathId }: { pathSource?: string; pa
   // 跳过检查的时间间隔控制
   const lastSkipCheckRef = useRef(0);
 
-  // 去广告开关（从 localStorage 继承，默认 true）
-  const [blockAdEnabled, setBlockAdEnabled] = useState<boolean>(() => {
-    if (typeof window !== 'undefined') {
-      const v = localStorage.getItem('enable_blockad');
-      if (v !== null) return v === 'true';
-    }
-    return true;
-  });
+  // 去广告开关（从 localStorage 继承，默认 true）。
+  // 初值固定为默认值，localStorage 读取延迟到首帧后的 effect：
+  // SSR 渲染时初始化器拿不到 localStorage，直接在初始化器里读会造成 hydration mismatch
+  const [blockAdEnabled, setBlockAdEnabled] = useState(true);
   const blockAdEnabledRef = useRef(blockAdEnabled);
   useEffect(() => {
     blockAdEnabledRef.current = blockAdEnabled;
   }, [blockAdEnabled]);
+  useEffect(() => {
+    try {
+      const v = localStorage.getItem('enable_blockad');
+      if (v !== null) setBlockAdEnabled(v === 'true');
+    } catch {
+      /* ignore */
+    }
+  }, []);
 
   // 视频基本信息
   const [videoTitle, setVideoTitle] = useState(searchParams.get('title') || '');
@@ -173,20 +177,20 @@ export function PlayPageClient({ pathSource, pathId }: { pathSource?: string; pa
     null
   );
 
-  // 优选和测速开关
-  const [optimizationEnabled] = useState<boolean>(() => {
-    if (typeof window !== 'undefined') {
+  // 优选和测速开关（仅 initAll 读取）：初值固定 true，localStorage 读取延迟到
+  // 首帧后的 effect（声明顺序先于 initAll effect，initAll 执行时已就绪），
+  // 避免 SSR hydration mismatch。用 ref 而非 state：initAll 闭包不需要响应式更新
+  const optimizationEnabledRef = useRef(true);
+  useEffect(() => {
+    try {
       const saved = localStorage.getItem('enableOptimization');
       if (saved !== null) {
-        try {
-          return JSON.parse(saved);
-        } catch {
-          /* ignore */
-        }
+        optimizationEnabledRef.current = JSON.parse(saved) !== false;
       }
+    } catch {
+      /* ignore */
     }
-    return true;
-  });
+  }, []);
 
   // 保存优选时的测速结果，避免EpisodeSelector重复测速
   const [precomputedVideoInfo, setPrecomputedVideoInfo] = useState<
@@ -209,6 +213,8 @@ export function PlayPageClient({ pathSource, pathId }: { pathSource?: string; pa
 
   const artPlayerRef = useRef<any>(null);
   const artRef = useRef<HTMLDivElement | null>(null);
+  // initAll 的 Promise：initFromHistory 等挂载期任务等待其完成，避免并发竞态
+  const initAllPromiseRef = useRef<Promise<void> | null>(null);
 
   // Wake Lock 相关
   const wakeLockRef = useRef<WakeLockSentinel | null>(null);
@@ -789,7 +795,7 @@ export function PlayPageClient({ pathSource, pathId }: { pathSource?: string; pa
       // 未指定源和 id 或需要优选，且开启优选开关
       if (
         (!currentSource || !currentId || needPreferRef.current) &&
-        optimizationEnabled
+        optimizationEnabledRef.current
       ) {
         setLoadingStage('preferring');
         setLoadingMessage('⚡ 正在优选最佳播放源...');
@@ -829,13 +835,20 @@ export function PlayPageClient({ pathSource, pathId }: { pathSource?: string; pa
       }, 1000);
     };
 
-    initAll();
+    // 暴露 Promise 供 initFromHistory 等挂载期任务等待（声明顺序在本 effect 之前
+    // 的 ref 上记录，二者同在挂载期 effect 中按声明顺序执行）
+    initAllPromiseRef.current = initAll();
   }, []);
 
   // 播放记录处理
   useEffect(() => {
-    // 仅在初次挂载时检查播放记录
+    // 仅在初次挂载时检查播放记录；先等 initAll 完成，避免两个挂载期任务并发竞态
     const initFromHistory = async () => {
+      try {
+        await initAllPromiseRef.current;
+      } catch {
+        /* initAll 内部已兜底处理失败场景 */
+      }
       if (!currentSource || !currentId) return;
 
       try {
@@ -844,16 +857,21 @@ export function PlayPageClient({ pathSource, pathId }: { pathSource?: string; pa
         const record = allRecords[key];
 
         if (record) {
-          const targetIndex = record.index - 1;
-          const targetTime = record.play_time;
+          // record.index 为 1 基；0/负值（脏数据）或超界一律不应用，
+          // 防止 setCurrentEpisodeIndex(-1) 触发「选集索引无效」整页错误
+          const targetIndex =
+            Number(record.index) > 0 ? Math.floor(Number(record.index)) - 1 : -1;
+          const totalEpisodes = Number(record.total_episodes) || 0;
+          const validIndex =
+            targetIndex >= 0 &&
+            (totalEpisodes === 0 || targetIndex < totalEpisodes);
 
-          // 更新当前选集索引
-          if (targetIndex !== currentEpisodeIndex) {
+          if (validIndex) {
+            // 更新当前选集索引
             setCurrentEpisodeIndex(targetIndex);
+            // 保存待恢复的播放进度，待播放器就绪后跳转
+            resumeTimeRef.current = record.play_time;
           }
-
-          // 保存待恢复的播放进度，待播放器就绪后跳转
-          resumeTimeRef.current = targetTime;
         }
       } catch (err) {
         console.error('读取播放记录失败:', err);
@@ -893,6 +911,30 @@ export function PlayPageClient({ pathSource, pathId }: { pathSource?: string; pa
       setVideoLoadingStage('sourceChanging');
       setIsVideoLoading(true);
 
+      // 先解析目标源详情：解析失败直接返回，不执行下方清播放记录/跳过配置等
+      // 破坏性操作，避免换源失败反而弄丢当前源的观看历史
+      let newDetail: SearchResult | null = null;
+      if (newSource === 'mei-local') {
+        // 本地服务器源（置顶伪源，done 的集直接播本地流）
+        newDetail = localSource;
+      } else {
+        newDetail = availableSources.find(
+          (source) => source.source === newSource && source.id === newId
+        ) ?? null;
+      }
+      if (!newDetail) {
+        setIsVideoLoading(false);
+        if (newSource === 'mei-local') {
+          // 本地源暂无已完成剧集：条内提示并保持当前网络源播放不中断，
+          // 不走整页错误（对齐 AGENTS no-local 引导语义的最小实现）
+          setLocalError('本地源暂无已完成的剧集，可先下载本集');
+          window.setTimeout(() => setLocalError(null), 4000);
+          return;
+        }
+        setError('未找到匹配结果');
+        return;
+      }
+
       // 记录当前播放进度（仅在同一集数切换时恢复）
       const currentPlayTime = artPlayerRef.current?.currentTime || 0;
       console.log('换源前当前播放时间:', currentPlayTime);
@@ -921,20 +963,6 @@ export function PlayPageClient({ pathSource, pathId }: { pathSource?: string; pa
         } catch (err) {
           console.error('清除跳过片头片尾配置失败:', err);
         }
-      }
-
-      let newDetail: SearchResult | null = null;
-      if (newSource === 'mei-local') {
-        // 本地服务器源（置顶伪源，done 的集直接播本地流）
-        newDetail = localSource;
-      } else {
-        newDetail = availableSources.find(
-          (source) => source.source === newSource && source.id === newId
-        ) ?? null;
-      }
-      if (!newDetail) {
-        setError('未找到匹配结果');
-        return;
       }
 
       // 尝试跳转到当前正在播放的集数
@@ -1161,11 +1189,19 @@ export function PlayPageClient({ pathSource, pathId }: { pathSource?: string; pa
   };
 
   useEffect(() => {
-    // 页面即将卸载时保存播放进度和清理资源
+    // 页面即将卸载时保存播放进度和清理资源。
+    // saveCurrentPlayProgress 在首个 await 前同步读取播放器时间并完成写库入参
+    // 快照，因此必须先于 cleanupPlayer 调用（cleanup 只销毁实例，
+    // 不会破坏已发起的写库操作）
     const handleBeforeUnload = () => {
-      saveCurrentPlayProgress();
-      releaseWakeLock();
+      void saveCurrentPlayProgress();
+      void releaseWakeLock();
       cleanupPlayer();
+    };
+
+    // pagehide：移动端/关闭标签页更可靠的最后保存时机（beforeunload 不总触发）
+    const handlePageHide = () => {
+      void saveCurrentPlayProgress();
     };
 
     // 页面可见性变化时保存播放进度和释放 Wake Lock
@@ -1183,11 +1219,13 @@ export function PlayPageClient({ pathSource, pathId }: { pathSource?: string; pa
 
     // 添加事件监听器
     window.addEventListener('beforeunload', handleBeforeUnload);
+    window.addEventListener('pagehide', handlePageHide);
     document.addEventListener('visibilitychange', handleVisibilityChange);
 
     return () => {
       // 清理事件监听器
       window.removeEventListener('beforeunload', handleBeforeUnload);
+      window.removeEventListener('pagehide', handlePageHide);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
   }, [currentEpisodeIndex, detail, artPlayerRef.current]);
@@ -1271,35 +1309,69 @@ export function PlayPageClient({ pathSource, pathId }: { pathSource?: string; pa
     }
   }, [detail]);
 
+  // 在途轮询控制器：新一轮开始时作废上一轮，避免乱序回写旧数据
+  const refreshAbortRef = useRef<AbortController | null>(null);
+  const lastLocalRecordsJsonRef = useRef('');
+
   const refreshLocalSources = useCallback(async () => {
     const title = videoTitleRef.current;
     if (!title) return;
+    refreshAbortRef.current?.abort();
+    const ac = new AbortController();
+    refreshAbortRef.current = ac;
     try {
-      const records = await fetchLocalSources({
-        title,
-        year: videoYearRef.current,
-      });
-      setLocalRecords(records);
+      const records = await fetchLocalSources(
+        { title, year: videoYearRef.current },
+        ac.signal
+      );
+      if (ac.signal.aborted) return;
+      // 数据无变化不触发重渲染（记录量小，JSON 对比开销可忽略）
+      const json = JSON.stringify(records);
+      if (json !== lastLocalRecordsJsonRef.current) {
+        lastLocalRecordsJsonRef.current = json;
+        setLocalRecords(records);
+      }
       setLocalError(null);
     } catch (err) {
-      console.warn('刷新本地源失败:', err);
+      if (!ac.signal.aborted) {
+        console.warn('刷新本地源失败:', err);
+      }
     }
     // media 可播列表（文件在盘的任务）：localUrl=/videos/<id> 不在集合 → 文件丢失。
-    // 拉取失败时清空集合（判定保守：查不到 = 不视为缺失，避免误报弹层）
+    // 拉取失败时清空集合（判定保守：查不到 = 不视为缺失，避免误报弹层）。
+    // 注意：media 属门户根路径应用（nginx 只在 ^/api/v1/ 直通 media），而 layout
+    // 注入的 window.fetch 改写器会把根相对 /api/* 补成 /tv/api/*（白名单不含 v1），
+    // 恒 404 会让「本地文件缺失」判定基准完全失效——用绝对 URL 逃过改写直达 media
     try {
-      const resp = await fetch('/api/v1/videos', {
+      const videosUrl = new URL('/api/v1/videos', window.location.origin).href;
+      const resp = await fetch(videosUrl, {
         headers: { Accept: 'application/json' },
+        signal: ac.signal,
       });
+      if (ac.signal.aborted) return;
       if (resp.ok) {
         const list = (await resp.json()) as Array<{ id: number }>;
-        setMediaPlayableIds(new Set(list.map((v) => Number(v.id))));
+        const next = new Set(list.map((v) => Number(v.id)));
+        setMediaPlayableIds((prev) => {
+          // Set 展开受 tsconfig target 限制，用 Array.from 比较
+          if (
+            prev.size === next.size &&
+            Array.from(next).every((v) => prev.has(v))
+          ) {
+            return prev;
+          }
+          return next;
+        });
       } else {
-        setMediaPlayableIds(new Set());
+        setMediaPlayableIds((prev) => (prev.size === 0 ? prev : new Set()));
       }
     } catch {
-      setMediaPlayableIds(new Set());
+      // 中断或失败：一律不判缺失（保守，避免误报弹层）
     }
   }, []);
+
+  // 卸载时中断在途轮询请求
+  useEffect(() => () => refreshAbortRef.current?.abort(), []);
 
   // 标题确定后拉一次本地源记录（videoTitle 在 initAll 后为规范剧名）
   useEffect(() => {
@@ -1307,7 +1379,7 @@ export function PlayPageClient({ pathSource, pathId }: { pathSource?: string; pa
     void refreshLocalSources();
   }, [videoTitle, refreshLocalSources]);
 
-  // 有在途下载任务时轮询（3s），驱动 pending → downloading x% → done 状态机
+  // 有在途下载任务时轮询（10s，数据无变化不重渲染），驱动 pending → downloading x% → done 状态机
   useEffect(() => {
     const hasActive = localRecords.some(
       (r) => r.status === 'pending' || r.status === 'downloading'
@@ -1315,7 +1387,7 @@ export function PlayPageClient({ pathSource, pathId }: { pathSource?: string; pa
     if (!hasActive) return;
     const timer = setInterval(() => {
       void refreshLocalSources();
-    }, 3000);
+    }, 10000);
     return () => clearInterval(timer);
   }, [localRecords, refreshLocalSources]);
 
@@ -1629,15 +1701,22 @@ export function PlayPageClient({ pathSource, pathId }: { pathSource?: string; pa
       typeof window !== 'undefined' &&
       typeof (window as any).webkitConvertPointFromNodeToPage === 'function';
 
-    // 非WebKit浏览器且播放器已存在，使用switch方法切换
+    // 非WebKit浏览器且播放器已存在，使用 switchUrl 切换（artplayer v5 API，
+    // 返回 Promise；switch 只是它的 setter 别名）。仅当地址实际变化才切换，
+    // 避免依赖变化触发同地址重切导致播放中断
     if (!isWebkit && artPlayerRef.current) {
-      artPlayerRef.current.switch = videoUrl;
-      artPlayerRef.current.title = `${videoTitle} - 第${currentEpisodeIndex + 1
+      const art = artPlayerRef.current;
+      if (art.url !== videoUrl) {
+        void art
+          .switchUrl(videoUrl)
+          .catch((err: unknown) => console.warn('切换播放地址失败:', err));
+      }
+      art.title = `${videoTitle} - 第${currentEpisodeIndex + 1
         }集`;
-      artPlayerRef.current.poster = videoCover;
-      if (artPlayerRef.current?.video) {
+      art.poster = videoCover;
+      if (art?.video) {
         ensureVideoSource(
-          artPlayerRef.current.video as HTMLVideoElement,
+          art.video as HTMLVideoElement,
           videoUrl
         );
       }
@@ -2027,9 +2106,8 @@ export function PlayPageClient({ pathSource, pathId }: { pathSource?: string; pa
         }
       });
 
-      artPlayerRef.current.on('pause', () => {
-        saveCurrentPlayProgress();
-      });
+      // pause 事件只注册一个处理器（含释放 Wake Lock + 保存进度），
+      // 见上方 'pause' 注册处——重复注册会导致同一次暂停保存两次
 
       if (artPlayerRef.current?.video) {
         ensureVideoSource(
@@ -2041,7 +2119,9 @@ export function PlayPageClient({ pathSource, pathId }: { pathSource?: string; pa
       console.error('创建播放器失败:', err);
       setError('播放器初始化失败');
     }
-  }, [Artplayer, Hls, videoUrl, loading, blockAdEnabled]);
+    // 补齐 videoTitle/videoCover 依赖：换源后标题/封面变化时同步到已有播放器
+    // （地址未变时走上方 dedup 分支，不会重切；effect 体内不 setState，无死循环）
+  }, [Artplayer, Hls, videoUrl, loading, blockAdEnabled, videoTitle, videoCover]);
 
   // 当组件卸载时清理定时器、Wake Lock 和播放器资源
   useEffect(() => {
@@ -2320,6 +2400,8 @@ export function PlayPageClient({ pathSource, pathId }: { pathSource?: string; pa
                     e.stopPropagation();
                     handleToggleFavorite();
                   }}
+                  title={favorited ? '取消收藏' : '收藏'}
+                  aria-label={favorited ? '取消收藏' : '收藏'}
                   className='ml-3 flex-shrink-0 hover:opacity-80 transition-opacity'
                 >
                   <FavoriteIcon filled={favorited} />

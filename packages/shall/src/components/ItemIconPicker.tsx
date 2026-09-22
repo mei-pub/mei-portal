@@ -36,12 +36,13 @@ export function contrastColor(bg: string | undefined | null): string {
   if (!bg) return '#1c2333'; // 无底色（白底默认）→ 深色图标
   // 渐变 → 白色图标（渐变均为深色调）
   if (bg === 'gradient' || bg.includes('gradient') || bg.includes('linear')) return '#fff';
-  // 解析 hex
-  const hex = bg.replace('#', '');
-  if (hex.length === 3 || hex.length === 6) {
-    const r = parseInt(hex.slice(0, 2).padEnd(2, hex[0]), 16);
-    const g = parseInt(hex.slice(hex.length > 3 ? 2 : 1, hex.length > 3 ? 4 : 2).padEnd(2, hex[1]), 16);
-    const b = parseInt(hex.slice(hex.length > 3 ? 4 : 2).padEnd(2, hex[2]), 16);
+  // 解析 hex：3 位简写先展开为 6 位（原实现对 3 位 hex 按位错切，亮度算错）
+  const raw = bg.replace('#', '');
+  const hex = raw.length === 3 ? raw.split('').map((c) => c + c).join('') : raw;
+  if (hex.length === 6) {
+    const r = parseInt(hex.slice(0, 2), 16);
+    const g = parseInt(hex.slice(2, 4), 16);
+    const b = parseInt(hex.slice(4, 6), 16);
     if (isNaN(r) || isNaN(g) || isNaN(b)) return '#fff';
     const lum = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
     return lum > 0.55 ? '#1c2333' : '#fff';

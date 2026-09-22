@@ -11,6 +11,7 @@ import { useHealth } from '@/lib/use-health';
 import type { PanelConfig, PanelItem, PanelGroup } from '@/lib/panel-store';
 import ItemIconPicker, { isImgIcon, isTextIcon, textIconContent, contrastColor } from './ItemIconPicker';
 import { appCarrierHref } from '@/lib/app-routes';
+import { sanitizeHtml } from '@/lib/sanitize-html';
 import {
   HOME_SEARCH_MODE_KEY,
   HOME_SEARCH_SCOPE_KEY,
@@ -333,7 +334,7 @@ export default function PortalClient({ items, panel: initialPanel }: { items: It
   // 客户端同步配置（确保 hydration 后拿到最新配置；无论背景图有无都同步，保证删除背景也生效）
   useEffect(() => {
     const sync = () => fetch('/api/panel', { credentials: 'include' })
-      .then(r => r.json())
+      .then(r => (r.ok ? r.json() : null))
       .then(cfg => {
         if (!cfg || !cfg.background || !cfg.style) return;
         // 编辑排序时后台只同步外观，避免旧 items 覆盖正在排的顺序
@@ -441,7 +442,10 @@ export default function PortalClient({ items, panel: initialPanel }: { items: It
   // 系统监控
   useEffect(() => {
     if (!style?.systemMonitorShow) return;
-    const load = () => fetch('/api/system').then((r) => r.json()).then(setSys).catch(() => {});
+    const load = () => fetch('/api/system')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => { if (d) setSys(d); })
+      .catch(() => {});
     load();
     const t = setInterval(load, 5000);
     return () => clearInterval(t);
@@ -1035,8 +1039,9 @@ export default function PortalClient({ items, panel: initialPanel }: { items: It
         )}
 
         {/* 页脚 */}
+        {/* 页脚：footerHtml 为管理员可编辑的自由 HTML，注入前必须过白名单消毒 */}
         {style?.footerHtml && (
-          <section style={{ marginTop: 40, textAlign: 'center', color: 'var(--mei-text-muted)' }} dangerouslySetInnerHTML={{ __html: style.footerHtml }} />
+          <section style={{ marginTop: 40, textAlign: 'center', color: 'var(--mei-text-muted)' }} dangerouslySetInnerHTML={{ __html: sanitizeHtml(style.footerHtml) }} />
         )}
       </main>
 

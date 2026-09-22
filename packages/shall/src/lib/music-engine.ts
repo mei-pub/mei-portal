@@ -330,36 +330,68 @@ class MusicEngine {
       this.saveTimer = null;
       const payload = this.serialize();
       this.savingChain = this.savingChain.then(async () => {
-        try {
-          const res = await fetch(STATE_API, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            credentials: 'include',
-            body: JSON.stringify(payload),
-          });
-          if (res.status === 409) {
-            const data = await res.json();
-            this.revision = Number(data?.state?.revision) || this.revision;
-            return;
+        const attempt = async (body: Record<string, unknown>, allowRetry: boolean): Promise<void> => {
+          try {
+            const res = await fetch(STATE_API, {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json' },
+              credentials: 'include',
+              body: JSON.stringify(body),
+            });
+            if (res.status === 409) {
+              const data = await res.json();
+              this.revision = Number(data?.state?.revision) || this.revision;
+              // 冲突不丢数据：用服务端最新 revision 重放一次本地待写状态
+              //（allowRetry 只放开一次，防两边持续冲突打成死循环）
+              if (allowRetry) {
+                await attempt({ ...body, revision: this.revision }, false);
+              }
+              return;
+            }
+            if (res.ok) {
+              const data = await res.json();
+              this.revision = Number(data?.state?.revision) || this.revision + 1;
+            }
+          } catch {
+            // 网络异常：下次变更再试，本地快照已保住数据
           }
-          if (res.ok) {
-            const data = await res.json();
-            this.revision = Number(data?.state?.revision) || this.revision + 1;
-          }
-        } catch {
-          // 网络异常：下次变更再试，本地快照已保住数据
-        }
+        };
+        await attempt(payload, true);
       });
     }, delay);
   }
 
+  /** 只更新本地快照里的播放进度：不重写全部播放列表 JSON，也不触发服务端全量 PUT */
+  private persistPositionLocal(): void {
+    try {
+      const raw = localStorage.getItem(LOCAL_SNAPSHOT);
+      if (!raw) {
+        this.persistLocal();
+        return;
+      }
+      const parsed = JSON.parse(raw) as Record<string, unknown>;
+      const playback = (parsed.playback || {}) as Record<string, unknown>;
+      playback.position = this.pendingPosition;
+      parsed.playback = playback;
+      localStorage.setItem(LOCAL_SNAPSHOT, JSON.stringify(parsed));
+    } catch {}
+  }
+
   private positionTimer: ReturnType<typeof setTimeout> | null = null;
+  private lastPositionServerAt = 0;
   private schedulePositionSave(): void {
     if (this.positionTimer) return;
     this.positionTimer = setTimeout(() => {
       this.positionTimer = null;
-      this.save(0);
-    }, 5000);
+      // 播放期间的进度保存走轻量路径：只写进度 key（15s 节流），
+      // 服务端进度至多每 60s 随一次全量保存落库，其余由播控操作的 save() 带上
+      const now = Date.now();
+      this.persistPositionLocal();
+      if (this.loggedIn && now - this.lastPositionServerAt > 60_000) {
+        this.lastPositionServerAt = now;
+        this.save(0);
+      }
+    }, 15_000);
   }
 
   // ---- 队列 ----
@@ -402,7 +434,9 @@ class MusicEngine {
   }
 
   /** 立即播放单曲（下载中心等外部应用的 play-now 协议）：进临时队列，
-   *  不打扰已有播放列表/收藏；外壳引擎播放、MusicDock 常驻，跨应用不断播 */
+   *  不打扰已有播放列表/收藏；外壳引擎播放、MusicDock 常驻，跨应用不断播。
+   *  id='file:<相对路径>' 为 server-local 直取语义：进队后由 resolveWithFallback
+   *  的 file: 分支直接构造 serve 流，不走曲库名字匹配。 */
   playNow(song: Song): void {
     this.temp = [song];
     this.setQueue('temp', 0);
@@ -559,12 +593,21 @@ class MusicEngine {
 
   // ---- 本地服务器已下载曲库（「本地优先」：同曲已有本地文件就不再走网络源）----
   private localLibraryAt = 0;
+  private localLibraryTriedAt = 0;
   private localLibraryFiles: Array<{ name: string; artist: string; path: string }> = [];
 
-  /** 刷新已下载曲库索引（60s 缓存；失败静默——库不可用绝不阻塞播放） */
+  /**
+   * 刷新已下载曲库索引。
+   * - 成功（含空 files）才记 localLibraryAt：结果缓存 60s，避免每次切歌都重拉；
+   * - 失败不记成功时间戳（下次播放尽快重试），但以 localLibraryTriedAt 做 5s 节流，
+   *   防止曲库持续不可用时被切歌/播放重试风暴打成高频请求。
+   * 库不可用绝不阻塞播放（失败静默降级走网络源）。
+   */
   private async refreshLocalLibrary(): Promise<void> {
     const now = Date.now();
-    if (this.localLibraryFiles.length > 0 && now - this.localLibraryAt < 60_000) return;
+    if (now - this.localLibraryAt < 60_000) return;
+    if (now - this.localLibraryTriedAt < 5_000) return;
+    this.localLibraryTriedAt = now;
     try {
       const data = (await this.fetchJson(`${this.musicBase}/api/download/library`)) as {
         files?: Array<Record<string, unknown>>;
@@ -576,20 +619,31 @@ class MusicEngine {
         this.localLibraryAt = now;
       }
     } catch {
-      this.localLibraryAt = now; // 失败也记时间：不可用期间每分钟至多重试一次
+      // 失败不记 localLibraryAt：下次播放立即重试（受 5s 节流保护）
     }
   }
 
-  /** 命中本地已下载文件（同名+同歌手，忽略大小写与空白差异）则返回 serve 流地址 */
+  /** server-local 条目（id='file:<相对路径>'）直出 serve 流地址 */
+  private serverLocalUrl(id: string): string {
+    return `${this.musicBase}/api/download/serve?path=${encodeURIComponent(id.slice(5))}`;
+  }
+
+  /**
+   * 命中本地已下载文件（同名+同歌手，忽略大小写与空白差异）则返回 serve 流地址。
+   * 歌手为空时只允许命中「同样无歌手」的本地记录，避免按歌名配到任意歌手的同名文件。
+   */
   private async tryLocalFile(song: Song): Promise<string | null> {
     await this.refreshLocalLibrary();
     const norm = (s: string) => s.trim().toLowerCase().replace(/\s+/g, ' ');
     const name = norm(song.name || '');
     if (!name) return null;
     const artist = norm(song.artist || '');
-    const hit = this.localLibraryFiles.find(
-      (f) => norm(f.name) === name && (!artist || norm(f.artist) === artist)
-    );
+    const hit = this.localLibraryFiles.find((f) => {
+      if (norm(f.name) !== name) return false;
+      const fArtist = norm(f.artist);
+      if (!artist) return fArtist === '';
+      return fArtist === artist;
+    });
     if (!hit) return null;
     return `${this.musicBase}/api/download/serve?path=${encodeURIComponent(hit.path)}`;
   }
@@ -635,6 +689,11 @@ class MusicEngine {
     options: { nocache?: boolean } = {}
   ): Promise<{ url: string; song: Song }> {
     try {
+      // server-local 直取：id='file:<相对路径>' 已携带落盘路径，直接构造 serve 流，
+      // 不做名字匹配（下载中心「去播放」传入的记录可能还不在 60s 缓存的曲库索引里）
+      if (typeof song.id === 'string' && song.id.startsWith('file:')) {
+        return { url: this.serverLocalUrl(song.id), song };
+      }
       // 本地服务器优先：播放列表/收藏/搜索播放的全部路径，已下载的同名曲直接用本地文件
       const localUrl = await this.tryLocalFile(song);
       if (localUrl) return { url: localUrl, song };

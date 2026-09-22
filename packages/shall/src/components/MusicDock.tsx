@@ -40,6 +40,17 @@ export default function MusicDock() {
   const [queueOpen, setQueueOpen] = useState(false);
   const [toast, setToast] = useState('');
   const queueRef = useRef<HTMLDivElement>(null);
+  // 业务 toast 定时清除：error 分支有自己的清理 effect，
+  // 「已发起下载 / 已加入收藏」这类提示若不定时清除会永久挂在播放条上方
+  const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const showToast = (message: string) => {
+    setToast(message);
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    toastTimerRef.current = setTimeout(() => setToast(''), 3000);
+  };
+  useEffect(() => () => {
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+  }, []);
 
   useEffect(() => {
     if (!engine) return;
@@ -118,7 +129,7 @@ export default function MusicDock() {
         case 'toast': {
           // 音乐 iframe 的轻量反馈（如下载失败提示）借道播放条 toast 展示
           const message = String(data.message || '');
-          if (message) setToast(message);
+          if (message) showToast(message);
           break;
         }
         default:
@@ -129,9 +140,26 @@ export default function MusicDock() {
     return () => window.removeEventListener('message', onMessage);
   }, [engine]);
 
-  // 广播状态给所有 iframe，使子应用 UI 与常驻播放条一致
+  // 广播状态给所有 iframe，使子应用 UI 与常驻播放条一致。
+  // timeupdate ~250ms 触发一次 snap 更新，全量 guestState 序列化不能跟着这个频率走：
+  // 控制态字段（队列/播放/音量/形态…）变化立即广播，仅时间/进度变化时按 ≥1s 节流，
+  // 避免每秒 4 次对全部 iframe 做 JSON 全量序列化 + postMessage。
+  const lastBroadcastAtRef = useRef(0);
+  const controlSigRef = useRef('');
   useEffect(() => {
     if (!engine || !snap) return;
+    const controlSig = [
+      snap.ready, snap.queueType, snap.playlistId, snap.index, snap.mode,
+      snap.song ? songKey(snap.song) : '', snap.queueLength, snap.playing, snap.loading,
+      snap.volume, snap.dockMode, snap.dockLastVisible, snap.error,
+      snap.playlists.length, snap.selectedPlaylistId,
+      snap.favorites.length, snap.temp.length,
+    ].join('|');
+    const controlChanged = controlSig !== controlSigRef.current;
+    controlSigRef.current = controlSig;
+    const now = Date.now();
+    if (!controlChanged && now - lastBroadcastAtRef.current < 1000) return;
+    lastBroadcastAtRef.current = now;
     const payload = { source: 'mei-music-host', type: 'state', state: engine.guestState() };
     document.querySelectorAll('iframe').forEach((frame) => {
       try {
@@ -196,6 +224,8 @@ export default function MusicDock() {
   useEffect(() => {
     if (!snap?.error) return;
     setToast(snap.error);
+    // 业务 toast 的定时器若还挂着，可能在 2.4s 前把错误提示提前清掉：一并取消
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
     const t = setTimeout(() => {
       setToast('');
       engine?.clearError();
@@ -351,6 +381,7 @@ export default function MusicDock() {
             min={0}
             max={1000}
             value={Math.round(ratio * 1000)}
+            aria-label="播放进度"
             onChange={(e) => engine.seekTo(Number(e.target.value) / 1000)}
           />
           <span className="mei-dock-time">{fmt(snap.duration)}</span>
@@ -363,9 +394,12 @@ export default function MusicDock() {
             title={`下载「${song.name}」（按音乐应用「下载方式」设置分发）`}
             onClick={() => {
               // 音乐应用的 iframe appId 是 solara（注册表 /lib/app-routes）；
-              // 查 music 找不到 contentWindow，按钮会静默失效
+              // 查不到 iframe（应用未打开）时必须给用户反馈，不能静默失效
               const frame = document.querySelector<HTMLIFrameElement>('iframe[data-mei-app="solara"]');
-              if (!frame?.contentWindow) return;
+              if (!frame?.contentWindow) {
+                showToast('音乐应用未打开，无法发起下载');
+                return;
+              }
               frame.contentWindow.postMessage(
                 {
                   source: 'mei-shell',
@@ -382,7 +416,7 @@ export default function MusicDock() {
                 },
                 window.location.origin,
               );
-              setToast('已发起下载（按音乐应用「下载方式」设置分发）');
+              showToast('已发起下载（按音乐应用「下载方式」设置分发）');
             }}
           >
             <MeiIcon icon="lucide:download" size={16} />
@@ -392,7 +426,7 @@ export default function MusicDock() {
             title={faved ? '取消收藏' : '加入收藏'}
             onClick={() => {
               const added = engine.toggleFavorite(song);
-              setToast(added ? '已加入收藏' : '已取消收藏');
+              showToast(added ? '已加入收藏' : '已取消收藏');
             }}
           >
             {/* 已收藏 = 红色实心爱心（.faved 样式给 svg fill currentColor） */}

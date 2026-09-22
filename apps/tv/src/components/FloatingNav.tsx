@@ -99,15 +99,15 @@ const ITEMS: NavItem[] = [
 export default function FloatingNav({ activePath }: { activePath?: string }) {
   const pathname = usePathname();
   const current = activePath ?? pathname;
-  const [open, setOpen] = useState(true);
-
-  // 初始状态：localStorage 记忆优先，默认展开；
+  // 初始状态：localStorage 记忆优先，默认展开。
+  // 用 null 表示尚未恢复（对齐 SitePanel 规范：首帧不渲染），
+  // 避免「默认展开先渲染、effect 再收起」的首帧闪现与 SSR hydration mismatch；
   // 播放页进入播放态后由播放页经 mei-panel-set 事件编程收起（不写记忆）
+  const [open, setOpen] = useState<boolean | null>(null);
+
   useEffect(() => {
     try {
-      const saved = localStorage.getItem(STORE_KEY);
-      if (saved === '1') setOpen(false);
-      else if (saved === '0') setOpen(true);
+      setOpen(localStorage.getItem(STORE_KEY) !== '1');
     } catch {
       setOpen(true);
     }
@@ -129,6 +129,9 @@ export default function FloatingNav({ activePath }: { activePath?: string }) {
       localStorage.setItem(STORE_KEY, next ? '0' : '1');
     } catch {}
   };
+
+  // 尚未从 localStorage 恢复：首帧不渲染（对齐 SitePanel 规范）
+  if (open === null) return null;
 
   return !open ? (
     // 收起态：紧贴左缘的渐变小把手

@@ -13,12 +13,19 @@ export default function NavBridge() {
 
   useEffect(() => {
     let plugins: Array<{ id: string; url: string }> = [];
-    fetch('/api/plugins', { credentials: 'include' })
-      .then((r) => r.json())
-      .then((list) => {
-        plugins = Array.isArray(list) ? list.map((p) => ({ id: p.id, url: p.url })) : [];
-      })
-      .catch(() => {});
+    // 插件表是承载页改写的依据：拉取失败不能静默吞掉就完事（空表下已知应用
+    // 只能靠 appCarrierHref 的内置回退兜底），失败后重试一次。
+    const loadPlugins = (attempt = 0) => {
+      fetch('/api/plugins', { credentials: 'include' })
+        .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`))))
+        .then((list) => {
+          plugins = Array.isArray(list) ? list.map((p) => ({ id: p.id, url: p.url })) : [];
+        })
+        .catch(() => {
+          if (attempt < 1) setTimeout(() => loadPlugins(attempt + 1), 1500);
+        });
+    };
+    loadPlugins();
 
     function onClick(ev: MouseEvent) {
       if (ev.defaultPrevented || ev.button !== 0 || ev.metaKey || ev.ctrlKey || ev.shiftKey || ev.altKey) return;

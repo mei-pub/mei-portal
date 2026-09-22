@@ -4,7 +4,8 @@
 // - 按剧分组展示本地源记录（done 可播放/删除，downloading 进度轮询，failed 标红）
 // - 播放优先跳回 playRoute（play 页自动优先本地源，完整播放器体验）；
 //   旧记录无 playRoute 时兜底内嵌 <video> 轻量播放（localUrl 为 media 免鉴权流）
-// - 删除走二次确认弹层，成功后刷新列表（服务端同步清理落盘文件与空剧目录）
+// - 删除按 AGENTS 删除交互契约：未完成任务级联删除不询问（停任务 + 清临时文件）；
+//   已完成任务三选一（仅删记录 / 删记录和文件 / 取消），走 files=1|0 参数
 
 import {
   AlertTriangle,
@@ -73,6 +74,14 @@ function statusLabel(rec: DownloadRow): string {
       return rec.progress ? `下载中 ${Math.round(rec.progress)}%` : '下载中';
   }
 }
+
+// 删除弹层按钮样式（三种语义：取消 / 仅删记录 / 级联删除）
+const BTN_CANCEL =
+  'rounded-lg bg-gray-100 px-4 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-200 disabled:opacity-50 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600';
+const BTN_KEEP_FILES =
+  'rounded-lg border border-gray-300/70 px-4 py-2 text-sm font-medium text-gray-600 transition-colors hover:border-amber-400 hover:text-amber-600 disabled:opacity-50 dark:border-gray-600/70 dark:text-gray-300 dark:hover:border-amber-500 dark:hover:text-amber-400';
+const BTN_DELETE =
+  'rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-red-700 disabled:opacity-50';
 
 export default function DownloadsPage() {
   const router = useRouter();
@@ -229,7 +238,7 @@ export default function DownloadsPage() {
         )}
         <button
           onClick={() => setConfirmTarget(rec)}
-          title='删除该集（含落盘文件）'
+          title='删除该集记录（已完成可选择是否删除落盘文件）'
           className='flex items-center gap-1 rounded-full border border-gray-300/60 px-3 py-1 text-xs text-gray-500 transition-colors hover:border-red-400 hover:text-red-500 dark:border-gray-600/60 dark:text-gray-400 dark:hover:border-red-500 dark:hover:text-red-400'
         >
           <Trash2 className='h-3.5 w-3.5' /> 删除
@@ -249,11 +258,13 @@ export default function DownloadsPage() {
     setVideoTarget(rec);
   };
 
-  const handleDelete = async () => {
+  /** files=0 仅删记录（保留落盘文件）；files=1 级联清理文件
+   *  （未完成任务服务端级联停止下载并清临时文件）。 */
+  const handleDelete = async (files: 0 | 1) => {
     if (!confirmTarget) return;
     setDeleting(true);
     try {
-      await deleteLocalSource(confirmTarget.key);
+      await deleteLocalSource(confirmTarget.key, files);
       setConfirmTarget(null);
       await load();
     } catch (e) {
@@ -429,29 +440,70 @@ export default function DownloadsPage() {
               <h3 className='mb-2 text-lg font-semibold text-gray-900 dark:text-gray-100'>
                 删除已下载资源？
               </h3>
-              <p className='mb-4 text-sm text-gray-600 dark:text-gray-400'>
-                将删除「{confirmTarget.title}」
-                {confirmTarget.totalEpisodes > 1
-                  ? ` 第 ${confirmTarget.episode} 集`
-                  : ''}{' '}
-                的记录与服务器上的落盘文件，删除后不可恢复。
-              </p>
-              <div className='flex justify-center space-x-3'>
-                <button
-                  onClick={() => setConfirmTarget(null)}
-                  disabled={deleting}
-                  className='rounded-lg bg-gray-100 px-4 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-200 disabled:opacity-50 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600'
-                >
-                  取消
-                </button>
-                <button
-                  onClick={() => void handleDelete()}
-                  disabled={deleting}
-                  className='rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-red-700 disabled:opacity-50'
-                >
-                  {deleting ? '删除中...' : '删除'}
-                </button>
-              </div>
+              {confirmTarget.status === 'done' ? (
+                <>
+                  <p className='mb-4 text-sm text-gray-600 dark:text-gray-400'>
+                    「{confirmTarget.title}」
+                    {confirmTarget.totalEpisodes > 1
+                      ? ` 第 ${confirmTarget.episode} 集`
+                      : ''}{' '}
+                    已下载完成。可以选择仅删除记录保留文件，或连同服务器上的落盘文件一起删除，删除后不可恢复。
+                  </p>
+                  <div className='flex flex-wrap justify-center gap-3'>
+                    <button
+                      onClick={() => setConfirmTarget(null)}
+                      disabled={deleting}
+                      className={BTN_CANCEL}
+                    >
+                      取消
+                    </button>
+                    <button
+                      onClick={() => void handleDelete(0)}
+                      disabled={deleting}
+                      title='仅删除记录，保留服务器上的落盘文件'
+                      className={BTN_KEEP_FILES}
+                    >
+                      仅删记录
+                    </button>
+                    <button
+                      onClick={() => void handleDelete(1)}
+                      disabled={deleting}
+                      title='删除记录并级联清理服务器上的落盘文件'
+                      className={BTN_DELETE}
+                    >
+                      {deleting ? '删除中...' : '删记录和文件'}
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <p className='mb-4 text-sm text-gray-600 dark:text-gray-400'>
+                    「{confirmTarget.title}」
+                    {confirmTarget.totalEpisodes > 1
+                      ? ` 第 ${confirmTarget.episode} 集`
+                      : ''}{' '}
+                    尚未下载完成（{statusLabel(confirmTarget)}
+                    ）。将级联停止下载任务并清理临时文件与记录，半成品不保留。
+                  </p>
+                  <div className='flex justify-center space-x-3'>
+                    <button
+                      onClick={() => setConfirmTarget(null)}
+                      disabled={deleting}
+                      className={BTN_CANCEL}
+                    >
+                      取消
+                    </button>
+                    <button
+                      onClick={() => void handleDelete(1)}
+                      disabled={deleting}
+                      title='停止下载并级联清理临时文件与记录'
+                      className={BTN_DELETE}
+                    >
+                      {deleting ? '删除中...' : '删除'}
+                    </button>
+                  </div>
+                </>
+              )}
             </div>
           </div>
         </div>

@@ -95,7 +95,7 @@ export default function AppFrame() {
 
   useEffect(() => {
     fetch('/api/plugins', { credentials: 'include' })
-      .then((r) => r.json())
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`))))
       .then((list) => setPlugins(Array.isArray(list) ? list : []))
       .catch(() => setPlugins([]));
   }, []);
