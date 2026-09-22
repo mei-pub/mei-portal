@@ -116,6 +116,16 @@ function getDoubanProxyConfig(): {
   };
 }
 
+/** 服务端代理分支的统一取回：此前不检查 response.ok，4xx/5xx（含网关 502 HTML）
+ *  会被当成功解析，报错信息丢失（JSON parse error）或把错误体当数据返回 */
+async function fetchServerDoubanJson(url: string): Promise<DoubanResult> {
+  const response = await fetch(url);
+  if (!response.ok) {
+    throw new Error(`服务端代理请求失败: HTTP ${response.status}`);
+  }
+  return response.json();
+}
+
 /**
  * 浏览器端豆瓣分类数据获取函数
  */
@@ -210,11 +220,9 @@ export async function getDoubanCategories(
       return fetchDoubanCategories(params, proxyUrl);
     case 'direct':
     default:
-      const response = await fetch(
+      return fetchServerDoubanJson(
         `/api/douban/categories?kind=${kind}&category=${category}&type=${type}&limit=${pageLimit}&start=${pageStart}`
       );
-
-      return response.json();
   }
 }
 
@@ -243,11 +251,9 @@ export async function getDoubanList(
       return fetchDoubanList(params, proxyUrl);
     case 'direct':
     default:
-      const response = await fetch(
+      return fetchServerDoubanJson(
         `/api/douban?tag=${tag}&type=${type}&pageSize=${pageLimit}&pageStart=${pageStart}`
       );
-
-      return response.json();
   }
 }
 
@@ -363,11 +369,9 @@ export async function getDoubanRecommends(
       return fetchDoubanRecommends(params, proxyUrl);
     case 'direct':
     default:
-      const response = await fetch(
+      return fetchServerDoubanJson(
         `/api/douban/recommends?kind=${kind}&limit=${pageLimit}&start=${pageStart}&category=${category}&format=${format}&region=${region}&year=${year}&platform=${platform}&sort=${sort}&label=${label}`
       );
-
-      return response.json();
   }
 }
 

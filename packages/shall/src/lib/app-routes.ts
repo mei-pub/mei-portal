@@ -79,7 +79,12 @@ export function parseAppRoute(
  */
 export function appCarrierHref(path: string, plugins?: HostPluginRef[]): string | null {
   if (!path || /^https?:\/\//i.test(path)) return null;
-  const parsed = parseAppRoute(path, plugins);
+  // plugins 拉取失败（静默降级为空表）或面板把应用配成外链域名时，
+  // 传入的 plugins 可能覆盖不到已知应用前缀；此时对内置应用回退
+  // FALLBACK_PLUGINS 再匹配一次，保证应用路径永远包成承载地址而非裸 push
+  //（裸 push 的 RSC fetch 会被 nginx 分流打回整页加载，销毁常驻播放引擎）。
+  // 非应用路径（/search、/settings 等）两个表都匹配不到，仍返回 null 由调用方路由。
+  const parsed = parseAppRoute(path, plugins) ?? parseAppRoute(path, FALLBACK_PLUGINS);
   if (!parsed) return null;
   const params = new URLSearchParams({ app: parsed.appId, path });
   return `/app?${params.toString()}`;

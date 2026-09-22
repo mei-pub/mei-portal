@@ -36,6 +36,7 @@ const SHELL_URL = process.env.MEI_SHELL_URL || 'http://127.0.0.1:7808';
 const verifyCache = new Map();
 const CACHE_TTL = 30 * 1000;
 const NEGATIVE_TTL = 5 * 1000;
+const VERIFY_CACHE_MAX = 500; // 上限防泄漏：凭证无界增长（每 cookie 值一条）会吃光内存
 
 async function isPortalSessionValid(credential) {
   const cached = verifyCache.get(credential);
@@ -50,6 +51,8 @@ async function isPortalSessionValid(credential) {
   } catch {
     ok = false;
   }
+  // 超限整体清空（简单且足够：TTL 很短，清空只带来一轮额外 verify 回调）
+  if (verifyCache.size >= VERIFY_CACHE_MAX) verifyCache.clear();
   verifyCache.set(credential, { ok, exp: Date.now() + (ok ? CACHE_TTL : NEGATIVE_TTL) });
   return ok;
 }

@@ -43,16 +43,21 @@ export default function ManagePage() {
   async function unlock(e: React.FormEvent) {
     e.preventDefault();
     setUnlockErr("");
-    const res = await fetch("/novels/api/auth/unlock", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ password: masterPw }),
-    });
-    if (res.ok) {
-      setUnlocked(true);
-      refresh();
-    } else {
-      setUnlockErr("主密码错误");
+    try {
+      const res = await fetch("/novels/api/auth/unlock", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password: masterPw }),
+      });
+      if (res.ok) {
+        setUnlocked(true);
+        refresh();
+      } else {
+        setUnlockErr("主密码错误");
+      }
+    } catch {
+      // 网络失败按可重试提示（此前 unhandled rejection，用户点解锁毫无反馈）
+      setUnlockErr("网络异常，请重试");
     }
   }
 
@@ -62,6 +67,8 @@ export default function ManagePage() {
       const res = await fetch("/novels/api/sites?manage=1");
       const data = await res.json();
       setSites(Array.isArray(data) ? data : []);
+    } catch {
+      showToast("加载站点列表失败", "error");
     } finally {
       setLoading(false);
     }
@@ -123,13 +130,17 @@ export default function ManagePage() {
 
   async function removeSite(site: SiteRow) {
     if (!confirm(`删除站点「${site.name}」？站内所有小说与章节将一并删除，不可恢复。`)) return;
-    const res = await fetch(`/novels/api/sites?slug=${encodeURIComponent(site.slug)}`, { method: "DELETE" });
-    const data = await res.json();
-    if (res.ok) {
-      showToast("已删除", "success");
-      refresh();
-    } else {
-      showToast(data.error || "删除失败", "error");
+    try {
+      const res = await fetch(`/novels/api/sites?slug=${encodeURIComponent(site.slug)}`, { method: "DELETE" });
+      const data = await res.json().catch(() => ({} as { error?: string }));
+      if (res.ok) {
+        showToast("已删除", "success");
+        refresh();
+      } else {
+        showToast(data.error || "删除失败", "error");
+      }
+    } catch {
+      showToast("删除失败：网络异常", "error");
     }
   }
 

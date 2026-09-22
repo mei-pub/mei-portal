@@ -544,7 +544,12 @@
           body: JSON.stringify({ password }),
         });
         if (response.ok) {
-          window.location.href = "/music/";
+          // 登录成功跳回应用首页：不硬编码 /music/（部署前缀可能不同，
+          // 如门户外壳挂载在别的子路径）。登录页路径去掉尾段即应用前缀：
+          // /music/login → /music/；独立部署 /login → /
+          const segments = window.location.pathname.replace(/\/+$/, "").split("/");
+          segments.pop(); // 去掉尾段（login 或空段）
+          window.location.href = (segments.join("/") || "") + "/";
           return;
         }
         showNotification("密码错误，请重试", "error");

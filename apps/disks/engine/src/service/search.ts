@@ -50,7 +50,8 @@ const tgFetchLimiter = createLimiter(TG_GLOBAL_CONCURRENCY);
 async function searchChannel(keyword: string, channel: string): Promise<SearchResult[]> {
   return tgFetchLimiter(() => {
     const url = buildSearchURL(channel, keyword, '');
-    return fetchText(url, { timeoutMs: 4000 }).then((html) => parseSearchResults(html, channel));
+    // TG 抓取限定响应体上限：频道页异常膨胀时只截断解析范围，不做整页下载
+    return fetchText(url, { timeoutMs: 4000, maxBodyBytes: 1024 * 1024 }).then((html) => parseSearchResults(html, channel));
   });
 }
 
@@ -95,8 +96,9 @@ async function searchTG(keyword: string, channels: string[], forceRefresh: boole
             ),
           ),
         );
-        if (config.cacheEnabled) {
-          // 异步缓存（不阻塞返回）；只写全量结果，不写部分结果，避免污染缓存
+        if (config.cacheEnabled && collected.length > 0) {
+          // 异步缓存（不阻塞返回）；只写全量结果，不写部分结果，避免污染缓存；
+          // 全失败（空结果）不写缓存——否则空结果会占据整个 TTL，恢复后仍返回空
           setTimeout(() => cache.set(cacheKey, collected, ttlMs), 0);
         }
       })(),
@@ -155,8 +157,8 @@ async function searchPlugins(
     }
   }
 
-  if (config.cacheEnabled) {
-    // 主程序最后更新（异步，不阻塞）
+  if (config.cacheEnabled && allResults.length > 0) {
+    // 主程序最后更新（异步，不阻塞）；全失败（空结果）不写缓存，避免空结果占据整个 TTL
     setTimeout(() => cache.set(cacheKey, allResults, config.cacheTTLMinutes * 60 * 1000), 0);
   }
   return allResults;

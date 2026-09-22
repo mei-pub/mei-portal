@@ -45,6 +45,18 @@ export default function IframeHost({ url, name, appId }: { url: string; name: st
     return () => window.removeEventListener('message', onMsg);
   }, []);
 
+  // 重试：reload() 在跨域 iframe 上会抛 SecurityError，且无论哪种情况都必须
+  // 重新挂载 iframe 才能真正重载（src 不变时仅 effect 重跑不会触发重新加载）。
+  // key={reloadTick} 让 React 卸载旧 iframe、按原 src 挂新的（不污染 URL 回写）。
+  const retry = () => {
+    try {
+      ref.current?.contentWindow?.location.reload();
+    } catch {
+      /* 跨域：reload 不可达，仅靠 key 重挂 */
+    }
+    setReloadTick((t) => t + 1);
+  };
+
   return (
     <div style={{ position: 'relative', width: '100%', height: '100%' }}>
       {loading && (
@@ -95,15 +107,7 @@ export default function IframeHost({ url, name, appId }: { url: string; name: st
         >
           <span>{name} 加载较慢，应用可能仍在启动…</span>
           <button
-            onClick={() => {
-              // 触发重载：重置状态并由 effect 重新计时（同源 iframe 直接 reload）
-              try {
-                ref.current?.contentWindow?.location.reload();
-              } catch {
-                /* 跨域兜底：走 reloadTick 触发 src 重挂 */
-              }
-              setReloadTick((t) => t + 1);
-            }}
+            onClick={retry}
             style={{
               border: '1px solid var(--mei-border)',
               background: 'transparent',
@@ -120,6 +124,7 @@ export default function IframeHost({ url, name, appId }: { url: string; name: st
       )}
       <iframe
         ref={ref}
+        key={reloadTick}
         src={url}
         title={name}
         data-mei-app={appId}
@@ -142,17 +147,41 @@ export default function IframeHost({ url, name, appId }: { url: string; name: st
         }}
       />
       {error && (
+        // onError 在 iframe 上几乎不会触发（网络错误发生在文档内部），
+        // 一旦触发也只做顶部轻提示，不用全屏遮罩盖住可能仍在渲染的内容
         <div
           style={{
             position: 'absolute',
-            inset: 0,
+            top: 0,
+            left: 0,
+            right: 0,
+            zIndex: 3,
+            padding: '6px 12px',
+            fontSize: 12,
+            color: 'var(--mei-danger)',
+            background: 'var(--mei-surface)',
+            borderBottom: '1px solid var(--mei-border)',
             display: 'flex',
             alignItems: 'center',
-            justifyContent: 'center',
-            color: 'var(--mei-danger)',
+            justifyContent: 'space-between',
+            gap: 8,
           }}
         >
-          加载失败，请检查应用是否已启动
+          <span>检测到 {name} 加载异常，应用可能不可用</span>
+          <button
+            onClick={retry}
+            style={{
+              border: '1px solid var(--mei-border)',
+              background: 'transparent',
+              color: 'var(--mei-text)',
+              borderRadius: 'var(--mei-radius-full)',
+              padding: '2px 10px',
+              fontSize: 12,
+              cursor: 'pointer',
+            }}
+          >
+            重试
+          </button>
         </div>
       )}
       <style>{`@keyframes mei-spin{to{transform:rotate(360deg)}}

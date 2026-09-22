@@ -220,7 +220,7 @@ export default forwardRef<DownloadFormRef, DownloadFormProps>(
     const [modalOpen, setModalOpen] = useState(false);
     const [form] = Form.useForm<DownloadFormItem>();
     const { t } = useTranslation();
-    const { message } = App.useApp();
+    const { message, modal } = App.useApp();
     const { setLastDownloadTypes, setLastIsBatch } = useConfigStore(
       useShallow(downloadFormSelector),
     );
@@ -362,7 +362,7 @@ export default forwardRef<DownloadFormRef, DownloadFormProps>(
           }
         }
         if (batch !== null && batch !== undefined) {
-          setLastIsBatch(batch);
+          setLastIsBatch(Boolean(batch));
         }
       },
     );
@@ -475,7 +475,8 @@ export default forwardRef<DownloadFormRef, DownloadFormProps>(
         }
         if (meta.completed) {
           // 已下载完成：重新下载 = 删旧重下（含引擎内文件），二次确认
-          Modal.confirm({
+          // （用 App 上下文的 modal，静态 Modal.confirm 会脱离主题/国际化上下文）
+          modal.confirm({
             title: t("magnetAlreadyDownloaded"),
             content: t("magnetAlreadyDownloadedDesc"),
             okText: t("redownload"),
@@ -515,10 +516,26 @@ export default forwardRef<DownloadFormRef, DownloadFormProps>(
     });
 
     // 磁力任务创建前的强制校验：必须先完成内容解析（勾选文件/确认名称）才能
-    // 创建 —— 与迅雷一致，禁止未解析的磁力直接成任务
+    // 创建 —— 与迅雷一致，禁止未解析的磁力直接成任务。批量模式下磁力行同样
+    // 受「创建前强制解析」约束：逐行解析需要逐任务勾选文件（表单无此形态），
+    // 故批量列表含 magnet: 行一律阻止创建并提示改为单任务添加
     const ensureMagnetResolved = useMemoizedFn((): boolean => {
       const { category, batch } = form.getFieldsValue();
-      if (category !== "magnet" || batch) return true;
+      if (category !== "magnet") return true;
+      if (batch) {
+        const hasMagnetLine = String(form.getFieldValue("batchList") ?? "")
+          .split("\n")
+          .some((line: string) =>
+            /^magnet:\?/i.test(line.trim().split(" ")[0] ?? ""),
+          );
+        if (hasMagnetLine) {
+          message.warning(
+            "磁力链接需要先解析内容并勾选文件，请在单任务模式下逐条添加",
+          );
+          return false;
+        }
+        return true;
+      }
       if (magnetResolving) {
         message.warning(t("magnetResolving"));
         return false;

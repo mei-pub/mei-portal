@@ -10,6 +10,10 @@ import {
 
 export const dynamic = 'force-dynamic';
 
+// 云端备份是同步交互（设置页等待响应），上游不可达时必须有超时兜底，
+// 否则 WebDAV/S3 服务挂起会让该请求（及页面按钮）永久停留
+const REMOTE_TIMEOUT_MS = 30 * 1000;
+
 export async function POST(request: Request) {
   if (!isLoggedIn()) {
     return NextResponse.json({ ok: false, error: '未登录' }, { status: 401 });
@@ -43,6 +47,7 @@ export async function POST(request: Request) {
       method: body.direction === 'export' ? 'PUT' : 'GET',
       headers: config.headers,
       body: config.body,
+      signal: AbortSignal.timeout(REMOTE_TIMEOUT_MS),
     });
     if (!res.ok) {
       const text = await res.text().catch(() => '');
@@ -54,7 +59,12 @@ export async function POST(request: Request) {
     }
 
     const raw = Buffer.from(await res.arrayBuffer()).toString('utf8');
-    const parsed = JSON.parse(raw);
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(raw);
+    } catch {
+      throw new Error('云端备份文件不是有效的 JSON 配置');
+    }
     const next = normalizeConfig(parsed);
     savePanelConfig(next);
     return NextResponse.json({ ok: true, message: '已从云端恢复', config: next });

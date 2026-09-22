@@ -1,5 +1,8 @@
-import { DownloadStatus } from "@mediago/shared-common";
-import type { DownloadFilter, DownloadTask } from "@mediago/shared-common";
+import {
+  DownloadStatus,
+  type DownloadFilter,
+  type DownloadTask,
+} from "@mediago/shared-common";
 import { useMemoizedFn } from "ahooks";
 import { App, Empty, Segmented } from "antd";
 import { produce } from "immer";
@@ -150,18 +153,25 @@ export function DownloadTaskList({
   }, [filteredData, prioritizeActive]);
 
   const onStartDownload = useMemoizedFn(async (id: number) => {
-    await startDownload(id);
-
-    message.success(t("addTaskSuccess"));
+    try {
+      await startDownload(id);
+      message.success(t("addTaskSuccess"));
+    } catch (e) {
+      message.error((e as Error)?.message || "操作失败");
+    }
     mutate();
   });
 
   const onStopDownload = useMemoizedFn(async (id: number) => {
-    await stopDownload(id);
-
-    setTimeout(() => {
-      mutate();
-    }, 500);
+    try {
+      await stopDownload(id);
+    } catch (e) {
+      message.error((e as Error)?.message || "操作失败");
+    } finally {
+      setTimeout(() => {
+        mutate();
+      }, 500);
+    }
   });
 
   const handleFormConfirm = useMemoizedFn(async () => {
@@ -239,9 +249,17 @@ export function DownloadTaskList({
   });
 
   const onDownloadItems = useMemoizedFn(async (ids: number[]) => {
-    await Promise.allSettled(ids.map((id) => startDownload(Number(id))));
-
-    message.success(t("addTaskSuccess"));
+    const results = await Promise.allSettled(
+      ids.map((id) => startDownload(Number(id))),
+    );
+    const failed = results.filter((r) => r.status === "rejected").length;
+    if (failed === 0) {
+      message.success(t("addTaskSuccess"));
+    } else if (failed === ids.length) {
+      message.error(`批量启动失败（${failed} 项）`);
+    } else {
+      message.warning(`${ids.length - failed} 项已开始，${failed} 项失败`);
+    }
     mutate();
     setSelected([]);
   });

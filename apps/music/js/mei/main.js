@@ -2,7 +2,7 @@
 import { store, on } from "./store.js";
 import { player } from "./player.js";
 import { hostBridge } from "./hostbridge.js";
-import { renderSearch, renderPlaylists, renderPlayer, renderRandom, renderFavorites, renderDownloads, stopDownloadsPolling, loadLyric } from "./views.js";
+import { renderSearch, renderPlaylists, renderPlayer, renderRandom, renderFavorites, renderDownloads, stopDownloadsPolling, stopRandomView, loadLyric } from "./views.js";
 import { I, toast } from "./ui.js";
 import { migrateLegacyHashRoute, pushRoute, resolveRoute } from "./router.js";
 
@@ -110,6 +110,8 @@ function route() {
   root.classList.toggle("wide", path === "/search" || path === "/playlists" || path === "/player" || path === "/favorites" || path === "/downloads");
  // 离开已下载视图时停掉任务轮询（令牌失效，在途回调不再落地）
  if (path !== "/downloads") stopDownloadsPolling();
+ // 离开随便听听视图时令在途随机采样回调失效（防止旧回调抢跳播放页）
+ if (path !== "/random") stopRandomView();
  switch (path) {
     case "/search":
       renderSearch(root, params);

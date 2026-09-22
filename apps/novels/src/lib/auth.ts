@@ -55,6 +55,20 @@ export function requireSiteAccess(request: Request, slug: string | null): Librar
   return site;
 }
 
+/**
+ * 站点内容写操作鉴权：requireSiteAccess（站点可访问）+ 主密码解锁（mei-unlock）。
+ * 管理机制与 /api/sites、/api/admin/* 的写接口一致：mei-unlock cookie 由
+ * /api/auth/unlock（主密码）或门户登录自动解锁写入；公开访客只读。
+ */
+export function requireSiteWriteAccess(request: Request, slug: string | null): Library | NextResponse {
+  const siteResult = requireSiteAccess(request, slug);
+  if (siteResult instanceof NextResponse) return siteResult;
+  if (!isUnlocked(request)) {
+    return NextResponse.json({ error: 'Master unlock required' }, { status: 403 });
+  }
+  return siteResult;
+}
+
 export function unauthorizedResponse(): NextResponse {
   return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 }

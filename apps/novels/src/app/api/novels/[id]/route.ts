@@ -5,7 +5,7 @@ function resolveNovel(idOrSlug: string, libraryId: number) {
   if (Number.isInteger(n) && String(n) === idOrSlug) return getNovelById(n, libraryId);
   return getNovelBySlug(idOrSlug, libraryId);
 }
-import { requireSiteAccess } from "@/lib/auth";
+import { requireSiteAccess, requireSiteWriteAccess } from "@/lib/auth";
 
 export async function GET(
   request: Request,
@@ -31,7 +31,7 @@ export async function PUT(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const siteResult = requireSiteAccess(request, new URL(request.url).searchParams.get("site"));
+  const siteResult = requireSiteWriteAccess(request, new URL(request.url).searchParams.get("site"));
   if (siteResult instanceof NextResponse) return siteResult;
   const libraryId = siteResult.id;
   try {
@@ -57,7 +57,7 @@ export async function DELETE(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const siteResult = requireSiteAccess(request, new URL(request.url).searchParams.get("site"));
+  const siteResult = requireSiteWriteAccess(request, new URL(request.url).searchParams.get("site"));
   if (siteResult instanceof NextResponse) return siteResult;
   const libraryId = siteResult.id;
   try {

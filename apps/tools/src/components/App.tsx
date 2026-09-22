@@ -32,20 +32,24 @@ function App() {
   const [theme, setTheme] = useState<Theme>(() => getTheme(mode));
   useEffect(() => setTheme(getTheme(mode)), [mode]);
 
-  // Make sure to update the theme when the mode changes
+  // 仅当用户未显式选择主题（mode 为 system）时才跟随系统深浅色，
+  // 否则系统切换会覆盖用户的显式选择
   useEffect(() => {
+    if (mode !== 'system') return;
     const systemDarkModeQuery = window.matchMedia(
       '(prefers-color-scheme: dark)'
     );
     const handleThemeChange = (e: MediaQueryListEvent) => {
       setTheme(e.matches ? darkTheme : lightTheme);
     };
+    // 进入 system 模式时先按当前系统值对齐一次
+    setTheme(systemDarkModeQuery.matches ? darkTheme : lightTheme);
     systemDarkModeQuery.addEventListener('change', handleThemeChange);
 
     return () => {
       systemDarkModeQuery.removeEventListener('change', handleThemeChange);
     };
-  }, []);
+  }, [mode]);
 
   return (
     <I18nextProvider i18n={i18n}>
@@ -64,8 +68,17 @@ function App() {
                 <Navbar
                   mode={mode}
                   onChangeMode={() => {
-                    setMode((prev) => nextMode(prev));
-                    localStorage.setItem('theme', nextMode(mode));
+                    // 必须基于 setMode 的 prev 计算：用渲染闭包里的旧 mode 写存储，
+                    // 快速连点时会写入漂移的旧值
+                    setMode((prev) => {
+                      const next = nextMode(prev);
+                      try {
+                        localStorage.setItem('theme', next);
+                      } catch {
+                        // localStorage 不可用时仅切换主题
+                      }
+                      return next;
+                    });
                   }}
                 />
                 <MeiPanel />

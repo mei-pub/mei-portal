@@ -16,6 +16,20 @@ interface CachedCheck extends CheckResult {}
 
 const checkCache = new Map<string, CachedCheck>();
 const CHECK_TTL_MS = 30 * 60 * 1000;
+// 内存缓存上限：进程常驻且条目永不过期清理（读取时才惰性淘汰），
+// 不设上限的话长期运行会随每次检查无限增长（泄漏）
+const CHECK_CACHE_MAX = 5000;
+
+/** 写入并按插入顺序淘汰最旧条目（Map 迭代序 = 插入序） */
+function cacheSet(key: string, result: CachedCheck): void {
+  checkCache.delete(key);
+  checkCache.set(key, result);
+  while (checkCache.size > CHECK_CACHE_MAX) {
+    const oldest = checkCache.keys().next().value;
+    if (oldest === undefined) break;
+    checkCache.delete(oldest);
+  }
+}
 
 /** 私有 API 探测并发上限（同一网盘接口不宜打太猛） */
 const CHECK_CONCURRENCY = 6;
@@ -122,20 +136,22 @@ async function probeOne(item: CheckItem): Promise<CheckResult> {
   }
 }
 
-/** 批量检查（带内存缓存 + 并发限制，Go bbolt 换内存 Map） */
+/** 批量检查（带内存缓存 + 并发限制，Go bbolt 换内存 Map）
+ *  结果按请求下标写入：缓存命中同步返回、未命中 await 后返回，Promise.all 完成顺序
+ *  不影响 results 与 items 的对应关系（否则结果会错位） */
 export async function checkLinks(items: CheckItem[]): Promise<{ results: CheckResult[] }> {
-  const results: CheckResult[] = [];
+  const results: CheckResult[] = new Array(items.length);
   await Promise.all(
-    items.map(async (item) => {
+    items.map(async (item, index) => {
       const cacheKey = `${item.disk_type}|${item.url}`;
       const cached = checkCache.get(cacheKey);
       if (cached && cached.expires_at > Math.floor(Date.now() / 1000)) {
-        results.push({ ...cached, cache_hit: true });
+        results[index] = { ...cached, cache_hit: true };
         return;
       }
       const result = await probeLimit(() => probeOne(item));
-      checkCache.set(cacheKey, result);
-      results.push(result);
+      cacheSet(cacheKey, result);
+      results[index] = result;
     }),
   );
   return { results };

@@ -106,9 +106,13 @@ export class TunnelManager {
 
   async start() {
     if (!this.config) throw new Error("未配置服务器");
+    // 与自动重连互斥：同一时间只允许一个 launch 在途，否则手动 start 会与
+    // monitorTick 的重连并发拉起两个 frpc 进程
+    if (this.reconnecting) throw new Error("已有连接尝试正在进行，请稍候再试");
     this.desiredConnected = true;
     // 手动连接视为新一轮：清零计数与升级/耗尽标记，否则上一轮打满后再点连接会立刻被判定为已耗尽
     this.resetReconnectState();
+    this.reconnecting = true;
     try {
       await this.launch("正在启动隧道管理器...");
       this.onConnectSucceeded();
@@ -116,6 +120,7 @@ export class TunnelManager {
       this.onConnectFailed(error);
       throw error;
     } finally {
+      this.reconnecting = false;
       this.scheduleMonitor();
     }
   }
@@ -135,8 +140,11 @@ export class TunnelManager {
   /** 完整重启：停进程后重新拉起，等价于自动重连的 restart 方式。 */
   async restart() {
     if (!this.config) throw new Error("未配置服务器");
+    // 与 start / 自动重连互斥，见 start() 内注释
+    if (this.reconnecting) throw new Error("已有连接尝试正在进行，请稍候再试");
     this.desiredConnected = true;
     this.resetReconnectState();
+    this.reconnecting = true;
     this.frpc.stop();
     await new Promise(resolve => setTimeout(resolve, 500));
     try {
@@ -146,6 +154,7 @@ export class TunnelManager {
       this.onConnectFailed(error);
       throw error;
     } finally {
+      this.reconnecting = false;
       this.scheduleMonitor();
     }
   }

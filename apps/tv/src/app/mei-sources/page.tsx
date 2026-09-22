@@ -62,14 +62,20 @@ export default function MeiSourcesPage() {
   }, [load]);
 
   async function post(body: Record<string, unknown>): Promise<{ ok: boolean; data?: any }> {
-    const res = await fetch(API_BASE, {
-      method: 'POST',
-      credentials: 'include',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    });
-    const data = await res.json().catch(() => ({}));
-    return { ok: res.ok, data };
+    try {
+      const res = await fetch(API_BASE, {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      const data = await res.json().catch(() => ({}));
+      return { ok: res.ok, data };
+    } catch {
+      // 网络异常统一按失败返回：不 catch 的话调用方（如 check）会停在
+      // 「检测中…」状态且按钮永久禁用，同时抛出未处理的 Promise rejection
+      return { ok: false, data: { error: '网络请求失败，请稍后重试' } };
+    }
   }
 
   async function toggle(source: SourceItem) {

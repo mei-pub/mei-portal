@@ -87,8 +87,10 @@ export async function authorizedJsonFetch<T>(
   app: 'ai-draw' | 'mediago',
   init?: RequestInit,
 ): Promise<T> {
+  // ensureAppSession 内部即 syncAppTokens（统一身份令牌刷新），
+  // 这里不能重复调用，否则每次请求都多发一次 /api/auth/me（MediagoSettings
+  // 「保存全部设置」连发 5 个字段时就是 10 次冗余请求）
   await ensureAppSession(app);
-  await syncAppTokens();
   const token = app === 'ai-draw' ? getAiDrawToken() : getMediagoApiKey();
   const headers = new Headers(init?.headers);
   if (token) {

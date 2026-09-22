@@ -38,7 +38,7 @@ import {
   Video,
 } from 'lucide-react';
 import { GripVertical } from 'lucide-react';
-import { Suspense, useCallback, useEffect, useMemo, useState } from 'react';
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 
 import { AdminConfig, AdminConfigResult } from '@/lib/admin.types';
@@ -110,18 +110,28 @@ const AlertModal = ({
   showConfirm = false
 }: AlertModalProps) => {
   const [isVisible, setIsVisible] = useState(false);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     if (isOpen) {
       setIsVisible(true);
       if (timer) {
-        setTimeout(() => {
+        // 先清掉上一轮未触发的定时器：onClose 引用每次渲染都会变化，
+        // 不清理的话旧定时器会在新弹窗打开后误触发，把刚弹出的提示提前关掉
+        if (timerRef.current) clearTimeout(timerRef.current);
+        timerRef.current = setTimeout(() => {
           onClose();
         }, timer);
       }
     } else {
       setIsVisible(false);
     }
+    return () => {
+      if (timerRef.current) {
+        clearTimeout(timerRef.current);
+        timerRef.current = null;
+      }
+    };
   }, [isOpen, timer, onClose]);
 
   if (!isOpen) return null;
@@ -2069,6 +2079,7 @@ const VideoSourceConfig = ({
   const [showValidationModal, setShowValidationModal] = useState(false);
   const [searchKeyword, setSearchKeyword] = useState('');
   const [isValidating, setIsValidating] = useState(false);
+  const validateEventSourceRef = useRef<EventSource | null>(null);
   const [validationResults, setValidationResults] = useState<Array<{
     key: string;
     name: string;
@@ -2076,6 +2087,15 @@ const VideoSourceConfig = ({
     message: string;
     resultCount: number;
   }>>([]);
+
+  // 离开页面时关闭仍在进行的检测连接（否则 SSE 连接与流式回调整体泄漏）
+  useEffect(() => {
+    return () => {
+      validateEventSourceRef.current?.close();
+      validateEventSourceRef.current = null;
+    };
+  }, []);
+
 
   // dnd-kit 传感器
   const sensors = useSensors(
@@ -2208,7 +2228,9 @@ const VideoSourceConfig = ({
 
       try {
         // 使用EventSource接收流式数据
+        validateEventSourceRef.current?.close();
         const eventSource = new EventSource(`/api/admin/source/validate?q=${encodeURIComponent(searchKeyword.trim())}`);
+        validateEventSourceRef.current = eventSource;
 
         eventSource.onmessage = (event) => {
           try {
@@ -2249,6 +2271,7 @@ const VideoSourceConfig = ({
               case 'complete':
                 console.log(`检测完成，共检测 ${data.completedSources} 个视频源`);
                 eventSource.close();
+                if (validateEventSourceRef.current === eventSource) validateEventSourceRef.current = null;
                 setIsValidating(false);
                 break;
             }
@@ -3456,7 +3479,9 @@ const SiteConfigComponent = ({ config, refreshConfig }: { config: AdminConfig | 
             : (config.SiteConfig.DoubanImageProxyType || 'cmliussss-cdn-tencent'),
         DoubanImageProxy: config.SiteConfig.DoubanImageProxy || '',
         DisableYellowFilter: config.SiteConfig.DisableYellowFilter || false,
-        FluidSearch: config.SiteConfig.FluidSearch || true,
+        // FluidSearch=false 是合法配置（关闭流式搜索），用 || 会把 false 强转回 true，
+        // 管理员永远关不掉（每次 config 刷新又被重置）
+        FluidSearch: config.SiteConfig.FluidSearch ?? true,
         EnableWebLive: config.SiteConfig.EnableWebLive ?? false,
       });
     }

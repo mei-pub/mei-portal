@@ -112,8 +112,10 @@ const Converter = () => {
         quality,
       });
       tdApp.onEvent(ADD_CONVERT_TASK);
-      if (startImmediately && (conv as Record<string, unknown>)?.id) {
-        await startConversion((conv as Record<string, unknown>).id);
+      if (startImmediately && (conv as unknown as Record<string, unknown>)?.id) {
+        await startConversion(
+          Number((conv as unknown as Record<string, unknown>).id),
+        );
       }
       setAddModalOpen(false);
     } catch (e: unknown) {
@@ -140,7 +142,13 @@ const Converter = () => {
 
   const handleDelete = useMemoizedFn(async (id: number) => {
     tdApp.onEvent(DELETE_CONVERT);
-    await deleteConversion(id);
+    // 同页其它操作一致补上错误出口：删除失败静默吞掉会让列表与实际状态
+    // 脱节（记录还在但用户以为已删除），且抛出未处理的 Promise rejection
+    try {
+      await deleteConversion(id);
+    } catch (e: unknown) {
+      message.error((e as Error).message);
+    }
   });
 
   const handleOpenFolder = useMemoizedFn(async (targetPath: string) => {

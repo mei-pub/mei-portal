@@ -133,6 +133,16 @@ export default function MeiPanel() {
       setOpen(true);
     }
   }, []);
+  // 门户契约：支持编程收起（mei-panel-set 事件，detail.collapsed），不写 localStorage
+  useEffect(() => {
+    const handler = (event: Event) => {
+      const detail = (event as CustomEvent<{ collapsed?: boolean }>).detail;
+      if (!detail || typeof detail.collapsed !== 'boolean') return;
+      setOpen(!detail.collapsed);
+    };
+    window.addEventListener('mei-panel-set', handler);
+    return () => window.removeEventListener('mei-panel-set', handler);
+  }, []);
   const toggle = (next: boolean) => {
     setOpen(next);
     try {

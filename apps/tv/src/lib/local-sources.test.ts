@@ -79,7 +79,7 @@ test('mapCategory：未知归电视；单集兜底电影', () => {
 test('mapMediaStatus：media 状态映射，未知返回 null', () => {
   assert.equal(mapMediaStatus('success'), 'done');
   assert.equal(mapMediaStatus('failed'), 'failed');
-  assert.equal(mapMediaStatus('stopped'), 'failed');
+  assert.equal(mapMediaStatus('stopped'), 'paused');
   assert.equal(mapMediaStatus('downloading'), 'downloading');
   assert.equal(mapMediaStatus('pending'), 'pending');
   assert.equal(mapMediaStatus('ready'), null);
@@ -119,7 +119,7 @@ test('applyMediaState：media 终态回写（done 带 localUrl，未变/未知�
   assert.equal(done?.status, 'done');
   assert.equal(done?.localUrl, '/videos/88');
   assert.equal(applyMediaState(rec, 'failed')?.status, 'failed');
-  assert.equal(applyMediaState(rec, 'stopped')?.status, 'failed');
+  assert.equal(applyMediaState(rec, 'stopped')?.status, 'paused');
   assert.equal(applyMediaState(rec, 'downloading'), null); // 状态未变
   assert.equal(applyMediaState(rec, 'ready'), null); // 未知状态
   assert.equal(applyMediaState(rec, null), null); // 查不到任务

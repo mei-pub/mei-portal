@@ -63,12 +63,11 @@ const App: FC = () => {
     }
   });
 
-  // 监听config变化
-  const handleConfigChanged = useMemoizedFn(
-    (_event: unknown, data: { key: string; value: unknown }) => {
-      setAppStore({ [data.key]: data.value });
-    },
-  );
+  // 监听config变化（Callback 契约是 (...args: unknown[])，载荷在 [1] 位）
+  const handleConfigChanged = useMemoizedFn((...args: unknown[]) => {
+    const data = args[1] as { key: string; value: unknown } | undefined;
+    if (data) setAppStore({ [data.key]: data.value });
+  });
 
   const onChangePrivacy = useMemoizedFn(() => {
     setBrowserStore({ url: "", title: "", mode: PageMode.Default });
@@ -108,7 +107,9 @@ const App: FC = () => {
     if (!adapterReady) return;
     try {
       const config = await getConfig();
-      const deviceId = (config as Record<string, unknown>)?.machineId || "";
+      const deviceId = String(
+        (config as unknown as Record<string, unknown>)?.machineId ?? "",
+      );
       tdApp.onEvent(PAGE_LOAD, { deviceId });
     } catch {
       tdApp.onEvent(PAGE_LOAD, { deviceId: "" });
@@ -145,7 +146,7 @@ const App: FC = () => {
         try {
           const config = await getConfig();
           if (config) {
-            setAppStore(config as Record<string, unknown>);
+            setAppStore(config as unknown as Record<string, unknown>);
           }
         } catch {
           // Go Core may not be fully ready yet

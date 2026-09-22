@@ -1,4 +1,4 @@
-import { useCallback, useRef } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 
 interface UseLongPressOptions {
   onLongPress: () => void;
@@ -29,6 +29,17 @@ export const useLongPress = ({
       clearTimeout(pressTimer.current);
       pressTimer.current = null;
     }
+  }, []);
+
+  // 组件卸载时清掉在途的长按定时器：否则卸载后定时器仍会触发，
+  // 对已卸载的组件执行 onLongPress（内部常是 setState / 弹层操作）
+  useEffect(() => {
+    return () => {
+      if (pressTimer.current) {
+        clearTimeout(pressTimer.current);
+        pressTimer.current = null;
+      }
+    };
   }, []);
 
   const handleStart = useCallback(

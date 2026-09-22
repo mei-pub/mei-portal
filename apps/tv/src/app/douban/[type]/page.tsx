@@ -375,6 +375,9 @@ function DoubanPageClient({ type }: { type: string }) {
     } catch (err) {
       console.error(err);
       setLoading(false); // 发生错误时总是停止loading状态
+      // 首屏加载失败：标记错误态，让用户看到失败原因并可重试
+      // （此前只 console.error，界面静默显示「暂无相关内容」）
+      setLoadError(err instanceof Error ? err.message : '加载失败');
     }
   }, [
     type,
@@ -586,12 +589,17 @@ function DoubanPageClient({ type }: { type: string }) {
     };
   }, [hasMore, isLoadingMore, loading, loadError]);
 
-  // 人工重试加载更多：清除错误态并触发当前页重新拉取
+  // 人工重试：清错误态。首屏失败（还没有任何数据）时重新拉取第一页；
+  // 加载更多失败时保持原逻辑，触发当前页重新拉取
   const retryLoadMore = useCallback(() => {
     setLoadError(null);
     setHasMore(true);
+    if (doubanData.length === 0) {
+      loadInitialData();
+      return;
+    }
     setRetryTick((t) => t + 1);
-  }, []);
+  }, [doubanData.length, loadInitialData]);
 
   // 处理选择器变化
   const handlePrimaryChange = useCallback(
@@ -802,6 +810,12 @@ function DoubanPageClient({ type }: { type: string }) {
                   (
                     loadingRef as React.MutableRefObject<HTMLDivElement | null>
                   ).current = el;
+                } else if (!el) {
+                  // 指示器卸载（如出错隐藏）时同步清空引用：
+                  // 残留的已分离节点会让重试后重建的 observer 观察失效，无限滚动从此断掉
+                  (
+                    loadingRef as React.MutableRefObject<HTMLDivElement | null>
+                  ).current = null;
                 }
               }}
               className='flex justify-center mt-12 py-8'

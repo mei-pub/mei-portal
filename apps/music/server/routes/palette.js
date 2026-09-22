@@ -32,6 +32,30 @@ function clamp(value, min, max) {
   return Math.min(Math.max(value, min), max);
 }
 
+// 调色板目标校验（与 routes/proxy.js 的 isSafePicHost 同语义）：
+// 仅允许公网 http(s) URL —— 拒绝 file:/ftp: 等协议、localhost、内网 IP 字面量
+// （127/8、10/8、172.16/12、192.168/16、169.254/16 等）与内网主机名，
+// 避免 /palette 成为探测内网服务的 SSRF 跳板。
+function isSafePaletteTarget(u) {
+  if (u.protocol !== 'https:' && u.protocol !== 'http:') return false;
+  const host = String(u.hostname || '').toLowerCase().replace(/^\[|\]$/g, '');
+  if (!host) return false;
+  if (host === 'localhost' || host.endsWith('.localhost')) return false;
+  if (host.endsWith('.local') || host.endsWith('.internal')) return false;
+  if (host.includes(':')) return false; // IPv6 字面量一律拒绝
+  if (/^\d{1,3}(\.\d{1,3}){3}$/.test(host)) {
+    // IPv4 字面量：只放行非保留段（10/172.16-31/192.168/127/169.254/0/8 均拒绝）
+    const parts = host.split('.').map(Number);
+    if (parts[0] === 0 || parts[0] === 10 || parts[0] === 127) return false;
+    if (parts[0] === 169 && parts[1] === 254) return false;
+    if (parts[0] === 172 && parts[1] >= 16 && parts[1] <= 31) return false;
+    if (parts[0] === 192 && parts[1] === 168) return false;
+    return true;
+  }
+  if (!host.includes('.')) return false; // 单标签主机名（内网 netbios 等）拒绝
+  return true;
+}
+
 function componentToHex(value) {
   return clamp(Math.round(value), 0, 255).toString(16).padStart(2, '0');
 }
@@ -237,6 +261,9 @@ module.exports = function createPaletteRouter() {
     try {
       target = new URL(imageParam);
     } catch {
+      return res.status(400).json({ error: 'Invalid image URL' });
+    }
+    if (!isSafePaletteTarget(target)) {
       return res.status(400).json({ error: 'Invalid image URL' });
     }
 

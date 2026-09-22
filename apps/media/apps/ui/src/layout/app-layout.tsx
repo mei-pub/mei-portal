@@ -16,7 +16,7 @@ const App: FC = () => {
   useAsyncEffect(async () => {
     try {
       const configData = await getConfig();
-      setAppStore(configData as Record<string, unknown>);
+      setAppStore(configData as unknown as Record<string, unknown>);
     } catch {
       // ignore
     }

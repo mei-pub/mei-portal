@@ -13,6 +13,10 @@ import {
 
 export const dynamic = 'force-dynamic';
 
+// 云端备份是同步交互（设置页等待响应），上游不可达时必须有超时兜底，
+// 否则 WebDAV/S3 服务挂起会让该请求（及页面按钮）永久停留
+const REMOTE_TIMEOUT_MS = 30 * 1000;
+
 export async function POST(request: Request) {
   if (!isLoggedIn()) {
     return NextResponse.json({ ok: false, error: '未登录' }, { status: 401 });
@@ -57,7 +61,7 @@ export async function POST(request: Request) {
         body.target === 'webdav'
           ? buildWebdavRequest(body.config as unknown as WebdavBackupConfig, 'PUT', zip, 'application/zip')
           : buildS3Request(body.config as unknown as S3BackupConfig, 'PUT', zip, 'application/zip');
-      const res = await fetch(req.url, { method: 'PUT', headers: req.headers, body: req.body });
+      const res = await fetch(req.url, { method: 'PUT', headers: req.headers, body: req.body, signal: AbortSignal.timeout(REMOTE_TIMEOUT_MS) });
       if (!res.ok) {
         const text = await res.text().catch(() => '');
         throw new Error(`远端请求失败：HTTP ${res.status}${text ? ` ${text.slice(0, 120)}` : ''}`);
@@ -69,7 +73,7 @@ export async function POST(request: Request) {
       body.target === 'webdav'
         ? buildWebdavRequest(body.config as unknown as WebdavBackupConfig, 'GET', Buffer.alloc(0))
         : buildS3Request(body.config as unknown as S3BackupConfig, 'GET', Buffer.alloc(0));
-    const res = await fetch(req.url, { method: 'GET', headers: req.headers });
+    const res = await fetch(req.url, { method: 'GET', headers: req.headers, signal: AbortSignal.timeout(REMOTE_TIMEOUT_MS) });
     if (!res.ok) {
       const text = await res.text().catch(() => '');
       throw new Error(`远端请求失败：HTTP ${res.status}${text ? ` ${text.slice(0, 120)}` : ''}`);

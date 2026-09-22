@@ -4,7 +4,7 @@
 // 进行中任务稳定置前。每行展示来源类别徽标 + 状态 + 名称 + 时间，点击行跳转
 // 对应分类 tab；右键行弹出差异化管理菜单（按内容类型提供操作，web 自绘）。
 // 数据 5s 轻轮询保持状态新鲜（三源合计数据量小）。
-import { App, Empty } from "antd";
+import { App, Button, Empty, Spin } from "antd";
 import { useMemoizedFn } from "ahooks";
 import {
   type FC,
@@ -15,11 +15,11 @@ import useSWR from "swr";
 import {
   DownloadStatus,
   type DownloadTask,
+  type DownloadTaskWithFile,
 } from "@mediago/shared-common";
 import { DownloadIcon } from "@/assets/svg";
 import { DownloadTag } from "@/components/download-tag";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Button } from "antd";
 import { useWebContextMenu, type ContextMenuItem } from "@/components/web-context-menu";
 import { useContentMenu } from "./content-menu";
 import { useDeleteTasks } from "@/components/delete-tasks-dialog";
@@ -69,6 +69,8 @@ interface MixedItem {
   musicTaskId?: string | number;
   /** 音乐已下载文件路径 */
   musicFilePath?: string;
+  /** 音乐文件歌手（空时不能拿来源类别当歌手传给收藏/播放列表） */
+  artist?: string;
 }
 
 const KIND_TAG: Record<MixedKind, { text: string; color: string }> = {
@@ -124,6 +126,8 @@ function movieStatusNode(record: MovieSourceRecord): React.ReactNode {
           color="#127af3"
         />
       );
+    case "paused":
+      return <DownloadTag text="已暂停" color="#9abbe2" />;
     case "failed":
       return <DownloadTag text="失败" color="#ff7373" />;
     default:
@@ -145,14 +149,22 @@ const toDateTs = (v: unknown): number => {
 };
 
 const AllView: FC<AllViewProps> = ({ onEnter }) => {
-  const { message, modal } = App.useApp();
+  const { message } = App.useApp();
   // 三源并行拉取：媒体任务全状态（含文件/磁力/视频类），影视与音乐各自契约
-  const { data: mediaData, mutate: mutateMedia } = useSWR(
+  const {
+    data: mediaData,
+    isLoading: mediaLoading,
+    mutate: mutateMedia,
+  } = useSWR(
     "download-center/all/media",
     () => fetchMediaTasks({ current: 1, pageSize: 200, filter: undefined }),
     { refreshInterval: 5000, revalidateOnFocus: false },
   );
-  const { data: movieData, mutate: mutateMovie } = useSWR(
+  const {
+    data: movieData,
+    isLoading: movieLoading,
+    mutate: mutateMovie,
+  } = useSWR(
     "download-center/movie",
     listMovieSources,
     {
@@ -160,7 +172,11 @@ const AllView: FC<AllViewProps> = ({ onEnter }) => {
       revalidateOnFocus: false,
     },
   );
-  const { data: musicData, mutate: mutateMusic } = useSWR(
+  const {
+    data: musicData,
+    isLoading: musicLoading,
+    mutate: mutateMusic,
+  } = useSWR(
     "download-center/music",
     getMusicLibrary,
     {
@@ -217,15 +233,41 @@ const AllView: FC<AllViewProps> = ({ onEnter }) => {
     } else if (item.movieRecord) {
       const playable =
         !!item.movieRecord.playRoute || !!movieFallbackVideo(item.movieRecord);
-      items.push({ key: "play-movie", label: "立即播放", disabled: !playable });
-      items.push({ key: "sep-movie", label: "", separator: true });
-      items.push({ key: "del-movie", label: "删除记录（含文件）", danger: true });
+      // 生命周期语义与影视 tab 一致（复用 movieAction / taskAction 动作键）
+      switch (item.movieRecord.status) {
+        case "downloading":
+          items.push({ key: "pause", label: "暂停下载" });
+          break;
+        case "pending":
+        case "paused":
+          items.push({ key: "start", label: "继续下载" });
+          break;
+        case "failed":
+          items.push({ key: "start", label: "重试" });
+          break;
+        case "done":
+          items.push({ key: "play-movie", label: "立即播放", disabled: !playable });
+          if (item.movieRecord.localUrl) {
+            items.push({ key: "download-local", label: "下载到本地" });
+          }
+          break;
+      }
+      items.push({ key: "log", label: "查看日志" });
+      items.push({ key: "edit-movie", label: "修改信息…" });
+      items.push({ key: "del-movie", label: "删除…", danger: true });
+    } else if (item.musicTaskId !== undefined) {
+      // 音乐下载中任务（对照音乐 tab 任务菜单：取消即停止下载并清理临时文件）
+      items.push({ key: "cancel-music", label: "取消下载" });
     } else if (item.mediaTask && item.kind === "media") {
       if (item.active) {
         items.push({ key: "pause", label: "暂停下载" });
       }
       if (item.mediaTask.status === DownloadStatus.Success) {
         items.push({ key: "play-media", label: "播放" });
+        // 文件在盘的已完成任务提供产物回拉（附件端点）
+        if ((item.mediaTask as DownloadTaskWithFile).exists) {
+          items.push({ key: "download-local", label: "下载到本地" });
+        }
       }
       items.push({ key: "log", label: "查看日志" });
       items.push({ key: "delete", label: "删除…", danger: true });
@@ -233,6 +275,12 @@ const AllView: FC<AllViewProps> = ({ onEnter }) => {
       // 磁力 / 文件任务
       if (item.active) {
         items.push({ key: "pause", label: "暂停下载" });
+      }
+      if (
+        item.mediaTask.status === DownloadStatus.Success &&
+        (item.mediaTask as DownloadTaskWithFile).exists
+      ) {
+        items.push({ key: "download-local", label: "下载到本地" });
       }
       items.push({ key: "log", label: "查看日志" });
       items.push({ key: "delete", label: "删除…", danger: true });
@@ -259,14 +307,13 @@ const AllView: FC<AllViewProps> = ({ onEnter }) => {
         await musicFileAction(key, {
           path: item.musicFilePath,
           name: item.title,
-          artist: item.subtitle.split(" · ")[0] || "",
+          artist: item.artist ?? "",
         });
         return;
       }
-      if (
-        item.movieRecord &&
-        (key === "play-movie" || key === "del-movie")
-      ) {
+      if (item.movieRecord) {
+        // 影视记录全部动作（生命周期/日志/修改信息/播放/下载到本地/删除）
+        // 都经 movieAction 分发：默认分支复用 taskAction 的任务语义
         await movieAction(key, item.movieRecord);
         return;
       }
@@ -275,6 +322,7 @@ const AllView: FC<AllViewProps> = ({ onEnter }) => {
         (key === "play-media" ||
           key === "pause" ||
           key === "log" ||
+          key === "download-local" ||
           key === "delete")
       ) {
         await taskAction(key, item.mediaTask);
@@ -363,6 +411,7 @@ const AllView: FC<AllViewProps> = ({ onEnter }) => {
         active: false,
         statusNode: STATUS_DONE,
         musicFilePath: file.path,
+        artist: file.artist || "",
       });
     }
 
@@ -389,8 +438,11 @@ const AllView: FC<AllViewProps> = ({ onEnter }) => {
     () => visibleItems.filter((i) => selectedKeys.has(i.key)),
     [visibleItems, selectedKeys],
   );
+  // 全选判定只看可见行：选中集可能残留被搜索过滤掉的 key，
+  // 不能用 selectedKeys.size === visibleItems.length 判满
   const allChecked =
-    visibleItems.length > 0 && selectedKeys.size === visibleItems.length;
+    visibleItems.length > 0 &&
+    visibleItems.every((i) => selectedKeys.has(i.key));
   const someChecked = selectedKeys.size > 0 && !allChecked;
   const toggleAll = (checked: boolean) =>
     setSelectedKeys(
@@ -447,24 +499,50 @@ const AllView: FC<AllViewProps> = ({ onEnter }) => {
     refreshAll();
   });
 
-  /** 批量启动：选中项里所有非下载中的媒体任务（failed/stopped/success 重下） */
+  /** 批量启动：选中项里所有未完成的媒体任务（failed/stopped/pending/ready；
+   *  已完成产物不走重下，避免误触发重新下载） */
   const onDownloadBatch = useMemoizedFn(async () => {
-    const ids = selectedItems
+    const targets = selectedItems
       .map((i) => i.mediaTask)
       .filter(
         (t): t is DownloadTask =>
-          !!t && t.status !== DownloadStatus.Downloading,
-      )
-      .map((t) => t.id);
-    if (ids.length === 0) {
+          !!t &&
+          t.status !== DownloadStatus.Downloading &&
+          t.status !== DownloadStatus.Success,
+      );
+    if (targets.length === 0) {
       message.info("选中项中没有可启动的下载任务");
       return;
     }
-    await Promise.allSettled(ids.map((id) => startDownload(id)));
-    message.success("已开始下载");
+    const results = await Promise.allSettled(
+      targets.map((t) => startDownload(t.id)),
+    );
+    const failed = results.filter((r) => r.status === "rejected").length;
+    if (failed === 0) {
+      message.success("已开始下载");
+    } else if (failed === targets.length) {
+      message.error(`批量启动失败（${failed} 项）`);
+    } else {
+      message.warning(`${targets.length - failed} 项已开始，${failed} 项失败`);
+    }
     setSelectedKeys(new Set());
     refreshAll();
   });
+
+  // 首载任一源未返回时显示加载态（避免先闪「暂无下载记录」空态）；
+  // SWR 后台 revalidation 不算 loading，不会来回切
+  const anyLoading = mediaLoading || movieLoading || musicLoading;
+  // 混排列表媒体任务固定拉前 200 条：超出时轻提示，不静默截断
+  const mediaTotal = mediaData?.total ?? 0;
+  const mediaTruncated = mediaTotal > (mediaData?.list?.length ?? 0);
+
+  if (anyLoading) {
+    return (
+      <div className="flex flex-1 items-center justify-center">
+        <Spin />
+      </div>
+    );
+  }
 
   if (items.length === 0) {
     return (
@@ -526,6 +604,12 @@ const AllView: FC<AllViewProps> = ({ onEnter }) => {
           </Button>
         </div>
       </div>
+      {mediaTruncated && (
+        <div className="pl-1 text-xs text-[#A4A4A4] dark:text-[#6B6D72]">
+          媒体任务较多，仅显示最近 {mediaData?.list?.length ?? 0} 条（共{" "}
+          {mediaTotal} 条），更多请进入对应分类查看
+        </div>
+      )}
       {visibleItems.map((item) => {
         const tag = KIND_TAG[item.kind];
         const checked = selectedKeys.has(item.key);

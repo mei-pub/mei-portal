@@ -192,10 +192,9 @@ const SettingPage: React.FC = () => {
   });
 
   useEffect(() => {
-    const onDownloadProgress = (
-      _event: unknown,
-      progress: { percent: number },
-    ) => {
+    // Callback 契约是 (...args: unknown[])，载荷在 [1] 位
+    const onDownloadProgress = (...args: unknown[]) => {
+      const progress = args[1] as { percent: number };
       setDownloadProgress(progress.percent);
     };
     const onDownloaded = () => {

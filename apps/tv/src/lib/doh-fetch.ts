@@ -167,13 +167,18 @@ function raceIps<T>(
       })
     )
   );
-  const timeout = new Promise<never>((_, reject) =>
-    setTimeout(
+  let timer: NodeJS.Timeout | undefined;
+  const timeout = new Promise<never>((_, reject) => {
+    // 竞速结束后清掉兜底定时器：不清会挂着一个无意义的 pending 定时器，
+    // 拖慢进程退出（dev 模式下表现为请求结束后进程迟迟不退出）
+    timer = setTimeout(
       () => reject(new Error(`全部 IP 尝试超时（${hostname}: ${ips.join(', ')}）`)),
       timeoutMs
-    )
-  );
-  return Promise.race([overall, timeout]);
+    );
+  });
+  return Promise.race([overall, timeout]).finally(() => {
+    if (timer) clearTimeout(timer);
+  });
 }
 
 /** 一次全 IP 竞速：胜出 IP 记入好 IP 记忆，响应体供发现者直接复用 */

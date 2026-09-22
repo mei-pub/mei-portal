@@ -26,8 +26,49 @@ const SAFE_RESPONSE_HEADERS = [
   'content-length', 'content-range', 'etag', 'last-modified', 'expires',
 ];
 
+// 音乐 API 上游（gdstudio / wrangler）硬超时：上游挂起时不能让请求无限等，
+// 与 pic 解析分支的 15s 超时语义一致
+const API_TIMEOUT_MS = 15000;
+
 function isAllowedAudioHost(hostname) {
   return hostname && AUDIO_HOST_PATTERN.test(hostname);
+}
+
+// ── 封面（pic）目标校验 ────────────────────────────────────────────────────────
+// 图床域名随各音乐源变动，无法穷举白名单；退而求其次做「公网 http(s) 绝对 URL」
+// 校验：拒绝非 http(s) 协议、localhost/单标签内网主机名、IPv4/IPv6 字面量（覆盖
+// 127/8、10/8、172.16/12、192.168/16、169.254/16 等内网与元数据地址段）——
+// types=pic 因此不会成为开放重定向或内网 SSRF 跳板。
+function isSafePicHost(hostname) {
+  const host = String(hostname || '').toLowerCase().replace(/^\[|\]$/g, '');
+  if (!host) return false;
+  if (host === 'localhost' || host.endsWith('.localhost')) return false;
+  if (host.endsWith('.local') || host.endsWith('.internal')) return false;
+  if (host.includes(':')) return false; // IPv6 字面量（含 ::1、fc00::/7、fe80::/10）一律拒绝
+  if (/^\d{1,3}(\.\d{1,3}){3}$/.test(host)) return false; // IPv4 字面量一律拒绝
+  if (!host.includes('.')) return false; // 单标签主机名（内网 netbios 等）拒绝
+  return true;
+}
+
+/** 校验并解析安全的图片跳转/转发目标；非法返回 null */
+function safePicTarget(rawUrl) {
+  try {
+    const u = new URL(String(rawUrl || ''));
+    if (u.protocol !== 'https:' && u.protocol !== 'http:') return null;
+    if (!isSafePicHost(u.hostname)) return null;
+    return u;
+  } catch {
+    return null;
+  }
+}
+
+/** pic 目标分发：https 直接 302（浏览器直连图床）；http 经同源代理流式转发
+ * （https 页面下 302 到 http 会被混合内容拦截，与原注释语义一致） */
+function sendPic(req, res, rawUrl) {
+  const target = safePicTarget(rawUrl);
+  if (!target) return res.status(400).send('Invalid pic target');
+  if (target.protocol === 'https:') return res.redirect(target.toString());
+  return proxyAudioStream(target.toString(), req, res, { hostValidator: isSafePicHost });
 }
 
 const SAFE_UPSTREAM_HEADER_KEYS = new Set([
@@ -99,7 +140,10 @@ async function proxyAudioStream(targetUrl, req, res, options = {}) {
     return res.status(400).send('Invalid target');
   }
 
-  if (!isAllowedAudioHost(parsed.hostname)) {
+  // hostValidator 可注入（pic 转发用公网 URL 校验），默认音频 CDN 白名单
+  const hostValidator = options.hostValidator || isAllowedAudioHost;
+
+  if (!hostValidator(parsed.hostname)) {
     return res.status(400).send('Invalid target');
   }
   if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
@@ -137,7 +181,7 @@ async function proxyAudioStream(targetUrl, req, res, options = {}) {
       if (!location) return res.status(502).send('Invalid upstream redirect');
       if (redirects === 5) return res.status(502).send('Too many redirects');
       current = new URL(location, current);
-      if (!isAllowedAudioHost(current.hostname)) {
+      if (!hostValidator(current.hostname)) {
         return res.status(400).send('Invalid redirect target');
       }
     }
@@ -211,6 +255,7 @@ async function proxyApiRequest(reqUrl, req, res) {
           'User-Agent': req.headers['user-agent'] || 'Mozilla/5.0',
           'Accept': 'application/json',
         },
+        signal: AbortSignal.timeout(API_TIMEOUT_MS),
       });
       responseText = await upstream.text();
       contentType = upstream.headers.get('content-type') || 'application/json; charset=utf-8';
@@ -236,6 +281,7 @@ async function proxyApiRequest(reqUrl, req, res) {
           'User-Agent': req.headers['user-agent'] || 'Mozilla/5.0',
           'Accept': 'application/json',
         },
+        signal: AbortSignal.timeout(API_TIMEOUT_MS),
       });
       responseText = await upstream.text();
       contentType = upstream.headers.get('content-type') || 'application/json; charset=utf-8';
@@ -324,11 +370,10 @@ module.exports = function createProxyRouter() {
     }
 
     // 封面直链兜底：pic_id 为完整 URL 时转发（适用于本地源封面）。
+    // 目标必须通过公网 http(s) 校验（isSafePicHost），否则 400——杜绝开放重定向；
     // http 封面必须经代理流式转发：https 站点下 <img> 直接 302 到 http 会被混合内容拦截
     if (types === 'pic' && /^https?:\/\//.test(String(req.query.id || ''))) {
-      const picUrl = String(req.query.id);
-      if (/^https:/i.test(picUrl)) return res.redirect(picUrl);
-      return proxyAudioStream(picUrl, req, res);
+      return sendPic(req, res, String(req.query.id));
     }
 
     // 封面统一 302：gdstudio 的 types=pic 返回 JSON {url} 而非图片二进制，
@@ -353,13 +398,23 @@ async function proxyServerLocalUrl(req, res) {
     return res.status(400).json({ error: 'id 必须为 file:<相对路径>' });
   }
   const rel = id.slice('file:'.length);
-  const { resolveWithin } = require('./download-library');
+  // 与 download-library 的 serve/DELETE/library 同款双保险：resolveWithin 纯路径校验
+  // + realpath 符号链接逃逸校验（AGENTS「统一下载中心：防穿越」契约）
+  const { safeResolve } = require('./download-library');
   const root = process.env.MUSIC_DOWNLOAD_DIR || '/downloads/music';
-  const abs = resolveWithin(root, rel);
-  if (!abs) {
+  let safe;
+  try {
+    safe = await safeResolve(root, rel);
+  } catch {
+    safe = null;
+  }
+  if (!safe) {
     return res.status(400).json({ error: '非法路径' });
   }
-  const stat = await require('node:fs/promises').stat(abs).catch(() => null);
+  if (!safe.exists) {
+    return res.status(404).json({ error: '文件不存在（可能已被删除）' });
+  }
+  const stat = await require('node:fs/promises').stat(safe.abs).catch(() => null);
   if (!stat || !stat.isFile()) {
     return res.status(404).json({ error: '文件不存在（可能已被删除）' });
   }
@@ -384,7 +439,10 @@ async function proxyPicRedirect(req, res) {
   if (cached) {
     try {
       const data = JSON.parse(cached.body);
-      if (data && data.url) return res.redirect(data.url);
+      if (data && data.url && safePicTarget(data.url)) {
+        return sendPic(req, res, data.url);
+      }
+      // 缓存里的目标不安全/已失效：当作未命中走回源
     } catch { /* 缓存损坏走回源 */ }
   }
 
@@ -406,8 +464,12 @@ async function proxyPicRedirect(req, res) {
     if (!upstream.ok || !data || !data.url) {
       return res.status(502).send('Cover resolve error');
     }
+    // 上游返回的图片地址必须通过公网 http(s) 校验后才允许下发（开放重定向防护）
+    if (!safePicTarget(data.url)) {
+      return res.status(502).send('Unsafe cover URL');
+    }
     cache.set(cacheKey, { body: text, contentType: 'application/json; charset=utf-8' }, 3600);
-    return res.redirect(data.url);
+    return sendPic(req, res, data.url);
   } catch (err) {
     console.error('[Proxy Pic]', err.message || err);
     return res.status(502).send('Cover resolve error');
@@ -450,11 +512,12 @@ async function proxyLocalProvider(provider, types, req, res) {
       const info = await provider.lyric(String(req.query.id || ''));
       body = JSON.stringify(info);
     } else if (types === 'pic') {
-      // 本地源封面均为直链：优先 provider 解析，否则 id 本身是 URL
+      // 本地源封面均为直链：优先 provider 解析，否则 id 本身是 URL。
+      // 目标必须通过公网 http(s) 校验（sendPic 内 302 / 代理流式转发）
       const picUrl = provider.pic
         ? await provider.pic(String(req.query.id || ''))
         : String(req.query.id || '');
-      if (/^https?:\/\//.test(picUrl)) return res.redirect(picUrl);
+      if (/^https?:\/\//.test(picUrl)) return sendPic(req, res, picUrl);
       return res.status(404).send('No cover');
     } else {
       return res.status(400).send('Unsupported types');

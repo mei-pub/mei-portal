@@ -188,6 +188,19 @@ export function btStagingRoot(configDir: string): string {
 }
 
 /**
+ * 种子缓存目录（configDir/torrents）并确保存在。
+ * 该目录历史上只被 uploadTorrent 与 qB 暂存路径的递归 mkdir「偶然」创建：
+ * 全新部署 / 目录被清理后，第一条走索引网关命中的磁力会在缓存写盘时
+ * ENOENT——元数据明明已解析成功却整体失败，且报错被 UI 误导为「资源失效」。
+ * 解析链路是该目录的首次创建者，必须显式 mkdir。
+ */
+export function ensureTorrentsCacheDir(stagingRoot: string): string {
+  const dir = path.dirname(stagingRoot);
+  fs.mkdirSync(dir, { recursive: true });
+  return dir;
+}
+
+/**
  * 磁力链接只带 btih 不带 webseed/tracker，peer 发现全压 DHT 单通道——
  * 网盘搜索来源的磁力多为 webseed 为主或半冷资源（如发行版 ISO），
  * DHT 上 peer 稀少，等不到 metadata 就超时。add 前追加 tr= 参数让
@@ -794,7 +807,7 @@ export class DownloaderSvc {
         try {
           const buf = await qbit.exportTorrent(hash);
           fs.writeFileSync(
-            path.join(path.dirname(stagingRoot), `${hash}.torrent`),
+            path.join(ensureTorrentsCacheDir(stagingRoot), `${hash}.torrent`),
             buf,
           );
         } catch (err) {
@@ -877,12 +890,20 @@ export class DownloaderSvc {
     const meta = extractTorrentMeta(buf);
     if (!meta.name || meta.size <= 0) return { status: "miss" };
     // 落 torrents 缓存：提交任务时免重抓（downloadBtViaQbit 的
-    // torrentCache 命中即用，skipChecking re-add 到任务目录）
-    const torrentCache = path.join(
-      path.dirname(stagingRoot),
-      `${hash}.torrent`,
-    );
-    fs.writeFileSync(torrentCache, buf);
+    // torrentCache 命中即用，skipChecking re-add 到任务目录）。
+    // 缓存只是省一次重抓的优化——落盘失败绝不拖垮已经成功的解析，
+    // 最多提交时重抓 metadata（qB 常驻温热，代价极小）
+    try {
+      const torrentCache = path.join(
+        ensureTorrentsCacheDir(stagingRoot),
+        `${hash}.torrent`,
+      );
+      fs.writeFileSync(torrentCache, buf);
+    } catch (err) {
+      logger.warn(
+        `torrent cache write failed (submit will re-fetch metadata): ${err}`,
+      );
+    }
     logger.info(
       `magnet resolved via index gateway: ${hash} (${meta.name}, ${(buf.length / 1024).toFixed(1)}KB archive)`,
     );

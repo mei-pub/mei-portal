@@ -35,17 +35,15 @@ export function toast(message) {
   toastTimer = setTimeout(() => el.classList.remove("show"), 1800);
 }
 
-// 常驻进度 toast：独立元素，不与普通 toast 抢占；返回 { update, close }
+// 常驻进度 toast：每次调用创建独立元素（多任务并行互不覆盖），返回 { update, close }。
 // options.onClick 提供时整条可点击（cursor + hint 下划线提示），用于
-// 「服务器下载中 → 点击管理」这类引导跳转
+// 「服务器下载中 → 点击管理」这类引导跳转；多条并存时按活跃数纵向错开
+const activeProgToasts = new Set();
 export function progressToast(message, { onClick = null, hint = "" } = {}) {
-  let el = document.getElementById("meiToastProgress");
-  if (!el) {
-    el = document.createElement("div");
-    el.id = "meiToastProgress";
-    document.body.appendChild(el);
-  }
+  const el = document.createElement("div");
   el.className = `mei-toast mei-toast-prog${onClick ? " clickable" : ""}`;
+  // 与普通 toast 同底座位置，第 n 条并存在其上方 52px 一档错开（close 后即释放档位）
+  el.style.bottom = `calc(var(--playerbar-h, 0px) + ${78 + activeProgToasts.size * 52}px)`;
   el.textContent = "";
   const msg = document.createElement("span");
   msg.className = "t-msg";
@@ -58,10 +56,16 @@ export function progressToast(message, { onClick = null, hint = "" } = {}) {
     el.appendChild(h);
   }
   el.onclick = onClick;
+  document.body.appendChild(el);
+  activeProgToasts.add(el);
   el.classList.add("show");
   return {
     update(text) { msg.textContent = text; el.classList.add("show"); },
-    close() { el.classList.remove("show"); },
+    close() {
+      activeProgToasts.delete(el);
+      el.classList.remove("show");
+      setTimeout(() => el.remove(), 300); // 等 opacity 过渡结束再摘除
+    },
   };
 }
 
@@ -91,44 +95,94 @@ export function openDialog(content, { title = "", sub = "" } = {}) {
   return close;
 }
 
+// 确认弹层：确定 true / 取消·Esc·遮罩点击 false（与 choiceDialog 同构的 settled 守卫，
+// 遮罩关闭也必须 resolve——否则 await 方永久挂起）
 export function confirmDialog(message, { danger = false, okText = "确定" } = {}) {
   return new Promise((resolve) => {
-    const box = document.createElement("div");
-    box.innerHTML = `
-      <p style="font-size:13px;color:var(--muted);margin:0 0 16px;line-height:1.6"></p>
-      <div style="display:flex;gap:10px;justify-content:flex-end">
-        <button class="mei-btn-ghost" data-r="no">取消</button>
-        <button class="${danger ? "mei-btn" : "mei-btn"}" data-r="ok" ${danger ? 'style="background:var(--danger);box-shadow:none"' : ""}></button>
-      </div>
-    `;
-    box.querySelector("p").textContent = message;
-    box.querySelector('[data-r="ok"]').textContent = okText;
-    const close = openDialog(box);
-    box.querySelector('[data-r="no"]').onclick = () => { close(); resolve(false); };
-    box.querySelector('[data-r="ok"]').onclick = () => { close(); resolve(true); };
+    const mask = document.createElement("div");
+    mask.className = "mei-mask";
+    const dialog = document.createElement("div");
+    dialog.className = "mei-dialog";
+    const text = document.createElement("p");
+    text.style.cssText = "font-size:13px;color:var(--muted);margin:0 0 16px;line-height:1.6";
+    text.textContent = message;
+    dialog.appendChild(text);
+    const row = document.createElement("div");
+    row.style.cssText = "display:flex;gap:10px;justify-content:flex-end";
+    const noBtn = document.createElement("button");
+    noBtn.className = "mei-btn-ghost";
+    noBtn.textContent = "取消";
+    const okBtn = document.createElement("button");
+    okBtn.className = "mei-btn";
+    okBtn.textContent = okText;
+    if (danger) okBtn.style.cssText = "background:var(--danger);box-shadow:none";
+    row.appendChild(noBtn);
+    row.appendChild(okBtn);
+    dialog.appendChild(row);
+    mask.appendChild(dialog);
+
+    let settled = false;
+    const done = (value) => {
+      if (settled) return;
+      settled = true;
+      document.removeEventListener("keydown", onKey);
+      mask.remove();
+      resolve(value);
+    };
+    const onKey = (e) => { if (e.key === "Escape") done(false); };
+    noBtn.onclick = () => done(false);
+    okBtn.onclick = () => done(true);
+    mask.addEventListener("click", (e) => { if (e.target === mask) done(false); });
+    document.addEventListener("keydown", onKey);
+    document.body.appendChild(mask);
   });
 }
 
+// 输入弹层：确定返回输入值 / 取消·Esc·遮罩点击返回 null（同上，必须 resolve）
 export function promptDialog(message, initial = "", placeholder = "") {
   return new Promise((resolve) => {
-    const box = document.createElement("div");
-    box.innerHTML = `
-      <p style="font-size:13px;color:var(--muted);margin:0 0 12px;line-height:1.6"></p>
-      <input class="mei-input" style="height:38px;font-size:13px;margin-bottom:14px">
-      <div style="display:flex;gap:10px;justify-content:flex-end">
-        <button class="mei-btn-ghost" data-r="no">取消</button>
-        <button class="mei-btn" data-r="ok">确定</button>
-      </div>
-    `;
-    box.querySelector("p").textContent = message;
-    const input = box.querySelector("input");
+    const mask = document.createElement("div");
+    mask.className = "mei-mask";
+    const dialog = document.createElement("div");
+    dialog.className = "mei-dialog";
+    const text = document.createElement("p");
+    text.style.cssText = "font-size:13px;color:var(--muted);margin:0 0 12px;line-height:1.6";
+    text.textContent = message;
+    dialog.appendChild(text);
+    const input = document.createElement("input");
+    input.className = "mei-input";
+    input.style.cssText = "height:38px;font-size:13px;margin-bottom:14px";
     input.value = initial;
     input.placeholder = placeholder;
-    const close = openDialog(box);
-    const done = (val) => { close(); resolve(val); };
-    box.querySelector('[data-r="no"]').onclick = () => done(null);
-    box.querySelector('[data-r="ok"]').onclick = () => done(input.value);
+    dialog.appendChild(input);
+    const row = document.createElement("div");
+    row.style.cssText = "display:flex;gap:10px;justify-content:flex-end";
+    const noBtn = document.createElement("button");
+    noBtn.className = "mei-btn-ghost";
+    noBtn.textContent = "取消";
+    const okBtn = document.createElement("button");
+    okBtn.className = "mei-btn";
+    okBtn.textContent = "确定";
+    row.appendChild(noBtn);
+    row.appendChild(okBtn);
+    dialog.appendChild(row);
+    mask.appendChild(dialog);
+
+    let settled = false;
+    const done = (value) => {
+      if (settled) return;
+      settled = true;
+      document.removeEventListener("keydown", onKey);
+      mask.remove();
+      resolve(value);
+    };
+    const onKey = (e) => { if (e.key === "Escape") done(null); };
+    noBtn.onclick = () => done(null);
+    okBtn.onclick = () => done(input.value);
     input.onkeydown = (e) => { if (e.key === "Enter") done(input.value); };
+    mask.addEventListener("click", (e) => { if (e.target === mask) done(null); });
+    document.addEventListener("keydown", onKey);
+    document.body.appendChild(mask);
     setTimeout(() => input.focus(), 30);
   });
 }
@@ -180,5 +234,6 @@ export function choiceDialog({ title = "", sub = "", options = [] }) {
 }
 
 export function emptyHtml(iconKey, text) {
-  return `<div class="mei-empty"><div class="e-icon">${I[iconKey] || I.music}</div><div></div></div>`;
+  const safe = String(text ?? "").replace(/[&<>'"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;" }[c]));
+  return `<div class="mei-empty"><div class="e-icon">${I[iconKey] || I.music}</div><div>${safe}</div></div>`;
 }

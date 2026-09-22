@@ -48,6 +48,16 @@ export default function SitePanel() {
     } catch { setOpen(true); }
   }, []);
 
+  // 编程收起（AGENTS 面板契约）：监听 mei-panel-set，不写记忆
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const collapsed = (e as CustomEvent<{ collapsed?: boolean }>).detail?.collapsed;
+      if (typeof collapsed === "boolean") setOpen(collapsed);
+    };
+    window.addEventListener("mei-panel-set", handler);
+    return () => window.removeEventListener("mei-panel-set", handler);
+  }, []);
+
   const toggle = (next: boolean) => {
     setOpen(next);
     try { localStorage.setItem("mei-float-novels", next ? "0" : "1"); } catch {}
@@ -56,7 +66,10 @@ export default function SitePanel() {
   function loadOthers() {
     if (others !== null) return;
     fetch("/novels/api/sites")
-      .then((r) => r.json())
+      .then((r) => {
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        return r.json();
+      })
       .then((list: SiteEntry[]) => setOthers((Array.isArray(list) ? list : []).filter((s) => s.slug !== site.slug)))
       .catch(() => setOthers([]));
   }

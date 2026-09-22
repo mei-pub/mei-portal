@@ -5,7 +5,7 @@ function resolveNovel(idOrSlug: string, libraryId: number) {
   if (Number.isInteger(n) && String(n) === idOrSlug) return getNovelById(n, libraryId);
   return getNovelBySlug(idOrSlug, libraryId);
 }
-import { requireSiteAccess } from "@/lib/auth";
+import { requireSiteAccess, requireSiteWriteAccess } from "@/lib/auth";
 
 export async function GET(
   request: Request,
@@ -32,7 +32,7 @@ export async function POST(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const siteResult = requireSiteAccess(request, new URL(request.url).searchParams.get("site"));
+  const siteResult = requireSiteWriteAccess(request, new URL(request.url).searchParams.get("site"));
   if (siteResult instanceof NextResponse) return siteResult;
   const libraryId = siteResult.id;
   try {
@@ -44,8 +44,13 @@ export async function POST(
       return NextResponse.json({ error: 'Title and content are required' }, { status: 400 });
     }
 
+    const target = resolveNovel(id, libraryId);
+    if (!target) {
+      return NextResponse.json({ error: 'Novel not found' }, { status: 404 });
+    }
+
     const chapter = createChapter({
-      novel_id: resolveNovel(id, libraryId)!.id,
+      novel_id: target.id,
       library_id: libraryId,
       title,
       content,

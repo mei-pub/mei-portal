@@ -5,17 +5,6 @@ import { useParams, useSearchParams, useRouter } from "next/navigation";
 import Link from "@/components/Link";
 import MarkdownRenderer from "@/components/MarkdownRenderer";
 
-// Prevent default touch behaviors for better mobile reading experience
-if (typeof document !== "undefined") {
-  let lastTouchDistance = 0;
-  document.addEventListener("touchmove", (e: TouchEvent) => {
-    // Prevent pinch-zoom (2+ touch points)
-    if (e.touches.length >= 2) {
-      e.preventDefault();
-    }
-  }, { passive: false });
-}
-
 interface Chapter {
   id: number;
   title: string;
@@ -87,6 +76,20 @@ export default function ReaderPage() {
       if (b) b.style.display = "";
     };
   }, []);
+
+  // Prevent default touch behaviors for better mobile reading experience
+  // （仅阅读页挂载期间生效：此前挂在模块顶层且永不移除，阅读 chunk 加载后
+  // 全站双指缩放都被禁掉）
+  useEffect(() => {
+    const onTouchMove = (e: TouchEvent) => {
+      // Prevent pinch-zoom (2+ touch points)
+      if (e.touches.length >= 2) {
+        e.preventDefault();
+      }
+    };
+    document.addEventListener("touchmove", onTouchMove, { passive: false });
+    return () => document.removeEventListener("touchmove", onTouchMove);
+  }, []);
   const chapterIdParam = searchParams.get("chapter");
   const fulltextParam = searchParams.get("fulltext");
 
@@ -111,6 +114,9 @@ export default function ReaderPage() {
   });
 
   const contentRef = useRef<HTMLDivElement>(null);
+  // 单章加载的竞态防护序号：快速连点下一章时，先发出的请求可能后返回，
+  // 不做标记会把旧章节内容覆盖到新章节上
+  const chapterLoadSeqRef = useRef(0);
   const [showSettings, setShowSettings] = useState(false);
   const [showChapterList, setShowChapterList] = useState(false);
   const [showBars, setShowBars] = useState(true);
@@ -189,8 +195,8 @@ export default function ReaderPage() {
     });
   }, []);
 
-  const downloadAndApplyFont = useCallback(async (font: FontConfig) => {
-    if (!font.webFontFamily) return;
+  const downloadAndApplyFont = useCallback(async (font: FontConfig): Promise<boolean> => {
+    if (!font.webFontFamily) return false;
     setFontStatusMap(prev => new Map(prev).set(font.label, "downloading"));
     setFontDownloadProgress(font.label);
 
@@ -201,11 +207,14 @@ export default function ReaderPage() {
       await document.fonts.ready;
       markFontDownloaded(font.label);
       setFontStatusMap(prev => new Map(prev).set(font.label, "available"));
+      return true;
     } catch (err) {
       console.error(`Failed to load font ${font.label}:`, err);
       setFontStatusMap(prev => new Map(prev).set(font.label, "need-download"));
+      return false;
+    } finally {
+      setFontDownloadProgress(null);
     }
-    setFontDownloadProgress(null);
   }, [injectFontLink, markFontDownloaded]);
 
   // Init font statuses: system default = available, others = check localStorage
@@ -254,10 +263,11 @@ export default function ReaderPage() {
       );
       if (!confirmed) return;
 
-      await downloadAndApplyFont(font);
-      // Download succeeded → apply
-      const newStatus = fontStatusMap.get(font.label);
-      if (newStatus === "available") {
+      // 下载并按结果直接应用：不能用下载后再读 fontStatusMap 判断——
+      // 那是本次闭包里的旧快照，永远读不到刚写入的 "available"，
+      // 导致下载成功后字体也不会切换（要点第二次才生效）
+      const ok = await downloadAndApplyFont(font);
+      if (ok) {
         setSettings(prev => ({ ...prev, fontFamily: font.value }));
       }
     }
@@ -306,6 +316,7 @@ export default function ReaderPage() {
       return;
     }
     async function loadChapter() {
+      const seq = ++chapterLoadSeqRef.current;
       setLoading(true);
       let targetId = chapterIdParam ? parseInt(chapterIdParam) : chapters[0]?.id;
       const idx = chapters.findIndex(c => c.id === targetId);
@@ -313,19 +324,24 @@ export default function ReaderPage() {
       if (idx < 0 && chapters.length > 0) targetId = chapters[0].id;
       try {
         const res = await fetch(`/novels/api/chapters/${targetId}`);
+        // 过期响应丢弃：期间已有新一轮章节加载启动
+        if (seq !== chapterLoadSeqRef.current) return;
         if (res.ok) {
           const data = await res.json();
+          if (seq !== chapterLoadSeqRef.current) return;
           setCurrentChapter({ id: data.id, title: data.title, content: data.content || "" });
         }
       } catch (err) {
         console.error("Failed to load chapter:", err);
       } finally {
-        setLoading(false);
-        // Scroll to top when chapter content loads
-        setTimeout(() => {
-          const container = scrollContainerRef.current;
-          if (container) container.scrollTop = 0;
-        }, 50);
+        if (seq === chapterLoadSeqRef.current) {
+          setLoading(false);
+          // Scroll to top when chapter content loads
+          setTimeout(() => {
+            const container = scrollContainerRef.current;
+            if (container) container.scrollTop = 0;
+          }, 50);
+        }
       }
     }
     loadChapter();

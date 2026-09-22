@@ -3,6 +3,9 @@ import cors from 'cors';
 import fs from 'fs-extra';
 import path from 'path';
 import {fileURLToPath} from 'url';
+import crypto from 'node:crypto';
+import dns from 'node:dns';
+import net from 'node:net';
 import dotenv from 'dotenv';
 import jwt from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
@@ -26,32 +29,34 @@ if (fs.existsSync(devVarsPath)) {
 
 const app = express();
 const PORT = process.env.PORT || 7805;
-const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-in-production';
+// JWT_SECRET 只用于本进程内需要签名/校验的场景（当前主流程已接入门户统一身份，
+// 独立签发流程已停用）。绝不能用弱默认值兜底：未配置时生成进程内随机值并提醒。
+const JWT_SECRET = process.env.JWT_SECRET || (() => {
+  const generated = crypto.randomBytes(48).toString('hex');
+  console.warn('[Security] 未配置 JWT_SECRET，已生成本进程随机值（重启后失效）。如需持久会话请在 .env 中显式配置。');
+  return generated;
+});
 
 // Track last update time for each user to avoid excessive DB writes
 const lastSeenUpdateCache = new Map();
 
-// === Crypto Utilities for decrypting sensitive data ===
-/**
- * XOR cipher for encryption/decryption
- */
-function xorCipher(text, key) {
-  let result = '';
-  for (let i = 0; i < text.length; i++) {
-    result += String.fromCharCode(text.charCodeAt(i) ^ key.charCodeAt(i % key.length));
-  }
-  return result;
-}
+// === Sensitive value handling ===
+// 历史实现是 XOR + Base64，且「密钥」（时间戳 + 硬编码盐）随密文同传，等于明文，
+// 只是传输混淆，没有任何实际安全意义。现改为前端明文直传（HTTPS/同源反代负责传输安全），
+// 服务端保留对旧格式（timestamp|base64）的兼容解密，读到的旧值原样可用。
+const LEGACY_SENSITIVE_RE = /^\d{10}\|[A-Za-z0-9+/=]+$/;
 
 /**
  * Decrypt sensitive information sent from frontend
- * @param {string} encrypted - Format: timestamp|encrypted_base64
- * @returns {string} - Decrypted original value
+ * @param {string} encrypted - 明文，或旧格式 timestamp|encrypted_base64
+ * @returns {string} - 原始值
  */
 function decryptSensitive(encrypted) {
   if (!encrypted) return '';
 
   try {
+    if (!LEGACY_SENSITIVE_RE.test(encrypted)) return encrypted;
+
     const [timestamp, base64] = encrypted.split('|');
     if (!timestamp || !base64) return '';
 
@@ -66,18 +71,49 @@ function decryptSensitive(encrypted) {
   }
 }
 
-app.use(cors({
-  origin: function(origin, callback) {
-    if (!origin) return callback(null, true);
-    if (origin.startsWith('chrome-extension://') || origin.startsWith('moz-extension://')) {
-      return callback(null, true);
-    }
-    if (origin.includes('localhost') || origin.includes('127.0.0.1')) {
-      return callback(null, true);
-    }
-    callback(null, true);
-  },
-  credentials: true
+// CORS：严格按白名单放行。白名单 = 同源（Origin host 与请求 Host 一致）
+// + 本机（localhost/127.0.0.1/::1，任意端口，便于本地开发）
+// + MEI_ALLOWED_ORIGINS（逗号分隔，跨域部署时配门户/子域名地址；同源部署无需配置）。
+// 非浏览器客户端（curl/服务间调用）没有 Origin，放行。
+const allowedOrigins = (process.env.MEI_ALLOWED_ORIGINS || process.env.MEI_SHELL_URL || '')
+  .split(',')
+  .map(origin => origin.trim().replace(/\/+$/, ''))
+  .filter(Boolean);
+
+const isLocalOrigin = origin => {
+  try {
+    const host = new URL(origin).hostname;
+    return host === 'localhost' || host === '127.0.0.1' || host === '::1' || host.endsWith('.localhost');
+  } catch {
+    return false;
+  }
+};
+
+const originHost = origin => {
+  try { return new URL(origin).host; } catch { return ''; }
+};
+
+// 同源判定：Origin 的 host 与请求到达时的 Host 一致。
+// 必须按 host 比对而不是按「没有 Origin」判断——现代浏览器对同源的非 GET/HEAD
+// 请求同样携带 Origin 头，漏判会把门户反代/直连端口下的所有写请求误杀。
+// 只比 Host、不采信 X-Forwarded-Host：后者浏览器不列为禁止头，可被页面伪造，
+// 直连端口场景下会造成跨域绕过；本仓库 nginx 经 forwarded-headers 保留真实 Host。
+const isSameHostOrigin = (origin, req) => {
+  const hostHeader = String(req.headers.host || '').trim();
+  if (!hostHeader) return false;
+  return originHost(origin) === hostHeader;
+};
+
+app.use(cors(function (req, callback) {
+  const origin = req.headers.origin;
+  const allow = !origin
+    || isLocalOrigin(origin)
+    || isSameHostOrigin(origin, req)
+    || allowedOrigins.includes(origin.replace(/\/+$/, ''));
+  if (allow) return callback(null, { origin: true, credentials: true });
+  // 未命中白名单一律拒绝（带 credentials 的跨域放行等于把任意站点变成已登录用户）。
+  // 用 error 中止请求而非只关 CORS 头：后者浏览器虽读不到响应，服务端仍会执行写操作。
+  return callback(new Error('Not allowed by CORS'));
 }));
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
@@ -227,7 +263,13 @@ async function initializeAdmin() {
   const db = getDB();
   const adminUser = await db.get('SELECT * FROM users WHERE username = ?', 'admin');
   if (!adminUser) {
-    const adminPassword = process.env.MEI_ADMIN_PASSWORD || 'admin123';
+    // 未配置口令时生成一次性随机值并在首启日志打印；绝不能静默落到弱默认口令
+    let adminPassword = process.env.MEI_ADMIN_PASSWORD;
+    if (!adminPassword) {
+      adminPassword = crypto.randomBytes(12).toString('base64url');
+      console.log('[Security] 未配置 MEI_ADMIN_PASSWORD，已生成一次性随机管理员口令（请立即保存，此后不再显示）：');
+      console.log(`[Security] 用户名 admin  口令 ${adminPassword}`);
+    }
     const hashedPassword = await bcrypt.hash(adminPassword, 10);
     const newAdmin = {
       id: uuidv4(),
@@ -240,7 +282,9 @@ async function initializeAdmin() {
       `INSERT INTO users (id, username, password, role, created_at) VALUES (?, ?, ?, ?, ?)`,
       [newAdmin.id, newAdmin.username, newAdmin.password, newAdmin.role, newAdmin.createdAt]
     );
-    console.log('Default admin user created: admin / admin123');
+    if (process.env.MEI_ADMIN_PASSWORD) {
+      console.log('Default admin user created: admin（口令来自 MEI_ADMIN_PASSWORD）');
+    }
   }
 }
 
@@ -330,6 +374,75 @@ const isAdmin = (req, res, next) => {
     res.status(403).json({ error: 'Admin access required' });
   }
 };
+
+// --- 出站 URL 校验（SSRF 防护）---
+// /api/ai/models、validate-ai-config、/api/parse-url、/api/chat 都会 fetch 用户可控的
+// baseUrl/url。不校验就是内网探测/打元数据接口的跳板。规则：
+//  1. 仅 http/https；URL 解析器天然把 username@host 归位到 userinfo，hostname 不受其影响
+//  2. 拒绝环回/私网/链路本地/0.0.0.0/元数据地址（169.254.169.254），元数据地址任何情况下都拒绝
+//  3. 域名先做 DNS 解析再逐个 IP 校验，防止用解析到内网的域名绕过
+//  4. allowPrivate 仅供「已通过门户会话鉴权」的请求开放本地 LLM（Ollama/LM Studio）用途；
+//     匿名请求一律只允许公网地址
+const METADATA_HOSTS = new Set(['169.254.169.254']);
+
+function isPrivateAddress(ip) {
+  if (net.isIPv4(ip)) {
+    if (ip === '0.0.0.0') return true;
+    const [a, b] = ip.split('.').map(Number);
+    if (a === 10) return true;                       // 10.0.0.0/8
+    if (a === 172 && b >= 16 && b <= 31) return true; // 172.16.0.0/12
+    if (a === 192 && b === 168) return true;          // 192.168.0.0/16
+    if (a === 127) return true;                       // loopback
+    if (a === 169 && b === 254) return true;          // link-local（含元数据地址）
+    if (a === 100 && b >= 64 && b <= 127) return true; // CGNAT 100.64.0.0/10
+    return false;
+  }
+  const addr = ip.toLowerCase();
+  if (addr === '::' || addr === '::1') return true;                 // unspecified / loopback
+  if (addr.startsWith('fe8') || addr.startsWith('fe9') || addr.startsWith('fea') || addr.startsWith('feb')) return true; // fe80::/10 link-local
+  if (addr.startsWith('fc') || addr.startsWith('fd')) return true;  // fc00::/7 unique local
+  if (addr.startsWith('::ffff:')) return isPrivateAddress(addr.slice(7)); // IPv4-mapped
+  return false;
+}
+
+async function assertOutboundUrl(rawUrl, { allowPrivate = false } = {}) {
+  let parsed;
+  try {
+    parsed = new URL(String(rawUrl));
+  } catch {
+    throw new Error('URL 格式无效');
+  }
+  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+    throw new Error('仅支持 http/https 地址');
+  }
+  const host = parsed.hostname.toLowerCase().replace(/^\[|\]$/g, '');
+  if (!host) throw new Error('URL 缺少主机名');
+
+  const checkIp = ip => {
+    if (METADATA_HOSTS.has(ip)) throw new Error('禁止访问元数据地址');
+    if (ip === '0.0.0.0' || ip === '::') throw new Error('禁止访问未指定地址');
+    if (!allowPrivate && isPrivateAddress(ip)) throw new Error(`禁止访问内网地址（${ip}）`);
+  };
+
+  if (net.isIP(host)) {
+    checkIp(host);
+    return parsed;
+  }
+
+  let addresses;
+  try {
+    addresses = await dns.promises.lookup(host, { all: true, verbatim: true });
+  } catch {
+    throw new Error(`无法解析主机名：${host}`);
+  }
+  if (!addresses || !addresses.length) throw new Error(`无法解析主机名：${host}`);
+  for (const { address } of addresses) checkIp(address);
+  return parsed;
+}
+
+// /api/admin/* 的可选额外收紧：默认信任门户统一身份（部署形态即完全可信管理面）；
+// 配置 ADMIN_TOKEN 后，还必须携带 X-Admin-Token 才能进入管理路由。
+const ADMIN_TOKEN = process.env.ADMIN_TOKEN || '';
 
 // --- Public Routes ---
 app.get('/api/settings/public', async (req, res) => {
@@ -425,6 +538,13 @@ app.post('/api/logs/file', async (req, res) => {
 });
 
 // --- Admin Routes ---
+if (ADMIN_TOKEN) {
+  app.use('/api/admin', (req, res, next) => {
+    if (req.headers['x-admin-token'] === ADMIN_TOKEN) return next();
+    return res.status(403).json({ error: 'Admin token required' });
+  });
+}
+
 app.get('/api/admin/users', authenticateToken, isAdmin, async (req, res) => {
   const rows = await getDB().all('SELECT * FROM users ORDER BY created_at DESC');
   const users = rows.map(mapUser);
@@ -964,6 +1084,13 @@ app.post('/api/auth/validate-ai-config', authenticateToken, async (req, res) => 
     baseUrl = baseUrl.slice(0, -1);
   }
 
+  // 出站校验：已鉴权请求允许私网地址（本地 Ollama/LM Studio），元数据地址仍拒绝
+  try {
+    await assertOutboundUrl(baseUrl, { allowPrivate: true });
+  } catch (error) {
+    return res.json({ valid: false, error: `API 地址无效：${error.message}` });
+  }
+
   try {
     // For Ollama, use the OpenAI compatible /models endpoint
     if (provider === 'ollama') {
@@ -1059,6 +1186,13 @@ app.post('/api/ai/models', optionalAuthenticateToken, async (req, res) => {
 
   if (baseUrl.endsWith('/')) {
     baseUrl = baseUrl.slice(0, -1);
+  }
+
+  // 出站校验：匿名请求只允许公网地址（防内网探测跳板）；已鉴权请求允许本地 LLM 端点
+  try {
+    await assertOutboundUrl(baseUrl, { allowPrivate: !!req.user });
+  } catch (error) {
+    return res.status(400).json({ error: `API 地址无效：${error.message}` });
   }
 
   try {
@@ -1359,6 +1493,13 @@ app.post('/api/parse-url', optionalAuthenticateToken, async (req, res) => {
       return res.status(400).json({ error: 'URL格式无效' });
     }
 
+    // 抓取的是公网文章页：无论是否登录都只允许公网地址
+    try {
+      await assertOutboundUrl(url, { allowPrivate: false });
+    } catch (error) {
+      return res.status(400).json({ error: `URL 不允许抓取：${error.message}` });
+    }
+
     const isWechat = isWechatArticle(url);
 
     const headers = {
@@ -1603,6 +1744,14 @@ app.post('/api/chat', optionalAuthenticateToken, async (req, res) => {
     // surface that error to the user — clearer than failing here.
     if (!apiKey) {
       console.log('[AI Service] No API key configured; proceeding without Authorization header');
+    }
+
+    // 出站校验：匿名请求（本地模式自带 aiConfig）只允许公网地址，
+    // 已鉴权请求允许私网（本地 Ollama/LM Studio）
+    try {
+      await assertOutboundUrl(apiBaseUrl, { allowPrivate: !!req.user });
+    } catch (error) {
+      return res.status(400).json({ error: `AI 服务地址无效：${error.message}` });
     }
 
     // Set timeout for AI requests (5 minutes for long-running models)

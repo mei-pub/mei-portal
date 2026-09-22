@@ -16,7 +16,7 @@ function useTimeout(callback: () => void, delay: number) {
     let timer: NodeJS.Timeout | undefined;
 
     if (delay !== null && callback && typeof callback === 'function') {
-      timer = setTimeout(callbackRef.current, delay);
+      timer = setTimeout(() => callbackRef.current(), delay);
     }
 
     return () => {
@@ -24,7 +24,9 @@ function useTimeout(callback: () => void, delay: number) {
         clearTimeout(timer);
       }
     };
-  }, [callback, delay]);
+    // deps 不能包含 callback：callback（通常是内联函数）每次渲染都是新引用，
+    // 会不断重置定时器。回调经 ref 间接调用，定时器只随 delay 变化重启。
+  }, [delay]);
 }
 
 export default useTimeout;

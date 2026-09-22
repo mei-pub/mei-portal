@@ -25,12 +25,30 @@ export async function protectWithGhostScript(dataStruct: {
 
 const getListener = (worker: Worker): Promise<string> => {
   return new Promise((resolve, reject) => {
-    const listener = (e: MessageEvent) => {
-      resolve(e.data);
+    const cleanup = () => {
       worker.removeEventListener('message', listener);
-      setTimeout(() => worker.terminate(), 0);
+      worker.removeEventListener('error', errorListener);
+      worker.removeEventListener('messageerror', messageErrorListener);
     };
+    const listener = (e: MessageEvent) => {
+      cleanup();
+      setTimeout(() => worker.terminate(), 0);
+      resolve(e.data);
+    };
+    // worker 内部异常（wasm 加载失败、脚本错误）只触发 error/messageerror，
+    // 不监听的话调用方 Promise 永久 pending，worker 实例也随之泄漏
+    const fail = (message: string) => {
+      cleanup();
+      worker.terminate();
+      reject(new Error(message));
+    };
+    const errorListener = () =>
+      fail('PDF 处理 Worker 发生错误，请重试或刷新页面');
+    const messageErrorListener = () =>
+      fail('PDF 处理 Worker 返回的数据无法反序列化');
     worker.addEventListener('message', listener);
+    worker.addEventListener('error', errorListener);
+    worker.addEventListener('messageerror', messageErrorListener);
   });
 };
 

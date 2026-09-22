@@ -5,14 +5,14 @@ function resolveNovelId(idOrSlug: string, libraryId: number): number | null {
   const novel = Number.isInteger(n) && String(n) === idOrSlug ? getNovelById(n, libraryId) : getNovelBySlug(idOrSlug, libraryId);
   return novel ? novel.id : null;
 }
-import { requireSiteAccess } from "@/lib/auth";
+import { requireSiteAccess, requireSiteWriteAccess } from "@/lib/auth";
 
 // POST - 创建分卷
 export async function POST(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const siteResult = requireSiteAccess(request, new URL(request.url).searchParams.get("site"));
+  const siteResult = requireSiteWriteAccess(request, new URL(request.url).searchParams.get("site"));
   if (siteResult instanceof NextResponse) return siteResult;
   const libraryId = siteResult.id;
 
@@ -47,7 +47,7 @@ export async function PUT(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const siteResult = requireSiteAccess(request, new URL(request.url).searchParams.get("site"));
+  const siteResult = requireSiteWriteAccess(request, new URL(request.url).searchParams.get("site"));
   if (siteResult instanceof NextResponse) return siteResult;
   const libraryId = siteResult.id;
 
@@ -82,7 +82,7 @@ export async function DELETE(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const siteResult = requireSiteAccess(request, new URL(request.url).searchParams.get("site"));
+  const siteResult = requireSiteWriteAccess(request, new URL(request.url).searchParams.get("site"));
   if (siteResult instanceof NextResponse) return siteResult;
   const libraryId = siteResult.id;
 

@@ -138,6 +138,8 @@ function StyleTab({ config, update }: { config: PanelConfig; update: (c: PanelCo
     }
     const reader = new FileReader();
     reader.onload = () => cb(String(reader.result));
+    // 读取失败（文件被占用/权限问题）必须提示，否则点击后无任何反馈
+    reader.onerror = () => window.alert('图片读取失败，请重试');
     reader.readAsDataURL(file);
   }
 
@@ -157,6 +159,8 @@ function StyleTab({ config, update }: { config: PanelConfig; update: (c: PanelCo
               accept="image/*"
               onChange={(e) => {
                 const file = e.target.files?.[0];
+                // 重置 value：同一张图选两次时 change 事件才会再次触发
+                e.target.value = '';
                 if (file) readImage(file, (dataUrl) => setBg({ url: dataUrl }));
               }}
             />
@@ -185,7 +189,7 @@ function StyleTab({ config, update }: { config: PanelConfig; update: (c: PanelCo
             <TextInput value={config.style.logoImage} onChange={(e) => setStyle({ logoImage: e.target.value })} placeholder="留空使用默认 Logo" />
           </SettingsField>
           <SettingsField label="上传 Logo 图片" span>
-            <FileInput accept="image/*" onChange={(e) => { const file = e.target.files?.[0]; if (file) readImage(file, (dataUrl) => setStyle({ logoImage: dataUrl })); }} />
+            <FileInput accept="image/*" onChange={(e) => { const file = e.target.files?.[0]; e.target.value = ''; if (file) readImage(file, (dataUrl) => setStyle({ logoImage: dataUrl })); }} />
           </SettingsField>
           <div className="mei-field span">
             <Toggle checked={config.style.clockShowSecond} onChange={(v) => setStyle({ clockShowSecond: v })} label="时钟显示秒" />
@@ -269,7 +273,10 @@ function EnginesSection({ config, update }: { config: PanelConfig; update: (c: P
   function addEngine() {
     const n = name.trim();
     const u = url.trim();
-    if (!n || !/^https?:\/\//i.test(u) || engines.length >= MAX_SEARCH_ENGINES) return;
+    // 非法输入必须给反馈，否则点击「添加引擎」无任何响应会被当成按钮坏了
+    if (!n || !u) { window.alert('请填写引擎名称与链接'); return; }
+    if (!/^https?:\/\//i.test(u)) { window.alert('链接必须以 http:// 或 https:// 开头'); return; }
+    if (engines.length >= MAX_SEARCH_ENGINES) { window.alert(`最多添加 ${MAX_SEARCH_ENGINES} 个引擎`); return; }
     commit([...engines, { id: `ce${Date.now()}${Math.random().toString(36).slice(2, 6)}`, name: n, url: u }]);
     setName('');
     setUrl('');

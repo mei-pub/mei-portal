@@ -63,10 +63,11 @@ export async function changeAudioSpeed(
       type: mimeType
     });
 
-    return new File(
-      [blob],
-      fileName.replace(/\.[^/.]+$/, `-${speed}x.${outputFormat}`),
-      { type: mimeType }
-    );
+    // 输出文件名沿用用户原始文件名主干（tempFile 的 UUID 名只用于 ffmpeg 内部
+    // 读写，不能暴露给用户）；扩展名按所选输出格式
+    const baseName = input.name.replace(/\.[^/.]+$/, '');
+    const outputFileName = `${baseName}-${speed}x.${outputFormat}`;
+
+    return new File([blob], outputFileName, { type: mimeType });
   });
 }

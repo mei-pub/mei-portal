@@ -85,7 +85,11 @@ const handleLogin = async () => {
     emit('update:visible', false);
     emit('success');
   } catch (err: any) {
-    error.value = err.response?.data?.error || '登录失败，请检查账号密码';
+    // 兼容两种失败形态：HTTP 4xx/5xx（取 body.message/error）与业务层抛错（err.message）
+    error.value = err?.response?.data?.message
+      || err?.response?.data?.error
+      || err?.message
+      || '登录失败，请检查账号密码';
   } finally {
     loading.value = false;
   }

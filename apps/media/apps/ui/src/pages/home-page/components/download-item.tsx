@@ -37,7 +37,7 @@ import {
 } from "@/const";
 import type { DownloadTaskDetails } from "@/hooks/use-tasks";
 import { appStoreSelector, useAppStore } from "@/store/app";
-import { getMediaVideosKey, listMediaVideos } from "@/api/download-center";
+import { appFileUrl, getMediaVideosKey, listMediaVideos } from "@/api/download-center";
 import { matchMediaVideo, mediaVideoTarget } from "@/utils/play-actions";
 import { useInlinePlayer } from "@/pages/downloads-page/components/inline-player";
 import { cn, fromatDateTime, isWeb, tdApp } from "@/utils";
@@ -179,7 +179,16 @@ export const DownloadTaskItem = memo(function DownloadTaskItem({
         );
         break;
       case DownloadStatus.Pending:
-        buttons.push(<span key="pending">{t("pending")}</span>);
+        // 等待中不再零操作：提供日志入口与「开始下载」（对照 ready 态）
+        if (terminalBtn) buttons.push(terminalBtn);
+        buttons.push(
+          <IconButton
+            key="download"
+            icon={<DownloadListIcon />}
+            title={t("download")}
+            onClick={() => startWithEvent(DOWNLOAD_NOW)}
+          />,
+        );
         break;
       case DownloadStatus.Stopped:
         if (terminalBtn) buttons.push(terminalBtn);
@@ -218,7 +227,9 @@ export const DownloadTaskItem = memo(function DownloadTaskItem({
             );
           }
           // 下载到本地：/files/:id 附件端点（任意扩展产物都能回拉，视频之外的
-          // 压缩包/文档也可；attachment 响应触发浏览器下载，不离开当前页）
+          // 压缩包/文档也可；attachment 响应触发浏览器下载，不离开当前页）。
+          // 用 appFileUrl 构造绝对路径：/downloads 无尾斜杠时相对路径会被
+          // 解析到站点根（/files/:id 404）
           if (task.exists) {
             buttons.push(
               <IconButton
@@ -226,7 +237,7 @@ export const DownloadTaskItem = memo(function DownloadTaskItem({
                 icon={<DownloadOutlined />}
                 title={t("downloadToLocal")}
                 onClick={() => {
-                  window.location.href = `files/${task.id}`;
+                  window.location.href = appFileUrl(`files/${task.id}`);
                 }}
               />,
             );

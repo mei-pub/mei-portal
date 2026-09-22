@@ -43,11 +43,52 @@ export function verifyToken(token: string): string | null {
   }
 }
 
+// ── 已吊销 token 黑名单（登出吊销；内存 Map + 过期清理） ──
+// 无状态 JWT 本身无法吊销，登出时把该 token 记入黑名单直到其自然过期
+const revokedTokens = new Map<string, number>();
+const REVOKED_MAX = 10_000;
+
+function readTokenExp(token: string): number {
+  try {
+    const payload = JSON.parse(Buffer.from(token.split('.')[1] ?? '', 'base64url').toString('utf8')) as { exp?: number };
+    return typeof payload.exp === 'number' && Number.isFinite(payload.exp) ? payload.exp * 1000 : 0;
+  } catch {
+    return 0;
+  }
+}
+
+/** 登出吊销：token 记入黑名单至其 exp（解析不出 exp 时按 1 小时保守处理） */
+export function revokeToken(token: string): void {
+  const now = Date.now();
+  const until = readTokenExp(token) || now + 3600_000;
+  // 插入时顺带清理过期项，防止 Map 无限膨胀
+  for (const [t, e] of revokedTokens) {
+    if (e < now) revokedTokens.delete(t);
+  }
+  if (revokedTokens.size >= REVOKED_MAX) {
+    const oldest = revokedTokens.keys().next().value;
+    if (oldest !== undefined) revokedTokens.delete(oldest);
+  }
+  revokedTokens.set(token, until);
+}
+
+export function isTokenRevoked(token: string): boolean {
+  const until = revokedTokens.get(token);
+  if (until === undefined) return false;
+  if (until < Date.now()) {
+    revokedTokens.delete(token);
+    return false;
+  }
+  return true;
+}
+
 /** 从 Authorization 头提取用户名（AUTH_ENABLED=false 时放行，返回固定用户） */
 export function authenticate(authorization: string | undefined): string | null {
   if (!config.authEnabled) return 'anonymous';
   if (!authorization?.startsWith('Bearer ')) return null;
-  return verifyToken(authorization.slice('Bearer '.length));
+  const token = authorization.slice('Bearer '.length);
+  if (isTokenRevoked(token)) return null;
+  return verifyToken(token);
 }
 
 export function checkCredentials(username: string, password: string): boolean {

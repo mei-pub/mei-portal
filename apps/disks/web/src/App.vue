@@ -77,6 +77,13 @@ const exportableDiskTypes = computed(() => {
 // 强制刷新逻辑
 let forceRefreshPending = false;
 
+// 搜索令牌：每次 handleSearch 递增；响应回来只接受最新令牌，旧慢响应不得覆盖新结果
+let searchSeq = 0;
+// 后台补全链（第二/三/四次搜索）所属的搜索令牌；新搜索开始后旧链响应全部作废
+let activeChainSeq = 0;
+// 5s 强关 loading 的兜底定时器句柄（不清理会跨搜索残留，误关新一轮的加载态）
+let loadingFallbackTimer: number | null = null;
+
 // 当前页面状态：资源路径 /disks/{page}，兼容旧 ?view= 深链
 const initialRoute = resolveRoute(window.location.pathname, window.location.search);
 const currentPage = ref<PansouPage>(initialRoute.page);
@@ -217,6 +224,14 @@ const handleSearch = async (params: SearchParams) => {
   loading.value = true;
   searchNotice.value = '';
 
+  // 递增令牌 + 清掉上一轮残留的 loading 兜底定时器
+  const seq = ++searchSeq;
+  activeChainSeq = seq;
+  if (loadingFallbackTimer !== null) {
+    clearTimeout(loadingFallbackTimer);
+    loadingFallbackTimer = null;
+  }
+
   // 清空之前的搜索结果
   searchResults.total = 0;
   searchResults.mergedResults = {};
@@ -250,7 +265,9 @@ const handleSearch = async (params: SearchParams) => {
     // 先发起第一次搜索请求（显示结果）
     search(userParams)
       .then(firstResponse => {
-        
+        // 旧慢响应晚到：新一轮搜索已在跑，丢弃本次结果
+        if (seq !== searchSeq) return;
+
         if (firstResponse && firstResponse.total !== undefined) {
           // 使用第一次搜索结果进行显示
           updateSearchResults(firstResponse);
@@ -280,6 +297,7 @@ const handleSearch = async (params: SearchParams) => {
         }
       })
       .catch(error => {
+        if (seq !== searchSeq) return;
         console.error('第一次搜索出错:', error);
         loading.value = false;
         isActivelySearching.value = false;
@@ -290,11 +308,12 @@ const handleSearch = async (params: SearchParams) => {
           : '搜索失败，请稍后重试';
       });
     
-    // 设置一个超时，确保即使搜索很慢，UI也不会一直处于加载状态
-    setTimeout(() => {
-      if (loading.value) {
+    // 设置一个超时，确保即使搜索很慢，UI也不会一直处于加载状态（句柄可清理，只作用于本轮）
+    loadingFallbackTimer = window.setTimeout(() => {
+      if (seq === searchSeq && loading.value) {
         loading.value = false;
       }
+      loadingFallbackTimer = null;
     }, 5000); // 5秒后如果还在加载，则关闭加载状态
     
   } catch (error) {
@@ -770,6 +789,7 @@ const calculateSrcForFullSearch = (): 'all' | 'tg' | 'plugin' => {
 // 开始第二次搜索
 const startSecondAllSearch = (firstSearchCompleteTime: number) => {
   if (!lastSearchParams.value) return;
+  const chainSeq = activeChainSeq;
   
   isUpdating.value = true;
   isActivelySearching.value = true;
@@ -796,6 +816,8 @@ const startSecondAllSearch = (firstSearchCompleteTime: number) => {
     
     try {
       const response = await search(userParams);
+      // 旧链响应晚到（新一轮搜索已开始）：丢弃
+      if (chainSeq !== searchSeq) return;
       
       // 更新结果
       if (response && response.total >= searchResults.total) {
@@ -820,6 +842,7 @@ const startSecondAllSearch = (firstSearchCompleteTime: number) => {
 // 开始第三次搜索
 const startThirdAllSearch = (secondSearchCompleteTime: number) => {
   if (!lastSearchParams.value) return;
+  const chainSeq = activeChainSeq;
   
   updateCount.value = 2;
   
@@ -844,6 +867,8 @@ const startThirdAllSearch = (secondSearchCompleteTime: number) => {
     
     try {
       const response = await search(userParams);
+      // 旧链响应晚到（新一轮搜索已开始）：丢弃
+      if (chainSeq !== searchSeq) return;
       
       // 更新结果
       if (response && response.total >= searchResults.total) {
@@ -877,6 +902,7 @@ const startThirdAllSearch = (secondSearchCompleteTime: number) => {
 // 开始第四次搜索
 const startFourthAllSearch = (thirdSearchCompleteTime: number) => {
   if (!lastSearchParams.value) return;
+  const chainSeq = activeChainSeq;
   
   updateCount.value = 3;
   
@@ -901,6 +927,8 @@ const startFourthAllSearch = (thirdSearchCompleteTime: number) => {
     
     try {
       const response = await search(userParams);
+      // 旧链响应晚到（新一轮搜索已开始）：丢弃
+      if (chainSeq !== searchSeq) return;
       
       // 更新结果
       if (response && response.total >= searchResults.total) {
@@ -1519,14 +1547,16 @@ onUnmounted(() => {
 @media (max-width: 768px) {
   .app-shell {
     --mobile-footer-height: calc(3.15rem + env(safe-area-inset-bottom));
-    height: 100dvh;
-    min-height: 100dvh;
+    /* 减去门户顶栏悬浮胶囊占用的顶部空间（body padding-top 由外壳 spaceCss 注入），
+       否则 100dvh 会把底部裁掉一条 */
+    height: calc(100dvh - var(--mei-topbar-space, 0px));
+    min-height: calc(100dvh - var(--mei-topbar-space, 0px));
     overflow: hidden;
   }
 
   .main-content {
     flex: 1 1 auto;
-    height: calc(100dvh - 4rem - var(--mobile-footer-height));
+    height: calc(100dvh - var(--mei-topbar-space, 0px) - 4rem - var(--mobile-footer-height));
     min-height: 0;
     box-sizing: border-box;
     padding-top: 2rem;

@@ -3,7 +3,48 @@ import type {EngineType} from '@/types'
 import {useStorageModeStore} from '@/stores/storageModeStore'
 import {db} from './db'
 
-const API_BASE = '/draw//api/auth'
+// API 根路径：目录名与 URL 子路径对齐（本应用挂 /draw），nginx 按前缀反代到本服务。
+// 严禁手写 '/draw//api' 这类双斜杠路径——部分代理层不会合并斜杠，直接 404。
+const API_ROOT = '/draw/api'
+
+/** 会话失效的统一处理：清空本地会话并回登录页。 */
+function handleUnauthorized(status: number) {
+  if (status !== 401) return
+  useAuthStore.getState().logout()
+  if (!window.location.pathname.endsWith('/login')) {
+    window.location.href = '/draw/login'
+  }
+}
+
+/**
+ * 非 2xx 响应的统一错误解析：先读 text 再尝试 JSON.parse，
+ * 解析失败（如 nginx 返回 HTML 错误页）时用状态码文案兜底，
+ * 避免直接 await response.json() 抛 SyntaxError 掩盖真实错误。
+ */
+async function parseApiError(response: Response, fallback: string): Promise<string> {
+  try {
+    const text = await response.text()
+    if (text) {
+      try {
+        const data = JSON.parse(text)
+        if (data && typeof data.error === 'string' && data.error) return data.error
+      } catch {
+        // 非 JSON 响应体，落到状态码文案
+      }
+    }
+  } catch {
+    // 读取响应体失败，落到状态码文案
+  }
+  return `${fallback} (${response.status})`
+}
+
+/** 非 2xx 统一出口：401 自动登出 + 错误消息解析。 */
+async function guard(response: Response, fallback: string): Promise<never> {
+  handleUnauthorized(response.status)
+  throw new Error(await parseApiError(response, fallback))
+}
+
+const API_BASE = `${API_ROOT}/auth`
 
 export interface SystemSettings {
   ai?: {
@@ -50,10 +91,7 @@ export const authService = {
       body: JSON.stringify({ username, password }),
     })
 
-    if (!response.ok) {
-      const error = await response.json()
-      throw new Error(error.error || 'Login failed')
-    }
+    if (!response.ok) await guard(response, 'Login failed')
 
     const data = await response.json()
     useAuthStore.getState().setAuth(data.user, data.token)
@@ -67,10 +105,7 @@ export const authService = {
       body: JSON.stringify({ username, password }),
     })
 
-    if (!response.ok) {
-      const error = await response.json()
-      throw new Error(error.error || 'Registration failed')
-    }
+    if (!response.ok) await guard(response, 'Registration failed')
 
     return await response.json()
   },
@@ -90,10 +125,7 @@ export const authService = {
       body: JSON.stringify({ currentPassword, newPassword }),
     })
 
-    if (!response.ok) {
-      const error = await response.json()
-      throw new Error(error.error || 'Failed to change password')
-    }
+    if (!response.ok) await guard(response, 'Failed to change password')
 
     return await response.json()
   },
@@ -108,15 +140,15 @@ export const authService = {
   },
 
   async getUsers() {
-    const response = await fetch('/draw//api/admin/users', {
+    const response = await fetch(`${API_ROOT}/admin/users`, {
       headers: this.getAuthHeader()
     })
-    if (!response.ok) throw new Error('Failed to fetch users')
+    if (!response.ok) await guard(response, 'Failed to fetch users')
     return await response.json()
   },
 
   async updateUserRole(userId: string, role: 'user' | 'admin') {
-    const response = await fetch(`/draw//api/admin/users/${userId}/role`, {
+    const response = await fetch(`${API_ROOT}//admin/users/${userId}/role`, {
       method: 'PUT',
       headers: {
         'Content-Type': 'application/json',
@@ -124,26 +156,23 @@ export const authService = {
       },
       body: JSON.stringify({ role })
     })
-    if (!response.ok) throw new Error('Failed to update user role')
+    if (!response.ok) await guard(response, 'Failed to update user role')
     return await response.json()
   },
 
   async deleteUser(userId: string) {
-    const response = await fetch(`/draw//api/admin/users/${userId}`, {
+    const response = await fetch(`${API_ROOT}//admin/users/${userId}`, {
       method: 'DELETE',
       headers: this.getAuthHeader()
     })
-    if (!response.ok) {
-      const error = await response.json()
-      throw new Error(error.error || 'Failed to delete user')
-    }
+    if (!response.ok) await guard(response, 'Failed to delete user')
   },
 
   async getSystemSettings(): Promise<SystemSettings> {
     // Always try to fetch public settings (for notifications etc)
     let publicSettings: SystemSettings = {}
     try {
-      const res = await fetch('/draw//api/settings/public')
+      const res = await fetch(`${API_ROOT}/settings/public`)
       if (res.ok) {
         publicSettings = await res.json()
       }
@@ -154,7 +183,7 @@ export const authService = {
     // Admin settings should always be fetched from server, regardless of storage mode
     // Local mode only affects personal user settings, not admin settings
     try {
-      const response = await fetch('/draw//api/admin/settings', {
+      const response = await fetch(`${API_ROOT}/admin/settings`, {
         headers: this.getAuthHeader()
       })
       if (response.ok) {
@@ -177,7 +206,7 @@ export const authService = {
   async updateSystemSettings(settings: SystemSettings) {
     // Admin settings should always be saved to server, regardless of storage mode
     // Local mode only affects personal user settings, not admin settings
-    const response = await fetch('/draw//api/admin/settings', {
+    const response = await fetch(`${API_ROOT}/admin/settings`, {
       method: 'PUT',
       headers: {
         'Content-Type': 'application/json',
@@ -185,7 +214,7 @@ export const authService = {
       },
       body: JSON.stringify(settings)
     })
-    if (!response.ok) throw new Error('Failed to update settings')
+    if (!response.ok) await guard(response, 'Failed to update settings')
     return await response.json()
   },
 
@@ -202,10 +231,10 @@ export const authService = {
       }
     }
 
-    const response = await fetch('/draw//api/auth/profile', {
+    const response = await fetch(`${API_ROOT}/auth/profile`, {
       headers: this.getAuthHeader()
     })
-    if (!response.ok) throw new Error('Failed to fetch profile')
+    if (!response.ok) await guard(response, 'Failed to fetch profile')
     return await response.json()
   },
 
@@ -215,7 +244,7 @@ export const authService = {
       return { nickname }
     }
 
-    const response = await fetch('/draw//api/auth/profile/nickname', {
+    const response = await fetch(`${API_ROOT}/auth/profile/nickname`, {
       method: 'PUT',
       headers: {
         'Content-Type': 'application/json',
@@ -223,7 +252,7 @@ export const authService = {
       },
       body: JSON.stringify({ nickname })
     })
-    if (!response.ok) throw new Error('Failed to update nickname')
+    if (!response.ok) await guard(response, 'Failed to update nickname')
     const data = await response.json()
 
     // Update local store
@@ -243,7 +272,7 @@ export const authService = {
       return config
     }
 
-    const response = await fetch('/draw//api/auth/profile/ai-config', {
+    const response = await fetch(`${API_ROOT}/auth/profile/ai-config`, {
       method: 'PUT',
       headers: {
         'Content-Type': 'application/json',
@@ -251,12 +280,12 @@ export const authService = {
       },
       body: JSON.stringify(config)
     })
-    if (!response.ok) throw new Error('Failed to update AI config')
+    if (!response.ok) await guard(response, 'Failed to update AI config')
     return await response.json()
   },
 
   async adminUpdateUserAIConfig(userId: string, config: any) {
-    const response = await fetch(`/draw//api/admin/users/${userId}/ai-config`, {
+    const response = await fetch(`${API_ROOT}//admin/users/${userId}/ai-config`, {
       method: 'PUT',
       headers: {
         'Content-Type': 'application/json',
@@ -264,12 +293,12 @@ export const authService = {
       },
       body: JSON.stringify(config)
     })
-    if (!response.ok) throw new Error('Failed to update user AI config')
+    if (!response.ok) await guard(response, 'Failed to update user AI config')
     return await response.json()
   },
 
   async adminResetUserPassword(userId: string, password: string) {
-    const response = await fetch(`/draw//api/admin/users/${userId}/password`, {
+    const response = await fetch(`${API_ROOT}//admin/users/${userId}/password`, {
       method: 'PUT',
       headers: {
         'Content-Type': 'application/json',
@@ -277,12 +306,12 @@ export const authService = {
       },
       body: JSON.stringify({ password })
     })
-    if (!response.ok) throw new Error('Failed to reset password')
+    if (!response.ok) await guard(response, 'Failed to reset password')
     return await response.json()
   },
 
   async adminUpdateUserAccessPassword(userId: string, accessPassword: string) {
-    const response = await fetch(`/draw//api/admin/users/${userId}/access-password`, {
+    const response = await fetch(`${API_ROOT}//admin/users/${userId}/access-password`, {
       method: 'PUT',
       headers: {
         'Content-Type': 'application/json',
@@ -290,12 +319,12 @@ export const authService = {
       },
       body: JSON.stringify({ accessPassword })
     })
-    if (!response.ok) throw new Error('Failed to update access password')
+    if (!response.ok) await guard(response, 'Failed to update access password')
     return await response.json()
   },
 
   async validateAccessPassword(password: string) {
-    const response = await fetch('/draw//api/auth/validate-access-password', {
+    const response = await fetch(`${API_ROOT}/auth/validate-access-password`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -303,34 +332,34 @@ export const authService = {
       },
       body: JSON.stringify({ password })
     })
-    if (!response.ok) throw new Error('Failed to validate password')
+    if (!response.ok) await guard(response, 'Failed to validate password')
     return await response.json()
   },
 
   async getExampleProjects(): Promise<ExampleProject[]> {
-    const response = await fetch('/draw//api/admin/example-projects', {
+    const response = await fetch(`${API_ROOT}/admin/example-projects`, {
       headers: this.getAuthHeader()
     })
-    if (!response.ok) throw new Error('Failed to fetch example projects')
+    if (!response.ok) await guard(response, 'Failed to fetch example projects')
     return await response.json()
   },
 
   async getPublicExampleProjects(): Promise<ExampleProject[]> {
-    const response = await fetch('/draw//api/public/example-projects')
-    if (!response.ok) throw new Error('Failed to fetch public example projects')
+    const response = await fetch(`${API_ROOT}/public/example-projects`)
+    if (!response.ok) await guard(response, 'Failed to fetch public example projects')
     return await response.json()
   },
 
   async getExampleProject(id: string): Promise<ExampleProject> {
-    const response = await fetch(`/draw//api/admin/example-projects/${id}`, {
+    const response = await fetch(`${API_ROOT}//admin/example-projects/${id}`, {
       headers: this.getAuthHeader()
     })
-    if (!response.ok) throw new Error('Failed to fetch example project')
+    if (!response.ok) await guard(response, 'Failed to fetch example project')
     return await response.json()
   },
 
   async createExampleProject(project: Partial<ExampleProject>) {
-    const response = await fetch('/draw//api/admin/example-projects', {
+    const response = await fetch(`${API_ROOT}/admin/example-projects`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -338,12 +367,12 @@ export const authService = {
       },
       body: JSON.stringify(project)
     })
-    if (!response.ok) throw new Error('Failed to create example project')
+    if (!response.ok) await guard(response, 'Failed to create example project')
     return await response.json()
   },
 
   async updateExampleProject(id: string, project: Partial<ExampleProject>) {
-    const response = await fetch(`/draw//api/admin/example-projects/${id}`, {
+    const response = await fetch(`${API_ROOT}//admin/example-projects/${id}`, {
       method: 'PUT',
       headers: {
         'Content-Type': 'application/json',
@@ -351,12 +380,12 @@ export const authService = {
       },
       body: JSON.stringify(project)
     })
-    if (!response.ok) throw new Error('Failed to update example project')
+    if (!response.ok) await guard(response, 'Failed to update example project')
     return await response.json()
   },
 
   async reorderExampleProjects(ids: string[]) {
-    const response = await fetch('/draw//api/admin/example-projects/reorder', {
+    const response = await fetch(`${API_ROOT}/admin/example-projects/reorder`, {
       method: 'PUT',
       headers: {
         'Content-Type': 'application/json',
@@ -364,28 +393,28 @@ export const authService = {
       },
       body: JSON.stringify({ ids })
     })
-    if (!response.ok) throw new Error('Failed to reorder example projects')
+    if (!response.ok) await guard(response, 'Failed to reorder example projects')
     return await response.json()
   },
 
   async deleteExampleProject(id: string) {
-    const response = await fetch(`/draw//api/admin/example-projects/${id}`, {
+    const response = await fetch(`${API_ROOT}//admin/example-projects/${id}`, {
       method: 'DELETE',
       headers: this.getAuthHeader()
     })
-    if (!response.ok) throw new Error('Failed to delete example project')
+    if (!response.ok) await guard(response, 'Failed to delete example project')
   },
 
   async getLocalUsers() {
-    const response = await fetch('/draw//api/admin/local-users', {
+    const response = await fetch(`${API_ROOT}/admin/local-users`, {
       headers: this.getAuthHeader()
     })
-    if (!response.ok) throw new Error('Failed to fetch local users')
+    if (!response.ok) await guard(response, 'Failed to fetch local users')
     return await response.json()
   },
 
   async updateLocalUserNickname(userId: string, nickname: string) {
-    const response = await fetch(`/draw//api/admin/local-users/${userId}/nickname`, {
+    const response = await fetch(`${API_ROOT}//admin/local-users/${userId}/nickname`, {
       method: 'PUT',
       headers: {
         'Content-Type': 'application/json',
@@ -393,49 +422,49 @@ export const authService = {
       },
       body: JSON.stringify({ nickname })
     })
-    if (!response.ok) throw new Error('Failed to update local user nickname')
+    if (!response.ok) await guard(response, 'Failed to update local user nickname')
     return await response.json()
   },
 
   async getChatLogs(params: { userId?: string, startDate?: string, endDate?: string, page?: number, pageSize?: number }) {
     const query = new URLSearchParams(params as any).toString()
-    const response = await fetch(`/draw//api/admin/logs/chat?${query}`, {
+    const response = await fetch(`${API_ROOT}//admin/logs/chat?${query}`, {
       headers: this.getAuthHeader()
     })
-    if (!response.ok) throw new Error('Failed to fetch chat logs')
+    if (!response.ok) await guard(response, 'Failed to fetch chat logs')
     return await response.json()
   },
 
   async getFileLogs(params: { userId?: string, startDate?: string, endDate?: string, page?: number, pageSize?: number }) {
     const query = new URLSearchParams(params as any).toString()
-    const response = await fetch(`/draw//api/admin/logs/file?${query}`, {
+    const response = await fetch(`${API_ROOT}//admin/logs/file?${query}`, {
       headers: this.getAuthHeader()
     })
-    if (!response.ok) throw new Error('Failed to fetch file logs')
+    if (!response.ok) await guard(response, 'Failed to fetch file logs')
     return await response.json()
   },
 
   async getChatStatsByDate(params?: { userId?: string }): Promise<Array<{ date: string, count: number }>> {
     const query = params ? new URLSearchParams(params as any).toString() : ''
-    const response = await fetch(`/draw//api/admin/stats/chat-by-date${query ? `?${query}` : ''}`, {
+    const response = await fetch(`${API_ROOT}//admin/stats/chat-by-date${query ? `?${query}` : ''}`, {
       headers: this.getAuthHeader()
     })
-    if (!response.ok) throw new Error('Failed to fetch chat stats')
+    if (!response.ok) await guard(response, 'Failed to fetch chat stats')
     return await response.json()
   },
 
   async getFileStatsByDate(params?: { userId?: string }): Promise<Array<{ date: string, count: number }>> {
     const query = params ? new URLSearchParams(params as any).toString() : ''
-    const response = await fetch(`/draw//api/admin/stats/file-by-date${query ? `?${query}` : ''}`, {
+    const response = await fetch(`${API_ROOT}//admin/stats/file-by-date${query ? `?${query}` : ''}`, {
       headers: this.getAuthHeader()
     })
-    if (!response.ok) throw new Error('Failed to fetch file stats')
+    if (!response.ok) await guard(response, 'Failed to fetch file stats')
     return await response.json()
   },
 
   async validateAIConfig(config: any) {
     // Both local and cloud mode use the server endpoint for validation
-    const response = await fetch('/draw//api/auth/validate-ai-config', {
+    const response = await fetch(`${API_ROOT}/auth/validate-ai-config`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -443,7 +472,7 @@ export const authService = {
       },
       body: JSON.stringify(config)
     })
-    if (!response.ok) throw new Error('Failed to validate AI config')
+    if (!response.ok) await guard(response, 'Failed to validate AI config')
     return await response.json()
   },
 
@@ -454,7 +483,7 @@ export const authService = {
     details: any
   }) {
     try {
-      const response = await fetch('/draw//api/logs/chat', {
+      const response = await fetch(`${API_ROOT}/logs/chat`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -477,7 +506,7 @@ export const authService = {
     fileTitle: string
   }) {
     try {
-      const response = await fetch('/draw//api/logs/file', {
+      const response = await fetch(`${API_ROOT}/logs/file`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -495,7 +524,7 @@ export const authService = {
 
   async registerLocalUser(userId: string) {
     try {
-      const response = await fetch('/draw//api/local-users/register', {
+      const response = await fetch(`${API_ROOT}/local-users/register`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'

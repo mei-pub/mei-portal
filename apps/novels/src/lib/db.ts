@@ -212,11 +212,21 @@ export interface Chapter {
   created_at: string;
 }
 
-// ── Helper: parse tags from JSON string ──
+// ── Helper: parse tags from JSON string（脏数据容错：单行 tags 损坏不应拖垮全站） ──
 function parseNovelRow(row: Record<string, unknown>): Novel {
+  let tags: unknown = [];
+  if (typeof row.tags === 'string') {
+    try {
+      tags = JSON.parse(row.tags);
+    } catch {
+      tags = [];
+    }
+  } else if (row.tags) {
+    tags = row.tags;
+  }
   return {
     ...(row as Omit<Novel, 'tags'>),
-    tags: typeof row.tags === 'string' ? JSON.parse(row.tags) : row.tags || [],
+    tags: Array.isArray(tags) ? (tags as string[]) : [],
   };
 }
 
@@ -315,6 +325,19 @@ export function getAllNovels(libraryId: number): Novel[] {
   return rows.map(r => parseNovelRow(r as Record<string, unknown>));
 }
 
+/** 关键字搜索（SQL LIKE + LIMIT，避免 JS 层全量加载） */
+export function searchNovels(libraryId: number, keyword: string, limit: number): Novel[] {
+  const like = `%${keyword}%`;
+  const rows = db.prepare(
+    `SELECT * FROM novels
+     WHERE library_id = ?
+       AND (LOWER(title) LIKE ? OR LOWER(COALESCE(author, '')) LIKE ? OR LOWER(COALESCE(description, '')) LIKE ?)
+     ORDER BY updated_at DESC
+     LIMIT ?`
+  ).all(libraryId, like, like, like, limit);
+  return rows.map(r => parseNovelRow(r as Record<string, unknown>));
+}
+
 function attachNovelParts(novel: Novel): Novel & { chapters: Omit<Chapter, 'content'>[]; volumes: Volume[] } {
   const chapters = db.prepare(
     'SELECT id, novel_id, title, chapter_order, word_count, created_at FROM chapters WHERE novel_id = ? ORDER BY chapter_order ASC'
@@ -345,19 +368,34 @@ export function makeNovelSlug(titleOrSlug: string): string {
 
 export function createNovel(libraryId: number, input: { title: string; slug?: string; author?: string; description?: string; cover_url?: string; icon?: string; iconColor?: string; category?: string; tags?: string[]; status?: string }): Novel {
   const now = new Date().toISOString();
-  const slug = makeNovelSlug(input.slug || input.title);
   const stmt = db.prepare(
     `INSERT INTO novels (slug, library_id, title, author, description, cover_url, icon, icon_color, category, tags, status, word_count, rating, created_at, updated_at)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, ?, ?)`
   );
-  const info = stmt.run(
-    slug, libraryId, input.title, input.author || '', input.description || '',
-    input.cover_url || '', input.icon || '', input.iconColor || '', input.category || '',
-    JSON.stringify(input.tags || []), input.status || 'ongoing', now, now
-  );
-  return parseNovelRow(
-    db.prepare('SELECT * FROM novels WHERE id = ?').get(info.lastInsertRowid) as Record<string, unknown>
-  );
+  // slug 查重（makeNovelSlug 的 SELECT）与 INSERT 非原子：并发撞 idx_novels_slug 唯一索引时
+  // 捕获 SQLITE_CONSTRAINT 并加随机后缀重试，避免 500
+  let lastError: unknown;
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const base = attempt === 0
+      ? makeNovelSlug(input.slug || input.title)
+      : `${slugifySite(input.slug || input.title, Date.now()).replace(/^site-/, 'novel-')}-${Math.random().toString(36).slice(2, 7)}`;
+    const slug = attempt === 0 ? base : uniqueNovelSlug(base);
+    try {
+      const info = stmt.run(
+        slug, libraryId, input.title, input.author || '', input.description || '',
+        input.cover_url || '', input.icon || '', input.iconColor || '', input.category || '',
+        JSON.stringify(input.tags || []), input.status || 'ongoing', now, now
+      );
+      return parseNovelRow(
+        db.prepare('SELECT * FROM novels WHERE id = ?').get(info.lastInsertRowid) as Record<string, unknown>
+      );
+    } catch (err) {
+      const code = (err as { code?: string })?.code || '';
+      if (code !== 'SQLITE_CONSTRAINT') throw err;
+      lastError = err;
+    }
+  }
+  throw lastError;
 }
 
 export function updateNovel(id: number, libraryId: number, input: { title?: string; slug?: string; author?: string; description?: string; cover_url?: string; icon?: string; iconColor?: string; category?: string; tags?: string[]; status?: string; rating?: number }): boolean {
@@ -447,8 +485,12 @@ export function getChapterById(id: number, libraryId: number): Chapter | null {
   return (row as Chapter) || null;
 }
 
-export function createChapter(input: { novel_id: number; library_id: number; title: string; content: string; chapter_order: number }): Chapter {
-  const { novel_id, library_id, title, content, chapter_order } = input;
+export function createChapter(input: { novel_id: number; library_id: number; title: string; content: string; chapter_order: number; skipWordCount?: boolean }): Chapter | null {
+  const { novel_id, library_id, title, content, chapter_order, skipWordCount } = input;
+  // Verify novel belongs to library（与 createVolume 同款归属校验）
+  const novel = db.prepare('SELECT id FROM novels WHERE id = ? AND library_id = ?').get(novel_id, library_id);
+  if (!novel) return null;
+
   const now = new Date().toISOString();
   const wordCount = calculateWordCount(content);
 
@@ -457,13 +499,23 @@ export function createChapter(input: { novel_id: number; library_id: number; tit
   );
   const info = stmt.run(novel_id, title, content, chapter_order || 0, wordCount, now);
 
-  // Update novel word count and updated_at
-  const totalWords = db.prepare(
-    'SELECT COALESCE(SUM(word_count), 0) as total FROM chapters WHERE novel_id = ?'
-  ).get(novel_id) as { total: number };
-  db.prepare('UPDATE novels SET word_count = ?, updated_at = ? WHERE id = ?').run(totalWords.total, now, novel_id);
+  if (!skipWordCount) recalcNovelWordCount(novel_id, now);
 
   return db.prepare('SELECT * FROM chapters WHERE id = ?').get(info.lastInsertRowid) as Chapter;
+}
+
+/** 重算小说总字数并刷新 updated_at（批量导入时只在末尾调用一次，避免每章 SUM 的 O(n²)） */
+export function recalcNovelWordCount(novelId: number, now?: string): void {
+  const totalWords = db.prepare(
+    'SELECT COALESCE(SUM(word_count), 0) as total FROM chapters WHERE novel_id = ?'
+  ).get(novelId) as { total: number };
+  db.prepare('UPDATE novels SET word_count = ?, updated_at = ? WHERE id = ?')
+    .run(totalWords.total, now || new Date().toISOString(), novelId);
+}
+
+/** 在单个 SQLite 事务中执行（better-sqlite3 transaction 包装，供批量导入用） */
+export function withTransaction<T>(fn: () => T): T {
+  return db.transaction(fn)();
 }
 
 export function updateChapter(id: number, libraryId: number, input: { title: string; content: string; chapter_order: number }): boolean {

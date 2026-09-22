@@ -13,12 +13,14 @@ export interface LocalSourceQuery {
 
 /** 查询某剧的全部本地源记录（服务端顺带刷新在途任务状态并带回瞬时进度） */
 export async function fetchLocalSources(
-  query: LocalSourceQuery
+  query: LocalSourceQuery,
+  signal?: AbortSignal
 ): Promise<LocalSourceWithProgress[]> {
   const params = new URLSearchParams({ title: query.title });
   if (query.year) params.set('year', query.year);
   const res = await fetch(`/api/local-sources?${params.toString()}`, {
     cache: 'no-store',
+    signal,
   });
   if (!res.ok) {
     throw new Error(`查询本地源失败 (${res.status})`);
@@ -71,11 +73,20 @@ export async function createLocalDownload(
   };
 }
 
-/** 删除单条本地源记录（服务端同时清理落盘文件与空剧目录） */
-export async function deleteLocalSource(key: string): Promise<boolean> {
-  const res = await fetch(`/api/local-sources?key=${encodeURIComponent(key)}`, {
-    method: 'DELETE',
-  });
+/** 删除单条本地源记录。
+ *  files=1（默认）：级联清理落盘文件——未完成任务（pending/downloading/failed）
+ *  由服务端级联停止下载并清理临时文件，半成品不保留；
+ *  files=0：仅删记录、保留落盘文件（已完成记录由前端三选一交互决定）。 */
+export async function deleteLocalSource(
+  key: string,
+  files: 0 | 1 = 1
+): Promise<boolean> {
+  const res = await fetch(
+    `/api/local-sources?key=${encodeURIComponent(key)}&files=${files}`,
+    {
+      method: 'DELETE',
+    }
+  );
   if (!res.ok) {
     throw new Error(`删除本地源失败 (${res.status})`);
   }

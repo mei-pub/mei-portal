@@ -164,6 +164,18 @@
     if (ev.origin !== window.location.origin) return;
     var d = (ev && ev.data) || {};
     if (d.source === 'mei-iframe' && (d.type === 'topbar-space-request' || d.type === 'ready')) broadcastSpace();
+    // 子应用（iframe 内）上行的顶栏控制：EMBED 模式下顶栏不注入，应用文档里
+    // dispatch 的 mei-topbar-set / mei-topbar-suppress 只能由本监听器代为执行
+    //（与下行 {source:'mei-shell',type:'topbar-space'} 对称的上行通道）。
+    if (d.source === 'mei-app') {
+      if (d.type === 'topbar-set') {
+        window.dispatchEvent(new CustomEvent('mei-topbar-set', { detail: d.detail || {} }));
+      } else if (d.type === 'topbar-suppress') {
+        window.dispatchEvent(new CustomEvent('mei-topbar-suppress', { detail: d.detail || {} }));
+      } else if (d.type === 'topbar-reset-transient') {
+        window.dispatchEvent(new Event('mei-topbar-reset-transient'));
+      }
+    }
   });
 
   // 外壳 → iframe 的形态广播：iframe 内没有顶栏，收起态只能靠外壳告知。
@@ -184,6 +196,25 @@
         window.parent.postMessage({ source: 'mei-iframe', type: 'topbar-space-request' }, window.location.origin);
       }
     } catch (e) {}
+    // 上行通道：EMBED 模式下顶栏不注入，本文档里应用 dispatch 的
+    // mei-topbar-set / mei-topbar-suppress / mei-topbar-reset-transient
+    // 没有本地监听者可执行，必须转发给外壳的 topbar 实例（source:'mei-app'，
+    // 与下行 {source:'mei-shell',type:'topbar-space'} 对称）。典型用途：
+    // 影视播放页进入播放态时自动收起顶栏（tv play-client 广播 mei-topbar-set）。
+    ['mei-topbar-set', 'mei-topbar-suppress', 'mei-topbar-reset-transient'].forEach(function (name) {
+      var type = name === 'mei-topbar-set'
+        ? 'topbar-set'
+        : name === 'mei-topbar-suppress' ? 'topbar-suppress' : 'topbar-reset-transient';
+      window.addEventListener(name, function (e) {
+        try {
+          if (!window.parent || window.parent === window) return;
+          window.parent.postMessage(
+            { source: 'mei-app', type: type, detail: (e && e.detail) || {} },
+            window.location.origin
+          );
+        } catch (err) {}
+      });
+    });
   }
 
   // ---- 应用预热 ----
@@ -242,16 +273,26 @@
     try { localStorage.setItem('mei-enabled', JSON.stringify(m)); } catch (e) {}
   }
 
+  // HTML 转义：所有动态插值进 innerHTML 前必须走这里（存储型 XSS 防线）
+  function escapeHtml(s) {
+    return String(s == null ? '' : s)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+
   // 兼容旧 panel 数据中内置应用绑定 loopback:7777 / same-host:7777 的地址。
-  // 显式自定义域名和同 host 的其他端口必须保留。
+  // 显式自定义域名和同 host 的其他端口必须保留：只有 7777 这一旧端口才归一为子路径，
+  // 同 host 默认端口（port 为空）的 URL 视为显式自定义部署，原样保留。
   function normalizeBuiltinUrl(url) {
     if (!url || !/^https?:\/\//i.test(url)) return url;
     try {
       var parsed = new URL(url, window.location.href);
       var localHost = ['localhost', '127.0.0.1', '0.0.0.0', '::1', '[::1]'].indexOf(parsed.hostname) >= 0;
       var sameHost = parsed.hostname === window.location.hostname;
-      var legacyPort = parsed.port === '' || parsed.port === '7777';
-      if ((localHost && parsed.port === '7777') || (sameHost && legacyPort)) {
+      if ((localHost || sameHost) && parsed.port === '7777') {
         return parsed.pathname + parsed.search + parsed.hash;
       }
     } catch (e) {}
@@ -373,6 +414,23 @@
     ].join('');
     document.head.appendChild(style);
 
+    // 书架面板的全局关闭监听（click/Escape/resize/scroll）只挂一次：
+    // heal 循环会反复重建顶栏，每次重建都 addEventListener 会无上限累积监听器。
+    // 处理函数委托给「当前」的 closeLibMenu，重建后自然作用于新书架面板。
+    var libMenuGlobalsBound = false;
+    var libMenuCurrentClose = null;
+    function bindLibMenuGlobals(close) {
+      libMenuCurrentClose = close;
+      if (libMenuGlobalsBound) return;
+      libMenuGlobalsBound = true;
+      document.addEventListener('click', function () { if (libMenuCurrentClose) libMenuCurrentClose(); });
+      document.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape' && libMenuCurrentClose) libMenuCurrentClose();
+      });
+      window.addEventListener('resize', function () { if (libMenuCurrentClose) libMenuCurrentClose(); });
+      window.addEventListener('scroll', function () { if (libMenuCurrentClose) libMenuCurrentClose(); }, true);
+    }
+
     // 顶栏用 position:sticky 自然占位，无需 padding-top
     function buildTopbar(plugins) {
       // 重建前清理旧的书架面板（SPA heal 重建顶栏时避免残留多个）
@@ -393,7 +451,7 @@
           if (cfg && cfg.style) {
             var txt = document.getElementById('mtb-brand-text');
             if (cfg.style.logoImage) {
-              brand.innerHTML = '<img src="' + cfg.style.logoImage + '" alt="logo" style="height:22px;max-width:120px;object-fit:contain;border-radius:6px;flex-shrink:0;" /><span class="mtb-brand-text" id="mtb-brand-text"></span>';
+              brand.innerHTML = '<img src="' + escapeHtml(cfg.style.logoImage) + '" alt="logo" style="height:22px;max-width:120px;object-fit:contain;border-radius:6px;flex-shrink:0;" /><span class="mtb-brand-text" id="mtb-brand-text"></span>';
             } else if (cfg.style.logoText) {
               if (txt) txt.textContent = cfg.style.logoText;
             }
@@ -462,7 +520,7 @@
         var libBtn = document.createElement('button');
         libBtn.className = 'mtb-btn' + (libGroupActive ? ' active' : '');
         libBtn.style.display = 'inline-flex';
-        libBtn.innerHTML = '<span>' + tutorialPlugin.name + '</span>' +
+        libBtn.innerHTML = '<span>' + escapeHtml(tutorialPlugin.name) + '</span>' +
           '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" style="margin-left:3px;opacity:.6"><path d="m6 9 6 6 6-6"/></svg>';
         libBtn.title = '小说阅读 · 站点面板';
         // 站点面板：挂 body + fixed 定位（.mei-apps 有 overflow-x:auto，绝对定位会被裁剪）
@@ -512,10 +570,7 @@
             .catch(function () { renderSites([]); });
         };
         libMenu.onclick = function (e) { e.stopPropagation(); };
-        document.addEventListener('click', closeLibMenu);
-        document.addEventListener('keydown', function (e) { if (e.key === 'Escape') closeLibMenu(); });
-        window.addEventListener('resize', closeLibMenu);
-        window.addEventListener('scroll', closeLibMenu, true);
+        bindLibMenuGlobals(closeLibMenu);
         mountRoot().appendChild(libMenu);
         wrap.appendChild(libBtn);
         apps.appendChild(wrap);
@@ -711,11 +766,23 @@
       // 重建后（或解除抑制后）按当前形态重新落地，保证跨应用跳转形态不变
       applyCollapseState();
     }
+    // 自愈循环：文档不可见时暂停；连续多轮自检未发现异常则把周期拉长到 30s，
+    // 避免每 5s 永久空转（数据拉取只在启动时进行一次，自愈只做 DOM 存在性检查）。
     var healCount = 0;
+    var healOkStreak = 0;
     function healLoop() {
-      ensureBar();
-      healCount++;
-      setTimeout(healLoop, healCount < 20 ? 300 : 5000);
+      var delay = healCount < 20 ? 300 : 5000;
+      if (document.hidden) {
+        // 后台标签页：跳过自检（SPA hydration 只发生在可见时），周期复位为常规值
+        healOkStreak = 0;
+      } else {
+        ensureBar();
+        healCount++;
+        var healthy = SUPPRESSED || !!document.getElementById('mei-topbar');
+        healOkStreak = healthy ? healOkStreak + 1 : 0;
+        if (healOkStreak >= 6) delay = 30000;
+      }
+      setTimeout(healLoop, delay);
     }
     setTimeout(healLoop, 500);
     // 应用切换后立即重建（不等自愈循环）

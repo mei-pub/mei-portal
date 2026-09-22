@@ -59,6 +59,24 @@ interface ApiResponse<T> {
   data: T;
 }
 
+/**
+ * 统一解包（D10 兼容层）：引擎各端点响应形态不一致——
+ * 有的裸 data（如 /health、/api/check/links 早期约定），有的 {code,message,data} 包装。
+ * - 有 code 字段且 code !== 0 → 视为业务失败，抛错（失败绝不能被当成功消费）
+ * - 有 data 字段 → 返回 data
+ * - 否则原样返回（裸 data 形态）
+ */
+function unwrap<T>(body: unknown): T {
+  if (body && typeof body === 'object' && 'code' in (body as Record<string, unknown>)) {
+    const { code, message, data } = body as ApiResponse<T>;
+    if (typeof code === 'number' && code !== 0) {
+      throw new Error(message || `请求失败 (code=${code})`);
+    }
+    if (data !== undefined) return data;
+  }
+  return body as T;
+}
+
 // 健康状态接口（基于实际API返回）
 export interface HealthStatus {
   status: string;
@@ -101,19 +119,15 @@ export const search = async (params: SearchParams): Promise<SearchResponse> => {
     ...params,
     ext: JSON.stringify({ referer: "https://dm.xueximeng.com" })
   };
-  
-  const response = await api.get<ApiResponse<SearchResponse>>('/search', { params: searchParams });
-  
-  // 如果响应中包含data字段，则返回data
-  if (response.data && response.data.data) {
-    return response.data.data;
+
+  const response = await api.get<unknown>('/search', { params: searchParams });
+  const body = unwrap<SearchResponse | Partial<SearchResponse>>(response.data);
+
+  // 如果响应本身就是SearchResponse格式（裸 data 形态）
+  if (body && body.total !== undefined && body.merged_by_type) {
+    return body as SearchResponse;
   }
-  
-  // 如果响应本身就是SearchResponse格式
-  if (response.data && response.data.total !== undefined && response.data.merged_by_type) {
-    return response.data as unknown as SearchResponse;
-  }
-  
+
   // 返回空结果
   return {
     total: 0,
@@ -124,15 +138,23 @@ export const search = async (params: SearchParams): Promise<SearchResponse> => {
 
 // 登录
 export const login = async (params: LoginParams): Promise<LoginResponse> => {
-  const response = await api.post<LoginResponse>('/auth/login', params);
-  return response.data;
+  const response = await api.post<unknown>('/auth/login', params);
+  // 引擎失败时也可能返回 HTTP 200 {code:1001}（旧版行为），必须校验 code，
+  // 绝不能把失败响应里的 undefined token 当登录成功写进 localStorage
+  const data = unwrap<LoginResponse>(response.data);
+  if (!data || typeof data.token !== 'string' || data.token === '') {
+    throw new Error('登录响应缺少凭证');
+  }
+  return data;
 };
 
 // 验证token
 export const verifyToken = async (): Promise<boolean> => {
   try {
-    await api.post('/auth/verify');
-    return true;
+    // 引擎对无效 token 返回 HTTP 200 {code:1002}，必须解包判断 code 而非只看 HTTP 状态
+    const response = await api.post<unknown>('/auth/verify');
+    const data = unwrap<{ valid?: boolean }>(response.data);
+    return data?.valid === true;
   } catch {
     return false;
   }
@@ -152,11 +174,12 @@ export const inspectVisibleLinks = async (
   items: LinkCheckItem[],
   view_token?: string
 ): Promise<LinkCheckResponse> => {
-  const response = await api.post<LinkCheckResponse>('/check/links', {
+  const response = await api.post<unknown>('/check/links', {
     items,
     view_token
   });
-  return response.data;
+  // 兼容两种响应形态（{code,message,data} 包装 / 裸 data），统一返回业务数据
+  return unwrap<LinkCheckResponse>(response.data);
 };
 
 // 检查认证状态

@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
   EmptyState,
@@ -27,6 +27,8 @@ export default function AiDrawStatus() {
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  // 请求序号：userId/page 快速切换时，慢的旧响应不得覆盖新筛选的结果
+  const loadSeqRef = useRef(0);
 
   function detailText(value: unknown): string {
     if (!value) return '-';
@@ -39,6 +41,7 @@ export default function AiDrawStatus() {
   }
 
   const load = useCallback(async () => {
+    const seq = ++loadSeqRef.current;
     setLoading(true);
     try {
       const q = userId ? `?userId=${encodeURIComponent(userId)}&` : '?';
@@ -48,15 +51,17 @@ export default function AiDrawStatus() {
         authorizedJsonFetch<Paged<ChatLog>>(`/draw/api/admin/logs/chat${q}page=${page}&pageSize=10`, 'ai-draw'),
         authorizedJsonFetch<Paged<FileLog>>(`/draw/api/admin/logs/file${q}page=${page}&pageSize=10`, 'ai-draw'),
       ]);
+      if (seq !== loadSeqRef.current) return; // 已被更新的查询取代，丢弃旧结果
       setChatStats(Array.isArray(cs) ? cs : []);
       setFileStats(Array.isArray(fs) ? fs : []);
       setChatLogs(cl);
       setFileLogs(fl);
       setError('');
     } catch (err) {
+      if (seq !== loadSeqRef.current) return;
       setError((err as Error).message || '读取绘图运行状态失败');
     } finally {
-      setLoading(false);
+      if (seq === loadSeqRef.current) setLoading(false);
     }
   }, [userId, page]);
 
@@ -65,6 +70,20 @@ export default function AiDrawStatus() {
   const chatTotal = useMemo(() => chatStats.reduce((sum, item) => sum + item.count, 0), [chatStats]);
   const fileTotal = useMemo(() => fileStats.reduce((sum, item) => sum + item.count, 0), [fileStats]);
   const max = Math.max(1, ...chatStats.map((v) => v.count), ...fileStats.map((v) => v.count));
+
+  // 两个序列按日期对齐（不能按下标 zip：某序列缺某天时后续柱子会整体错位）
+  const chartDays = useMemo(() => {
+    const fileByDate = new Map(fileStats.map((item) => [item.date, item.count]));
+    const dates = new Set([...chatStats.map((v) => v.date), ...fileStats.map((v) => v.date)]);
+    return [...dates]
+      .sort((a, b) => a.localeCompare(b))
+      .map((date) => ({
+        date,
+        chat: chatStats.find((v) => v.date === date)?.count || 0,
+        file: fileByDate.get(date) || 0,
+      }))
+      .reverse();
+  }, [chatStats, fileStats]);
 
   return (
     <SettingsPage
@@ -105,18 +124,15 @@ export default function AiDrawStatus() {
               <span><i className="bar file" /> 文件创建</span>
             </div>
             <div className="chart">
-              {[...chatStats].reverse().map((item, i) => {
-                const fileItem = [...fileStats].reverse()[i];
-                return (
-                  <div key={item.date} className="chart-day">
+              {chartDays.map((day) => (
+                  <div key={day.date} className="chart-day">
                     <div className="bars">
-                      <div className="bar chat" style={{ height: `${Math.max(3, (item.count / max) * 100)}px` }} />
-                      <div className="bar file" style={{ height: `${Math.max(3, ((fileItem?.count || 0) / max) * 100)}px` }} />
+                      <div className="bar chat" style={{ height: `${Math.max(3, (day.chat / max) * 100)}px` }} />
+                      <div className="bar file" style={{ height: `${Math.max(3, (day.file / max) * 100)}px` }} />
                     </div>
-                    <small>{item.date.slice(5)}</small>
+                    <small>{day.date.slice(5)}</small>
                   </div>
-                );
-              })}
+                ))}
             </div>
           </div>
         )}

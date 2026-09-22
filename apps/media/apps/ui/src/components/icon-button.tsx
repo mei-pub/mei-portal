@@ -13,7 +13,8 @@ interface Props extends PropsWithChildren {
   title?: string;
   onClick?: () => void;
   disabled?: boolean;
-  icon?: ReactElement;
+  /** 图标元素需接受 className / fill（cloneElement 注入尺寸/配色） */
+  icon?: ReactElement<{ className?: string; fill?: string }>;
 }
 
 export const IconButton = memo(function IconButton({

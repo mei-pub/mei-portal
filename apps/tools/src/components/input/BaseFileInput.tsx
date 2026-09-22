@@ -66,6 +66,17 @@ export default function BaseFileInput({
         .catch((err) => {
           showSnackBar(t('baseFileInput.copyFailed', { error: err }), 'error');
         });
+      return;
+    }
+    // 单文件场景（本组件 value 实际只有 File | null）：复制文件名并给出成功反馈，
+    // 否则复制按钮点了没有任何效果
+    if (value) {
+      navigator.clipboard
+        .writeText(value.name)
+        .then(() => showSnackBar(t('baseFileInput.fileNameCopied'), 'success'))
+        .catch((err) => {
+          showSnackBar(t('baseFileInput.copyFailed', { error: err }), 'error');
+        });
     }
   };
 

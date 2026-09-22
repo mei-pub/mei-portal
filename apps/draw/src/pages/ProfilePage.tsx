@@ -677,7 +677,7 @@ function ModelSelectorDialog({ open, onOpenChange, apiKey, baseUrl, provider, ex
   const fetchModels = async () => {
     setLoading(true)
     try {
-      const response = await fetch('/draw//api/ai/models', {
+      const response = await fetch('/draw/api/ai/models', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -691,9 +691,13 @@ function ModelSelectorDialog({ open, onOpenChange, apiKey, baseUrl, provider, ex
       })
 
       if (!response.ok) {
-        const error = await response.json()
-        throw new Error(error.error || '获取模型列表失败')
-      }
+        const text = await response.text()
+        let message = '获取模型列表失败'
+        try {
+          message = JSON.parse(text).error || message
+        } catch { /* 非 JSON 响应体，用默认文案 */ }
+        throw new Error(message)
+        }
 
       const data = await response.json()
       const models = data.models || []
