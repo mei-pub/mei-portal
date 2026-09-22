@@ -6,16 +6,22 @@
 // 分类 tab 在此之上叠加个性化项（编辑/开始下载/加入多选等），不得少于全部 tab。
 // 加入播放列表走实时 GET + revision PUT（409 重试）+ replace-data 同步外壳引擎。
 import { App, Modal } from "antd";
-import { DownloadStatus } from "@mediago/shared-common";
-import type { DownloadTask } from "@mediago/shared-common";
+import {
+  DownloadStatus,
+  type DownloadTask,
+  type DownloadTaskWithFile,
+} from "@mediago/shared-common";
 import { useMemoizedFn } from "ahooks";
-import { type FC, type ReactNode, useState } from "react";
+import { type FC, useState } from "react";
 import useSWR from "swr";
 import Terminal from "@/components/download-terminal";
-import type { ContextMenuItem } from "@/components/web-context-menu";
-import { useWebContextMenu } from "@/components/web-context-menu";
+import {
+  useWebContextMenu,
+  type ContextMenuItem,
+} from "@/components/web-context-menu";
 export type { ContextMenuItem };
 import {
+  appFileUrl,
   deleteMediaTask,
   deleteMovieSource,
   deleteMusicFile,
@@ -67,9 +73,15 @@ export function useMusicGuest() {
   const { data, mutate } = useSWR(
     MUSIC_STATE_SWR_KEY,
     async () => {
-      const r = await fetch("/api/music/state");
-      if (!r.ok) return null;
-      return (await r.json()) as { loggedIn: boolean; state: MusicStateLite };
+      // 绝对路径 /api/music/state 仅门户同源部署可达；独立部署/网络异常时
+      // 静默降级为 null（菜单显示「暂无播放列表」禁用态，不抛错刷屏）
+      try {
+        const r = await fetch("/api/music/state");
+        if (!r.ok) return null;
+        return (await r.json()) as { loggedIn: boolean; state: MusicStateLite };
+      } catch {
+        return null;
+      }
     },
     { refreshInterval: 15000, revalidateOnFocus: false },
   );
@@ -243,6 +255,11 @@ export function useContentMenu(deps: ContentMenuDeps) {
         if (isMediaVideoTask(task)) {
           items.push({ key: "play-media", label: "播放" });
         }
+        // 磁力/文件任务没有播放页：产物回拉走 /files/:id 附件端点
+        // （下载中心 UI 的媒体任务列表带 exists 字段，文件在盘才给入口）
+        if ((task as DownloadTaskWithFile).exists) {
+          items.push({ key: "download-local", label: "下载到本地" });
+        }
         break;
     }
     items.push({ key: "log", label: "查看日志" });
@@ -290,6 +307,11 @@ export function useContentMenu(deps: ContentMenuDeps) {
           break;
         case "log":
           setLogTarget({ id: task.id, name: task.name });
+          break;
+        case "download-local":
+          // 附件端点：appFileUrl 构造绝对路径（门户 /downloads 前缀 / 独立根路径），
+          // attachment 响应触发浏览器下载
+          window.location.href = appFileUrl(`files/${task.id}`);
           break;
         case "delete": {
           const unfinished =
@@ -350,21 +372,22 @@ export function useContentMenu(deps: ContentMenuDeps) {
         break;
       }
       case "del-movie": {
-        modal.confirm({
-          title: `删除《${record.title}》${record.name} 的下载记录？`,
-          content: "将同时删除已下载的视频文件。",
-          okText: "删除",
-          okButtonProps: { danger: true },
-          onOk: async () => {
-            try {
-              await deleteMovieSource(record.key, true);
-              message.success("已删除");
-            } catch {
-              message.error("删除失败");
-            }
-            deps.refresh();
-          },
+        // 统一删除契约（useDeleteTasks 三选一）：未完成必然级联停止下载并
+        // 清理临时文件；已完成由用户选择是否连文件删除
+        const unfinished = record.status !== "done" ? 1 : 0;
+        const choice = await deps.confirmDelete({
+          unfinished,
+          done: 1 - unfinished,
+          label: `《${record.title}》${record.name}`,
         });
+        if (choice === null) break; // 取消
+        try {
+          await deleteMovieSource(record.key, choice);
+          message.success("已删除");
+        } catch (e) {
+          message.error((e as Error).message || "删除失败");
+        }
+        deps.refresh();
         break;
       }
     }
@@ -377,7 +400,7 @@ export function useContentMenu(deps: ContentMenuDeps) {
       if (record.status === "done") {
         items.push({ key: "play-movie", label: "立即播放", disabled: !playable });
       }
-      items.push({ key: "del-movie", label: "删除记录（含文件）", danger: true });
+      items.push({ key: "del-movie", label: "删除…", danger: true });
       items.push({ key: "sep-2", label: "", separator: true });
       items.push({ key: "refresh", label: "刷新列表" });
       openMenu(e, items, (key) => {
@@ -407,7 +430,9 @@ export function useContentMenu(deps: ContentMenuDeps) {
       case "fav-music": {
         const song = music.musicFileSong(file);
         if (music.sendMusicGuest({ type: "toggle-favorite", song })) {
-          message.success("已在门户音乐引擎中切换收藏");
+          // 外壳引擎对 toggle-favorite 无 ack 协议，只能确认「已发送」，
+          // 不断言收藏结果（实际结果以 MusicDock 面板为准）
+          message.success("已发送到门户音乐引擎");
         }
         break;
       }
@@ -482,7 +507,8 @@ export function useContentMenu(deps: ContentMenuDeps) {
   );
 
   const openMusicTaskMenu = useMemoizedFn(
-    (e: React.MouseEvent, taskId: string | number, name: string) => {
+    // name 参数保留调用方签名（音乐 tab 传歌名占位），菜单本身未用到
+    (e: React.MouseEvent, taskId: string | number, _name: string) => {
       const items: ContextMenuItem[] = [
         { key: "cancel-music", label: "取消下载" },
         { key: "sep-2", label: "", separator: true },

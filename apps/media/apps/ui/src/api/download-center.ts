@@ -6,7 +6,12 @@
 //   5. GET    /api/v1/videos                   → MediaPlayableVideo[]（裸 JSON，media core）
 //
 // 单镜像同源部署（UI 在 /downloads/ iframe 内），相对路径 fetch 自动携带门户
-// mei-auth cookie；不经过 http axios 实例（那是 media core 专用，会注入 X-API-Key）。
+// mei-auth cookie；/tv、/music 契约口不经过 http axios 实例（那是 media core
+// 专用，会注入 X-API-Key）。
+// media core 自身的端点（删除任务 / 可播视频列表）走 http 实例：electron 桌面
+// 模式其 baseURL 指向本地 core 且需要 X-API-Key，裸 fetch 相对路径必失败；
+// web 模式 baseURL = 同源 origin，行为不变。
+import { http } from "@/utils";
 
 export type MovieSourceStatus = "pending" | "downloading" | "done" | "failed";
 
@@ -63,10 +68,14 @@ async function requestJson<T>(url: string, init?: RequestInit): Promise<T> {
   if (!resp.ok) {
     throw new Error(`服务响应异常（HTTP ${resp.status}）`);
   }
+  // 先以 resp.ok 判定成功；204 / 空 body / 非 JSON body 不再误判为失败
+  // （DELETE 契约口可能不带响应体），统一按成功处理返回 undefined
+  const text = await resp.text().catch(() => "");
+  if (!text.trim()) return undefined as T;
   try {
-    return (await resp.json()) as T;
+    return JSON.parse(text) as T;
   } catch {
-    throw new Error("服务响应格式异常");
+    return undefined as T;
   }
 }
 
@@ -108,17 +117,31 @@ export function deleteMusicFile(path: string): Promise<void> {
 }
 
 /** 删除 media 下载任务：停止下载；deleteFiles=true 连落盘产物一起清理
- *  （未完成任务的分片临时 / 已完成任务的成品文件） */
+ *  （未完成任务的分片临时 / 已完成任务的成品文件）。
+ *  走 http 实例（electron 桌面 baseURL + X-API-Key），见文件头说明 */
 export function deleteMediaTask(id: number, deleteFiles = false): Promise<void> {
-  return requestJson(
-    `/api/downloads/${id}?deleteFiles=${deleteFiles ? "1" : "0"}`,
-    { method: "DELETE" },
-  );
+  return http
+    .delete(`/api/downloads/${id}`, {
+      params: { deleteFiles: deleteFiles ? 1 : 0 },
+    })
+    .then(() => undefined);
 }
 
 /** 契约 5：media core 可播视频列表（已成功且文件在盘的任务，裸 JSON 数组） */
 export function listMediaVideos(): Promise<MediaPlayableVideo[]> {
-  return requestJson<MediaPlayableVideo[]>(getMediaVideosKey);
+  return http.get(getMediaVideosKey).then((data: unknown) =>
+    Array.isArray(data) ? (data as MediaPlayableVideo[]) : [],
+  );
+}
+
+/** 应用内附件直链：门户部署挂在 /downloads 前缀（与 main.tsx 的
+ *  routerBasename 同规则），独立部署/桌面在根路径。相对路径 files/:id 在
+ *  /downloads 无尾斜杠时会被解析到站点根（/files/:id 404），必须用本函数 */
+export function appFileUrl(path: string): string {
+  const prefix = window.location.pathname.startsWith("/downloads")
+    ? "/downloads/"
+    : "/";
+  return `${prefix}${path.replace(/^\/+/, "")}`;
 }
 
 /** media core /api/v1/videos 的 SWR 缓存 key（可播视频列表共享缓存） */

@@ -11,10 +11,9 @@ export default function OverlayDialog() {
   const dialogId = useId();
 
   useEffect(() => {
-    const onShowOverlayDialog = (
-      _e: unknown,
-      data: Omit<DownloadTask, "id">[],
-    ) => {
+    // Callback 契约是 (...args: unknown[])，IPC 载荷在 [1] 位
+    const onShowOverlayDialog = (...args: unknown[]) => {
+      const data = args[1] as Omit<DownloadTask, "id">[];
       const item = data[0];
       downloadForm.current?.openModal({
         batch: false,

@@ -25,6 +25,8 @@ if (isWeb) {
       release: import.meta.env.APP_VERSION,
       environment: import.meta.env.MODE,
     },
-    reactInit,
+    // @sentry/react 与 @sentry/electron 内部 SDK 版本存在 skew，renderer 侧
+    // 复用 reactInit 是既定运行时行为，此处仅做类型桥接
+    reactInit as unknown as Parameters<typeof init>[1],
   );
 }

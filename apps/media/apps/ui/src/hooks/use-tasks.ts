@@ -159,9 +159,12 @@ export function useTasks(
     [mutate, setEvents],
   );
 
-  // Subscribe to Go SSE download events
+  // Subscribe to Go SSE download events（Callback 契约是 (...args: unknown[])，
+  // 事件载荷在 [1] 位）
   useEffect(() => {
-    return onDownloadEvent(handleDownloadEvent);
+    return onDownloadEvent((...args: unknown[]) =>
+      handleDownloadEvent(args[0], args[1] as DownloadEvent),
+    );
   }, [handleDownloadEvent]);
 
   return {

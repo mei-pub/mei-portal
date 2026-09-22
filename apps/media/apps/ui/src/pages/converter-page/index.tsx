@@ -112,8 +112,10 @@ const Converter = () => {
         quality,
       });
       tdApp.onEvent(ADD_CONVERT_TASK);
-      if (startImmediately && (conv as Record<string, unknown>)?.id) {
-        await startConversion((conv as Record<string, unknown>).id);
+      if (startImmediately && (conv as unknown as Record<string, unknown>)?.id) {
+        await startConversion(
+          Number((conv as unknown as Record<string, unknown>).id),
+        );
       }
       setAddModalOpen(false);
     } catch (e: unknown) {
