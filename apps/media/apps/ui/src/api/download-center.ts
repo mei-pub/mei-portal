@@ -4,6 +4,7 @@
 //   3. GET    /music/api/download/library      → { tasks, files }
 //   4. DELETE /music/api/download/library?path=→ { removed: true }
 //   5. GET    /api/v1/videos                   → MediaPlayableVideo[]（裸 JSON，media core）
+//   6. PUT    /tv/api/local-sources            → { updated: true }（修改信息，同步改名 media 任务）
 //
 // 单镜像同源部署（UI 在 /downloads/ iframe 内），相对路径 fetch 自动携带门户
 // mei-auth cookie；/tv、/music 契约口不经过 http axios 实例（那是 media core
@@ -13,7 +14,12 @@
 // web 模式 baseURL = 同源 origin，行为不变。
 import { http } from "@/utils";
 
-export type MovieSourceStatus = "pending" | "downloading" | "done" | "failed";
+export type MovieSourceStatus =
+  | "pending"
+  | "downloading"
+  | "paused"
+  | "done"
+  | "failed";
 
 export interface MovieSourceRecord {
   key: string;
@@ -114,6 +120,15 @@ export function deleteMusicFile(path: string): Promise<void> {
     `/music/api/download/library?path=${encodeURIComponent(path)}`,
     { method: "DELETE" },
   ).then(() => undefined);
+}
+
+/** 契约 6：修改信息——重命名影视记录显示名；服务端同步改名 media 下载任务 */
+export function renameMovieSource(key: string, name: string): Promise<void> {
+  return requestJson<{ updated?: boolean }>("/tv/api/local-sources", {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ key, name }),
+  }).then(() => undefined);
 }
 
 /** 删除 media 下载任务：停止下载；deleteFiles=true 连落盘产物一起清理

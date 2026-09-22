@@ -5,7 +5,7 @@
 //   音乐任务：取消（删除任务并清理临时文件）
 // 分类 tab 在此之上叠加个性化项（编辑/开始下载/加入多选等），不得少于全部 tab。
 // 加入播放列表走实时 GET + revision PUT（409 重试）+ replace-data 同步外壳引擎。
-import { App, Modal } from "antd";
+import { App, Input, Modal } from "antd";
 import {
   DownloadStatus,
   type DownloadTask,
@@ -28,6 +28,7 @@ import {
   deleteMusicTask,
   listMediaVideos,
   type MovieSourceRecord,
+  renameMovieSource,
 } from "@/api/download-center";
 import { startDownload, stopDownload } from "@/api/download-task";
 import {
@@ -359,6 +360,33 @@ export function useContentMenu(deps: ContentMenuDeps) {
 
   // ---- 影视记录 ----
 
+  // 修改信息弹层状态（影视记录重命名；tv 记录 + media 任务双侧同步）
+  const [renameTarget, setRenameTarget] = useState<MovieSourceRecord | null>(
+    null,
+  );
+  const [renameValue, setRenameValue] = useState("");
+  const [renaming, setRenaming] = useState(false);
+
+  /** 影视记录 → media 任务视图（生命周期动作复用 taskAction 的迅雷语义） */
+  const movieTaskFromRecord = (record: MovieSourceRecord): DownloadTask => {
+    const statusMap: Record<
+      MovieSourceRecord["status"],
+      DownloadStatus
+    > = {
+      pending: DownloadStatus.Pending,
+      downloading: DownloadStatus.Downloading,
+      paused: DownloadStatus.Stopped,
+      done: DownloadStatus.Success,
+      failed: DownloadStatus.Failed,
+    };
+    return {
+      id: Number(record.mediaTaskId),
+      name: record.name,
+      status: statusMap[record.status],
+      type: "mediago",
+    } as unknown as DownloadTask;
+  };
+
   const movieAction = useMemoizedFn(async (key: string, record: MovieSourceRecord) => {
     switch (key) {
       case "play-movie": {
@@ -369,6 +397,12 @@ export function useContentMenu(deps: ContentMenuDeps) {
         const target = movieFallbackVideo(record);
         if (target) deps.inlinePlayer.play(target);
         else message.info("该记录没有可播放的文件");
+        break;
+      }
+      case "edit-movie": {
+        // 修改信息（对齐迅雷）：重命名集名；tv 记录与 media 任务双侧同步
+        setRenameTarget(record);
+        setRenameValue(record.name);
         break;
       }
       case "del-movie": {
@@ -390,6 +424,10 @@ export function useContentMenu(deps: ContentMenuDeps) {
         deps.refresh();
         break;
       }
+      // 生命周期/日志/下载到本地：与下载任务同语义，复用 taskAction
+      default:
+        await taskAction(key, movieTaskFromRecord(record));
+        break;
     }
   });
 
@@ -397,8 +435,28 @@ export function useContentMenu(deps: ContentMenuDeps) {
     (e: React.MouseEvent, record: MovieSourceRecord) => {
       const playable = !!record.playRoute || !!movieFallbackVideo(record);
       const items: ContextMenuItem[] = [];
-      if (record.status === "done") {
-        items.push({ key: "play-movie", label: "立即播放", disabled: !playable });
+      // 生命周期语义对齐迅雷：暂停 / 继续 / 重试 / 播放 / 下载到本地
+      switch (record.status) {
+        case "downloading":
+          items.push({ key: "pause", label: "暂停下载" });
+          break;
+        case "pending":
+        case "paused":
+          items.push({ key: "start", label: "继续下载" });
+          break;
+        case "failed":
+          items.push({ key: "start", label: "重试" });
+          break;
+        case "done":
+          items.push({ key: "play-movie", label: "立即播放", disabled: !playable });
+          if (record.localUrl) {
+            items.push({ key: "download-local", label: "下载到本地" });
+          }
+          break;
+      }
+      items.push({ key: "edit-movie", label: "修改信息…" });
+      if (record.status !== "done") {
+        items.push({ key: "log", label: "查看日志" });
       }
       items.push({ key: "del-movie", label: "删除…", danger: true });
       items.push({ key: "sep-2", label: "", separator: true });
@@ -411,6 +469,67 @@ export function useContentMenu(deps: ContentMenuDeps) {
         void movieAction(key, record);
       });
     },
+  );
+
+  const renameModal = (
+    <Modal
+      title="修改信息"
+      open={renameTarget !== null}
+      onCancel={() => setRenameTarget(null)}
+      okText="保存"
+      cancelText="取消"
+      confirmLoading={renaming}
+      okButtonProps={{ disabled: renameValue.trim() === "" }}
+      width={460}
+      destroyOnClose
+      onOk={async () => {
+        const target = renameTarget;
+        const name = renameValue.trim();
+        if (!target || name === "") {
+          message.warning("名称不能为空");
+          return;
+        }
+        setRenaming(true);
+        try {
+          await renameMovieSource(target.key, name);
+          message.success("已修改");
+          setRenameTarget(null);
+          deps.refresh();
+        } catch (err) {
+          message.error((err as Error).message || "修改失败");
+        } finally {
+          setRenaming(false);
+        }
+      }}
+    >
+      <div className="flex flex-col gap-3 py-2">
+        <div className="text-xs text-black/45 dark:text-white/45">
+          修改名称仅变更显示名，不影响已落盘文件。
+        </div>
+        <Input
+          value={renameValue}
+          autoFocus
+          maxLength={200}
+          placeholder="输入新的名称"
+          onChange={(e) => setRenameValue(e.target.value)}
+          onPressEnter={async () => {
+            if (renameValue.trim() === "" || renaming || !renameTarget) return;
+            const target = renameTarget;
+            setRenaming(true);
+            try {
+              await renameMovieSource(target.key, renameValue.trim());
+              message.success("已修改");
+              setRenameTarget(null);
+              deps.refresh();
+            } catch (err) {
+              message.error((err as Error).message || "修改失败");
+            } finally {
+              setRenaming(false);
+            }
+          }}
+        />
+      </div>
+    </Modal>
   );
 
   // ---- 音乐文件 ----
@@ -527,6 +646,7 @@ export function useContentMenu(deps: ContentMenuDeps) {
   return {
     menu,
     logModal,
+    renameModal,
     music,
     taskAction,
     movieAction,

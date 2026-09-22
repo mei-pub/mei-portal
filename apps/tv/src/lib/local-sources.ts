@@ -101,8 +101,9 @@ export function mapMediaStatus(mediaStatus: string): LocalSourceStatus | null {
   switch (mediaStatus) {
     case 'success':
       return 'done';
-    case 'failed':
     case 'stopped':
+      return 'paused';
+    case 'failed':
       return 'failed';
     case 'pending':
       return 'pending';
@@ -430,6 +431,21 @@ export interface MediaTaskInfo {
  * 连落盘产物一起清（未完成任务的分片临时目录 / 成品文件）。
  * media 任务记录缺失（404，已被手动删除）不影响调用方——删除 tv 记录继续。
  */
+/**
+ * 重命名 media 下载任务（修改信息的 media 侧同步，尽力而为）：
+ * /api/v1/videos 的 title 匹配键与任务名同源，不同步会让按名匹配的
+ * 播放链路漂移。media 侧失败由调用方决定是否阻断（记录改名不回滚）。
+ */
+export async function renameMediaDownload(
+  id: number,
+  name: string
+): Promise<void> {
+  await mediaFetch(`/api/downloads/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify({ name }),
+  });
+}
+
 export async function deleteMediaDownload(
   id: number,
   deleteFiles = false
@@ -478,7 +494,12 @@ export async function refreshRecord(
   store: LocalSourceStore,
   rec: LocalSourceRecord
 ): Promise<LocalSourceRecord> {
-  if (rec.status !== 'pending' && rec.status !== 'downloading') return rec;
+  if (
+    rec.status !== 'pending' &&
+    rec.status !== 'downloading' &&
+    rec.status !== 'paused' // 暂停记录也要刷新：继续下载后状态机才能走回 downloading/done
+  )
+    return rec;
   const video = await fetchMediaDownload(rec.mediaTaskId);
   if (!video) return rec; // 查不到（如任务被手动删除）：保持原状态
   const updated = applyMediaState(rec, video.status);

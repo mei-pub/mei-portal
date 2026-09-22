@@ -4,8 +4,9 @@
 /** 影视分类目录（落盘到 <分类>/<剧名>/ 的第一级目录名） */
 export type LocalSourceCategory = '电影' | '电视' | '动漫' | '综艺';
 
-/** 本地源状态：pending/downloading 对应 media 任务未完成；done 表示可用本地流播放 */
-export type LocalSourceStatus = 'pending' | 'downloading' | 'done' | 'failed';
+/** 本地源状态：pending/downloading 对应 media 任务未完成；paused 为用户主动暂停
+ *  （media stopped，勿并入 failed——「失败」与「暂停」语义必须可区分）；done 表示可用本地流播放 */
+export type LocalSourceStatus = 'pending' | 'downloading' | 'paused' | 'done' | 'failed';
 
 export interface LocalSourceRecord {
   /** 记录键：`${normalizeTitle(title)}|${year}|e${episode}`，同一剧同一集幂等 */

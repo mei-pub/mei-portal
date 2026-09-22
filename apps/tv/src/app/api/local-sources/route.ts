@@ -20,6 +20,7 @@ import {
   recordKeyOf,
   refreshAndDecorate,
   refreshRecord,
+  renameMediaDownload,
   sanitizePlayRoute,
 } from '@/lib/local-sources';
 
@@ -147,6 +148,55 @@ export async function POST(request: NextRequest) {
     console.error('创建本地下载失败', err);
     const message = err instanceof Error ? err.message : '创建下载任务失败';
     return NextResponse.json({ error: message }, { status: 502 });
+  }
+}
+
+/**
+ * PUT /api/local-sources  body: { key, name }
+ *
+ * 修改信息（对齐迅雷）：重命名本地源记录的显示名（集名），并同步改名
+ * 背后的 media 下载任务（尽力而为——/api/v1/videos 的 title 匹配键与
+ * 任务名同源，不同步会让按名匹配的播放链路漂移；media 侧失败不回滚
+ * 记录改名，仅记日志）。文件名/落盘产物不受影响。
+ */
+export async function PUT(request: NextRequest) {
+  try {
+    if (!(await requireAuth(request))) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const body = await request.json().catch(() => null);
+    const key = typeof body?.key === 'string' ? body.key.trim() : '';
+    const name = typeof body?.name === 'string' ? body.name.trim() : '';
+    if (!key || !name) {
+      return NextResponse.json(
+        { error: '缺少必要参数（key/name）' },
+        { status: 400 }
+      );
+    }
+    if (name.length > 200) {
+      return NextResponse.json({ error: '名称过长' }, { status: 400 });
+    }
+
+    const existing = await store.get(key);
+    if (!existing) {
+      return NextResponse.json({ error: '记录不存在' }, { status: 404 });
+    }
+
+    await store.upsert({ ...existing, name, updatedAt: Date.now() });
+
+    // media 任务名同步：尽力而为，失败不影响记录改名
+    try {
+      await renameMediaDownload(existing.mediaTaskId, name);
+    } catch (err) {
+      console.warn(`同步 media 任务名失败 key=${key}:`, err);
+    }
+
+    return NextResponse.json({ updated: true }, { status: 200 });
+  } catch (err) {
+    console.error('修改本地源信息失败', err);
+    const message = err instanceof Error ? err.message : '修改失败';
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }
 

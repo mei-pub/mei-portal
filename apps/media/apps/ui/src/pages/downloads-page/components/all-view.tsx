@@ -126,6 +126,8 @@ function movieStatusNode(record: MovieSourceRecord): React.ReactNode {
           color="#127af3"
         />
       );
+    case "paused":
+      return <DownloadTag text="已暂停" color="#9abbe2" />;
     case "failed":
       return <DownloadTag text="失败" color="#ff7373" />;
     default:
@@ -231,8 +233,27 @@ const AllView: FC<AllViewProps> = ({ onEnter }) => {
     } else if (item.movieRecord) {
       const playable =
         !!item.movieRecord.playRoute || !!movieFallbackVideo(item.movieRecord);
-      items.push({ key: "play-movie", label: "立即播放", disabled: !playable });
-      items.push({ key: "sep-movie", label: "", separator: true });
+      // 生命周期语义与影视 tab 一致（复用 movieAction / taskAction 动作键）
+      switch (item.movieRecord.status) {
+        case "downloading":
+          items.push({ key: "pause", label: "暂停下载" });
+          break;
+        case "pending":
+        case "paused":
+          items.push({ key: "start", label: "继续下载" });
+          break;
+        case "failed":
+          items.push({ key: "start", label: "重试" });
+          break;
+        case "done":
+          items.push({ key: "play-movie", label: "立即播放", disabled: !playable });
+          if (item.movieRecord.localUrl) {
+            items.push({ key: "download-local", label: "下载到本地" });
+          }
+          break;
+      }
+      items.push({ key: "log", label: "查看日志" });
+      items.push({ key: "edit-movie", label: "修改信息…" });
       items.push({ key: "del-movie", label: "删除…", danger: true });
     } else if (item.musicTaskId !== undefined) {
       // 音乐下载中任务（对照音乐 tab 任务菜单：取消即停止下载并清理临时文件）
@@ -290,10 +311,9 @@ const AllView: FC<AllViewProps> = ({ onEnter }) => {
         });
         return;
       }
-      if (
-        item.movieRecord &&
-        (key === "play-movie" || key === "del-movie")
-      ) {
+      if (item.movieRecord) {
+        // 影视记录全部动作（生命周期/日志/修改信息/播放/下载到本地/删除）
+        // 都经 movieAction 分发：默认分支复用 taskAction 的任务语义
         await movieAction(key, item.movieRecord);
         return;
       }

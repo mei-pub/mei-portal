@@ -18,6 +18,7 @@ import {
   listMovieSources,
 } from "@/api/download-center";
 import { movieFallbackVideo, playMovieRecord } from "@/utils/play-actions";
+import { startDownload, stopDownload } from "@/api/download-task";
 import { useInlinePlayer } from "./inline-player";
 import { useContentMenu } from "./content-menu";
 import { BulkBar, BulkButton, ListSearch, triState } from "./bulk-bar";
@@ -45,6 +46,8 @@ const statusTag = (record: MovieSourceRecord) => {
           color="#127af3"
         />
       );
+    case "paused":
+      return <DownloadTag text="已暂停" color="#9abbe2" />;
     case "done":
       return <DownloadTag text="已完成" color="#09ce87" />;
     case "failed":
@@ -62,8 +65,8 @@ const MoviePanel: FC = () => {
   const inlinePlayer = useInlinePlayer();
   const { confirmDelete, deleteDialog } = useDeleteTasks();
   const { message } = App.useApp();
-  // 内容级右键菜单（立即播放/删除含文件）——能力对齐全部 tab
-  const { menu, openMovieMenu } = useContentMenu({
+  // 内容级右键菜单（生命周期/修改信息/日志/立即播放/删除）——能力对齐全部 tab
+  const { menu, logModal, renameModal, openMovieMenu } = useContentMenu({
     refresh: useMemoizedFn(() => void mutate()),
     inlinePlayer,
     confirmDelete,
@@ -80,6 +83,34 @@ const MoviePanel: FC = () => {
   // 多选批量（对标迅雷）：选中集合 + 搜索过滤
   const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set());
   const [searchText, setSearchText] = useState("");
+
+  // 批量生命周期：暂停（downloadings）/ 继续（stopped/pending）；逐条调 media
+  // 任务 API，按成败数量汇总提示（与批量删除同一反馈口径）
+  const bulkLifecycle = useMemoizedFn(async (action: "pause" | "start") => {
+    const want = action === "pause" ? "downloading" : "pending";
+    const targets = visibleRecords.filter(
+      (r) =>
+        selectedKeys.has(r.key) &&
+        (action === "pause"
+          ? r.status === "downloading"
+          : r.status === "pending" || r.status === "paused"),
+    );
+    if (targets.length === 0) {
+      message.info(action === "pause" ? "选中项中没有下载中的任务" : "选中项中没有可继续的任务");
+      return;
+    }
+    const results = await Promise.allSettled(
+      targets.map((record) =>
+        action === "pause"
+          ? stopDownload(Number(record.mediaTaskId))
+          : startDownload(Number(record.mediaTaskId)),
+      ),
+    );
+    const failed = results.filter((r) => r.status === "rejected").length;
+    if (failed > 0) message.error(`操作失败 ${failed} 项`);
+    else message.success(action === "pause" ? "已暂停" : "已继续下载");
+    mutate();
+  });
 
   const visibleRecords = useMemo(() => {
     const kw = searchText.trim().toLowerCase();
@@ -326,6 +357,18 @@ const MoviePanel: FC = () => {
         />
         <BulkButton
           disabled={selectedKeys.size === 0}
+          onClick={() => void bulkLifecycle("pause")}
+        >
+          暂停
+        </BulkButton>
+        <BulkButton
+          disabled={selectedKeys.size === 0}
+          onClick={() => void bulkLifecycle("start")}
+        >
+          继续
+        </BulkButton>
+        <BulkButton
+          disabled={selectedKeys.size === 0}
           danger
           onClick={() => void handleBulkDelete()}
         >
@@ -334,6 +377,8 @@ const MoviePanel: FC = () => {
       </BulkBar>
       {renderGroups()}
       {menu}
+      {logModal}
+      {renameModal}
       {deleteDialog}
     </div>
   );
