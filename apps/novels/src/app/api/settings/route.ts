@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { updateLibrary, getLibraryById } from '@/lib/db';
-import { requireSiteAccess } from '@/lib/auth';
+import { requireSiteAccess, requireSiteWriteAccess } from '@/lib/auth';
 
 // GET /api/settings?site={slug} — 站点信息（需站点可访问）
 export async function GET(request: Request) {
@@ -18,7 +18,7 @@ export async function GET(request: Request) {
 // PUT /api/settings?site={slug} — 更新站点（需站点可访问）
 // 可改显示名称；隐秘站点可改开启密码；类型不可改
 export async function PUT(request: Request) {
-  const siteResult = requireSiteAccess(request, new URL(request.url).searchParams.get('site'));
+  const siteResult = requireSiteWriteAccess(request, new URL(request.url).searchParams.get('site'));
   if (siteResult instanceof NextResponse) return siteResult;
   const site = siteResult;
   try {

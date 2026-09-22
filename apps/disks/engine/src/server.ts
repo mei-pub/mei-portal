@@ -3,7 +3,7 @@
 
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import { config } from './config.ts';
-import { authenticate, checkCredentials, issueToken, verifyToken } from './auth.ts';
+import { authenticate, checkCredentials, issueToken, revokeToken } from './auth.ts';
 import { cache } from './cache.ts';
 import { search } from './service/search.ts';
 import { checkLinks } from './service/check.ts';
@@ -69,6 +69,35 @@ function sendJSON(res: ServerResponse, status: number, body: unknown): void {
     'Access-Control-Allow-Headers': 'Content-Type, Authorization',
   });
   res.end(json);
+}
+
+/** 204 无响应体（204 语义禁止 body，带 body 会被部分客户端视为协议错误） */
+function sendNoContent(res: ServerResponse): void {
+  res.writeHead(204, {
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+  });
+  res.end();
+}
+
+// ── 登录速率限制：每 IP 每分钟最多 10 次（内存计数，进程重启即清零） ──
+const LOGIN_RATE_LIMIT = 10;
+const LOGIN_WINDOW_MS = 60_000;
+const loginAttempts = new Map<string, { count: number; resetAt: number }>();
+
+function allowLogin(ip: string): boolean {
+  const now = Date.now();
+  for (const [k, v] of loginAttempts) {
+    if (v.resetAt < now) loginAttempts.delete(k);
+  }
+  const rec = loginAttempts.get(ip);
+  if (!rec || rec.resetAt < now) {
+    loginAttempts.set(ip, { count: 1, resetAt: now + LOGIN_WINDOW_MS });
+    return true;
+  }
+  rec.count++;
+  return rec.count <= LOGIN_RATE_LIMIT;
 }
 
 function readBody(req: IncomingMessage): Promise<string> {
@@ -229,6 +258,11 @@ async function handleCheckLinks(req: IncomingMessage, res: ServerResponse): Prom
       return;
     }
     const items: CheckItem[] = parsed.items;
+    // 数量上限：批量检查每条都可能外发探测，超大批量会拖垮事件循环与网盘接口
+    if (items.length > 100) {
+      sendJSON(res, 400, newErrorResponse(400, 'items 数量超限（最多 100）'));
+      return;
+    }
     const result = await checkLinks(items);
     sendJSON(res, 200, newSuccessResponse(result));
   } catch (err) {
@@ -257,16 +291,23 @@ async function route(req: IncomingMessage, res: ServerResponse): Promise<void> {
   const path = url.pathname;
 
   if (req.method === 'OPTIONS') {
-    sendJSON(res, 204, {});
+    sendNoContent(res);
     return;
   }
 
   // 认证接口（公开路径）
   if (path === '/api/auth/login' && req.method === 'POST') {
+    // 登录速率限制：防爆破（超限返回 429）
+    const ip = req.socket.remoteAddress ?? 'unknown';
+    if (!allowLogin(ip)) {
+      sendJSON(res, 429, newErrorResponse(429, '尝试过于频繁，请稍后再试'));
+      return;
+    }
     try {
       const body = JSON.parse(await readBody(req)) as { username: string; password: string };
       if (!checkCredentials(body.username, body.password)) {
-        sendJSON(res, 200, newErrorResponse(1001, '用户名或密码错误'));
+        // 登录失败用 401 + code:1001：HTTP 200 会让客户端把失败当成功处理
+        sendJSON(res, 401, newErrorResponse(1001, '用户名或密码错误'));
         return;
       }
       sendJSON(res, 200, newSuccessResponse({ token: issueToken(body.username), expires_in: config.authTokenExpiryHours * 3600 }));
@@ -282,6 +323,11 @@ async function route(req: IncomingMessage, res: ServerResponse): Promise<void> {
     return;
   }
   if (path === '/api/auth/logout' && req.method === 'POST') {
+    // 吊销当前 Bearer token（无状态 JWT 经黑名单实现，至其 exp 自然过期）
+    const authorization = req.headers['authorization'];
+    if (config.authEnabled && authorization?.startsWith('Bearer ')) {
+      revokeToken(authorization.slice('Bearer '.length));
+    }
     sendJSON(res, 200, newSuccessResponse({}));
     return;
   }

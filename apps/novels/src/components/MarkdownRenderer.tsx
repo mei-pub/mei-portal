@@ -108,7 +108,7 @@ function parseMarkdown(content: string, textStyle: string = ""): string {
         quoteLines.push(qLine);
         i++;
       }
-      blocks.push(`<blockquote style="border-left:3px solid #d1d5db;padding:4px 12px;margin:12px 0;color:#6b7280;background:#f9fafb;border-radius:0 4px 4px 0${textStyle ? ";" + textStyle : ""}">${inlineFormat(quoteLines.join("<br/>"))}</blockquote>`);
+      blocks.push(`<blockquote style="border-left:3px solid #d1d5db;padding:4px 12px;margin:12px 0;color:#6b7280;background:#f9fafb;border-radius:0 4px 4px 0${textStyle ? ";" + textStyle : ""}">${quoteLines.map((l) => inlineFormat(l)).join("<br/>")}</blockquote>`);
       continue;
     }
 
@@ -172,7 +172,7 @@ function parseMarkdown(content: string, textStyle: string = ""): string {
       i++;
     }
     if (paraLines.length > 0) {
-      blocks.push(`<p style="margin:0 0 0.8em${textStyle ? ";" + textStyle : ""}">${inlineFormat(paraLines.join("<br/>"))}</p>`);
+      blocks.push(`<p style="margin:0 0 0.8em${textStyle ? ";" + textStyle : ""}">${paraLines.map((l) => inlineFormat(l)).join("<br/>")}</p>`);
     }
   }
 
@@ -180,7 +180,28 @@ function parseMarkdown(content: string, textStyle: string = ""): string {
 }
 
 function escapeHtml(str: string): string {
-  return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+}
+
+/** 链接 href 白名单：http/https/相对路径/锚点/mailto，其余拒绝（防 javascript: 等注入） */
+function isSafeHref(rawUrl: string): boolean {
+  // href 已经过 escapeHtml，先还原常见实体再做协议判断
+  const url = rawUrl
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/[\s\x00-\x1f\x7f]/g, "")
+    .toLowerCase();
+  if (!url) return false;
+  if (url.startsWith("#")) return true;
+  if (url.startsWith("/")) return true;
+  if (/^[a-z][a-z0-9+.-]*:/.test(url)) {
+    return url.startsWith("http:") || url.startsWith("https:") || url.startsWith("mailto:");
+  }
+  // 无协议：视为相对路径
+  return true;
 }
 
 function parseTableRow(line: string): string[] {
@@ -244,7 +265,7 @@ function processImagesInLine(text: string): string {
     
     const src = afterBracket.substring(0, srcEnd);
     
-    // 生成 img 标签
+    // 生成 img 标签（src/alt 已随所在文本完成 HTML 转义，仅需兜底引号）
     const safeSrc = src.replace(/"/g, "&quot;");
     const safeAlt = alt.replace(/"/g, "&quot;");
     result.push(`<img src="${safeSrc}" alt="${safeAlt}" style="max-width:100%;height:auto;border-radius:6px;margin:8px 0;display:block" />`);
@@ -256,9 +277,11 @@ function processImagesInLine(text: string): string {
   return result.join("");
 }
 
-/** Inline formatting: bold, italic, strikethrough, code, images, links */
+/** Inline formatting: 先转义原文，再做安全的 markdown 行内替换（生成受控标签） */
 function inlineFormat(text: string): string {
-  let r = text;
+  // 1. 先对原文本整体 HTML 转义：此后所有替换都作用于已转义文本，
+  //    原始 HTML（如 <img onerror>）不再透传，只可能生成受控标签
+  let r = escapeHtml(text);
 
   // Inline code: `code` — must be before bold/italic to avoid conflicts
   r = r.replace(/`([^`]+)`/g, "<code style='background:#f3f4f6;padding:1px 5px;border-radius:3px;font-size:0.9em;color:#e11d48'>$1</code>");
@@ -267,8 +290,11 @@ function inlineFormat(text: string): string {
   // 使用字符串方法而非正则，确保正确解析alt中的]
   r = processImagesInLine(r);
 
-  // Links: [text](url) - 支持超长URL和base64
-  r = r.replace(/\[([^\]]+)\]\((\S*)\)/g, "<a href=\"$2\" style=\"color:#4f46e5;text-decoration:underline\" target=\"_blank\" rel=\"noopener\">$1</a>");
+  // Links: [text](url) - 支持超长URL和base64；href 白名单校验（N2）
+  r = r.replace(/\[([^\]]+)\]\((\S*)\)/g, (match, linkText: string, url: string) => {
+    if (!isSafeHref(url)) return match; // 不安全协议（javascript: 等）→ 保持纯文本
+    return `<a href="${url}" style="color:#4f46e5;text-decoration:underline" target="_blank" rel="noopener">${linkText}</a>`;
+  });
 
   // Bold+italic: ***text***
   r = r.replace(/\*\*\*(.+?)\*\*\*/g, "<strong><em>$1</em></strong>");
@@ -291,8 +317,8 @@ function renderImage(line: string): string {
   if (!imgMatch) return escapeHtml(line);
   
   const [src, alt] = imgMatch;
-  const safeSrc = src.replace(/"/g, "&quot;");
-  const safeAlt = alt.replace(/"/g, "&quot;");
+  const safeSrc = escapeHtml(src);
+  const safeAlt = escapeHtml(alt);
   return `<img src="${safeSrc}" alt="${safeAlt}" style="max-width:100%;height:auto;border-radius:6px;margin:12px 0;display:block" />`;
 }
 

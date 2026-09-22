@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createChapter, getNovelById, getNovelBySlug } from '@/lib/db';
-import { requireSiteAccess } from "@/lib/auth";
+import { requireSiteWriteAccess } from "@/lib/auth";
 
 // 支持两种格式:
 // 1. { fullText } - 旧格式，系统自动拆分（保持向后兼容）
@@ -10,7 +10,7 @@ export async function POST(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const siteResult = requireSiteAccess(request, new URL(request.url).searchParams.get("site"));
+  const siteResult = requireSiteWriteAccess(request, new URL(request.url).searchParams.get("site"));
   if (siteResult instanceof NextResponse) return siteResult;
   const libraryId = siteResult.id;
   try {
@@ -39,6 +39,7 @@ export async function POST(
           content: ch.content.trim(),
           chapter_order: existingChaptersCount + i,
         });
+        if (!chapter) continue;
         created.push({ id: chapter.id, title: chapter.title, word_count: chapter.word_count });
       }
       return NextResponse.json({
@@ -122,6 +123,7 @@ export async function POST(
         content: ch.content,
         chapter_order: existingChaptersCount + i,
       });
+      if (!chapter) continue;
       created.push({ id: chapter.id, title: chapter.title, word_count: chapter.word_count });
     }
 

@@ -1,10 +1,10 @@
 import { NextResponse } from 'next/server';
-import { requireSiteAccess } from "@/lib/auth";
+import { requireSiteWriteAccess } from "@/lib/auth";
 import { importLibrary } from '@/lib/backup';
 import type { ExportData } from '@/lib/backup';
 
 export async function POST(request: Request) {
-  const siteResult = requireSiteAccess(request, new URL(request.url).searchParams.get("site"));
+  const siteResult = requireSiteWriteAccess(request, new URL(request.url).searchParams.get("site"));
   if (siteResult instanceof NextResponse) return siteResult;
   const libraryId = siteResult.id;
 

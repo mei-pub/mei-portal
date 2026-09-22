@@ -122,20 +122,22 @@ async function probeOne(item: CheckItem): Promise<CheckResult> {
   }
 }
 
-/** 批量检查（带内存缓存 + 并发限制，Go bbolt 换内存 Map） */
+/** 批量检查（带内存缓存 + 并发限制，Go bbolt 换内存 Map）
+ *  结果按请求下标写入：缓存命中同步返回、未命中 await 后返回，Promise.all 完成顺序
+ *  不影响 results 与 items 的对应关系（否则结果会错位） */
 export async function checkLinks(items: CheckItem[]): Promise<{ results: CheckResult[] }> {
-  const results: CheckResult[] = [];
+  const results: CheckResult[] = new Array(items.length);
   await Promise.all(
-    items.map(async (item) => {
+    items.map(async (item, index) => {
       const cacheKey = `${item.disk_type}|${item.url}`;
       const cached = checkCache.get(cacheKey);
       if (cached && cached.expires_at > Math.floor(Date.now() / 1000)) {
-        results.push({ ...cached, cache_hit: true });
+        results[index] = { ...cached, cache_hit: true };
         return;
       }
       const result = await probeLimit(() => probeOne(item));
       checkCache.set(cacheKey, result);
-      results.push(result);
+      results[index] = result;
     }),
   );
   return { results };

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 // mei-portal：左侧窄浮动面板（全应用统一：Logo + 纵向名称 + 图标入口）
 // 网盘搜索：入口仅「搜索」一项；折叠态为左缘小把手；localStorage 记忆
-import { ref, onMounted } from 'vue';
+import { ref, onMounted, onBeforeUnmount } from 'vue';
 
 const emit = defineEmits<{
   (e: 'navigate-search'): void;
@@ -16,7 +16,17 @@ onMounted(() => {
   } catch {
     open.value = true;
   }
+  // 编程收起（AGENTS 面板契约）：监听 mei-panel-set { detail: { collapsed } }，不写记忆
+  window.addEventListener('mei-panel-set', onPanelSet as EventListener);
 });
+
+onBeforeUnmount(() => {
+  window.removeEventListener('mei-panel-set', onPanelSet as EventListener);
+});
+
+const onPanelSet = (e: CustomEvent<{ collapsed?: boolean }>) => {
+  if (typeof e.detail?.collapsed === 'boolean') open.value = e.detail.collapsed;
+};
 
 const toggle = (next: boolean) => {
   open.value = next;
@@ -168,4 +178,20 @@ const toggle = (next: boolean) => {
   transition: width 0.15s;
 }
 .mei-panel-handle:hover { width: 28px; }
+
+/* 暗色模式（对齐 SitePanel 规范口径：gray-900/70 底 + white/10 边） */
+@media (prefers-color-scheme: dark) {
+  .mei-panel {
+    background: rgba(17, 24, 39, 0.70);
+    border-color: rgba(255, 255, 255, 0.10);
+    box-shadow: 0 8px 28px rgba(0, 0, 0, 0.45);
+  }
+  .p-info:hover { background: rgba(255, 255, 255, 0.08); }
+  .p-name { color: #e5e7eb; }
+  .p-divider { background: rgba(255, 255, 255, 0.10); }
+  .p-item { color: #9ca3af; }
+  .p-item:hover { background: rgba(255, 255, 255, 0.08); color: #818cf8; }
+  .p-collapse { color: #6b7280; }
+  .p-collapse:hover { background: rgba(255, 255, 255, 0.08); }
+}
 </style>

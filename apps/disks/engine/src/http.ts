@@ -23,7 +23,7 @@ export interface FetchOptions {
   maxBodyBytes?: number;
 }
 
-/** 抓取文本（HTML/JSON），带超时 */
+/** 抓取文本（HTML/JSON），带超时；非 2xx 直接抛错（不把错误页/错误 JSON 当正常内容解析） */
 export async function fetchText(url: string, opts: FetchOptions = {}): Promise<string> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), opts.timeoutMs ?? 30_000);
@@ -35,7 +35,10 @@ export async function fetchText(url: string, opts: FetchOptions = {}): Promise<s
       body: opts.body,
       signal: controller.signal,
     });
-    return await resp.text();
+    if (!resp.ok) {
+      throw new Error(`HTTP ${resp.status} ${url}`);
+    }
+    return await readBodyCapped(resp, opts.maxBodyBytes ?? 0);
   } finally {
     clearTimeout(timer);
   }

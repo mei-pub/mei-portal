@@ -1,6 +1,8 @@
 // 配置 —— 环境变量语义与 Go 版 config/config.go 逐条对齐
 // 关键语义：ENABLED_PLUGINS 三态——未设置=不加载任何插件；空串=不加载；列表=只加载列出的
 
+import { randomBytes } from 'node:crypto';
+
 const DEFAULT_CHANNELS = [
   'tgsearchers6',
   'yunpanxunlei',
@@ -99,6 +101,20 @@ export function loadConfig(): Config {
   // 并发默认值 = 频道数 + 插件数(估 7) + 10（与 Go getDefaultConcurrency 一致）
   const defaultConcurrency = defaultChannels.length + 7 + 10;
 
+  // JWT 密钥：未配置时不再使用硬编码默认值（可被伪造任意 token），
+  // 改为生成进程内随机密钥——重启后已签发 token 全部失效，可接受；
+  // 需要跨重启保持登录态时显式配置 AUTH_JWT_SECRET
+  const authEnabled = envBool('AUTH_ENABLED', false);
+  let authJWTSecret = envStr('AUTH_JWT_SECRET');
+  if (authJWTSecret === '') {
+    authJWTSecret = randomBytes(32).toString('base64url');
+    if (authEnabled) {
+      console.error(
+        '[disks-engine] AUTH_ENABLED=true 但未配置 AUTH_JWT_SECRET，已使用进程内随机密钥（重启后登录态失效）。如需持久登录态请配置 AUTH_JWT_SECRET',
+      );
+    }
+  }
+
   return {
     // PORT 优先，未设置时回退 PANSOU_PORT（start.sh 依赖 PANSOU_PORT；此前写法 fallback 恒真值导致 PANSOU_PORT 永远失效）
     port: envInt('PORT', envInt('PANSOU_PORT', 8888)),
@@ -121,10 +137,10 @@ export function loadConfig(): Config {
     // 前端 axios 10s → nginx /disks/api 60s。任何一层不得小于内层，否则外层先杀。
     tgDeadlineMs: envInt('TG_DEADLINE_MS', envInt('ASYNC_RESPONSE_TIMEOUT', 4) * 1000 + 1000),
     searchHardDeadlineMs: envInt('SEARCH_HARD_DEADLINE_MS', 7000),
-    authEnabled: envBool('AUTH_ENABLED', false),
+    authEnabled,
     authUsers: authUsers(),
     authTokenExpiryHours: envInt('AUTH_TOKEN_EXPIRY_HOURS', 24),
-    authJWTSecret: envStr('AUTH_JWT_SECRET', 'mei-pansou-secret'),
+    authJWTSecret,
     logPath: envStr('LOG_PATH', './logs'),
   };
 }
