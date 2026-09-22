@@ -28,6 +28,7 @@ const { publicView } = require('./server-download');
 
 const DEFAULT_DOWNLOAD_ROOT = '/downloads/music';
 const MAX_LIBRARY_TASKS = 50;
+const SCAN_STAT_CONCURRENCY = 16; // 曲库扫描 stat 并发批量大小（串行 stat 在大盘上明显拖慢 /library）
 
 // 音频扩展名白名单（扫描 serve 共用）
 const AUDIO_EXTENSIONS = new Set(['mp3', 'flac', 'wav', 'm4a', 'aac', 'ogg', 'opus', 'webm']);
@@ -143,25 +144,36 @@ async function scanLibrary(root, deps = {}) {
     } catch {
       continue;
     }
+    const candidates = [];
     for (const entry of entries) {
       if (!entry.isFile()) continue;
       const fileName = entry.name;
       if (fileName.startsWith('.')) continue; // 隐藏文件与 .part 临时文件
       const ext = path.extname(fileName).slice(1).toLowerCase();
       if (!AUDIO_EXTENSIONS.has(ext)) continue;
-      const full = path.join(rootAbs, artist, fileName);
-      const stat = await statImpl(full).catch(() => null);
-      if (!stat || !stat.isFile()) continue;
-      const base = fileName.slice(0, fileName.length - ext.length - 1);
-      const parsed = parseAudioFileName(base);
-      files.push({
-        artist,
-        name: parsed.name,
-        source: parsed.source, // 落盘文件名「歌名 - 源.ext」中的源短码（netease/qq/...）
-        fileName,
-        path: `${artist}/${fileName}`,
-        size: stat.size,
-        mtime: Math.round(stat.mtimeMs),
+      candidates.push(fileName);
+    }
+    // 小并发批量 stat（每批 SCAN_STAT_CONCURRENCY 个），避免逐文件串行 await
+    for (let i = 0; i < candidates.length; i += SCAN_STAT_CONCURRENCY) {
+      const batch = candidates.slice(i, i + SCAN_STAT_CONCURRENCY);
+      const stats = await Promise.all(
+        batch.map((fileName) => statImpl(path.join(rootAbs, artist, fileName)).catch(() => null))
+      );
+      batch.forEach((fileName, j) => {
+        const stat = stats[j];
+        if (!stat || !stat.isFile()) return;
+        const ext = path.extname(fileName).slice(1).toLowerCase();
+        const base = fileName.slice(0, fileName.length - ext.length - 1);
+        const parsed = parseAudioFileName(base);
+        files.push({
+          artist,
+          name: parsed.name,
+          source: parsed.source, // 落盘文件名「歌名 - 源.ext」中的源短码（netease/qq/...）
+          fileName,
+          path: `${artist}/${fileName}`,
+          size: stat.size,
+          mtime: Math.round(stat.mtimeMs),
+        });
       });
     }
   }

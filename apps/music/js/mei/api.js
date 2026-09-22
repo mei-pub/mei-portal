@@ -44,8 +44,10 @@ export function enabledSources() {
         if (enabled.length > 0) return enabled;
       }
     }
-  } catch (e) { /* ignore */ }
-  localStorage.setItem(YOUTUBE_MIGRATION_KEY, "1");
+  } catch (e) { /* ignore（localStorage 不可用：隐私模式等） */ }
+  try {
+    localStorage.setItem(YOUTUBE_MIGRATION_KEY, "1");
+  } catch { /* ignore：写入失败不阻断默认源启用 */ }
   return ALL_SOURCES.filter((o) => DEFAULT_ENABLED.includes(o.value));
 }
 
@@ -219,15 +221,20 @@ export async function fetchDownloadLibrary() {
 // 本地已下载曲库的名称索引（60s 缓存）：resolvePlayUrl 用它做「本地优先」匹配。
 // 失败也记时间戳——服务不可用期间每分钟至多重试一次，绝不阻塞播放。
 let dlIndexAt = 0;
+let dlIndexFailAt = 0; // 最近一次拉取失败时间：失败后 60s 内不重试（短路绕过节流会每次播放都打接口）
 let dlIndexFiles = [];
 export async function matchLocalDownload(song) {
   const now = Date.now();
-  if (!dlIndexFiles.length || now - dlIndexAt > 60000) {
+  const needFetch = !dlIndexFiles.length || now - dlIndexAt > 60000;
+  const failThrottled = dlIndexFailAt > 0 && now - dlIndexFailAt < 60000;
+  if (needFetch && !failThrottled) {
     try {
       const lib = await fetchDownloadLibrary();
       dlIndexFiles = lib.files || [];
+      dlIndexFailAt = 0; // 成功即解除失败节流
     } catch (e) {
       dlIndexFiles = [];
+      dlIndexFailAt = now;
     }
     dlIndexAt = now;
   }

@@ -367,6 +367,51 @@ async function runDownloadTask(task, ctx = {}) {
   }
 }
 
+// ─── 启动清理 ─────────────────────────────────────────────────────────────────
+
+/**
+ * 启动时清理半成品：任务表为内存 Map，进程重启后 running 任务连同其 cleanupTmp
+ * 句柄一起消失，上次中断留下的 .part/.tmp 成为孤儿文件（曲库扫描跳过隐藏文件，
+ * 不清理就永远占着磁盘）。扫描 <root>/<歌手>/ 下的隐藏临时文件并删除。
+ * 返回删除数量；目录不存在返回 0。
+ */
+async function cleanupPartialDownloads(root, deps = {}) {
+  const readdirImpl = deps.readdirImpl || ((dir) => fsp.readdir(dir, { withFileTypes: true }));
+  const rmImpl = deps.rmImpl || ((p) => fsp.rm(p, { force: true }));
+  const rootAbs = path.resolve(String(root));
+  let artists;
+  try {
+    artists = await readdirImpl(rootAbs);
+  } catch {
+    return 0;
+  }
+  let removed = 0;
+  for (const artistEntry of artists) {
+    const isDir = typeof artistEntry === 'string' ? false : artistEntry.isDirectory();
+    if (!isDir) continue;
+    const dir = path.join(rootAbs, artistEntry.name);
+    let entries;
+    try {
+      entries = await readdirImpl(dir);
+    } catch {
+      continue;
+    }
+    for (const entry of entries) {
+      const name = typeof entry === 'string' ? entry : entry.name;
+      if (!name.startsWith('.')) continue;
+      if (!/\.part$|\.tmp$/i.test(name)) continue;
+      try {
+        await rmImpl(path.join(dir, name));
+        removed += 1;
+      } catch { /* 单个失败不阻断，下次启动再试 */ }
+    }
+  }
+  if (removed > 0) {
+    console.log(`[ServerDownload] 启动清理：移除 ${removed} 个上次中断留下的 .part/.tmp 半成品`);
+  }
+  return removed;
+}
+
 // ─── 路由 ─────────────────────────────────────────────────────────────────────
 
 const JSON_HEADERS = {
@@ -403,6 +448,12 @@ module.exports = function createServerDownloadRouter(deps = {}) {
     resolveImpl: deps.resolveImpl,
     idleTimeoutMs: deps.idleTimeoutMs,
   };
+
+  // 启动即清理上次进程中断留下的 .part/.tmp 半成品（fire-and-forget，不阻塞挂载）
+  cleanupPartialDownloads(
+    deps.downloadRoot || process.env.MUSIC_DOWNLOAD_DIR || DEFAULT_DOWNLOAD_ROOT,
+    { readdirImpl: deps.readdirImpl, rmImpl: deps.rmImpl }
+  ).catch(() => {});
 
   router.options('/', (req, res) => {
     res.status(204).set(JSON_HEADERS).end();
@@ -465,4 +516,5 @@ module.exports.createTaskManager = createTaskManager;
 module.exports.resolveUpstreamInfo = resolveUpstreamInfo;
 module.exports.audioFetchHeaders = audioFetchHeaders;
 module.exports.runDownloadTask = runDownloadTask;
+module.exports.cleanupPartialDownloads = cleanupPartialDownloads;
 module.exports.publicView = publicView;

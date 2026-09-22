@@ -4,7 +4,8 @@
 //
 // 未被 iframe 承载（直接访问 /music/）时 enabled=false，播放器保持本地单例行为。
 import { store, emit } from "./store.js";
-import { player } from "./player.js";
+import { player, MODE_LABELS } from "./player.js";
+import { toast } from "./ui.js";
 
 const HOST_SOURCE = "mei-music-host";
 const GUEST_SOURCE = "mei-music-guest";
@@ -90,6 +91,7 @@ export const hostBridge = {
 };
 
 const DOCK_MODES = ["full", "mini", "hidden"];
+let hostModeSeen = false; // 首次 state 同步前不提示模式变化
 
 /** 外壳播放条形态 → body class，让应用内底部留白随形态收缩 */
 function applyDockMode(mode) {
@@ -144,6 +146,7 @@ function applyState(state) {
   if (queue.type) player.queueType = queue.type;
   if (typeof queue.playlistId === "string") player.playlistId = queue.playlistId;
   if (Number.isFinite(queue.index)) player.index = queue.index;
+  const prevMode = player.mode;
   if (playback.mode) player.mode = playback.mode;
 
   player.audio.paused = !playback.playing;
@@ -156,6 +159,12 @@ function applyState(state) {
 
   if (queueChanged || dataChanged) emit("queue");
   emit("player");
+  // 播放模式真实回写后提示：cycleMode 在宿主模式只发指令不本地猜档
+  // （hostModeSeen 跳过首次 state 同步，避免连接建立即弹 toast）
+  if (hostModeSeen && playback.mode && playback.mode !== prevMode) {
+    toast(MODE_LABELS[playback.mode] || playback.mode);
+  }
+  hostModeSeen = true;
   player.syncLyricIdx(player.audio.currentTime);
   emit("time");
 }

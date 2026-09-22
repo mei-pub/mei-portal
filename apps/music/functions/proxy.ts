@@ -1,5 +1,8 @@
 const DEFAULT_API_BASE_URL = "https://music-api.gdstudio.xyz/api.php";
-const KUWO_HOST_PATTERN = /(^|\.)kuwo\.cn$/i;
+// 音频直链域名白名单：与 node 版（server/routes/proxy.js 的 AUDIO_HOST_PATTERN）保持
+// 同一组域名，两部署形态不得漂移（kugou 直链是 kugou.com；netease 旧源会出现 http 的
+// 126.net；YouTube 用 googlevideo.com）
+const AUDIO_HOST_PATTERN = /(^|\.)(kuwo\.cn|kuwo\.com|kugou\.cn|kugou\.com|migu\.cn|qq\.com|126\.net|90svip\.cn|googlevideo\.com)$/i;
 const SAFE_RESPONSE_HEADERS = ["content-type", "cache-control", "accept-ranges", "content-length", "content-range", "etag", "last-modified", "expires"];
 
 function createCorsHeaders(init?: Headers): Headers {
@@ -30,39 +33,54 @@ function handleOptions(): Response {
   });
 }
 
-function isAllowedKuwoHost(hostname: string): boolean {
+function isAllowedAudioHost(hostname: string): boolean {
   if (!hostname) return false;
-  return KUWO_HOST_PATTERN.test(hostname);
+  return AUDIO_HOST_PATTERN.test(hostname);
 }
 
-function normalizeKuwoUrl(rawUrl: string): URL | null {
+/** 按直链域名构造防盗链头（与 node 版 audioUpstreamHeaders 同语义） */
+function audioUpstreamHeaders(hostname: string, request: Request): Record<string, string> {
+  const headers: Record<string, string> = {
+    "User-Agent": request.headers.get("User-Agent") ?? "Mozilla/5.0",
+  };
+  if (/(^|\.)kuwo\.cn$/i.test(hostname)) {
+    headers["Referer"] = "https://www.kuwo.cn/";
+  } else if (/(^|\.)qq\.com$/i.test(hostname)) {
+    headers["Referer"] = "https://y.qq.com/";
+  } else if (/(^|\.)googlevideo\.com$/i.test(hostname)) {
+    headers["User-Agent"] =
+      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 " +
+      "(KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36";
+    headers["Origin"] = "https://www.youtube.com";
+    headers["Referer"] = "https://www.youtube.com/";
+  }
+  return headers;
+}
+
+function normalizeAudioUrl(rawUrl: string): URL | null {
   try {
     const parsed = new URL(rawUrl);
-    if (!isAllowedKuwoHost(parsed.hostname)) {
+    if (!isAllowedAudioHost(parsed.hostname)) {
       return null;
     }
     if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
       return null;
     }
-    parsed.protocol = "http:";
     return parsed;
   } catch {
     return null;
   }
 }
 
-async function proxyKuwoAudio(targetUrl: string, request: Request): Promise<Response> {
-  const normalized = normalizeKuwoUrl(targetUrl);
+async function proxyAudioStream(targetUrl: string, request: Request): Promise<Response> {
+  const normalized = normalizeAudioUrl(targetUrl);
   if (!normalized) {
     return new Response("Invalid target", { status: 400 });
   }
 
   const init: RequestInit = {
     method: request.method,
-    headers: {
-      "User-Agent": request.headers.get("User-Agent") ?? "Mozilla/5.0",
-      "Referer": "https://www.kuwo.cn/",
-    },
+    headers: audioUpstreamHeaders(normalized.hostname, request),
   };
 
   const rangeHeader = request.headers.get("Range");
@@ -191,7 +209,7 @@ export async function onRequest({ request, waitUntil, env }: { request: Request,
   const target = url.searchParams.get("target");
 
   if (target) {
-    return proxyKuwoAudio(target, request);
+    return proxyAudioStream(target, request);
   }
 
   return proxyApiRequest(url, request, waitUntil, apiBaseUrl);

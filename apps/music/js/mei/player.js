@@ -292,10 +292,12 @@ export const player = {
 
   cycleMode() {
     if (this._host) {
-      const i = MODE_CYCLE.indexOf(this.mode);
-      const next = MODE_CYCLE[(i + 1) % MODE_CYCLE.length];
+      // 宿主模式：真实播放模式由外壳常驻引擎持有，经 hostbridge 的 state 回写镜像到
+      // player.mode。这里只转发指令，不基于可能失步的本地镜像猜测「下一档」——
+      // 否则 toast 会报出与外壳实际切换结果不一致的模式名。提示由 hostbridge
+      // applyState 检测到真实 mode 变化后给出（返回空串 = 调用方不本地 toast）。
       this._host.send({ type: "cycle-mode" });
-      return MODE_LABEL[next];
+      return "";
     }
     const i = MODE_CYCLE.indexOf(this.mode);
     this.mode = MODE_CYCLE[(i + 1) % MODE_CYCLE.length];

@@ -798,7 +798,15 @@ export async function loadLyric() {
 }
 
 // ============ 随便听听（req 11） ============
+// 视图令牌：与 dlViewToken 同构——路由离开（stopRandomView）或重进本视图后，
+// 在途采样回调全部失效，避免快速切走再切回时的双跑与旧回调抢跳播放页
+let randViewToken = 0;
+export function stopRandomView() {
+  randViewToken += 1;
+}
+
 export function renderRandom(root) {
+  const token = ++randViewToken;
   root.innerHTML = `
     <div class="mei-search-hero" style="padding-top:16vh">
       ${brandHtml()}
@@ -808,15 +816,18 @@ export function renderRandom(root) {
       </div>
     </div>
   `;
-  (async () => {
+  void (async () => {
     try {
       const keywords = pickGenres(8);
       let songs = dedupe(await sampleRandomSongs(keywords, 30));
+      if (token !== randViewToken) return;
       if (songs.length < 40) {
         // 聚合采样不足：雷达歌单兜底
         const radar = await radarPlaylist("3778678", 200).catch(() => []);
+        if (token !== randViewToken) return;
         songs = dedupe([...songs, ...radar]);
       }
+      if (token !== randViewToken) return;
       if (songs.length === 0) throw new Error("empty");
       const picked = shuffle(songs).slice(0, 200);
       store.setTemp(picked);
@@ -827,7 +838,9 @@ export function renderRandom(root) {
       toast(`已随机挑选 ${picked.length} 首歌，随机播放中`);
       pushRoute("/player");
     } catch {
-      root.querySelector("#randTip").textContent = "随机获取失败，请检查音乐源后重试";
+      if (token !== randViewToken) return;
+      const tip = root.querySelector("#randTip"); // 视图已切走时节点不存在，静默放弃
+      if (tip) tip.textContent = "随机获取失败，请检查音乐源后重试";
     }
   })();
 }
@@ -846,11 +859,9 @@ export function renderFavorites(root) {
     root.querySelector("#goSearch").onclick = () => pushRoute("/search");
     return;
   }
-  // 收藏页是浏览页：展示收藏列表，点击歌曲才播放，不自动跳转播放页
-  if (player.queueType !== "fav") {
-    // 仅设置队列但不开播播放，保持当前播放状态
-    player.setQueue("fav", 0);
-  }
+  // 收藏页是浏览页：仅只读展示收藏列表，「正在播放」高亮跟随当前真实队列。
+  // 不在渲染副作用里 setQueue("fav")——那会在用户只是路过收藏页时把播放队列
+  // 上下文切走；切到收藏队列只由显式操作触发（播放全部 / 随机播放 / 点播歌曲）。
   root.classList.add("wide");
   root.innerHTML = `
     <div class="mei-fav-page">
@@ -1002,10 +1013,11 @@ export function renderDownloads(root) {
     try {
       const data = await fetchDownloadLibrary();
       if (token !== dlViewToken) return;
-      dlState = { loading: false, error: "", tasks: data.tasks, files: data.files };
+      // 就地更新：整体重赋值会丢掉 tab / artist 等视图态（轮询与重试共用本回调）
+      dlState = { ...dlState, loading: false, error: "", tasks: data.tasks, files: data.files };
     } catch (e) {
       if (token !== dlViewToken) return;
-      dlState = { loading: false, error: (e && e.message) || "加载失败", tasks: [], files: [] };
+      dlState = { ...dlState, loading: false, error: (e && e.message) || "加载失败", tasks: [], files: [] };
     }
     draw();
     schedulePoll();
