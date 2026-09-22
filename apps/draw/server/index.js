@@ -71,8 +71,10 @@ function decryptSensitive(encrypted) {
   }
 }
 
-// CORS：严格按白名单放行。白名单 = 本机（localhost/127.0.0.1/::1，任意端口，便于本地开发）
-// + MEI_ALLOWED_ORIGINS（逗号分隔，含门户自身地址）。不带 Origin 的请求（同源/curl）放行。
+// CORS：严格按白名单放行。白名单 = 同源（Origin host 与请求 Host 一致）
+// + 本机（localhost/127.0.0.1/::1，任意端口，便于本地开发）
+// + MEI_ALLOWED_ORIGINS（逗号分隔，跨域部署时配门户/子域名地址；同源部署无需配置）。
+// 非浏览器客户端（curl/服务间调用）没有 Origin，放行。
 const allowedOrigins = (process.env.MEI_ALLOWED_ORIGINS || process.env.MEI_SHELL_URL || '')
   .split(',')
   .map(origin => origin.trim().replace(/\/+$/, ''))
@@ -87,16 +89,31 @@ const isLocalOrigin = origin => {
   }
 };
 
-app.use(cors({
-  origin: function(origin, callback) {
-    // 非浏览器客户端 / 同源请求没有 Origin
-    if (!origin) return callback(null, true);
-    if (isLocalOrigin(origin)) return callback(null, true);
-    if (allowedOrigins.includes(origin.replace(/\/+$/, ''))) return callback(null, true);
-    // 未命中白名单一律拒绝（带 credentials 的跨域放行等于把任意站点变成已登录用户）
-    return callback(new Error('Not allowed by CORS'));
-  },
-  credentials: true
+const originHost = origin => {
+  try { return new URL(origin).host; } catch { return ''; }
+};
+
+// 同源判定：Origin 的 host 与请求到达时的 Host 一致。
+// 必须按 host 比对而不是按「没有 Origin」判断——现代浏览器对同源的非 GET/HEAD
+// 请求同样携带 Origin 头，漏判会把门户反代/直连端口下的所有写请求误杀。
+// 只比 Host、不采信 X-Forwarded-Host：后者浏览器不列为禁止头，可被页面伪造，
+// 直连端口场景下会造成跨域绕过；本仓库 nginx 经 forwarded-headers 保留真实 Host。
+const isSameHostOrigin = (origin, req) => {
+  const hostHeader = String(req.headers.host || '').trim();
+  if (!hostHeader) return false;
+  return originHost(origin) === hostHeader;
+};
+
+app.use(cors(function (req, callback) {
+  const origin = req.headers.origin;
+  const allow = !origin
+    || isLocalOrigin(origin)
+    || isSameHostOrigin(origin, req)
+    || allowedOrigins.includes(origin.replace(/\/+$/, ''));
+  if (allow) return callback(null, { origin: true, credentials: true });
+  // 未命中白名单一律拒绝（带 credentials 的跨域放行等于把任意站点变成已登录用户）。
+  // 用 error 中止请求而非只关 CORS 头：后者浏览器虽读不到响应，服务端仍会执行写操作。
+  return callback(new Error('Not allowed by CORS'));
 }));
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
