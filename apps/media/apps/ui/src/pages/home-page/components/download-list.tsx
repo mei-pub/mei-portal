@@ -4,7 +4,7 @@ import {
   type DownloadTask,
 } from "@mediago/shared-common";
 import { useMemoizedFn } from "ahooks";
-import { App, Empty, Segmented } from "antd";
+import { App, Button, Empty, Segmented } from "antd";
 import { produce } from "immer";
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -268,6 +268,49 @@ export function DownloadTaskList({
     setSelected([]);
   });
 
+  // 全部暂停/全部开始（对齐迅雷工具栏）：作用于当前搜索/状态过滤后的可见
+  // 任务——暂停=进行中（downloading/pending），开始=全部可续（stopped/
+  // pending/failed/ready），逐条走与右键一致的 stop/start 端点
+  const onPauseAll = useMemoizedFn(async () => {
+    const targets = filteredData.filter(
+      (task) =>
+        task.status === DownloadStatus.Downloading ||
+        task.status === DownloadStatus.Pending,
+    );
+    if (targets.length === 0) {
+      message.info("没有进行中的任务");
+      return;
+    }
+    const results = await Promise.allSettled(
+      targets.map((task) => stopDownload(task.id)),
+    );
+    const failed = results.filter((r) => r.status === "rejected").length;
+    if (failed === 0) message.success("已全部暂停");
+    else message.warning(`${targets.length - failed} 项已暂停，${failed} 项失败`);
+    mutate();
+  });
+
+  const onStartAll = useMemoizedFn(async () => {
+    const targets = filteredData.filter(
+      (task) =>
+        task.status === DownloadStatus.Stopped ||
+        task.status === DownloadStatus.Pending ||
+        task.status === DownloadStatus.Failed ||
+        task.status === DownloadStatus.Ready,
+    );
+    if (targets.length === 0) {
+      message.info("没有可开始的任务");
+      return;
+    }
+    const results = await Promise.allSettled(
+      targets.map((task) => startDownload(task.id)),
+    );
+    const failed = results.filter((r) => r.status === "rejected").length;
+    if (failed === 0) message.success("已全部开始");
+    else message.warning(`${targets.length - failed} 项已开始，${failed} 项失败`);
+    mutate();
+  });
+
   const handleShowDownloadForm = useMemoizedFn((task: DownloadTask) => {
     tdApp.onEvent(EDIT_DOWNLOAD);
     const { id, name, url, headers, type, folder } = task;
@@ -302,6 +345,12 @@ export function DownloadTaskList({
   return (
     <div className="flex flex-col flex-1 overflow-auto">
       <div className="flex flex-row items-center justify-end gap-2 pb-2">
+        <Button size="small" onClick={() => void onStartAll()}>
+          全部开始
+        </Button>
+        <Button size="small" onClick={() => void onPauseAll()}>
+          全部暂停
+        </Button>
         <ListSearch value={searchText} onChange={setSearchText} placeholder="搜索任务" />
         <Segmented
           size="small"

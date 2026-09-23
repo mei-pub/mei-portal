@@ -920,6 +920,29 @@ export class DownloaderSvc {
     };
   }
 
+  /** 种子 tracker 自愈：真实 tracker 数为 0 时注入公共清单并强制通告。
+   *  覆盖三条路径——新 add（网关缓存 .torrent / 磁力 / 种子文件上传）与
+   *  续传/重试（升级后存量 0 tracker 的卡死任务），尽力而为不阻断任务 */
+  private async ensureBtTrackers(
+    qbit: QBitClient,
+    hash: string,
+  ): Promise<void> {
+    try {
+      const trackers = await qbit.getTrackers(hash);
+      // qB 伪条目：url 形如 "** [DHT] **" / "** [PeX] **" / "** [LSD] **"
+      const real = trackers.filter((t) => !/^\*\*/.test(t.url || ""));
+      if (real.length === 0) {
+        await qbit.addTrackers(hash, PUBLIC_BT_TRACKERS);
+        await qbit.reannounceTorrent(hash).catch(() => {});
+        logger.info(
+          `bt trackers injected: ${hash} (+${PUBLIC_BT_TRACKERS.length} public trackers)`,
+        );
+      }
+    } catch (err) {
+      logger.warn(`bt tracker ensure failed: ${err}`);
+    }
+  }
+
   /**
    * BT 任务执行（队列 bt 类型）：全走 qBittorrent。
    * - 磁力任务 url = 磁力原文；种子文件任务 url = torrents 目录内 .torrent
@@ -992,6 +1015,13 @@ export class DownloaderSvc {
       }
       if (!added) throw new Error("BT 任务添加失败（种子已存在于引擎）");
     }
+
+    // tracker 自愈注入：种子可能根本不带 tracker——网关缓存 .torrent 直加
+    // 路径绕过了 withBtTrackers（只有磁力原文兜底路径注入 tr=），而 qB 的
+    // DHT 冷启动时路由表为空，无 tracker 又无 DHT 节点 = peer 发现全灭，
+    // 实测 stalledDL 0 做种 0 进度（「任务启动了但一点进度都没有」根因）。
+    // 已带 tracker 的种子（磁力 tr= / 用户上传的种子自带）原样尊重不动。
+    await this.ensureBtTrackers(qbit, hash);
 
     // 先启动再选文件：qB 4.5.2 对 stopped / missingFiles 状态的种子拒绝
     // filePrio（HTTP 400）——任务重试续传、上轮失败残留等场景种子都处于
