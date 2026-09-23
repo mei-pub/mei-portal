@@ -48,19 +48,29 @@ export function playMusicFile(file: MusicDownloadFile): void {
   }
 }
 
+/** tv 应用内路由 → 门户侧可导航路径。playRoute 存的是 tv 播放页的
+ *  usePathname（不含 /tv basePath，形如 /play/<source>/<id>），跨应用
+ *  跳转必须补 /tv 前缀：外壳按 URL 前缀解析归属应用（tv 的前缀是 /tv），
+ *  /play/... 解析不出 tv → 裸 push → nginx 也没有 /play location → 404。
+ *  已带前缀（历史手工数据）原样返回。 */
+export function withTvBasePath(route: string): string {
+  return /^\/tv(\/|$)/.test(route) ? route : `/tv${route.startsWith("/") ? route : `/${route}`}`;
+}
+
 /** 影视 tab（有 playRoute 的记录）：深链走外壳承载路由跳 tv 播放页
  *  （本地源自动优先；独立模式整页跳转）。无 playRoute 的旧记录走
  *  movieFallbackVideo + 内嵌弹层，不要用本函数。 */
 export function playMovieRecord(record: MovieSourceRecord): void {
   const route = record.playRoute || "";
   if (!route) return;
+  const target = withTvBasePath(route);
   if (isEmbeddedInShell()) {
     window.parent.postMessage(
-      { source: "mei-iframe", type: "navigate", path: route },
+      { source: "mei-iframe", type: "navigate", path: target },
       window.location.origin,
     );
   } else {
-    window.location.assign(route);
+    window.location.assign(target);
   }
 }
 
