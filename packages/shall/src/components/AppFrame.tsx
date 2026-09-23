@@ -212,6 +212,19 @@ export default function AppFrame() {
     []
   );
 
+  // 承载页地址即时回写：/app 承载地址是内部传输形态。进入承载页后若只靠
+  // 1200ms 轮询回写，地址栏会闪现 /app 查询串（慢机器上更久），历史下拉
+  // 里也会出现 /app 条目。承载参数本身就是规范路径，当拍立即 replaceState，
+  // /app 不再出现在用户可见的地址栏与历史记录中；轮询回写继续负责子应用
+  // 内部导航的跟随。
+  const carrierPath = carrierParsed?.path || '';
+  useEffect(() => {
+    if (pathname !== '/app' || !carrierPath) return;
+    if (window.location.pathname + window.location.search + window.location.hash !== carrierPath) {
+      window.history.replaceState(null, '', carrierPath);
+    }
+  }, [carrierPath, pathname]);
+
   // 子应用内部导航回写到顶层资源 URL，保证刷新/分享可复原
   useEffect(() => {
     if (!appId) return;
