@@ -131,6 +131,20 @@ export function renameMovieSource(key: string, name: string): Promise<void> {
   }).then(() => undefined);
 }
 
+/** 影视记录的原始下载链接（media 任务 url，按需获取——列表不随行携带，
+ *  「复制链接」点击时才拉一次）。走 http 实例（electron 桌面 baseURL） */
+export function getMediaTaskUrl(id: number | string): Promise<string | null> {
+  return http
+    .get<{ url?: string } | { data?: { url?: string } }>(
+      `/api/downloads/${id}`,
+    )
+    .then((data: any) => {
+      const url = data?.url ?? data?.data?.url;
+      return typeof url === "string" && url ? url : null;
+    })
+    .catch(() => null);
+}
+
 /** 删除 media 下载任务：停止下载；deleteFiles=true 连落盘产物一起清理
  *  （未完成任务的分片临时 / 已完成任务的成品文件）。
  *  走 http 实例（electron 桌面 baseURL + X-API-Key），见文件头说明 */

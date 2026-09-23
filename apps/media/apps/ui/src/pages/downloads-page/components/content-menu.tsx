@@ -26,6 +26,7 @@ import {
   deleteMovieSource,
   deleteMusicFile,
   deleteMusicTask,
+  getMediaTaskUrl,
   listMediaVideos,
   type MovieSourceRecord,
   renameMovieSource,
@@ -224,6 +225,36 @@ export interface ContentMenuDeps {
 export const isMediaVideoTask = (task: DownloadTask): boolean =>
   task.type !== "direct" && task.type !== "bt";
 
+/** 剪贴板写入（Clipboard API 优先，HTTP 部署降级 execCommand）——
+ *  对齐迅雷「复制下载地址/复制磁力链接」的底层能力 */
+async function copyText(text: string): Promise<boolean> {
+  try {
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch {
+    /* 非 secure context（http 部署）：降级 */
+  }
+  try {
+    const ta = document.createElement("textarea");
+    ta.value = text;
+    ta.style.position = "fixed";
+    ta.style.opacity = "0";
+    document.body.appendChild(ta);
+    ta.focus();
+    ta.select();
+    const ok = document.execCommand("copy");
+    document.body.removeChild(ta);
+    return ok;
+  } catch {
+    return false;
+  }
+}
+
+/** 音乐文件的本地流直链（同源绝对地址，可粘给其它播放器/下载器直接用） */
+function musicServeUrl(path: string): string {
+  return `${window.location.origin}/music/api/download/serve?path=${encodeURIComponent(path)}`;
+}
+
 export function useContentMenu(deps: ContentMenuDeps) {
   const { message, modal } = App.useApp();
   const { menu, openMenu } = useWebContextMenu();
@@ -263,6 +294,10 @@ export function useContentMenu(deps: ContentMenuDeps) {
         }
         break;
     }
+    items.push({
+      key: "copy-link",
+      label: /^magnet:/i.test(task.url) ? "复制磁力链接" : "复制链接",
+    });
     items.push({ key: "log", label: "查看日志" });
     items.push({ key: "delete", label: "删除…", danger: true });
     return items;
@@ -306,6 +341,13 @@ export function useContentMenu(deps: ContentMenuDeps) {
             message.error("操作失败");
           }
           break;
+        case "copy-link": {
+          // 对齐迅雷「复制下载地址 / 复制磁力链接」
+          const ok = await copyText(task.url || "");
+          if (ok) message.success(/^magnet:/i.test(task.url) ? "已复制磁力链接" : "已复制下载链接");
+          else message.error("复制失败，请手动选择链接");
+          break;
+        }
         case "log":
           setLogTarget({ id: task.id, name: task.name });
           break;
@@ -405,6 +447,18 @@ export function useContentMenu(deps: ContentMenuDeps) {
         setRenameValue(record.name);
         break;
       }
+      case "copy-link": {
+        // 复制原始下载链接（对齐迅雷）：列表不随行携带 url，按需拉一次
+        const url = await getMediaTaskUrl(record.mediaTaskId);
+        if (!url) {
+          message.info("该记录没有原始链接（任务可能已被删除）");
+          break;
+        }
+        const ok = await copyText(url);
+        if (ok) message.success(/^magnet:/i.test(url) ? "已复制磁力链接" : "已复制下载链接");
+        else message.error("复制失败，请手动选择链接");
+        break;
+      }
       case "del-movie": {
         // 统一删除契约（useDeleteTasks 三选一）：未完成必然级联停止下载并
         // 清理临时文件；已完成由用户选择是否连文件删除
@@ -454,6 +508,7 @@ export function useContentMenu(deps: ContentMenuDeps) {
           }
           break;
       }
+      items.push({ key: "copy-link", label: "复制链接" });
       items.push({ key: "edit-movie", label: "修改信息…" });
       if (record.status !== "done") {
         items.push({ key: "log", label: "查看日志" });
@@ -555,6 +610,13 @@ export function useContentMenu(deps: ContentMenuDeps) {
         }
         break;
       }
+      case "copy-music-url": {
+        // 复制本地流直链（对齐迅雷「复制下载地址」）：可粘给其它播放器
+        const ok = await copyText(musicServeUrl(file.path));
+        if (ok) message.success("已复制播放链接");
+        else message.error("复制失败");
+        break;
+      }
       case "del-music-file": {
         modal.confirm({
           title: `删除音乐文件「${file.name}」？`,
@@ -587,6 +649,7 @@ export function useContentMenu(deps: ContentMenuDeps) {
       const items: ContextMenuItem[] = [
         { key: "play-music", label: "播放" },
         { key: "fav-music", label: "收藏" },
+        { key: "copy-music-url", label: "复制播放链接" },
       ];
       const playlists = music.musicState?.playlists ?? [];
       if (playlists.length > 0) {

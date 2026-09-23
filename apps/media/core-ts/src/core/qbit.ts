@@ -271,14 +271,38 @@ export class QBitClient {
     return (await res.text()).trim() !== "Fails.";
   }
 
+  /** 给已存在的种子追加 tracker（urls 多个用换行分隔）。
+   * qB 4.5.2 坑：该端点参数是单数 hash（不是 hashes）——与 reannounce/
+   * delete 等用 hashes 的端点不一致，发 hashes 直接 400 Bad Request。
+   * 同发 hashes 以兼容改用复数参数的 qB 5.x（多余参数 qB 忽略）。 */
+  async addTrackers(hash: string, urls: string[]): Promise<void> {
+    const body = new URLSearchParams({ hash, hashes: hash, urls: urls.join("\n") });
+    const res = await this.request("/api/v2/torrents/addTrackers", {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body,
+    });
+    await this.ensureOk(res, "tracker 注入");
+  }
+
+  /** 查种子 tracker 列表（含 DHT/PeX/LSD 三个伪条目，url 形如 ** [DHT] **） */
+  async getTrackers(
+    hash: string,
+  ): Promise<Array<{ url: string; status: number }>> {
+    const res = await this.request(
+      `/api/v2/torrents/trackers?hash=${encodeURIComponent(hash)}`,
+    );
+    await this.ensureOk(res, "tracker 查询");
+    return (await res.json()) as Array<{ url: string; status: number }>;
+  }
+
   /** 文件优先级：ids 是 0-based 文件索引；priority 0 = 不下载 / 1 = 普通。
    * qB 4.5.2 坑一：POST 端点的 hash/id/priority 必须全部走 form body——
    *   hash/priority 放 query 时 requireParams 读不到，永远 400 Bad Request
    *   （与 setPreferences 的 Referer/参数坑同源；单文件任务从不调它，所以
    *   之前从未暴露）；
    * 坑二：种子刚 add（非运行态）时 filePrio 也 400——对 400 等待重试，
-   *   最多 6 次 × 800ms。 */
-  async setFilePriority(
+   *   最多 6 次 × 800ms。 */  async setFilePriority(
     hash: string,
     ids: number[],
     priority: 0 | 1,

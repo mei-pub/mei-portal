@@ -220,6 +220,7 @@ const AllView: FC<AllViewProps> = ({ onEnter }) => {
     if (item.musicFilePath) {
       items.push({ key: "play-music", label: "播放" });
       items.push({ key: "fav-music", label: "收藏" });
+      items.push({ key: "copy-music-url", label: "复制播放链接" });
       const playlists = music.musicState?.playlists ?? [];
       if (playlists.length > 0) {
         for (const pl of playlists) {
@@ -252,6 +253,7 @@ const AllView: FC<AllViewProps> = ({ onEnter }) => {
           }
           break;
       }
+      items.push({ key: "copy-link", label: "复制链接" });
       items.push({ key: "log", label: "查看日志" });
       items.push({ key: "edit-movie", label: "修改信息…" });
       items.push({ key: "del-movie", label: "删除…", danger: true });
@@ -262,6 +264,9 @@ const AllView: FC<AllViewProps> = ({ onEnter }) => {
       if (item.active) {
         items.push({ key: "pause", label: "暂停下载" });
       }
+      if (item.mediaTask.status === DownloadStatus.Stopped) {
+        items.push({ key: "start", label: "继续下载" });
+      }
       if (item.mediaTask.status === DownloadStatus.Success) {
         items.push({ key: "play-media", label: "播放" });
         // 文件在盘的已完成任务提供产物回拉（附件端点）
@@ -269,12 +274,28 @@ const AllView: FC<AllViewProps> = ({ onEnter }) => {
           items.push({ key: "download-local", label: "下载到本地" });
         }
       }
+      items.push({
+        key: "copy-link",
+        label: /^magnet:/i.test(item.mediaTask.url)
+          ? "复制磁力链接"
+          : "复制链接",
+      });
       items.push({ key: "log", label: "查看日志" });
       items.push({ key: "delete", label: "删除…", danger: true });
     } else if (item.mediaTask) {
       // 磁力 / 文件任务
       if (item.active) {
         items.push({ key: "pause", label: "暂停下载" });
+      } else if (
+        item.mediaTask.status === DownloadStatus.Stopped ||
+        item.mediaTask.status === DownloadStatus.Pending ||
+        item.mediaTask.status === DownloadStatus.Failed ||
+        item.mediaTask.status === DownloadStatus.Ready
+      ) {
+        items.push({
+          key: "start",
+          label: item.mediaTask.status === DownloadStatus.Failed ? "重试" : "继续下载",
+        });
       }
       if (
         item.mediaTask.status === DownloadStatus.Success &&
@@ -282,6 +303,12 @@ const AllView: FC<AllViewProps> = ({ onEnter }) => {
       ) {
         items.push({ key: "download-local", label: "下载到本地" });
       }
+      items.push({
+        key: "copy-link",
+        label: /^magnet:/i.test(item.mediaTask.url)
+          ? "复制磁力链接"
+          : "复制链接",
+      });
       items.push({ key: "log", label: "查看日志" });
       items.push({ key: "delete", label: "删除…", danger: true });
     }
@@ -321,8 +348,10 @@ const AllView: FC<AllViewProps> = ({ onEnter }) => {
         item.mediaTask &&
         (key === "play-media" ||
           key === "pause" ||
+          key === "start" ||
           key === "log" ||
           key === "download-local" ||
+          key === "copy-link" ||
           key === "delete")
       ) {
         await taskAction(key, item.mediaTask);
