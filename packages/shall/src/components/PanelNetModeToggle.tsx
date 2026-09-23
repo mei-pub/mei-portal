@@ -1,12 +1,25 @@
 'use client';
 // 主页内网模式开关（自研主页版，localStorage mei-lan-mode）
 // 开启后自定义图标项优先使用内网地址（lanUrl）
-import { useState } from 'react';
+// 状态经 effect 读取（SSR/水合首帧一律按关渲染，避免渲染期直读 localStorage
+// 造成水合分歧），本页/其他标签页变更经 mei-lan-change / storage 事件同步
+import { useEffect, useState } from 'react';
 
 export default function PanelNetModeToggle() {
-  const [lan, setLan] = useState<boolean>(() => {
-    try { return localStorage.getItem('mei-lan-mode') === '1'; } catch { return false; }
-  });
+  const [lan, setLan] = useState(false);
+
+  useEffect(() => {
+    const read = () => {
+      try { setLan(localStorage.getItem('mei-lan-mode') === '1'); } catch {}
+    };
+    read();
+    window.addEventListener('mei-lan-change', read);
+    window.addEventListener('storage', read);
+    return () => {
+      window.removeEventListener('mei-lan-change', read);
+      window.removeEventListener('storage', read);
+    };
+  }, []);
 
   function toggle() {
     const next = !lan;

@@ -256,23 +256,6 @@
     window.dispatchEvent(new Event('mei-lan-change'));
   }
 
-  // ---- 应用开关（localStorage mei-enabled，仅当前浏览器）----
-  var SWITCHABLE = [
-    ['ai-draw', 'AI 绘图', '关闭后门户卡片与顶栏入口置灰'],
-    ['solara', '音乐播放', '关闭后门户卡片与顶栏入口置灰'],
-    ['lunatv', '影视门户', '关闭后门户卡片与顶栏入口置灰'],
-    ['mediago', '下载中心', '关闭后门户卡片与顶栏入口置灰'],
-  ];
-  function readEnabled() {
-    try { return JSON.parse(localStorage.getItem('mei-enabled') || '{}') || {}; } catch (e) { return {}; }
-  }
-  function isAppOn(id) { return readEnabled()[id] !== false; }
-  function setAppOn(id, on) {
-    var m = readEnabled();
-    m[id] = !!on;
-    try { localStorage.setItem('mei-enabled', JSON.stringify(m)); } catch (e) {}
-  }
-
   // HTML 转义：所有动态插值进 innerHTML 前必须走这里（存储型 XSS 防线）
   function escapeHtml(s) {
     return String(s == null ? '' : s)
@@ -806,7 +789,6 @@
   }
 
   // 注入 token 类应用的凭证到 localStorage
-  // 同时检查子应用 cookie 是否需要刷新（repenetrate）
   // 嵌入模式也保留（应用嵌入后仍需登录态）
   fetch('/api/auth/me', { credentials: 'include' })
     .then(function (r) { return r.json(); })
@@ -838,18 +820,6 @@
           } catch (e) {
             localStorage.setItem('auth-storage', JSON.stringify({ state: { user: { username: 'admin', role: 'admin' }, token: d.tokens['ai-draw'] }, version: 0 }));
           }
-        }
-
-        // 登录态刷新：如果用户已登录但子应用 cookie 可能过期（session 级 cookie），
-        // 调用 repenetrate 重新登录各子应用。每个浏览器会话只调用一次（用 sessionStorage 标记）。
-        if (d.loggedIn) {
-          try {
-            if (!sessionStorage.getItem('mei-repenetrated')) {
-              sessionStorage.setItem('mei-repenetrated', '1');
-              fetch('/api/auth/repenetrate', { method: 'POST', credentials: 'include' })
-                .catch(function () {});
-            }
-          } catch (e) {}
         }
       }
     })

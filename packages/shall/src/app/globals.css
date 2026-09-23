@@ -155,16 +155,6 @@ body {
 .mei-app-card:active {
   transform: translateY(-2px) scale(0.985);
 }
-.mei-app-card[data-disabled='true'] {
-  opacity: 0.38;
-  cursor: not-allowed;
-  filter: saturate(0.4);
-}
-.mei-app-card[data-disabled='true']:hover {
-  transform: none;
-  border-color: rgba(255, 255, 255, 0.85);
-  box-shadow: var(--mei-shadow-sm);
-}
 
 /* 卡片内的图标砖 */
 .mei-app-card .mei-icon-tile {

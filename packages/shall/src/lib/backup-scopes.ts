@@ -76,7 +76,7 @@ export const BACKUP_SCOPE_META: Record<BackupScope, BackupScopeMeta> = {
 
 // 各应用在浏览器本地持久化的配置键（与同源子路径应用共享 localStorage）。
 export const BROWSER_STORAGE_KEYS: Record<BackupScope, string[]> = {
-  panel: ['mei-lan-mode', 'mei-enabled', 'mei-recents'],
+  panel: ['mei-lan-mode', 'mei-recents'],
   lunatv: [
     'defaultAggregateSearch',
     'fluidSearch',
