@@ -18,10 +18,16 @@ WORKDIR /build
 RUN apt-get update && apt-get install -y --no-install-recommends python3 make g++ \
     && rm -rf /var/lib/apt/lists/*
 COPY apps/novels/ ./
-# 字体下载脚本首次启动会跑，构建时跳过
+# 字体下载脚本首次启动会跑，构建时跳过（npm build 阶段）
 ENV SKIP_FONT_DOWNLOAD=1
 RUN npm ci --no-audit --no-fund || npm install --no-audit --no-fund
 RUN npm run build
+# 字体种子：构建机有网络，10 个中文 Noto/LXGW 家族一次性下载烙进镜像，
+# 运行时首启只做本地拷贝（零外网，全新部署/新卷秒就绪）。
+# 种子下载失败不阻断构建（mkdir 兜底保证目录存在），运行时仍有联网回退。
+RUN DATA_DIR=/build/fonts-seed SKIP_FONT_DOWNLOAD=0 node scripts/download-fonts.mjs \
+    || echo "[build] fonts seed download failed; runtime fallback remains"
+RUN mkdir -p /build/fonts-seed
 
 # ---- link 内网穿透（Node + 原生 JS，frpc 外部工具经 GitHub Release 下载）----
 # 用 alpine 基础（su-exec 在 alpine 有），只下载 frpc 二进制
@@ -184,6 +190,8 @@ COPY --from=novels-builder /build/.next/standalone ./apps/novels/
 COPY --from=novels-builder /build/.next/static ./apps/novels/.next/static
 COPY --from=novels-builder /build/public ./apps/novels/public
 COPY --from=novels-builder /build/scripts ./apps/novels/scripts
+# 字体种子（构建期下载烙进镜像）：首启本地拷贝进 /data，不依赖外网
+COPY --from=novels-builder /build/fonts-seed ./fonts-seed
 
 # ---- link ----
 COPY --from=link-builder /usr/local/bin/frpc /usr/local/bin/frpc
