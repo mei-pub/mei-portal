@@ -221,7 +221,9 @@ export default function AppFrame() {
   useEffect(() => {
     if (pathname !== '/app' || !carrierPath) return;
     if (window.location.pathname + window.location.search + window.location.hash !== carrierPath) {
-      window.history.replaceState(null, '', carrierPath);
+      // 保留当前 history.state（Next App Router 的历史键）：传 null 会把
+      // 路由状态抹掉，后续客户端导航可能失灵
+      window.history.replaceState(window.history.state, '', carrierPath);
     }
   }, [carrierPath, pathname]);
 
@@ -242,6 +244,11 @@ export default function AppFrame() {
         return; // 跨域应用：忽略
       }
       if (!inner || !appId) return;
+      // 只回写真实的应用内路径。iframe 加载失败/被中断时停留在 about:blank，
+      // 其 location.pathname 是 'blank'（无前导斜杠的特殊 URL），不加守卫会被
+      // 当相对路径 replaceState 成 /blank——地址跳到无人认领的路径，页面显示
+      // 「未指定应用」。任何非绝对路径状态一律跳过，等应用真正就绪后再跟随。
+      if (!inner.startsWith('/')) return;
       const [beforeHash = '', hash = ''] = inner.split('#');
       const [innerPathname = '', innerSearch = ''] = beforeHash.split('?');
       const params = new URLSearchParams(innerSearch || '');
@@ -250,7 +257,8 @@ export default function AppFrame() {
       const next = `${innerPathname}${canonicalSearch ? `?${canonicalSearch}` : ''}${hash ? `#${hash}` : ''}`;
       if (!sameAppPath(next, activePath)) setActivePath(next);
       if (window.location.pathname + window.location.search + window.location.hash !== next) {
-        window.history.replaceState(null, '', next);
+        // 保留 Next 的 history.state（同上：置 null 会破坏 App Router 历史键）
+        window.history.replaceState(window.history.state, '', next);
       }
     }, 1200);
     return () => clearInterval(timer);
