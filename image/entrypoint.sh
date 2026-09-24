@@ -37,11 +37,23 @@ if [ ! -f "$DATA_DIR/shell/user.json" ]; then
   echo "[mei-portal] 首次启动，初始化默认账户 admin（请在门户修改密码）"
 fi
 
-# ---- novels 字体（首启预下载，后台进行不阻塞）----
-# 下载脚本写入 $DATA_DIR/novels/fonts（DATA_DIR 参数指向 novels 子目录），
-# 幂等检查必须用同一路径——此前误查旧名 $DATA_DIR/tutorial，导致每次启动都重新下载
-if [ ! -d "$DATA_DIR/novels/fonts/css" ] && [ -f /app/apps/novels/scripts/download-fonts.mjs ]; then
-  echo "[mei-portal] novels 字体首次下载（后台）..."
+# ---- novels 字体（镜像种子本地拷贝，零外网；联网下载仅为种子缺失时的回退）----
+# 种子由 Dockerfile 构建期下载烙进镜像（/app/fonts-seed）。首启把种子拷进
+# /data/novels/fonts（卷持久，升级不重做）；种子比卷里多出的家族（新版本
+# 增补的字体）增量补拷。全部就绪后无任何外网动作。
+if [ -d /app/fonts-seed/fonts/css ]; then
+  seed_incomplete=0
+  for f in /app/fonts-seed/fonts/css/*.css; do
+    [ -f "$DATA_DIR/novels/fonts/css/$(basename "$f")" ] || { seed_incomplete=1; break; }
+  done
+  if [ "$seed_incomplete" = "1" ]; then
+    echo "[mei-portal] novels 字体从镜像种子本地拷贝..."
+    mkdir -p "$DATA_DIR/novels/fonts"
+    cp -r /app/fonts-seed/fonts/. "$DATA_DIR/novels/fonts/"
+  fi
+elif [ ! -d "$DATA_DIR/novels/fonts/css" ] && [ -f /app/apps/novels/scripts/download-fonts.mjs ]; then
+  # 回退：无种子（源码运行/构建期下载失败）时才联网，后台进行不阻塞
+  echo "[mei-portal] novels 字体联网下载（后台，仅首次）..."
   (cd /app/apps/novels && DATA_DIR="$DATA_DIR/novels" node scripts/download-fonts.mjs || echo "[mei-portal] 字体下载完成/跳过") &
 fi
 

@@ -6,7 +6,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ClientPlugin } from '@/lib/categories';
 import TopBar from './TopBar';
 import MeiIcon from './MeiIcon';
-import { isSwitchable, isAppEnabled } from '@/lib/app-toggles';
 import { useHealth } from '@/lib/use-health';
 import type { PanelConfig, PanelItem, PanelGroup } from '@/lib/panel-store';
 import ItemIconPicker, { isImgIcon, isTextIcon, textIconContent, contrastColor } from './ItemIconPicker';
@@ -85,13 +84,12 @@ type HealthMap = Record<string, { ok: boolean; ms: number; loading: boolean }>;
 
 /* ============ 统一图标卡片 ============ */
 function UnifiedCard({
-  item, lanMode, health, disabled, editMode, iconMode, plugins, navigate,
+  item, lanMode, health, editMode, iconMode, plugins, navigate,
   onEdit, onDelete, onContext, onDragStart, onDragOver, onDrop, isDragging, shouldBlockClick,
 }: {
   item: PanelItem;
   lanMode: boolean;
   health?: { ok: boolean; ms: number; loading: boolean };
-  disabled?: boolean;
   editMode: boolean;
   iconMode?: boolean;
   plugins: { id: string; url: string }[];
@@ -142,10 +140,9 @@ function UnifiedCard({
     >
       <button
         className="mei-app-card"
-        data-disabled={disabled ? 'true' : undefined}
         data-mode={iconMode ? 'icon' : 'compact'}
         type="button"
-        onClick={() => { if (shouldBlockClick()) return; if (!editMode && !disabled) openTarget(href, plugins, navigate); }}
+        onClick={() => { if (shouldBlockClick()) return; if (!editMode) openTarget(href, plugins, navigate); }}
         onContextMenu={onContext}
         title={editMode ? '拖拽排序 / 右键菜单' : item.title}
       >
@@ -439,6 +436,9 @@ export default function PortalClient({ items, panel: initialPanel }: { items: It
     return () => { window.removeEventListener('storage', onLan); window.removeEventListener('mei-lan-change', onLan as EventListener); };
   }, []);
 
+  // 应用开关特性已整体退役（应用内无切换入口、卡片置灰读取随之移除），
+  // 历史 localStorage 偏好不再生效，卡⽚恢复正常可点。
+
   // 系统监控
   useEffect(() => {
     if (!style?.systemMonitorShow) return;
@@ -651,7 +651,6 @@ export default function PortalClient({ items, panel: initialPanel }: { items: It
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [panel.items, query]
   );
-  const isSwitchedOff = (item: PanelItem) => !!(item.builtin && isSwitchable(item.builtin) && !isAppEnabled(item.builtin));
   const healthOf = (item: PanelItem) => (item.builtin ? health[item.builtin] : undefined);
 
   // 小说站点：每个可见站点一个独立图标项（客户端动态获取，尊重 ns-open 可见性；编辑模式不注入）
@@ -763,7 +762,6 @@ export default function PortalClient({ items, panel: initialPanel }: { items: It
       plugins={hostPlugins}
       navigate={navigate}
       health={healthOf(item)}
-      disabled={isSwitchedOff(item)}
       editMode={editMode}
       iconMode={pageIconMode}
       isDragging={dragId === item.id}
