@@ -534,7 +534,46 @@ async function main(): Promise<void> {
     hub.broadcast("download-stop", { id });
   };
 
-  // 10. HTTP 服务
+  // 10. 启动自愈：恢复上次进程中断的在途任务。容器升级/进程重启会打断
+  // 下载——行卡在 downloading/pending、qB 里的种子无人管理（missingFiles
+  // 等异常也无人恢复，表现为「升级后任务永远停在下载中」）。等 qB 引擎
+  // 就绪（supervisord 拉起顺序可能晚于 core）后按既有状态重新入队；
+  // startDownload 内部按任务现状走续传/missingFiles 自愈路径。用户显式
+  // 停止的任务（stopped）不恢复。
+  void (async () => {
+    const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
+    for (let i = 0; i < 36; i++) {
+      const ready = await downloader
+        .qbit()
+        .getInfo("0".repeat(40))
+        .then(() => true)
+        .catch(() => false);
+      if (ready) break;
+      await wait(5000);
+    }
+    let interrupted: ReturnType<DownloadTaskService["findActiveTasks"]> = [];
+    try {
+      interrupted = downloadSvc.findActiveTasks();
+    } catch (err: any) {
+      logger.warn(`boot resume: list active tasks failed: ${err?.message ?? err}`);
+      return;
+    }
+    if (interrupted.length === 0) return;
+    logger.info(
+      `boot resume: re-enqueueing ${interrupted.length} interrupted download task(s): ${interrupted.map((v) => v.id).join(",")}`,
+    );
+    for (const v of interrupted) {
+      try {
+        await downloadSvc.startDownload(v.id, cfg.localDir, false);
+      } catch (err: any) {
+        logger.warn(
+          `boot resume: task ${v.id} re-enqueue failed: ${err?.message ?? err}`,
+        );
+      }
+    }
+  })();
+
+  // 11. HTTP 服务
   const envPaths: EnvPaths = {
     configDir: cfg.configDir,
     binDir:
