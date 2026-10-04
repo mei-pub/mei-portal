@@ -1111,6 +1111,19 @@ export class DownloaderSvc {
           await qbit
             .deleteTorrent(hash, false)
             .catch((err) => logger.warn(`bt readd delete failed: ${err}`));
+          // 删除偶发未生效（WebUI 会话/竞态）时种子仍挂着 missingFiles，
+          // 重加只会空转——升级为连文件一起删强制干净重建（missingFiles
+          // 态下本就无可用数据，无损失）
+          if ((await qbit.getInfo(hash))[0]) {
+            logger.warn(
+              `bt task ${p.id}: torrent survived delete, force deleting with files`,
+            );
+            await qbit
+              .deleteTorrent(hash, true)
+              .catch((err) =>
+                logger.warn(`bt readd force delete failed: ${err}`),
+              );
+          }
           const torrentCache = path.join(
             path.dirname(btStagingRoot(this.cfg.getConfigDir?.() ?? "/data/media")),
             `${hash}.torrent`,
@@ -1126,16 +1139,43 @@ export class DownloaderSvc {
               await qbit.addMagnet(withBtTrackers(p.url), {
                 savepath: saveDir,
               });
+            } else if (/\.torrent$/i.test(p.url) && fs.existsSync(p.url)) {
+              // 种子文件任务：url 即本地种子路径（白名单已校验）
+              await qbit.addTorrentFile(fs.readFileSync(p.url), {
+                savepath: saveDir,
+                name: path.basename(p.url),
+                skipChecking: true,
+              });
+            } else {
+              logger.warn(
+                `bt readd: no cached torrent and url is not re-addable, skip re-add`,
+              );
             }
             await qbit.startTorrent(hash);
           } catch (err) {
             logger.warn(`bt readd failed: ${err}`);
           }
           await new Promise((r) => setTimeout(r, 2000));
+          // 观测重加后的引擎真实状态：否则「静默无效的重加」3 次空转不可见
+          const after = await qbit
+            .getInfo(hash)
+            .then((l) => l[0])
+            .catch(() => null);
+          logger.warn(
+            `bt task ${p.id}: re-add attempt ${verifyAttempts} result: state=${after?.state ?? "gone"}, progress=${Math.round((after?.progress ?? 0) * 100)}%`,
+          );
           continue;
         }
+        // 最终失败给出可行动线索：磁盘满/路径不可写是 missingFiles 反复
+        // 出现的高频根因
+        let diskHint = "";
+        try {
+          const st = fs.statfsSync(saveDir);
+          const freeGb = (st.bavail * st.bsize) / 1024 ** 3;
+          diskHint = `，存储剩余 ${freeGb.toFixed(1)}GB`;
+        } catch {}
         throw new Error(
-          `BT 下载出错（missingFiles，重加 ${verifyAttempts} 次未恢复）`,
+          `BT 下载出错（missingFiles，重加 ${verifyAttempts} 次未恢复${diskHint}；请检查存储剩余空间与目录可写性，或引擎是否反复重启）`,
         );
       }
       if (info.state === "error") {
