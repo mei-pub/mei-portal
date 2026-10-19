@@ -57,6 +57,9 @@ export interface MusicDownloadFile {
   path: string;
   size: number;
   mtime: string | number;
+  /** 源 id / source（曲库服务按任务表+源索引 enrich 回填；历史文件可能缺省） */
+  songId?: string | number;
+  songSource?: string;
 }
 
 export interface MusicLibrary {

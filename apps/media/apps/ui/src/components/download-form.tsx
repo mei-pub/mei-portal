@@ -1,6 +1,7 @@
 import {
   CloudDownloadOutlined,
   DockerOutlined,
+  FolderOpenOutlined,
   PaperClipOutlined,
   UnorderedListOutlined,
 } from "@ant-design/icons";
@@ -11,6 +12,7 @@ import {
   Checkbox,
   Form,
   Input,
+  InputNumber,
   Modal,
   Radio,
   Segmented,
@@ -21,16 +23,19 @@ import {
 } from "antd";
 import { forwardRef, useImperativeHandle, useRef, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
+import useSWR from "swr";
 import { useShallow } from "zustand/react/shallow";
 import { ADD_TO_LIST, DOWNLOAD_NOW } from "@/const";
 import { usePlatform } from "@/hooks/use-platform";
 import { createDownloadTasks } from "@/api/download-task";
+import { deleteMediaTask } from "@/api/download-center";
 import { useDockerApi } from "@/hooks/use-docker-api";
 import { appStoreSelector, useAppStore } from "@/store/app";
 import { downloadFormSelector, useConfigStore } from "@/store/config";
-import { tdApp } from "@/utils";
+import { http, tdApp } from "@/utils";
 import { DownloadTask, DownloadType } from "@mediago/shared-common";
 import { BatchUrlTextarea } from "./batchurl-textarea";
+import SaveDirBrowser from "./save-dir-browser";
 
 const { TextArea } = Input;
 
@@ -130,15 +135,21 @@ export type MagnetInputMode = "magnet" | "torrent";
 export interface TorrentUploadResult {
   /** 种子文件上传模式：服务端落盘的 .torrent 路径（bt url 白名单内） */
   path?: string;
-  /** 磁力解析模式：qBittorrent 种子 hash（discard/续用定位） */
+  /** 磁力解析模式：种子 infohash（discard/续用定位） */
   hash?: string;
   name: string;
   size: number;
   files: Array<{ index: number; path: string; size: number }> | null;
-  /** 磁力解析：已在 BT 引擎中存在（含未完成续传 / qB WebUI 手加） */
+  /** 磁力解析：已在下载引擎中存在（含未完成续传 / 控制台手加） */
   existed?: boolean;
   /** 已存在且下载完成（重新下载 = 删旧重下，UI 需二次确认） */
   completed?: boolean;
+  /** 已存在任务的提交按 url+saveDir 匹配接管：目录必须沿用（锁目录） */
+  folderLocked?: boolean;
+  /** folderLocked 时的必用目录 key（空串 = 下载根） */
+  folder?: string;
+  /** 已存在任务的 DB 行 id（completed 二次确认「删旧重下」用） */
+  existedId?: number;
 }
 
 /** 具体下载类型 → 大类（外部 ref 接口与编辑回填仍以 DownloadType 进出） */
@@ -190,6 +201,10 @@ export interface DownloadFormItem {
   url?: string;
   id?: number;
   folder?: string;
+  /** 直链任务分段数（0/空 = 引擎按文件大小自动推荐） */
+  segments?: number | null;
+  /** 归属命名队列（FluxDown daemon.queue；空 = 引擎默认 Main Queue） */
+  queueId?: string | null;
 }
 
 export interface DownloadFormProps {
@@ -227,6 +242,21 @@ export default forwardRef<DownloadFormRef, DownloadFormProps>(
     const { contextMenu } = usePlatform();
     const { addVideosToDocker } = useDockerApi();
 
+    // 命名队列（FluxDown daemon.queue）：新建任务归属队列选择。引擎
+    // 未起/未配置时请求失败 → 不渲染该字段（保持表单简洁）
+    const { data: engineQueues } = useSWR(
+      modalOpen ? "/api/downloads/engine-queues" : null,
+      () =>
+        http.get("/api/downloads/engine-queues") as Promise<
+          Array<{ queueId: string; name: string }>
+        >,
+      { revalidateOnFocus: false },
+    );
+    const queueOptions = (engineQueues ?? []).map((q) => ({
+      value: q.queueId,
+      label: q.name,
+    }));
+
     // 磁力下载（种子文件模式）：上传解析结果 + 内容勾选状态
     const [torrentMeta, setTorrentMeta] = useState<TorrentUploadResult | null>(
       null,
@@ -240,6 +270,10 @@ export default forwardRef<DownloadFormRef, DownloadFormProps>(
     const nameTouchedRef = useRef(false);
     // 磁力链接内容解析（创建前强制流程）：防抖自动触发 + 去重 + 解析中状态
     const [magnetResolving, setMagnetResolving] = useState(false);
+    /** 目录锁定（existed 磁力接管必须沿用既有任务目录） */
+    const [folderLocked, setFolderLocked] = useState(false);
+    /** 保存目录浏览器（FluxDown 新建弹窗对齐：目录树选择 + 新建目录） */
+    const [dirBrowserOpen, setDirBrowserOpen] = useState(false);
     const resolvedMagnetRef = useRef("");
     const magnetDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(
       null,
@@ -377,6 +411,7 @@ export default forwardRef<DownloadFormRef, DownloadFormProps>(
         setSelectedFiles([]);
         nameTouchedRef.current = false;
         resolvedMagnetRef.current = "";
+        setFolderLocked(false);
         if (magnetDebounceRef.current) {
           clearTimeout(magnetDebounceRef.current);
           magnetDebounceRef.current = null;
@@ -427,7 +462,7 @@ export default forwardRef<DownloadFormRef, DownloadFormProps>(
     });
 
     // 磁力链接内容解析（创建前强制流程，对齐迅雷）：POST /api/downloads/resolve-magnet
-    // → qBittorrent 引擎抓 metadata（常驻温热 DHT，秒级）→ 种子真名/大小/文件清单。
+    // → FluxDown 引擎建解析会话抓 metadata（DHT/网关缓存，秒级）→ 种子真名/大小/文件清单。
     // 解析成功后展示文件勾选/名称预填；失败清空 torrentMeta 强制校验拦截提交。
     // 表单取消/关闭时 discard 暂存种子（不留引擎半成品）。
     const discardMagnetStaging = useMemoizedFn(async (hash: string) => {
@@ -449,12 +484,17 @@ export default forwardRef<DownloadFormRef, DownloadFormProps>(
         return;
       }
       setMagnetResolving(true);
+      setFolderLocked(false);
       try {
         const res = await fetch("/api/downloads/resolve-magnet", {
           method: "POST",
           credentials: "include",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ url }),
+          body: JSON.stringify({
+            url,
+            // 目录随请求预解析：existed 时响应锁定到既有任务的目录
+            folder: form.getFieldValue("folder") ?? null,
+          }),
         });
         const payload = (await res.json().catch(() => null)) as {
           success?: boolean;
@@ -467,6 +507,13 @@ export default forwardRef<DownloadFormRef, DownloadFormProps>(
         const meta = payload.data;
         resolvedMagnetRef.current = url;
         setTorrentMeta(meta);
+        // 目录锁定（existed 接管必须沿用既有任务的目录）
+        if (meta.folderLocked) {
+          setFolderLocked(true);
+          if (typeof meta.folder === "string" && meta.folder !== "") {
+            form.setFieldValue("folder", meta.folder);
+          }
+        }
         setTypeFilter("all");
         setCollapsedDirs(new Set());
         setSelectedFiles(meta.files?.map((f) => f.index) ?? []);
@@ -482,6 +529,12 @@ export default forwardRef<DownloadFormRef, DownloadFormProps>(
             okText: t("redownload"),
             cancelText: t("cancel"),
             onOk: async () => {
+              // 删旧重下：先删既有完成任务（连落盘成品），再弃置残留解析
+              // 会话，最后重新解析（提交即全新任务）——只弃置暂存不删旧任务
+              // 会让再解析永远命中 existed/completed
+              if (meta.existedId) {
+                await deleteMediaTask(meta.existedId, true).catch(() => {});
+              }
               if (meta.hash) await discardMagnetStaging(meta.hash);
               // 弃置后重新解析（引擎重新抓元数据，提交即全新任务）
               setTorrentMeta(null);
@@ -621,7 +674,8 @@ export default forwardRef<DownloadFormRef, DownloadFormProps>(
       const { batch } = form.getFieldsValue();
       const type = formType();
       if (batch) {
-        const { batchList = "", headers, folder } = form.getFieldsValue();
+        const { batchList = "", headers, folder, queueId } =
+          form.getFieldsValue();
 
         const tasks: Omit<DownloadTask, "id">[] = await Promise.all(
           batchList.split("\n").map(async (line: string) => {
@@ -632,18 +686,20 @@ export default forwardRef<DownloadFormRef, DownloadFormProps>(
               headers,
               type,
               folder,
+              queueId: queueId || null,
             };
           }),
         );
 
         return tasks;
       } else {
-        const { name = "", headers, folder } = form.getFieldsValue();
+        const { name = "", headers, folder, segments, queueId } =
+          form.getFieldsValue();
         let { url = "" } = form.getFieldsValue();
-        // 磁力任务：url = 磁力原文（qBittorrent 按 btih 定位，解析暂存种子
-        // 迁移到任务目录续传）；种子文件上传任务：url = 服务端落盘的
+        // 磁力任务：url = 磁力原文（引擎按 infohash 定位，提交时接管解析
+        // 会话或弃置重建）；种子文件上传任务：url = 服务端落盘的
         // .torrent 路径（白名单内）。内容勾选派生 select-file
-        // （全选/未选 = 全部）
+        //（全选/未选 = 全部）
         let selectFile: string | undefined;
         if (type === DownloadType.bt && torrentMeta) {
           if (torrentMeta.path) {
@@ -664,6 +720,15 @@ export default forwardRef<DownloadFormRef, DownloadFormProps>(
           type,
           folder,
           selectFile,
+          // 直链分段数（0/空 = 引擎按文件大小自动推荐；仅 normal 类有意义）
+          segments:
+            type === DownloadType.direct &&
+            typeof segments === "number" &&
+            segments >= 0
+              ? segments
+              : null,
+          // 归属命名队列（空 = 引擎默认 Main Queue；direct/bt 引擎任务）
+          queueId: queueId || null,
         } as Omit<DownloadTask, "id">;
 
         return [task];
@@ -671,13 +736,14 @@ export default forwardRef<DownloadFormRef, DownloadFormProps>(
     });
 
     return (
-      <Modal
-        open={modalOpen}
-        key={isEdit ? "edit" : "new"}
-        title={isEdit ? t("editDownload") : t("newDownload")}
-        width={500}
-        onCancel={() => closeModal(false)}
-        afterOpenChange={afterOpenChange}
+      <>
+        <Modal
+          open={modalOpen}
+          key={isEdit ? "edit" : "new"}
+          title={isEdit ? t("editDownload") : t("newDownload")}
+          width={500}
+          onCancel={() => closeModal(false)}
+          afterOpenChange={afterOpenChange}
         destroyOnHidden={destroyOnClose}
         footer={[
           <Button key="cancel" onClick={() => closeModal(false)}>
@@ -1125,10 +1191,11 @@ export default forwardRef<DownloadFormRef, DownloadFormProps>(
                         message: t("pleaseEnterOnlineVideoUrl"),
                       },
                       {
-                        // 磁力类只接受 magnet:（无 //）；普通/视频类走 file/http(s)/ftp 直链
+                        // 磁力类只接受 magnet:（无 //）；普通类接受 file/http(s)/ftp
+                        // 直链与 ed2k://（FluxDown 引擎 eD2K/Kad 支持）；视频类走 http(s)
                         pattern: isMagnet
                           ? /^magnet:\?.+/
-                          : /^(file|https?|ftp):\/\/.+/,
+                          : /^(file|https?|ftp|ed2k):\/\/.+/,
                         message: isMagnet
                           ? t("pleaseEnterCorrectMagnetLink")
                           : t("pleaseEnterCorrectVideoLink"),
@@ -1173,7 +1240,7 @@ export default forwardRef<DownloadFormRef, DownloadFormProps>(
                       ) : torrentMeta ? (
                         <div className="text-xs text-emerald-600 dark:text-emerald-400">
                           {t("torrentParsed")}：{torrentMeta.name} ·{" "}
-                          {t("engineQbittorrent")}
+                          {t("engineFluxdown")}
                           {torrentMeta.existed
                             ? ` · ${t("magnetExistedResume")}`
                             : ""}
@@ -1190,10 +1257,60 @@ export default forwardRef<DownloadFormRef, DownloadFormProps>(
               );
             }}
           </Form.Item>
+          {/* 直链任务分段数（FluxDown 动态分段；对齐其桌面端表单的 per-task
+              分段控制——空/0 = 引擎按文件大小自动推荐） */}
           <Form.Item noStyle shouldUpdate>
             {(formInstance) => {
-              // 保存目录只能从内置目录选择（按文件类型落盘）；编辑旧任务时
-              // folder 可能是非内置值（影视分类/剧名）——兜底追加一个选项展示
+              const { category, batch } = formInstance.getFieldsValue();
+              if (category !== "normal" || batch) return null;
+              return (
+                <Form.Item
+                  label={t("segmentsCount")}
+                  tooltip={t("segmentsCountTooltip")}
+                  name="segments"
+                >
+                  <InputNumber
+                    min={0}
+                    max={64}
+                    precision={0}
+                    className="w-full"
+                    placeholder={t("segmentsAuto")}
+                  />
+                </Form.Item>
+              );
+            }}
+          </Form.Item>
+          {/* 归属队列（FluxDown 命名队列；引擎任务 direct/bt 可选——
+              空选 = 引擎默认 Main Queue） */}
+          <Form.Item noStyle shouldUpdate>
+            {(formInstance) => {
+              const { category, batch } = formInstance.getFieldsValue();
+              if (
+                (category !== "normal" && category !== "magnet") ||
+                batch ||
+                queueOptions.length === 0
+              )
+                return null;
+              return (
+                <Form.Item
+                  label={t("taskQueue")}
+                  tooltip={t("taskQueueTooltip")}
+                  name="queueId"
+                >
+                  <Select
+                    allowClear
+                    options={queueOptions}
+                    placeholder={t("queueDefault")}
+                  />
+                </Form.Item>
+              );
+            }}
+          </Form.Item>
+          <Form.Item noStyle shouldUpdate>
+            {(formInstance) => {
+              // 保存目录：内置目录 + 浏览器选择的任意子目录（"/x/y" 下载根相对）
+              // + 编辑旧任务的非内置值兜底展示（影视分类/剧名）。浏览器经
+              // /api/downloads/fs（限 /downloads 子树）选目录，可内建新目录
               const cur = formInstance.getFieldValue("folder");
               const folderOptions: Array<{ value: string; label: string }> =
                 BUILTIN_FOLDER_KEYS.map((k) => ({
@@ -1205,23 +1322,43 @@ export default forwardRef<DownloadFormRef, DownloadFormProps>(
                 cur !== "" &&
                 !(BUILTIN_FOLDER_KEYS as readonly string[]).includes(cur)
               ) {
-                folderOptions.push({ value: cur, label: cur });
+                folderOptions.push({
+                  value: cur,
+                  label:
+                    cur === "/"
+                      ? `${t("rootDir")}（/downloads）`
+                      : cur.startsWith("/")
+                        ? `${t("rootDir")}${cur}`
+                        : cur,
+                });
               }
               return (
-                <Form.Item
-                  name="folder"
-                  label={t("saveDir")}
-                  rules={[
-                    {
-                      required: true,
-                      message: t("pleaseSelectSaveDir"),
-                    },
-                  ]}
-                >
-                  <Select
-                    placeholder={t("pleaseSelectSaveDir")}
-                    options={folderOptions}
-                  />
+                <Form.Item label={t("saveDir")} required>
+                  <div className="flex w-full items-start gap-2">
+                    <Form.Item
+                      name="folder"
+                      noStyle
+                      rules={[
+                        {
+                          required: true,
+                          message: t("pleaseSelectSaveDir"),
+                        },
+                      ]}
+                    >
+                      <Select
+                        placeholder={t("pleaseSelectSaveDir")}
+                        options={folderOptions}
+                        disabled={folderLocked}
+                      />
+                    </Form.Item>
+                    <Button
+                      icon={<FolderOpenOutlined />}
+                      disabled={folderLocked}
+                      onClick={() => setDirBrowserOpen(true)}
+                    >
+                      {t("browse")}
+                    </Button>
+                  </div>
                 </Form.Item>
               );
             }}
@@ -1257,7 +1394,15 @@ export default forwardRef<DownloadFormRef, DownloadFormProps>(
             }}
           </Form.Item>
         </Form>
-      </Modal>
+        </Modal>
+        <SaveDirBrowser
+          open={dirBrowserOpen}
+          onClose={() => setDirBrowserOpen(false)}
+          onSelect={(folder) => {
+            form.setFieldValue("folder", folder);
+          }}
+        />
+      </>
     );
   },
 );

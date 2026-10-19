@@ -156,7 +156,12 @@ export class TaskQueue {
     } else if (err instanceof CanceledError) {
       logger.info(`Task was stopped id=${p.id}`);
       const task = this.tasks.get(p.id);
-      if (task) task.status = 'stopped';
+      // 已暂停：状态改写、速度清零（暂停行不该挂着最后一次瞬时速率），
+      // percent 保留暂停前的真实进度（续传重算前 UI 显示不回跳）
+      if (task) {
+        task.status = 'stopped';
+        task.speed = '';
+      }
       this.onStopped?.(p.id);
     } else {
       logger.error(`Task failed id=${p.id}: ${err.message}`);
@@ -178,5 +183,20 @@ export class TaskQueue {
 
   getAllTasks(): TaskInfo[] {
     return Array.from(this.tasks.values(), (t) => ({ ...t }));
+  }
+
+  // ---- 引擎任务视图注入（FluxDown 桥接层）----
+  // 引擎（FluxDown）执行的任务不走本队列的 execute 流程，但仍以 TaskInfo
+  // 形态进入 tasks 视图（GET /api/tasks 消费；UI 1s 轮询取进度）。
+  // 引擎事件驱动 upsert；不入 active（不参与并发调度）。
+
+  /** upsert 引擎任务信息（桥接层从 taskChanged/taskProgress 派生） */
+  reportEngineTask(info: TaskInfo): void {
+    this.tasks.set(info.id, { ...info });
+  }
+
+  /** 移除引擎任务视图（任务删除/引擎侧消失） */
+  removeEngineTask(id: string): void {
+    this.tasks.delete(id);
   }
 }

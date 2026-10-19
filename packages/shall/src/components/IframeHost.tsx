@@ -6,6 +6,30 @@
 // 应用内容边加载边显示；只有久久不出内容时才升级为可重试的提示条。
 import { useEffect, useRef, useState } from 'react';
 
+// 同源子应用内部导航即时上报外壳：包一层 history.pushState/replaceState 与
+// popstate，导航当拍 postMessage 通知外壳回写地址栏（AppFrame 的 inner-path
+// 分支）。ready 时注入一次，幂等；跨域 iframe eval 会抛 SecurityError，静默
+// 失败后由外壳 1.2s 轮询兜底。（门内历史回调以 bind 固定 this，保 Router 兼容）
+const INNER_NAV_HOOK = [
+  "if (!window.__meiInnerNav) {",
+  "  window.__meiInnerNav = true;",
+  "  var __meiNotify = function () {",
+  "    try {",
+  "      parent.postMessage({ source: 'mei-iframe', type: 'inner-path', path: window.location.pathname + window.location.search + window.location.hash }, window.location.origin);",
+  "    } catch (e) {}",
+  "  };",
+  "  ['pushState', 'replaceState'].forEach(function (k) {",
+  "    var orig = window.history[k].bind(window.history);",
+  "    window.history[k] = function () {",
+  "      var r = orig.apply(null, arguments);",
+  "      __meiNotify();",
+  "      return r;",
+  "    };",
+  "  });",
+  "  window.addEventListener('popstate', __meiNotify);",
+  "}",
+].join('\n');
+
 export default function IframeHost({ url, name, appId }: { url: string; name: string; appId?: string }) {
   const ref = useRef<HTMLIFrameElement>(null);
   // 本次加载是否已完成（onLoad 或 ready postMessage 任一先到即算完成）
@@ -14,6 +38,25 @@ export default function IframeHost({ url, name, appId }: { url: string; name: st
   const [slow, setSlow] = useState(false);
   const [error, setError] = useState(false);
   const [reloadTick, setReloadTick] = useState(0);
+
+  // 同源子应用内部导航即时上报外壳：注入 history hook（幂等）。
+  // 触发时机有二：iframe onLoad（所有普通加载的中点）+ ready postMessage（子
+  // 应用主动建立时）。此前只在 ready 分支注入，但普通 Vite 子应用并不主动
+  // 发 ready，导致 hook 从未注入、外壳回写退回 1200ms 轮询（地址延迟一拍）。
+  const injectInnerNavHook = () => {
+    try {
+      const w = ref.current?.contentWindow;
+      const host = w as unknown as {
+        __meiInnerNav?: boolean;
+        eval?: (code: string) => void;
+      };
+      if (w && host.__meiInnerNav !== true && typeof host.eval === 'function') {
+        host.eval(INNER_NAV_HOOK);
+      }
+    } catch {
+      /* 跨域：忽略，轮询兜底 */
+    }
+  };
 
   useEffect(() => {
     loadedRef.current = false;
@@ -39,6 +82,8 @@ export default function IframeHost({ url, name, appId }: { url: string; name: st
         loadedRef.current = true;
         setLoading(false);
         setSlow(false);
+        // ready 兜底注入（多数子应用不主动发 ready，onLoad 分支才是主路径）
+        injectInnerNavHook();
       }
     }
     window.addEventListener('message', onMsg);
@@ -132,6 +177,9 @@ export default function IframeHost({ url, name, appId }: { url: string; name: st
           loadedRef.current = true;
           setLoading(false);
           setError(false);
+          // 加载完成即注入内部导航上报 hook：此后子应用 SPA 的 pushState/
+          // replaceState/popstate 当拍 postMessage 回写外壳地址栏
+          injectInnerNavHook();
         }}
         onError={() => setError(true)}
         allow="clipboard-read; clipboard-write; fullscreen; autoplay; encrypted-media; picture-in-picture"

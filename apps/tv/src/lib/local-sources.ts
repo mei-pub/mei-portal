@@ -518,7 +518,13 @@ export async function refreshAndDecorate(
   const out: LocalSourceWithProgress[] = [];
   for (const rec of records) {
     let current = rec;
-    if (current.status === 'pending' || current.status === 'downloading') {
+    // paused 也要刷新（Round 二十二：继续下载后状态机必须走回
+    // downloading/done）——此前门禁漏掉 paused，记录永远停在「已暂停」
+    if (
+      current.status === 'pending' ||
+      current.status === 'downloading' ||
+      current.status === 'paused'
+    ) {
       current = await refreshRecord(store, current);
     }
     let task: MediaTaskInfo | null = null;

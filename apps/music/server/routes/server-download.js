@@ -26,6 +26,7 @@ const fsp = require('node:fs/promises');
 const path = require('node:path');
 const { Readable, Transform } = require('node:stream');
 const { pipeline } = require('node:stream/promises');
+const libraryIndex = require('../library-index');
 
 const { getProvider } = require('../providers');
 const { probeAudioUrl } = require('../providers/verify');
@@ -244,6 +245,12 @@ async function runDownloadTask(task, ctx = {}) {
       : (parseInt(process.env.MUSIC_DOWNLOAD_TIMEOUT || '', 10) || 120) * 1000;
 
   const update = (patch) => Object.assign(task, patch);
+  // 曲库源索引（Round-B）：任务表是内存态，重启即空 —— 完成时把 song.id/source
+  // 按落盘相对路径写入 .library-index.json，跨重启保住曲库文件行的「复制链接」
+  const recordSource = (targetAbs) => {
+    const rel = path.relative(root, targetAbs).split(path.sep).join('/');
+    void libraryIndex.record(root, rel, task.song);
+  };
   const fail = (message) =>
     update({ status: 'error', error: String(message || '下载失败'), finishedAt: Date.now() });
   // 删除任务（manager.remove）后不再继续：resolving 阶段在关键点提前退出，
@@ -274,11 +281,13 @@ async function runDownloadTask(task, ctx = {}) {
   try {
     const existed = await fsp.stat(targetPath).catch(() => null);
     if (!task.force && existed && existed.isFile() && total > 0 && existed.size === total) {
-      return update({
+      update({
         status: 'done', existed: true,
         received: existed.size, size: existed.size, percent: 100,
         finishedAt: Date.now(),
       });
+      recordSource(targetPath); // 复用命中同样要补源（保持复制链接跨重启可用）
+      return;
     }
   } catch { /* 覆盖下载 */ }
 
@@ -358,6 +367,7 @@ async function runDownloadTask(task, ctx = {}) {
 
     await fsp.rename(tmpPath, targetPath);
     update({ status: 'done', received, size: received, percent: 100, finishedAt: Date.now() });
+    recordSource(targetPath); // 曲库源索引：跨重启保住「复制链接」（Round-B）
   } catch (err) {
     await cleanupTmp();
     const message = watchdogReason

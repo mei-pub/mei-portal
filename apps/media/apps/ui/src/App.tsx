@@ -32,6 +32,10 @@ const SettingPage = lazy(() => import("./pages/setting-page"));
 const ConverterPage = lazy(() => import("./pages/converter-page"));
 const DownloadsPage = lazy(() => import("./pages/downloads-page"));
 const OverlayDialog = lazy(() => import("./pages/overlay-dialog"));
+// 快速查看独立页（侧栏查看的「新窗口全屏」形态；同本体不同容器）
+const FileViewerPage = lazy(() =>
+  import("./pages/downloads-page/file-viewer-page"),
+);
 
 function getAlgorithm(appTheme: "dark" | "light") {
   return appTheme === "dark"
@@ -265,6 +269,15 @@ const App: FC = () => {
             element={
               <Suspense fallback={<Loading />}>
                 <OverlayDialog />
+              </Suspense>
+            }
+          />
+          {/* 快速查看独立页（/view?task=<id>；不经 AppLayout——全屏查看） */}
+          <Route
+            path="/view"
+            element={
+              <Suspense fallback={<Loading />}>
+                <FileViewerPage />
               </Suspense>
             }
           />

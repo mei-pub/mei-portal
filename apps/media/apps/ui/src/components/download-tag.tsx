@@ -6,6 +6,8 @@ interface DownloadTagProps {
   text: string;
   color: string;
   className?: string;
+  /** 悬停提示（做种徽标显示实时上传速率等） */
+  title?: string;
 }
 
 export function DownloadTag({
@@ -13,17 +15,19 @@ export function DownloadTag({
   text,
   color,
   className,
+  title,
 }: DownloadTagProps) {
   return (
     <div
       className={cn(
-        "flex shrink-0 cursor-default flex-row items-center gap-0.5 rounded-2xl rounded-bl-lg py-0.5 pl-1.5 pr-1.5",
+        "flex shrink-0 cursor-default flex-row items-center gap-1 rounded-full px-2 py-[3px] font-medium shadow-[inset_0_-1px_0_rgba(0,0,0,0.14)]",
         className,
       )}
       style={{ background: color }}
+      title={title}
     >
       {icon}
-      <span className="text-xs text-white">{text}</span>
+      <span className="text-[11px] leading-none text-white">{text}</span>
     </div>
   );
 }

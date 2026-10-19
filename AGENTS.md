@@ -273,15 +273,87 @@ document 与 iframe 请求，所有请求都直接代理到子应用，Shell 不
 
 - **落盘布局**：`/downloads/music/<歌手>/<歌名> - <源>.mp3`（music 服务端，
   `MUSIC_DOWNLOAD_DIR`）；`/downloads/movie/<电影|电视|动漫|综艺>/<剧名>/`（media
-  下载引擎，`--local-dir`；tv 按 `分类/剧名` 组 folder）
+  下载引擎，`--local-dir`；tv 按 `分类/剧名` 组 folder）。folder 字段三形态
+  （`resolveTaskDir` 唯一规则，2026-10-09 起）：内置 key（bt/files/video）→
+  `<下载根>/<key>`；**前导斜杠**（`/`、`/x/y`，保存目录浏览器产物）→
+  `<下载根>/x/y`——`sanitizeFolder` 保留该前导斜杠（删掉即回归 movie 子树）；
+  其余相对段 → `localDir/<folder>`（影视 分类/剧名 语义）。目录浏览走
+  `GET /api/downloads/fs?path=`（daemon.fs.list，限 /downloads 子树、仅目录），
+  新建目录走 `POST /api/downloads/fs/mkdir`（core 直写，单段目录名）
 - **media 下载中心**（统一下载管理 UI，应用显示名为「下载中心」，但路由与插件 id 仍
   是 `/downloads` 与 `mediago`，不得因改名改动）：`/downloads?type=media|movie|music`
   是唯一对外深链路由格式——影视/音乐应用里的「下载中」引导跳转一律 postMessage
   `{source:'mei-iframe',type:'navigate',path:'/downloads?type=…'}`（走外壳
-  承载路由，禁止直接改 location）；页面为四 tab（全部/媒体/影视/音乐），「全部」为
-  默认 tab 且规范 URL 不带 query（`?type=all` 也接受并归一到无 query）；三个数据面板
-  分别消费：`GET /tv/api/local-sources/list`、`GET /music/api/download/library`、
-  media 自身任务（SSE）。删除分别走各自 DELETE
+  承载路由，禁止直接改 location）；**布局复刻 FluxDown 控制台**（2026-10-09 起）：
+  顶栏（新建下载 + 全局速度统计 + 视图导航）+ 三视图（任务/队列/订阅）；
+  任务视图 = 状态页签（全部/等待中/下载中/已暂停/已完成/未完成/失败）+ 分组
+  （队列/协议）+ 排序 + 全类型任务表（SSE 进度/右键菜单/批量/详情抽屉）。
+  深链映射（旧语义全保留）：`?type=` media/file/magnet/all → 任务视图；
+  movie/music → 下载库对应面板（影视 `GET /tv/api/local-sources/list`、
+  音乐 `GET /music/api/download/library`，顶栏「下载库」下拉也可达）；rss/queues
+  → 对应视图。RSS 面板走 `GET /api/downloads/rss/sources*`（daemon.rss.* 代理：
+  源 CRUD/规则过滤/条目手动挑选，PUT 源为白名单字段合并语义）；队列视图走
+  `GET /api/downloads/engine-queues*`（daemon.queue.* 代理）。删除分别走各自 DELETE
+- **下载执行引擎**（2026-10 由 qBittorrent+aria2 换为 FluxDown）：direct（http/ftp/
+  ed2k）与 bt/磁力任务全部由 FluxDown 引擎执行（容器内 `127.0.0.1:17800`，
+  supervisord `[program:fluxdown]`，`FLUXDOWN_TOKEN` 经 entrypoint 生成、注入 core
+  与引擎双方）；视频类（m3u8/bilibili/youtube/mediago）仍走 media 队列 + 外部工具。
+  **引擎不开放宿主端口（收口）**：管理能力全部在门户设置中心「下载中心设置」
+  （`/settings/mediago`，shell 原生 SettingsUI 实现，经 `/downloads/api` 代理；
+  引擎配置 40+ 键/Tracker 订阅/eD2K 订阅/运行统计）与下载中心 UI 内；引擎仅在容器
+  内服务（compose 不再映射 7778/7779，`MEI_FLUXDOWN_*` 端口声明已移除；外部工具需
+  接入 aria2 兼容 RPC 时自行加映射）。DB 关联字段 `engineTaskId`（一个引擎任务至多镜像一行，
+  `db.ts claimEngineLink` 写入时清旧主）。**已知上游缺陷**（FluxDown 0.5.4，main 未修）：
+  BT 选择对话框期间引擎后台 pause 种子，子集应答后 `update_only_files` 在 paused 句柄上
+  无限挂起——core 的规避在 `service/engine.ts`（子集提交走 fresh-create 抢答 +
+  `subsetUnstickWatchdog` pause+resume 解卡），升级引擎版本前不得删除。
+  **启动竞态看门狗**（2026-10-09 容器实证）：core 与引擎 supervisord 并行启动时，
+  首连可能既不 onopen 也不 onclose（半开挂死，零事件=零重连=桥接永久失联）——
+  `core/fluxdown.ts` connect() 内 12s 建连看门狗强制重连，升级前不得删除。
+  **早到选择事件竞态**（2026-10-09 容器实证）：torrentB64 的 BT 任务元数据即时，
+  `selectionPending` 可在 create 响应往返/建后核验（~600ms）期间先于 link() 注册
+  到达——丢弃即错过子集应答（引擎 60s 默认全量，实测 Sintel 全量 1725MB）。core
+  的规避：`pendingSelections` 缓冲 + `replayPendingSelection()` 在 link()/解析会话
+  注册点回放，升级前不得删除。
+  **镜像改名为无限循环**（2026-10-09 容器实证）：引擎 fileName 恒为种子名，DB 名带
+  去重后缀后每轮镜像必然不等，`findByName` 再撞既有行 → 每轮新随机后缀无限改名
+  （实测每 5s 一次）。core 规避：`lastMirroredNameByDbId` 同一 fileName 只触发
+  一次；`pushName` 把自定义名推引擎（preparing 态 rename 会 agent RPC 失败，属
+  引擎缺陷，best-effort 降级为一次性镜像改名），升级前不得删除守卫。
+  **DHT bootstrap 在容器内全军覆没**（2026-10-10 容器实证）：FluxDown 引擎是
+  musl 静态二进制，getaddrinfo 忽略 /etc/gai.conf 且永远 AAAA 优先——容器无
+  IPv6 路由时 DHT 发送即失败（日志持续 "error in bootstrap: no successful
+  lookups"），磁力解析只能靠 itorrents 网关（仅热门 hash 有档）。修复：镜像
+  Dockerfile 把 bootstrap 域名 v4 固定进 /etc/hosts（musl 先查 hosts 且只有
+  v4 记录；实测 transmission 路由器 87.98.162.88/212.129.33.59 应答）。本地
+  已运行的容器需 docker exec 追加同名行（重建容器后由镜像自带，不再丢失）。
+  **磁力解析超时不得弃置会话**（2026-10-10 实证修复）：core 的 100s 解析等待
+  超时后**保留**引擎任务与会话——引擎按自身 300s 死线继续解析（冷 DHT 下元
+  数据常需数分钟），用户点「重试解析」共享等待续等；取消走 discard-magnet、
+  引擎 300s 失败后 taskDeleted 自清，均无孤儿。旧实现超时即 discardSession，
+  把 DHT 预热与解析进度一并扔掉，冷 DHT 下重试永远从零开始。
+  **m3u8 合并阶段必须显示「合并中」**（2026-10-12 实证）：N_m3u8DL-RE 分片
+  下载快速到 100% 后进入 ffmpeg 合并（大分片数还要分块合并，可达数分钟），
+  任务仍 downloading 且 percent 停 100——UI 侧（下载中心任务行 + tv 播放页
+  服务器下载标签）在 `downloading && percent>=100` 时显示「合并中」，不得
+  显示卡死的 100%（用户误读为下载挂死）。
+  **音乐「下载方式」默认 ask**（2026-10-12）：music 下载默认每次弹层询问
+  （本地电脑/本地服务器/两者都要）——默认 local 曾让服务器下载入口对用户
+  完全不可见（「音乐与下载中心对接丢失」反馈根因）；用户可在设置后台
+  （音乐播放设置）固定为单去向，设置值优先生效。
+  **引擎绑定面**：`FLUXDOWN_BIND` 必须绑 `0.0.0.0:17800`（supervisord.conf）——
+  宿主 7778/7779 端口转发（OrbStack/Docker DNAT 走容器 eth0）到不了 127.0.0.1
+  监听（实证空回复）；宿主侧 compose 已限 127.0.0.1，对外暴露面不变。
+  **本地开发注意（OrbStack）**：OrbStack 会把镜像 EXPOSE 的端口（含 17800/17801）
+  自动发布到宿主回环——宿主再跑本机 FluxDown 引擎时 daemon 探测会被容器转发口
+  毒化（"daemon is listening but its bearer token file is unavailable"），本机
+  引擎与容器不可同时共用 17800/17801。
+  **命名队列面（daemon.queue.*，0.5.4 实证）**：create 收 `{name}`、update 仅收
+  `{queueId,name}`（DTO 限速/排程字段一律 invalidArgument）、schedule 假阳性不持久、
+  reorder 无有效参数——core 只接 CRUD/起停/moveTask/boost；任务归属队列在建任务
+  `request.queueId` 传（DB 列 `queueId` 供重提保真，换队列经
+  `POST /api/downloads/:id/queue` 同步 DB）；`daemon.group.*` 仅 create/delete、
+  `daemon.siteAuth.*` 仅 list/delete（create/update unsupported）——均不可用，未接入
 - **防穿越**：music 的 serve/DELETE/library 三口共享 resolveWithin（realpath +
   path.relative 双校验）；tv 的删除段消毒 + resolve 后必须位于 `/downloads/movie`
   内——任何新增的文件下发/删除端点必须同款双保险

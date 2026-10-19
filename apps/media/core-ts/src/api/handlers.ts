@@ -9,7 +9,7 @@ import { MSG, tLang, type Lang } from "../i18n.ts";
 import type { Conf } from "../conf.ts";
 import type { TaskLogManager } from "../tasklog.ts";
 import type { TaskQueue } from "../core/queue.ts";
-import type { TaskInfo, Aria2RpcOptions } from "../core/types.ts";
+import type { TaskInfo } from "../core/types.ts";
 import { extractTorrentMeta } from "../core/bencode.ts";
 import type { Hub } from "./sse.ts";
 import type { DownloadTaskService } from "../service/download.ts";
@@ -17,13 +17,9 @@ import type { FavoriteService } from "../service/favorite.ts";
 import type { ConversionService } from "../service/conversion.ts";
 import type { VideoService } from "./video.ts";
 import { isPortalSession } from "./auth.ts";
-import {
-  btStagingRoot,
-  normalizeAria2Options,
-  normalizeAria2Rpc,
-  type DownloaderSvc,
-} from "../core/downloader.ts";
-import { loadQBitConfig } from "../core/qbit.ts";
+import type { EngineBridge } from "../service/engine.ts";
+import { FluxDownUnavailableError } from "../core/fluxdown.ts";
+import type { DownloaderSvc } from "../core/downloader.ts";
 
 export interface EnvPaths {
   configDir: string;
@@ -100,6 +96,7 @@ export class Handlers {
   private readonly videoSvc: VideoService | null;
   private readonly env: EnvPaths;
   private readonly downloaderSvc: DownloaderSvc | null;
+  private readonly engine: EngineBridge | null;
 
   constructor(
     queue: TaskQueue,
@@ -112,6 +109,7 @@ export class Handlers {
     videoSvc: VideoService | null,
     env: EnvPaths,
     downloaderSvc: DownloaderSvc | null = null,
+    engine: EngineBridge | null = null,
   ) {
     this.queue = queue;
     this.logs = logs;
@@ -123,6 +121,7 @@ export class Handlers {
     this.videoSvc = videoSvc;
     this.env = env;
     this.downloaderSvc = downloaderSvc;
+    this.engine = engine;
   }
 
   // ---- Health（/healthy）----
@@ -216,15 +215,6 @@ export class Handlers {
 
   // ---- Config ----
 
-  /** aria2 引擎设置写入前收敛（非法值回退默认）：存进 config.json 的就是生效值，
-   *  回读与实际下载命令行注入保持一致（normalize 详见 core/downloader） */
-  private sanitizeConfigValue(key: string, value: unknown): unknown {
-    if (key === "aria2") {
-      return normalizeAria2Options(value);
-    }
-    return value;
-  }
-
   configGetStore(c: Ctx): void {
     ok(c, this.conf.store());
   }
@@ -234,9 +224,6 @@ export class Handlers {
     if (!body) {
       fail(c, 400, "invalid request body");
       return;
-    }
-    for (const [key, value] of Object.entries(body)) {
-      body[key] = this.sanitizeConfigValue(key, value);
     }
     this.conf
       .update(body)
@@ -259,10 +246,7 @@ export class Handlers {
 
   configSetKey(c: Ctx): void {
     const body = asObject(c.body);
-    const value = this.sanitizeConfigValue(
-      c.params.key!,
-      body ? body.value : undefined,
-    );
+    const value = body ? body.value : undefined;
     this.conf
       .set(c.params.key!, value)
       .then(() => {
@@ -392,25 +376,25 @@ export class Handlers {
 
   /**
    * 磁力链接内容解析（任务创建前的强制内容识别，对齐迅雷）：
-   * qBittorrent 引擎 add 到解析暂存目录抓 metadata（libtorrent 常驻温热
-   * DHT，秒级）→ stop → 返回种子真名/总大小/文件清单。任务 url 用磁力原文，
-   * 提交时按 hash 续用暂存种子迁移到任务目录。existed/completed 标识引擎
-   * 中已有该资源（UI 提示续传 / 重新下载）。
+   * FluxDown 引擎建解析会话（itorrents 网关有档则种子直供秒出元数据，
+   * 否则磁力原文走 DHT）→ 文件清单就绪挂起等用户勾选（60s 引擎侧期限）。
+   * 提交时接管会话应答选择；取消经 discard-magnet。
+   * existed/completed 标识已在本下载中心存在（活动任务直接接管）。
    */
   resolveMagnet(c: Ctx): void {
     const body = asObject(c.body);
     const url = typeof body?.url === "string" ? body.url.trim() : "";
+    const folder = typeof body?.folder === "string" ? body.folder : null;
     if (!/^magnet:\?.+urn:btih:[0-9a-fA-F]{40}/.test(url)) {
       fail(c, 400, "invalid magnet link (magnet:?xt=urn:btih:<40-hex>)");
       return;
     }
-    if (!this.downloaderSvc) {
-      fail(c, 500, "downloader not configured");
+    if (!this.engine) {
+      fail(c, 500, "download engine not configured");
       return;
     }
-    const stagingRoot = btStagingRoot(this.env.configDir);
-    this.downloaderSvc
-      .resolveMagnetBt(url, stagingRoot)
+    this.engine
+      .resolveMagnet(url, folder)
       .then((r) =>
         ok(c, {
           hash: r.hash,
@@ -419,32 +403,24 @@ export class Handlers {
           files: r.files,
           existed: r.existed,
           completed: r.completed,
+          engineTaskId: r.engineTaskId ?? "",
+          folderLocked: r.folderLocked ?? false,
+          folder: r.folder ?? "",
+          existedId: r.existedId ?? 0,
         }),
       )
       .catch((err: any) => {
-        if (err?.name === "QBitUnavailableError") {
-          fail(c, 503, err?.message ?? "BT 引擎不可用");
+        if (err instanceof FluxDownUnavailableError) {
+          fail(c, 503, err.message);
           return;
         }
-        const msg = String(err?.message ?? err ?? "magnet resolve failed");
-        // 存储类异常是引擎自身故障而非资源失效——语义化报错，避免 UI
-        // 把 ENOENT/EACCES 之类的原始系统错误配进「磁力已失效」引导
-        if (/^(ENOENT|EACCES|EPERM|ENOSPC|EROFS)\b/.test(msg)) {
-          fail(
-            c,
-            500,
-            `下载中心引擎存储异常（${msg.split(",")[0]}），请检查 /data 挂载与磁盘空间后重试`,
-          );
-          return;
-        }
-        fail(c, 400, msg);
+        fail(c, 400, String(err?.message ?? err ?? "magnet resolve failed"));
       });
   }
 
   /**
-   * 弃置解析暂存种子（表单取消/关闭时 UI 调用）：只删解析暂存目录内的
-   * 种子（save_path 前缀校验，防误删用户在 qB 的正式任务），连暂存半成品
-   * 文件一起清。
+   * 弃置解析会话（表单取消/关闭时 UI 调用）：删引擎里的解析任务
+   * （挂起中无产物；已超期开始下载的会话连半成品一起清）。
    */
   discardMagnet(c: Ctx): void {
     const body = asObject(c.body);
@@ -454,117 +430,909 @@ export class Handlers {
       fail(c, 400, "invalid torrent hash (40-hex)");
       return;
     }
-    if (!this.downloaderSvc) {
-      fail(c, 500, "downloader not configured");
+    if (!this.engine) {
+      fail(c, 500, "download engine not configured");
       return;
     }
-    const stagingRoot = btStagingRoot(this.env.configDir);
-    const qbit = this.downloaderSvc.qbit();
-    qbit
-      .getInfo(hash)
-      .then(async (list) => {
-        const t = list[0];
-        // 不在引擎 / 不在解析暂存目录（用户自己的 qB 任务）：不动
-        if (t && t.save_path.startsWith(stagingRoot)) {
-          await qbit.deleteTorrent(hash, true);
-          logger.info(`discarded magnet staging torrent: ${hash}`);
-        }
-        ok(c, { hash });
-      })
+    this.engine
+      .discardResolve(hash)
+      .then(() => ok(c, { hash }))
       .catch((err: any) => fail(c, 400, err?.message ?? "discard failed"));
   }
 
   /**
    * 下载引擎接入信息（设置页「下载引擎」展示）：
-   * - aria2 RPC：对外通用引擎（完整 aria2 能力），第三方客户端
-   *   （AriaNg / 手机 App / 浏览器扩展）填 RPC 地址 + secret 即可接入控制；
-   *   第三方提交的任务直接落下载根（/downloads）
-   * - qbittorrent：BT 下载中心引擎 + 独立 Web UI（浏览器直接管理 BT），
-   *   宿主访问端口经 compose 映射（env 声明）
+   * FluxDown 单引擎三口：REST/官方 Web 控制台/aria2 兼容 JSON-RPC 共用
+   * 17800（容器内），宿主接入端口经 compose 映射（env 声明）——aria2 兼容
+   * RPC 供第三方客户端（AriaNg / 手机 App / 浏览器扩展）接入控制；控制台
+   * 提供任务详情/队列/RSS/插件/诊断等完整管理界面。
    */
   getEngines(c: Ctx): void {
-    if (!this.downloaderSvc) {
-      fail(c, 500, "downloader not configured");
+    if (!this.engine) {
+      fail(c, 500, "download engine not configured");
       return;
     }
-    const rpc = normalizeAria2Rpc(this.conf.get("aria2Rpc"));
-    const qbitCfg = loadQBitConfig(
-      process.env.MEI_QBIT_BASEURL ?? "http://127.0.0.1:8080",
-    );
-    // 宿主侧访问端口（compose 映射声明；容器内固定 6800/8080）
-    const aria2HostPort = Number.parseInt(
-      process.env.MEI_ARIA2_RPC_PORT ?? "6800",
+    const token = this.engineToken();
+    const rpcHostPort = Number.parseInt(
+      process.env.MEI_FLUXDOWN_RPC_PORT ??
+        process.env.MEI_ARIA2_RPC_PORT ?? // 旧名兼容（部署 env 未更新时回落）
+        "7778",
       10,
     );
-    const qbitHostPort = Number.parseInt(
-      process.env.MEI_QBIT_WEBUI_PORT ?? "8080",
+    const webHostPort = Number.parseInt(
+      process.env.MEI_FLUXDOWN_WEB_PORT ??
+        process.env.MEI_QBIT_WEBUI_PORT ?? // 旧名兼容（部署 env 未更新时回落）
+        "7779",
       10,
     );
-    const qbit = this.downloaderSvc.qbit();
-    qbit
-      .version()
+    this.engine
+      .fdVersion()
       .then((version) => {
         ok(c, {
-          aria2Rpc: {
-            enabled: rpc.enabled,
-            port: aria2HostPort,
-            secret: rpc.secret,
-            rpcPath: "/jsonrpc",
-            alive: this.downloaderSvc!.aria2RpcAlive(),
-          },
-          qbittorrent: {
-            port: qbitHostPort,
-            username: qbitCfg.username,
-            password: qbitCfg.password,
+          fluxdown: {
             version,
+            ready: true,
+            token,
+            rpc: {
+              hostPort: rpcHostPort,
+              rpcPath: "/jsonrpc",
+              protocol: "aria2 兼容 JSON-RPC 2.0",
+            },
+            web: {
+              hostPort: webHostPort,
+              path: "/",
+            },
           },
         });
       })
       .catch((err: any) => {
         ok(c, {
-          aria2Rpc: {
-            enabled: rpc.enabled,
-            port: aria2HostPort,
-            secret: rpc.secret,
-            rpcPath: "/jsonrpc",
-            alive: this.downloaderSvc!.aria2RpcAlive(),
-          },
-          qbittorrent: {
-            port: qbitHostPort,
-            username: qbitCfg.username,
-            password: qbitCfg.password,
+          fluxdown: {
             version: "",
-            error: err?.message ?? "BT 引擎不可达",
+            ready: false,
+            token,
+            error: err?.message ?? "下载引擎不可达",
+            rpc: { hostPort: rpcHostPort, rpcPath: "/jsonrpc" },
+            web: { hostPort: webHostPort, path: "/" },
           },
         });
       });
   }
 
+  /** 引擎访问密钥（设置页展示；来源与 core 连接一致） */
+  private engineToken(): string {
+    return process.env.FLUXDOWN_TOKEN ?? "";
+  }
+
   /**
-   * aria2 RPC 对外引擎配置更新（设置页）：
-   * enabled / port 即时生效（server onDidChange('aria2Rpc') 重启守护），
-   * resetSecret 重置接入凭证（旧客户端全部失效）。
+   * 引擎配置查询（设置页「下载引擎」→ FluxDown 卡）：
+   * BT（DHT/UPnP/端口区间/MSE/自定义 tracker/tracker 订阅/做种策略）、
+   * 全局限速、并发、文件冲突策略等 —— 引擎为唯一事实源（revision 乐观锁）。
    */
-  setAria2Rpc(c: Ctx): void {
-    const body = asObject(c.body);
-    const cur = normalizeAria2Rpc(this.conf.get("aria2Rpc"));
-    if (body === null) {
-      fail(c, 400, "body required");
+  engineConfigGet(c: Ctx): void {
+    if (!this.engine) {
+      fail(c, 500, "download engine not configured");
       return;
     }
-    const next: Aria2RpcOptions = { ...cur };
-    if (typeof body.enabled === "boolean") next.enabled = body.enabled;
-    if (body.port !== undefined) {
-      const port = Number(body.port);
-      if (!Number.isInteger(port) || port < 1024 || port > 65535) {
-        fail(c, 400, "port must be 1024-65535");
+    this.engine
+      .configGet()
+      .then((snap) => ok(c, { revision: snap.revision, values: snap.values }))
+      .catch((err: any) => {
+        if (err instanceof FluxDownUnavailableError) {
+          fail(c, 503, err.message);
+          return;
+        }
+        fail(c, 400, err?.message ?? "engine config query failed");
+      });
+  }
+
+  /** 引擎配置更新（设置页表单提交；revision 乐观锁在引擎侧校验） */
+  engineConfigPatch(c: Ctx): void {
+    const body = asObject(c.body);
+    if (!body || typeof body.values !== "object" || body.values === null) {
+      fail(c, 400, "values required");
+      return;
+    }
+    if (!this.engine) {
+      fail(c, 500, "download engine not configured");
+      return;
+    }
+    // 白名单：只允许下载中心语义内的键（对齐 daemon DAEMON_CONFIG_FIELDS
+    // ——未知键整单拒绝 UnknownField），防越权改写引擎的代理/凭据等
+    // 非下载中心管辖配置
+    const allowed = [
+      // 通用下载
+      "speed_limit_bytes",
+      "upload_limit_bytes",
+      "max_concurrent_tasks",
+      "default_segments",
+      "auto_max_connections",
+      "max_auto_retries",
+      "auto_retry_delay_secs",
+      "dedup_same_url",
+      "auto_resume_on_start",
+      "file_exists_behavior",
+      "file_missing_action",
+      // BT
+      "bt_enable_dht",
+      "bt_enable_upnp",
+      "bt_port_start",
+      "bt_port_end",
+      "bt_mse_mode",
+      "bt_custom_trackers",
+      "bt_tracker_sub_enabled",
+      "bt_tracker_sub_urls",
+      "bt_seed_enabled",
+      "bt_auto_reseed",
+      "bt_seed_max_active",
+      "bt_seed_ratio_limit",
+      "bt_seed_post_ratio_limit",
+      "bt_seed_time_limit_minutes",
+      "bt_seed_time_limit_unit",
+      "bt_seed_inactive_time_limit_minutes",
+      "bt_seed_inactive_time_limit_unit",
+      "bt_seed_limit_operator",
+      "bt_seed_then_action",
+      // eD2K（direct 类型 ed2k:// 链接的找源网络）
+      "ed2k_enable_kad",
+      "ed2k_enable_upnp",
+      "ed2k_listen_port",
+      "ed2k_server_list",
+      "ed2k_server_sub_enabled",
+      "ed2k_server_sub_urls",
+    ];
+    const values: Record<string, string> = {};
+    for (const [k, v] of Object.entries(body.values as Record<string, unknown>)) {
+      if (allowed.includes(k)) values[k] = String(v);
+    }
+    if (Object.keys(values).length === 0) {
+      fail(c, 400, "no configurable keys in values");
+      return;
+    }
+    this.engine
+      .configPatch(values)
+      .then((snap) => ok(c, { revision: snap.revision, values: snap.values }))
+      .catch((err: any) => {
+        if (err instanceof FluxDownUnavailableError) {
+          fail(c, 503, err.message);
+          return;
+        }
+        fail(c, 400, err?.message ?? "engine config update failed");
+      });
+  }
+
+  /** tracker 订阅立即刷新（ngosang/trackerslist 等订阅源拉最新清单） */
+  engineTrackerRefresh(c: Ctx): void {
+    if (!this.engine) {
+      fail(c, 500, "download engine not configured");
+      return;
+    }
+    this.engine
+      .trackerSubscriptionRefresh()
+      .then((r) => ok(c, r))
+      .catch((err: any) => {
+        if (err instanceof FluxDownUnavailableError) {
+          fail(c, 503, err.message);
+          return;
+        }
+        fail(c, 400, err?.message ?? "tracker refresh failed");
+      });
+  }
+
+  /** 引擎任务改名（任务行操作；引擎侧校验状态与非法字符） */
+  taskRename(c: Ctx): void {
+    const id = intParam(c, "id");
+    const body = asObject(c.body);
+    const fileName = typeof body?.fileName === "string" ? body.fileName.trim() : "";
+    if (id === null) {
+      fail(c, 400, "invalid task id");
+      return;
+    }
+    if (fileName === "" || /[\\/:*?"<>|]/.test(fileName)) {
+      fail(c, 400, "fileName required (no path separators)");
+      return;
+    }
+    if (!this.engine) {
+      fail(c, 500, "download engine not configured");
+      return;
+    }
+    this.engine
+      .rename(id, fileName)
+      .then(() => {
+        // DB 同步改名（列表立即生效；引擎事件侧亦会镜像校准）
+        try {
+          this.downloadSvc?.editDownloadTask(id, { name: fileName });
+        } catch {
+          // DB 行可能已被删除：引擎侧已生效即可
+        }
+        ok(c, { id, fileName });
+      })
+      .catch((err: any) => {
+        if (err instanceof FluxDownUnavailableError) {
+          fail(c, 503, err.message);
+          return;
+        }
+        fail(c, 400, err?.message ?? "rename failed");
+      });
+  }
+
+  /** 引擎任务换源（任务行操作：换镜像/备用地址续传） */
+  taskChangeUrl(c: Ctx): void {
+    const id = intParam(c, "id");
+    const body = asObject(c.body);
+    const url = typeof body?.url === "string" ? body.url.trim() : "";
+    if (id === null) {
+      fail(c, 400, "invalid task id");
+      return;
+    }
+    if (!/^https?:\/\//.test(url)) {
+      fail(c, 400, "url must be http(s)");
+      return;
+    }
+    if (!this.engine) {
+      fail(c, 500, "download engine not configured");
+      return;
+    }
+    this.engine
+      .changeUrl(id, url)
+      .then(() => {
+        try {
+          this.downloadSvc?.editDownloadTask(id, { url });
+        } catch {
+          // DB 行可能已被删除
+        }
+        ok(c, { id, url });
+      })
+      .catch((err: any) => {
+        if (err instanceof FluxDownUnavailableError) {
+          fail(c, 503, err.message);
+          return;
+        }
+        fail(c, 400, err?.message ?? "change url failed");
+      });
+  }
+
+  /** 引擎任务详情（任务详情抽屉：任务快照 + 活动日志 + 实时数据） */
+  engineTaskDetail(c: Ctx): void {
+    const id = intParam(c, "id");
+    if (id === null) {
+      fail(c, 400, "invalid task id");
+      return;
+    }
+    if (!this.engine) {
+      fail(c, 500, "download engine not configured");
+      return;
+    }
+    Promise.all([
+      this.engine.taskInfo(id),
+      this.engine
+        .taskActivity(id)
+        .then((entries) => entries.slice(-200))
+        .catch(() => []),
+    ])
+      .then(([task, activity]) => {
+        const extras = this.engine!.detailExtras(id);
+        ok(c, {
+          task,
+          activity,
+          runtime: this.engine!.runtimeOf(id) ?? null,
+          segments: extras.segments,
+          speedHistory: extras.speedHistory,
+        });
+      })
+      .catch((err: any) => {
+        if (err instanceof FluxDownUnavailableError) {
+          fail(c, 503, err.message);
+          return;
+        }
+        fail(c, 400, err?.message ?? "task detail failed");
+      });
+  }
+
+  /** 引擎产物文件跟踪重扫（fileMissing 全量盘点；文件被外部移动/删除后找回） */
+  engineRescan(c: Ctx): void {
+    if (!this.engine) {
+      fail(c, 500, "download engine not configured");
+      return;
+    }
+    this.engine
+      .rescanFiles()
+      .then(() => ok(c, { message: "rescan completed" }))
+      .catch((err: any) => {
+        if (err instanceof FluxDownUnavailableError) {
+          fail(c, 503, err.message);
+          return;
+        }
+        fail(c, 400, err?.message ?? "rescan failed");
+      });
+  }
+
+  /** 每任务做种限制覆盖（详情抽屉「做种设置」） */
+  engineSeedLimits(c: Ctx): void {
+    const id = intParam(c, "id");
+    if (id === null) {
+      fail(c, 400, "invalid task id");
+      return;
+    }
+    const body = asObject(c.body) ?? {};
+    const num = (key: string): number | null => {
+      const v = body[key];
+      return typeof v === "number" && Number.isFinite(v) ? v : null;
+    };
+    // qB 三态：-2 跟随全局 / -1 不限 / >=0 自定义（分享率千分比）
+    const clamp = (v: number | null, min: number): number =>
+      v === null ? -2 : Math.max(min, Math.round(v));
+    const limits = {
+      ratioLimitMilli: clamp(num("ratioLimitMilli"), 0),
+      postRatioLimitMilli: clamp(num("postRatioLimitMilli"), 0),
+      seedTimeLimitMinutes: clamp(num("seedTimeLimitMinutes"), 0),
+      inactiveTimeLimitMinutes: clamp(num("inactiveTimeLimitMinutes"), 0),
+      uploadLimitBps: clamp(num("uploadLimitBps"), 0),
+    };
+    if (!this.engine) {
+      fail(c, 500, "download engine not configured");
+      return;
+    }
+    this.engine
+      .setSeedLimits(id, limits)
+      .then(() => ok(c, { message: "seed limits updated" }))
+      .catch((err: any) => {
+        if (err instanceof FluxDownUnavailableError) {
+          fail(c, 503, err.message);
+          return;
+        }
+        fail(c, 400, err?.message ?? "seed limits update failed");
+      });
+  }
+
+  /** 引擎任务批量操作（UI 全部暂停/开始；action: pause|resume） */
+  engineBatch(c: Ctx): void {
+    const body = asObject(c.body) ?? {};
+    // action 扩展：pause/resume（按 ids 或全量 all —— 对齐控制台
+    // 「全部暂停/全部恢复」原生口）
+    const action = body.action === "resume" ? "resume" : "pause";
+    const isAll = body.all === true;
+    const ids = Array.isArray(body.ids)
+      ? body.ids.filter((v) => typeof v === "number" && Number.isInteger(v))
+      : [];
+    if (!isAll && ids.length === 0) {
+      fail(c, 400, "ids required (or all=true)");
+      return;
+    }
+    if (!this.engine) {
+      fail(c, 500, "download engine not configured");
+      return;
+    }
+    const op =
+      isAll
+        ? action === "pause"
+          ? this.engine.pauseAllEngine()
+          : this.engine.resumeAllEngine()
+        : action === "pause"
+          ? this.engine.pauseMany(ids as number[])
+          : this.engine.resumeMany(ids as number[]);
+    op
+      .then(() => ok(c, { message: `engine tasks ${action}d` }))
+      .catch((err: any) => {
+        if (err instanceof FluxDownUnavailableError) {
+          fail(c, 503, err.message);
+          return;
+        }
+        fail(c, 400, err?.message ?? "engine batch failed");
+      });
+  }
+
+  /** 目录浏览（新建下载「保存目录」；引擎 fs.list,限 /downloads 子树） */
+  engineFsList(c: Ctx): void {
+    if (!this.engine) {
+      fail(c, 500, "download engine not configured");
+      return;
+    }
+    const raw = c.url.searchParams.get("path") ?? "/downloads";
+    if (raw !== "/downloads" && !raw.startsWith("/downloads/")) {
+      fail(c, 400, "仅支持浏览 /downloads 目录树");
+      return;
+    }
+    this.engine
+      .fsList(raw)
+      .then((r) => ok(c, r))
+      .catch((err: any) => {
+        if (err instanceof FluxDownUnavailableError) {
+          fail(c, 503, err.message);
+          return;
+        }
+        fail(c, 400, err?.message ?? "fs list failed");
+      });
+  }
+
+  /** 保存目录浏览器内新建目录（core 直写；限 /downloads 子树、单段目录名） */
+  engineFsMkdir(c: Ctx): void {
+    const body = asObject(c.body);
+    const raw = typeof body?.path === "string" ? body.path.trim() : "";
+    const name = typeof body?.name === "string" ? body.name.trim() : "";
+    if (raw !== "/downloads" && !raw.startsWith("/downloads/")) {
+      fail(c, 400, "仅支持在 /downloads 目录树内新建目录");
+      return;
+    }
+    if (
+      name === "" ||
+      name.length > 64 ||
+      name.includes("/") ||
+      name.includes("\\") ||
+      name === "." ||
+      name === ".."
+    ) {
+      fail(c, 400, "目录名不合法（单段名称，不含分隔符）");
+      return;
+    }
+    try {
+      const target = path.join(raw, name);
+      if (fs.existsSync(target)) {
+        ok(c, { path: target, existed: true });
         return;
       }
-      next.port = port;
+      fs.mkdirSync(target, { recursive: true });
+      ok(c, { path: target });
+    } catch (err: any) {
+      fail(c, 500, err?.message ?? String(err));
     }
-    if (body.resetSecret === true) next.secret = crypto.randomUUID();
-    void this.conf.set("aria2Rpc", next); // onDidChange 触发守护重启
-    ok(c, { ...next });
+  }
+
+  /** 引擎全局运行统计（下载页头部：总速度/活跃任务/磁盘剩余） */
+  engineStats(c: Ctx): void {
+    if (!this.engine) {
+      fail(c, 500, "download engine not configured");
+      return;
+    }
+    this.engine
+      .runtimeStatsGet()
+      .then((stats) => ok(c, stats ?? { activeTasks: 0, pendingTasks: 0, totalDownloadBps: 0, totalUploadBps: 0, diskFreeBytes: null, saveDir: "" }))
+      .catch((err: any) => fail(c, 400, err?.message ?? "engine stats failed"));
+  }
+
+  // ---- 命名队列（daemon.queue.* 代理；0.5.4：schedule/reorder 无效不接入）----
+
+  /** 队列清单（含内置 main/later） */
+  engineQueuesList(c: Ctx): void {
+    if (!this.engine) {
+      fail(c, 500, "download engine not configured");
+      return;
+    }
+    this.engine
+      .queueList()
+      .then((queues) => ok(c, queues))
+      .catch((err: any) => {
+        if (err instanceof FluxDownUnavailableError) {
+          fail(c, 503, err.message);
+          return;
+        }
+        fail(c, 400, err?.message ?? "queue list failed");
+      });
+  }
+
+  /** 建队列（新 queueId 需回列表取） */
+  engineQueueCreate(c: Ctx): void {
+    const body = asObject(c.body) ?? {};
+    const name = typeof body.name === "string" ? body.name.trim() : "";
+    if (name === "") {
+      fail(c, 400, "queue name is required");
+      return;
+    }
+    if (!this.engine) {
+      fail(c, 500, "download engine not configured");
+      return;
+    }
+    this.engine
+      .queueCreate(name)
+      .then((r) => ok(c, { created: r.ok === true }))
+      .catch((err: any) => {
+        if (err instanceof FluxDownUnavailableError) {
+          fail(c, 503, err.message);
+          return;
+        }
+        fail(c, 400, err?.message ?? "queue create failed");
+      });
+  }
+
+  /** 队列改名（0.5.4 唯一可用的更新面） */
+  engineQueueUpdate(c: Ctx): void {
+    const body = asObject(c.body) ?? {};
+    const queueId = typeof body.queueId === "string" ? body.queueId.trim() : "";
+    const name = typeof body.name === "string" ? body.name.trim() : "";
+    if (queueId === "" || name === "") {
+      fail(c, 400, "queueId and name are required");
+      return;
+    }
+    if (!this.engine) {
+      fail(c, 500, "download engine not configured");
+      return;
+    }
+    this.engine
+      .queueUpdate(queueId, name)
+      .then((r) => ok(c, { updated: r.ok === true }))
+      .catch((err: any) => {
+        if (err instanceof FluxDownUnavailableError) {
+          fail(c, 503, err.message);
+          return;
+        }
+        fail(c, 400, err?.message ?? "queue update failed");
+      });
+  }
+
+  /** 删队列（内置 main/later 由引擎拒绝；队列内任务由引擎处置——core 不级联删任务） */
+  engineQueueDelete(c: Ctx): void {
+    const queueId = c.params.queueId ?? "";
+    if (queueId === "") {
+      fail(c, 400, "queueId is required");
+      return;
+    }
+    if (!this.engine) {
+      fail(c, 500, "download engine not configured");
+      return;
+    }
+    this.engine
+      .queueDelete(queueId)
+      .then((r) => ok(c, { deleted: r.ok === true }))
+      .catch((err: any) => {
+        if (err instanceof FluxDownUnavailableError) {
+          fail(c, 503, err.message);
+          return;
+        }
+        fail(c, 400, err?.message ?? "queue delete failed");
+      });
+  }
+
+  /** 恢复队列调度 */
+  engineQueueStart(c: Ctx): void {
+    this.queueUnitOp(c, (engine, queueId) => engine.queueStart(queueId));
+  }
+
+  /** 暂停队列调度（在途任务继续，新任务排队） */
+  engineQueueStop(c: Ctx): void {
+    this.queueUnitOp(c, (engine, queueId) => engine.queueStop(queueId));
+  }
+
+  private queueUnitOp(
+    c: Ctx,
+    op: (engine: NonNullable<Handlers["engine"]>, queueId: string) => Promise<{ ok: boolean }>,
+  ): void {
+    const queueId = c.params.queueId ?? "";
+    if (queueId === "") {
+      fail(c, 400, "queueId is required");
+      return;
+    }
+    if (!this.engine) {
+      fail(c, 500, "download engine not configured");
+      return;
+    }
+    op(this.engine, queueId)
+      .then((r) => ok(c, { ok: r.ok === true }))
+      .catch((err: any) => {
+        if (err instanceof FluxDownUnavailableError) {
+          fail(c, 503, err.message);
+          return;
+        }
+        fail(c, 400, err?.message ?? "queue op failed");
+      });
+  }
+
+  /** 把任务（DB id → 引擎任务）挪入指定队列 */
+  engineTaskQueueMove(c: Ctx): void {
+    const id = Number.parseInt(c.params.id ?? "", 10);
+    const body = asObject(c.body) ?? {};
+    const queueId = typeof body.queueId === "string" ? body.queueId.trim() : "";
+    if (Number.isNaN(id) || queueId === "") {
+      fail(c, 400, "id and queueId are required");
+      return;
+    }
+    if (!this.engine) {
+      fail(c, 500, "download engine not configured");
+      return;
+    }
+    this.engine
+      .queueMoveTaskForDb(id, queueId)
+      .then((r) => ok(c, { moved: r.ok === true }))
+      .catch((err: any) => {
+        if (err instanceof FluxDownUnavailableError) {
+          fail(c, 503, err.message);
+          return;
+        }
+        fail(c, 400, err?.message ?? "queue move failed");
+      });
+  }
+
+  /** 任务插队（队列内提到队首优先调度） */
+  engineTaskQueueBoost(c: Ctx): void {
+    const id = Number.parseInt(c.params.id ?? "", 10);
+    if (Number.isNaN(id)) {
+      fail(c, 400, "invalid task id");
+      return;
+    }
+    if (!this.engine) {
+      fail(c, 500, "download engine not configured");
+      return;
+    }
+    this.engine
+      .queueBoostForDb(id)
+      .then((r) => ok(c, { boosted: r.ok === true }))
+      .catch((err: any) => {
+        if (err instanceof FluxDownUnavailableError) {
+          fail(c, 503, err.message);
+          return;
+        }
+        fail(c, 400, err?.message ?? "queue boost failed");
+      });
+  }
+
+  /** eD2K 服务器列表订阅刷新（设置页引擎 tab） */
+  engineEd2kRefresh(c: Ctx): void {
+    if (!this.engine) {
+      fail(c, 500, "download engine not configured");
+      return;
+    }
+    this.engine
+      .ed2kSubscriptionRefresh()
+      .then((r) => ok(c, r))
+      .catch((err: any) => {
+        if (err instanceof FluxDownUnavailableError) {
+          fail(c, 503, err.message);
+          return;
+        }
+        fail(c, 400, err?.message ?? "ed2k subscription refresh failed");
+      });
+  }
+
+  // ---- RSS 订阅（daemon.rss.* 代理；订阅源 CRUD / 条目 / 校验 / 刷新）----
+
+  /** RSS 写字段的白名单抽取（源 DTO 全字段；未知键丢弃） */
+  private rssSourceBody(
+    body: Record<string, unknown>,
+  ): Record<string, unknown> {
+    const str = (k: string): string | undefined =>
+      typeof body[k] === "string" ? (body[k] as string) : undefined;
+    const num = (k: string): number | undefined =>
+      typeof body[k] === "number" && Number.isFinite(body[k] as number)
+        ? (body[k] as number)
+        : undefined;
+    const bool = (k: string): boolean | undefined =>
+      typeof body[k] === "boolean" ? (body[k] as boolean) : undefined;
+    const out: Record<string, unknown> = {};
+    const strs = [
+      "sourceId",
+      "url",
+      "name",
+      "queueId",
+      "saveDir",
+      "includePattern",
+      "excludePattern",
+      "cookies",
+      "userAgent",
+      "proxyUrl",
+    ];
+    for (const k of strs) {
+      const v = str(k);
+      if (v !== undefined) out[k] = v;
+    }
+    for (const k of [
+      "intervalMinutes",
+      "sizeMinBytes",
+      "sizeMaxBytes",
+      "maxPerFetch",
+    ] as const) {
+      const v = num(k);
+      if (v !== undefined) out[k] = Math.max(0, Math.round(v));
+    }
+    for (const k of [
+      "enabled",
+      "autoDownload",
+      "startPaused",
+      "useRegex",
+      "smartEpisode",
+      "sendReferer",
+      "notifyOnDownload",
+    ] as const) {
+      const v = bool(k);
+      if (v !== undefined) out[k] = v;
+    }
+    return out;
+  }
+
+  rssSourcesList(c: Ctx): void {
+    if (!this.engine) {
+      fail(c, 500, "download engine not configured");
+      return;
+    }
+    this.engine
+      .rssListSources()
+      .then((sources) => ok(c, sources))
+      .catch((err: any) => {
+        if (err instanceof FluxDownUnavailableError) {
+          fail(c, 503, err.message);
+          return;
+        }
+        fail(c, 400, err?.message ?? "rss sources query failed");
+      });
+  }
+
+  rssSourceCreate(c: Ctx): void {
+    const body = asObject(c.body);
+    if (!body || typeof body.url !== "string" || body.url === "") {
+      fail(c, 400, "url is required");
+      return;
+    }
+    if (!this.engine) {
+      fail(c, 500, "download engine not configured");
+      return;
+    }
+    this.engine
+      .rssCreateSource(this.rssSourceBody(body) as never)
+      .then((r) => ok(c, r))
+      .catch((err: any) => {
+        if (err instanceof FluxDownUnavailableError) {
+          fail(c, 503, err.message);
+          return;
+        }
+        fail(c, 400, err?.message ?? "rss source create failed");
+      });
+  }
+
+  rssSourceUpdate(c: Ctx): void {
+    const body = asObject(c.body);
+    if (!body || typeof body.sourceId !== "string" || body.sourceId === "") {
+      fail(c, 400, "sourceId is required");
+      return;
+    }
+    if (!this.engine) {
+      fail(c, 500, "download engine not configured");
+      return;
+    }
+    // 更新需要完整源 DTO（daemon 侧整对象替换语义）：以现值打底，覆盖白名单字段
+    this.engine
+      .rssListSources()
+      .then((sources) => {
+        const cur = sources.find((s) => s.sourceId === body.sourceId);
+        if (!cur) {
+          fail(c, 404, "rss source not found");
+          return;
+        }
+        const merged = {
+          ...cur,
+          ...this.rssSourceBody(body),
+          sourceId: cur.sourceId,
+        } as import("../core/fluxdown.ts").FdRssSource;
+        return this.engine!.rssUpdateSource(merged).then((okRes) =>
+          ok(c, { updated: okRes?.ok === true }),
+        );
+      })
+      .catch((err: any) => {
+        if (err instanceof FluxDownUnavailableError) {
+          fail(c, 503, err.message);
+          return;
+        }
+        fail(c, 400, err?.message ?? "rss source update failed");
+      });
+  }
+
+  rssSourceDelete(c: Ctx): void {
+    const sourceId = c.params.sourceId ?? "";
+    if (sourceId === "") {
+      fail(c, 400, "sourceId is required");
+      return;
+    }
+    if (!this.engine) {
+      fail(c, 500, "download engine not configured");
+      return;
+    }
+    this.engine
+      .rssDeleteSource(sourceId)
+      .then((r) => ok(c, { deleted: r.ok === true }))
+      .catch((err: any) => {
+        if (err instanceof FluxDownUnavailableError) {
+          fail(c, 503, err.message);
+          return;
+        }
+        fail(c, 400, err?.message ?? "rss source delete failed");
+      });
+  }
+
+  rssSourceRefresh(c: Ctx): void {
+    const sourceId = c.params.sourceId ?? "";
+    if (sourceId === "") {
+      fail(c, 400, "sourceId is required");
+      return;
+    }
+    if (!this.engine) {
+      fail(c, 500, "download engine not configured");
+      return;
+    }
+    this.engine
+      .rssRefreshSource(sourceId)
+      .then((r) => ok(c, { refreshed: r.ok === true }))
+      .catch((err: any) => {
+        if (err instanceof FluxDownUnavailableError) {
+          fail(c, 503, err.message);
+          return;
+        }
+        fail(c, 400, err?.message ?? "rss source refresh failed");
+      });
+  }
+
+  rssSourceItems(c: Ctx): void {
+    const sourceId = c.params.sourceId ?? "";
+    if (sourceId === "") {
+      fail(c, 400, "sourceId is required");
+      return;
+    }
+    if (!this.engine) {
+      fail(c, 500, "download engine not configured");
+      return;
+    }
+    this.engine
+      .rssGetItems(sourceId)
+      .then((items) => ok(c, items))
+      .catch((err: any) => {
+        if (err instanceof FluxDownUnavailableError) {
+          fail(c, 503, err.message);
+          return;
+        }
+        fail(c, 400, err?.message ?? "rss items query failed");
+      });
+  }
+
+  rssItemAction(c: Ctx): void {
+    const sourceId = c.params.sourceId ?? "";
+    const body = asObject(c.body) ?? {};
+    const guid = typeof body.guid === "string" ? body.guid : "";
+    const action =
+      body.action === "download" || body.action === "ignore" || body.action === "readAll"
+        ? body.action
+        : "";
+    if (sourceId === "" || action === "" || (action !== "readAll" && guid === "")) {
+      fail(c, 400, "sourceId/guid/action required (guid ignored only for readAll)");
+      return;
+    }
+    if (!this.engine) {
+      fail(c, 500, "download engine not configured");
+      return;
+    }
+    this.engine
+      .rssItemAction(sourceId, guid, action)
+      .then((r) => ok(c, { done: r.ok === true }))
+      .catch((err: any) => {
+        if (err instanceof FluxDownUnavailableError) {
+          fail(c, 503, err.message);
+          return;
+        }
+        fail(c, 400, err?.message ?? "rss item action failed");
+      });
+  }
+
+  /** feed 校验（添加订阅前的只读探测：标题 + 条目预览） */
+  rssValidate(c: Ctx): void {
+    const body = asObject(c.body);
+    if (!body || typeof body.url !== "string" || body.url === "") {
+      fail(c, 400, "url is required");
+      return;
+    }
+    if (!this.engine) {
+      fail(c, 500, "download engine not configured");
+      return;
+    }
+    this.engine
+      .rssValidate({
+        url: body.url as string,
+        cookies: typeof body.cookies === "string" ? body.cookies : undefined,
+        userAgent: typeof body.userAgent === "string" ? body.userAgent : undefined,
+        proxyUrl: typeof body.proxyUrl === "string" ? body.proxyUrl : undefined,
+      })
+      .then((r) => ok(c, r))
+      .catch((err: any) => {
+        if (err instanceof FluxDownUnavailableError) {
+          fail(c, 503, err.message);
+          return;
+        }
+        fail(c, 400, err?.message ?? "rss validate failed");
+      });
   }
 
   downloadCreate(c: Ctx): void {
@@ -585,6 +1353,8 @@ export class Handlers {
       headers: string | null;
       folder: string | null;
       selectFile: string | null;
+      segments: number | null;
+      queueId: string | null;
     }>;
     try {
       inputs = body.tasks.map((t, i) => {
@@ -616,6 +1386,19 @@ export class Handlers {
             typeof o.selectFile === "string" && o.selectFile.trim() !== ""
               ? o.selectFile.trim()
               : null,
+          // 直链分段数（FluxDown 动态分段；0/null = 引擎自动推荐）
+          segments:
+            typeof o.segments === "number" &&
+            Number.isFinite(o.segments) &&
+            o.segments >= 0 &&
+            o.segments <= 64
+              ? Math.round(o.segments)
+              : null,
+          // 归属命名队列（FluxDown daemon.queue；空 = 引擎默认 main）
+          queueId:
+            typeof o.queueId === "string" && o.queueId.trim() !== ""
+              ? o.queueId.trim()
+              : null,
         };
       });
     } catch (err: any) {
@@ -627,21 +1410,33 @@ export class Handlers {
     this.downloadSvc
       .addDownloadTasks(inputs)
       .then(async (videos) => {
+        const startErrors: Array<{ id: number; message: string }> = [];
         if (startDownload) {
           const localPath = (this.conf.get("local") ?? "") as string;
           for (const v of videos) {
             try {
               await this.downloadSvc!.startDownload(v.id, localPath, false);
             } catch (err: any) {
-              logger.warn(
-                `auto-start download failed id=${v.id}: ${err?.message ?? err}`,
-              );
+              const message = err?.message ?? String(err);
+              logger.warn(`auto-start download failed id=${v.id}: ${message}`);
+              // 未启动过的死行回滚删除（无引擎关联/无产物，保留只会是
+              // 一条「失败」噪音）；提交失败应把原因带回给表单
+              this.downloadSvc!.deleteUnstartedRow(v.id);
+              startErrors.push({ id: v.id, message });
             }
           }
         }
-        const ids = videos.map((v) => v.id);
+        if (startErrors.length > 0 && startErrors.length === videos.length) {
+          // 全部启动失败：整单拒绝（表单留在原地展示错误）
+          fail(c, 400, startErrors[0]!.message);
+          return;
+        }
+        const started = videos.filter(
+          (v) => !startErrors.some((e) => e.id === v.id),
+        );
+        const ids = started.map((v) => v.id);
         this.hub.broadcast("download-create", { ids, count: ids.length });
-        ok(c, videos);
+        ok(c, started);
       })
       .catch((err: any) => fail(c, 500, err?.message ?? String(err)));
   }
@@ -710,6 +1505,13 @@ export class Handlers {
     if ("url" in body) data.url = body.url;
     if ("headers" in body) data.headers = body.headers;
     if ("folder" in body) data.folder = body.folder;
+    // 归属队列（引擎任务；下次启动/重提生效——在途任务请用详情抽屉换队列）
+    if ("queueId" in body) {
+      data.queueId =
+        typeof body.queueId === "string" && body.queueId.trim() !== ""
+          ? body.queueId.trim()
+          : null;
+    }
     this.downloadSvc
       .editDownloadTask(id, data)
       .then((v) => ok(c, v))

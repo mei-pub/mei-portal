@@ -11,18 +11,8 @@ import { initLogger, logger } from "./logger.ts";
 import { Conf } from "./conf.ts";
 import { TaskLogManager } from "./tasklog.ts";
 import { loadSchemasFromJSON } from "./core/schema.ts";
-import {
-  BinaryNames,
-  FFmpegBinaryName,
-  type Aria2Options,
-  type Aria2RpcOptions,
-} from "./core/types.ts";
-import {
-  DownloaderSvc,
-  normalizeAria2Options,
-  normalizeAria2Rpc,
-  type DownloaderConfig,
-} from "./core/downloader.ts";
+import { BinaryNames, FFmpegBinaryName } from "./core/types.ts";
+import { DownloaderSvc, type DownloaderConfig } from "./core/downloader.ts";
 import { TaskQueue } from "./core/queue.ts";
 import {
   openDatabase,
@@ -31,7 +21,12 @@ import {
   ConversionRepository,
 } from "./db.ts";
 import { DownloadTaskService } from "./service/download.ts";
-import { ensureQbitClient } from "./core/qbit.ts";
+import {
+  EngineBridge,
+  type EngineBridgeOptions,
+} from "./service/engine.ts";
+import { FluxDownClient, loadFluxDownToken } from "./core/fluxdown.ts";
+import { resolveTaskDir, sanitizeFilename } from "./core/downloader.ts";
 import { FavoriteService } from "./service/favorite.ts";
 import { Converter } from "./service/converter.ts";
 import { ConversionService } from "./service/conversion.ts";
@@ -39,6 +34,7 @@ import { Hub } from "./api/sse.ts";
 import { VideoService } from "./api/video.ts";
 import { Handlers, type EnvPaths } from "./api/handlers.ts";
 import { createServer } from "./api/router.ts";
+import { randomName } from "./service/helpers.ts";
 
 // ---- AppConfig（对应 Go main.AppConfig；默认值改用 /data/media/* 新命名）----
 
@@ -54,10 +50,6 @@ interface AppConfig {
   deleteSegments: boolean;
   proxy: string;
   useProxy: boolean;
-  /** aria2 引擎设置（设置页「下载引擎」驱动，热更新） */
-  aria2: Aria2Options;
-  /** aria2 RPC 对外引擎设置（第三方客户端接入；热更新经 onDidChange 重启守护） */
-  aria2Rpc: Aria2RpcOptions;
   dbPath: string;
   configDir: string;
   staticDir: string;
@@ -78,8 +70,6 @@ function defaultConfig(): AppConfig {
     deleteSegments: true,
     proxy: "",
     useProxy: false,
-    aria2: normalizeAria2Options(undefined),
-    aria2Rpc: normalizeAria2Rpc(undefined),
     dbPath: "/data/media/mediago.db",
     configDir: "", // 为空时回落到 logDir（与 Go 一致）
     staticDir: "",
@@ -179,31 +169,6 @@ const appStoreDefaults: Record<string, unknown> = {
   enableMobilePlayer: false,
   apiKey: "",
   passwordHash: "",
-  // aria2 下载引擎设置（下载中心设置页「下载引擎」tab；值经 normalizeAria2Options 收敛）
-  aria2: {
-    connections: 16,
-    splits: 16,
-    minSplitSize: "1M",
-    speedLimit: "",
-    maxTries: 5,
-    retryWait: 0,
-    bt: {
-      enableDht: true,
-      enableLpd: true,
-      enablePex: true,
-      listenPort: "",
-      uploadLimit: "",
-      maxPeers: 55,
-      trackers: "",
-    },
-  },
-  // aria2 RPC 对外引擎（完整 aria2 能力，第三方客户端接入控制）；
-  // secret 空时首启生成并回写
-  aria2Rpc: {
-    enabled: true,
-    port: 6800,
-    secret: "",
-  },
 };
 
 /** 系统下载目录（$HOME/Downloads，缺失回落 $HOME） */
@@ -273,29 +238,6 @@ async function main(): Promise<void> {
     cfg.deleteSegments = s.deleteSegments;
   if (typeof s.maxRunner === "number" && s.maxRunner > 0)
     cfg.maxRunner = s.maxRunner;
-  // aria2 引擎设置（外部手改 config.json 也要收敛，normalize 兜底类型/越界）
-  cfg.aria2 = normalizeAria2Options(appStore.get("aria2"));
-
-  // aria2 RPC 对外引擎配置收敛；secret 首启生成并回写（conf 层默认空）
-  {
-    const rpc = normalizeAria2Rpc(appStore.get("aria2Rpc"));
-    // 防御：RPC 端口与 core HTTP 端口同值（历史污染/误配）时强制回落 6800
-    // ——否则 aria2 守护在 core 之前抢端口，core listen EADDRINUSE →
-    // supervisord 1s 快重启 → 永远撞在守护占用的端口上 → FATAL 死循环
-    if (rpc.port === Number.parseInt(cfg.port, 10)) {
-      logger.warn(
-        `aria2 rpc port ${rpc.port} conflicts with core port, resetting to 6800`,
-      );
-      rpc.port = 6800;
-      await appStore.set("aria2Rpc", rpc);
-    }
-    if (rpc.secret === "") {
-      rpc.secret = randomUUID();
-      await appStore.set("aria2Rpc", rpc);
-      logger.info(`generated aria2 rpc secret (port=${rpc.port})`);
-    }
-    cfg.aria2Rpc = rpc;
-  }
 
   // 3. 下载目录不可用时回落系统下载目录；appStore 缺 local 时补写
   {
@@ -335,21 +277,15 @@ async function main(): Promise<void> {
     }
   }
 
-  // 6. 核心组件
+  // 6. 核心组件（视频站流媒体下载走队列 + 外部工具；direct/bt/ed2k 走 FluxDown 引擎）
   const downloaderCfg: DownloaderConfig & { [k: string]: unknown } = {
     // 以下 getter 由闭包读最新值（配置热更新后立即生效）
     getLocalDir: () => cfg.localDir,
     getDeleteSegments: () => cfg.deleteSegments,
     getProxy: () => cfg.proxy,
     getUseProxy: () => cfg.useProxy,
-    getAria2Options: () => cfg.aria2,
-    // DHT 路由表持久化（configDir/dht.dat）：aria2 进程退出保存 / 启动加载，
-    // 磁力解析与 BT 下载跨进程共享 —— 冷启动 bootstrap（10-30s）只发生一次
-    getDhtFile: () => path.join(cfg.configDir, "dht.dat"),
-    // 配置目录（torrents 缓存 / qB 解析暂存根）
+    // 配置目录（torrents 缓存：磁力网关种子 / 上传种子文件）
     getConfigDir: () => cfg.configDir,
-    // aria2 RPC 对外引擎（闭包读最新值：设置页改端口/开关立即生效）
-    getAria2Rpc: () => cfg.aria2Rpc,
   };
   const downloader = new DownloaderSvc(binMap, schemas, downloaderCfg);
   const queue = new TaskQueue(downloader, cfg.maxRunner);
@@ -388,50 +324,24 @@ async function main(): Promise<void> {
       logger.info(`localDir updated to "${newVal}" via config change`);
     }
   });
-  // aria2 引擎设置热更新：设置页保存 → conf dotSet 'aria2' → 在跑任务不受影响，新任务立即用新参数
-  appStore.onDidChange("aria2", (newVal) => {
-    cfg.aria2 = normalizeAria2Options(newVal);
-    logger.info(
-      `aria2 options updated via config change: ${JSON.stringify(cfg.aria2)}`,
-    );
-  });
 
-  // aria2 RPC 对外引擎热更新（设置页改端口/开关/重置 secret）→ 重启守护
-  appStore.onDidChange("aria2Rpc", (newVal) => {
-    const rpc = normalizeAria2Rpc(newVal);
-    cfg.aria2Rpc = rpc;
-    logger.info(
-      `aria2 rpc engine config changed: enabled=${rpc.enabled} port=${rpc.port}`,
+  // ---- FluxDown 下载引擎（direct/bt/ed2k 的唯一执行引擎）----
+  // 容器内 supervisord 同容器常驻（[program:fluxdown]，127.0.0.1:17800）；
+  // 访问密钥与引擎共用（entrypoint 首启生成 /data/fluxdown/token，经
+  // FLUXDOWN_TOKEN 环境注入双方）。引擎晚于 core 拉起属正常——客户端
+  // 指数退避重连，就绪后 snapshot 全量对账（含断线期间的状态变更）。
+  const fdToken = loadFluxDownToken(
+    process.env.MEI_FLUXDOWN_DATA_DIR ?? "/data/fluxdown",
+  );
+  if (fdToken === "") {
+    logger.warn(
+      "fluxdown engine token not found (FLUXDOWN_TOKEN / /data/fluxdown/token); engine tasks disabled until restart",
     );
-    void downloader.restartAria2Rpc();
-  });
-
-  // ---- 引擎启动（qBittorrent BT 引擎接管/偏好初始化 + aria2 RPC 对外守护拉起）----
-  // qB 与 core 同容器常驻（supervisord）；首启由 core 用出厂凭据登录后改强
-  // 密码（ensureQbitClient，凭据文件 /data/media/qbit-credentials.json）。
-  // supervisord 拉起顺序上 qB 可能晚于 core 几秒，初始化带重试
-  {
-    const initQbit = async (attempt: number): Promise<void> => {
-      try {
-        const qbit = await ensureQbitClient(
-          process.env.MEI_QBIT_BASEURL ?? "http://127.0.0.1:8080",
-        );
-        await qbit.ensureBtPreferences();
-        downloader.setQbitClient(qbit);
-      } catch (err: any) {
-        if (attempt < 5) {
-          logger.warn(
-            `qbittorrent init retry ${attempt + 1}: ${err?.message ?? err}`,
-          );
-          setTimeout(() => void initQbit(attempt + 1), 10_000);
-        } else {
-          logger.error(`qbittorrent init failed: ${err?.message ?? err}`);
-        }
-      }
-    };
-    void initQbit(0);
-    void downloader.ensureAria2Rpc();
   }
+  const fdClient = new FluxDownClient({
+    baseUrl: process.env.MEI_FLUXDOWN_BASEURL ?? "http://127.0.0.1:17800",
+    token: fdToken,
+  });
 
   // 8. 数据库
   const dbPath = cfg.dbPath;
@@ -443,15 +353,37 @@ async function main(): Promise<void> {
   const favoriteRepo = new FavoriteRepository(db);
   const conversionRepo = new ConversionRepository(db);
 
-  const downloadSvc = new DownloadTaskService(videoRepo, queue, taskLogs);
+  const hub = new Hub();
+
+  // FluxDown 引擎桥接：任务创建/解析会话/事件镜像同步/操作集
+  const engineOpts: EngineBridgeOptions = {
+    localDir: () => cfg.localDir,
+    configDir: () => cfg.configDir,
+    resolveTaskDir: (folder, base) =>
+      resolveTaskDir(folder ?? null, base ?? cfg.localDir),
+    sanitizeFilename,
+    randomName,
+  };
+  const engine = new EngineBridge(
+    fdClient,
+    videoRepo,
+    queue,
+    hub,
+    taskLogs,
+    engineOpts,
+  );
+  engine.start();
+  logger.info("FluxDown engine bridge started (client connecting...)");
+
+  const downloadSvc = new DownloadTaskService(videoRepo, queue, taskLogs, engine);
   const favoriteSvc = new FavoriteService(favoriteRepo);
   const converter = new Converter(getFFmpegBin(cfg));
 
-  const hub = new Hub();
   const conversionSvc = new ConversionService(conversionRepo, converter, hub);
   const videoSvc = new VideoService(videoRepo, () => cfg.localDir);
 
-  // 9. 队列回调（tasklog 追加 + DB 状态回写 + SSE 广播；对应 Go queue_callbacks.go）
+  // 9. 队列回调（tasklog 追加 + DB 状态回写 + SSE 广播；对应 Go queue_callbacks.go；
+  //    仅覆盖队列类型任务——引擎任务的等价回调由 EngineBridge 事件驱动派生）
   queue.onStart = (id) => {
     void taskLogs
       .reset(id)
@@ -475,7 +407,6 @@ async function main(): Promise<void> {
   };
   queue.onSuccess = (id) => {
     void taskLogs.append(id, "Task completed successfully").catch(() => {});
-    downloadSvc.forgetBtTask(id);
     // 临时目录产物收敛：rename 到任务目录最终名（失败仅告警，产物留在 .meipart-<id>）
     try {
       downloadSvc.finalizeTask(id, cfg.localDir);
@@ -496,7 +427,6 @@ async function main(): Promise<void> {
   };
   queue.onFailed = (id, err) => {
     void taskLogs.append(id, `Task failed: ${err.message}`).catch(() => {});
-    downloadSvc.forgetBtTask(id);
     const dbID = Number.parseInt(id, 10);
     if (!Number.isNaN(dbID)) {
       try {
@@ -510,17 +440,9 @@ async function main(): Promise<void> {
   queue.onMessage = (m) => {
     logger.info(`[task ${m.id}] ${m.message}`);
     void taskLogs.append(m.id, m.message).catch(() => {});
-    // BT 任务：从 FILE:/Download Results 行解析落盘路径，回写任务名（幂等，
-    // 内部短路非 aria2 行）。下载中的列表即可显示真实种子名。
-    try {
-      downloadSvc.noteBtResult(m.id, m.message, cfg.localDir);
-    } catch (err: any) {
-      logger.warn(`noteBtResult failed id=${m.id}: ${err?.message ?? err}`);
-    }
   };
   queue.onStopped = (id) => {
     void taskLogs.append(id, "Task stopped").catch(() => {});
-    downloadSvc.forgetBtTask(id);
     const dbID = Number.parseInt(id, 10);
     if (!Number.isNaN(dbID)) {
       try {
@@ -534,22 +456,17 @@ async function main(): Promise<void> {
     hub.broadcast("download-stop", { id });
   };
 
-  // 10. 启动自愈：恢复上次进程中断的在途任务。容器升级/进程重启会打断
-  // 下载——行卡在 downloading/pending、qB 里的种子无人管理（missingFiles
-  // 等异常也无人恢复，表现为「升级后任务永远停在下载中」）。等 qB 引擎
-  // 就绪（supervisord 拉起顺序可能晚于 core）后按既有状态重新入队；
-  // startDownload 内部按任务现状走续传/missingFiles 自愈路径。用户显式
-  // 停止的任务（stopped）不恢复。
+  // 10. 启动自愈：恢复上次进程中断的在途任务。引擎（FluxDown）自身随
+  // 容器常驻，core 重启不影响引擎任务的下载进度——引擎桥接就绪（snapshot
+  // 对账）后，active 的引擎任务由事件流自动接管镜像；未关联引擎的行
+  //（历史/队列任务）按既有状态重新入队。用户显式停止的任务（stopped）
+  // 不恢复。
   void (async () => {
-    const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
-    for (let i = 0; i < 36; i++) {
-      const ready = await downloader
-        .qbit()
-        .getInfo("0".repeat(40))
-        .then(() => true)
-        .catch(() => false);
-      if (ready) break;
-      await wait(5000);
+    // 等引擎就绪（supervisord 拉起顺序可能晚于 core；最长 180s）
+    try {
+      await engine.waitReady(180_000);
+    } catch {
+      logger.warn("boot resume: engine not ready in 180s, engine tasks stay as-is until reconnect");
     }
     let interrupted: ReturnType<DownloadTaskService["findActiveTasks"]> = [];
     try {
@@ -595,6 +512,7 @@ async function main(): Promise<void> {
     videoSvc,
     envPaths,
     downloader,
+    engine,
   );
 
   // 播放器 UI 目录（Go 为二进制内嵌；TS 版以目录形式部署，默认取 static-dir 同级的 player/）

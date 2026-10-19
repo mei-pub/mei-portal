@@ -154,6 +154,37 @@ test('library：返回 tasks（含 speed）与磁盘 files；running 任务置�
       assert.ok(key in f, `files 缺字段 ${key}`);
     }
     assert.equal(f.path, '周杰伦/晴天 - qq.mp3');
+    // 曲库文件补源（Round-B）：任务表存在同落盘路径的记录 → song.id/source 随行，
+    // 前端「复制链接」始终可构造音源站页面地址
+    assert.equal(f.songId, '1');
+    assert.equal(f.songSource, 'qq');
+  } finally {
+    server.close();
+    await fsp.rm(root, { recursive: true, force: true });
+  }
+});
+
+test('library：任务表 miss 时回落持久源索引（.library-index.json）补 songId', async () => {
+  const root = await makeTmpRoot();
+  await fsp.mkdir(path.join(root, '周杰伦'), { recursive: true });
+  await fsp.writeFile(path.join(root, '周杰伦', '七里香 - netease.mp3'), Buffer.alloc(64));
+  await fsp.writeFile(
+    path.join(root, '.library-index.json'),
+    JSON.stringify({
+      '周杰伦/七里香 - netease.mp3': { id: '42', source: 'netease', name: '七里香', artist: '周杰伦', at: Date.now() },
+    }),
+  );
+
+  const router = factory({ downloadRoot: root, taskManager: { list: () => [] } });
+  const { server, base } = await startApp(router, root);
+  try {
+    const res = await fetch(`${base}/api/download/library`);
+    assert.equal(res.status, 200);
+    const data = await res.json();
+    const f = data.files.find((x) => x.path === '周杰伦/七里香 - netease.mp3');
+    assert.ok(f, 'files 应包含盘上文件');
+    assert.equal(f.songId, '42');
+    assert.equal(f.songSource, 'netease');
   } finally {
     server.close();
     await fsp.rm(root, { recursive: true, force: true });

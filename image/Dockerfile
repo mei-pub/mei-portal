@@ -48,6 +48,26 @@ RUN set -eux; \
     frpc --version
 COPY apps/link/client/docker/ ./
 
+# ---- FluxDown 下载引擎（Rust 多协议下载器：HTTP/FTP/BT/磁力/eD2K/HLS/DASH，
+# 动态分段加速 + librqbit BT 栈；官方 release 产物 fluxdown-agent --server +
+# fluxdownd，两者必须同目录）。作为下载中心的唯一下载执行引擎。----
+FROM node:22-bookworm-slim AS fluxdown-builder
+ARG TARGETARCH
+ARG FLUXDOWN_VERSION=0.5.4
+RUN set -eux; \
+    case "${TARGETARCH}" in \
+      amd64) FNAME=linux-x64;  SHA=b76e180845d4fe59837ee153290d39e6dc323dca2bb6cb206b13ca9ecf441347 ;; \
+      arm64) FNAME=linux-arm64; SHA=9279f2d92d582fedf7bcae830adb8d7ec29cb3e7bb77acbf9d110f95a13f347c ;; \
+    esac; \
+    apt-get update && apt-get install -y --no-install-recommends ca-certificates curl \
+    && rm -rf /var/lib/apt/lists/*; \
+    curl -fsSL -o /tmp/fd.tgz "https://github.com/zerx-lab/FluxDown/releases/download/v${FLUXDOWN_VERSION}/FluxDown-Server-${FLUXDOWN_VERSION}-${FNAME}.tar.gz"; \
+    echo "${SHA}  /tmp/fd.tgz" | sha256sum -c -; \
+    mkdir -p /opt/fluxdown; \
+    tar -xzf /tmp/fd.tgz --strip-components=1 -C /opt/fluxdown "fluxdown-server-${FLUXDOWN_VERSION}-${FNAME}/fluxdown-agent" "fluxdown-server-${FLUXDOWN_VERSION}-${FNAME}/fluxdownd"; \
+    rm /tmp/fd.tgz; \
+    test -x /opt/fluxdown/fluxdown-agent && test -x /opt/fluxdown/fluxdownd
+
 # ---- tv 影视门户（Next.js 14，basePath=/tv，单密码模式）----
 FROM node:22-bookworm-slim AS tv-builder
 WORKDIR /build
@@ -145,20 +165,6 @@ COPY apps/media/core-ts/package.json apps/media/core-ts/package-lock.json* ./
 RUN npm ci --no-audit --no-fund || npm install --no-audit --no-fund
 COPY apps/media/core-ts/ ./
 
-# ---- AriaNg（aria2 RPC 标准第三方客户端面板，纯静态 SPA）----
-FROM node:22-bookworm-slim AS ariang-builder
-ARG ARIANG_VERSION=1.3.10
-RUN set -eux; \
-    apt-get update && apt-get install -y --no-install-recommends ca-certificates curl unzip \
-    && rm -rf /var/lib/apt/lists/*; \
-    curl -fsSL -o /tmp/ariang.zip "https://github.com/mayswind/AriaNg/releases/download/${ARIANG_VERSION}/AriaNg-${ARIANG_VERSION}.zip"; \
-    mkdir -p /out; \
-    unzip -q /tmp/ariang.zip -d /out; \
-    rm /tmp/ariang.zip; \
-    test -f /out/index.html
-
-
-
 # ---- 运行时（必须最后一个 FROM）----
 # =============================================================================
 FROM node:22-bookworm-slim AS runtime
@@ -168,14 +174,13 @@ FROM node:22-bookworm-slim AS runtime
 RUN apt-get update && apt-get install -y \
         nginx gettext-base ca-certificates curl python3 python3-pip python3-venv \
         libicu72 \
-        qbittorrent-nox \
     && rm -rf /var/lib/apt/lists/* /etc/nginx/sites-enabled/default \
     && python3 -m pip install --no-cache-dir --break-system-packages \
         supervisor \
         yt-dlp==2026.8.19 \
         yt-dlp-ejs==0.8.0 \
         bgutil-ytdlp-pot-provider==1.3.2 \
-    && which supervisord && which qbittorrent-nox
+    && which supervisord
 
 WORKDIR /app
 
@@ -196,6 +201,9 @@ COPY --from=novels-builder /build/fonts-seed ./fonts-seed
 # ---- link ----
 COPY --from=link-builder /usr/local/bin/frpc /usr/local/bin/frpc
 COPY --from=link-builder /build ./apps/link
+
+# ---- FluxDown 下载引擎（fluxdown-agent + fluxdownd 必须同目录）----
+COPY --from=fluxdown-builder /opt/fluxdown /opt/fluxdown
 
 # ---- tv ----
 COPY --from=tv-builder /build/.next/standalone ./apps/tv/
@@ -225,8 +233,6 @@ COPY --from=disks-web-builder /build/dist ./apps/disks/frontend/dist
 # ---- media（TS core + 前端静态 + 播放页 + 下载工具）----
 COPY --from=media-engine-builder /build ./apps/media/core-ts
 COPY --from=media-node-builder /src/apps/ui/build/server ./apps/media/static
-# AriaNg（aria2 RPC 第三方客户端面板）：静态挂 /downloads/ariang/
-COPY --from=ariang-builder /out ./apps/media/static/ariang
 COPY --from=media-node-builder /src/apps/player-ui/dist ./apps/media/player
 ARG TARGETARCH
 COPY --from=media-node-builder /src/.deps/linux-* /app/deps-tmp/
@@ -244,6 +250,13 @@ RUN rm -rf /etc/nginx/sites-enabled
 COPY image/plugins.json /etc/mei-plugins.json
 COPY image/supervisord.conf /etc/supervisor/conf.d/mei-portal.conf
 RUN mkdir -p /etc/supervisor && ln -sf /etc/supervisor/conf.d/mei-portal.conf /etc/supervisor/supervisord.conf
+# DHT bootstrap 域名 v4 固定（2026-10-10 容器实证）：FluxDown 引擎是 musl 静态
+# 二进制，getaddrinfo 忽略 gai.conf 且永远 AAAA 优先——容器无 IPv6 路由时 DHT
+# 发送即失败（"no successful lookups" 持续重试），磁力解析永远超时。musl 先查
+# /etc/hosts 且其中只有 v4 记录，据此把 bootstrap 域名固定到实测应答的
+# transmission 路由器 IP（双栈生产环境无害：只影响这四个域名的解析顺序）。
+# Docker 会把镜像 /etc/hosts 内容并进容器生成的 hosts 文件，故写进镜像即持久。
+RUN printf '\n# DHT bootstrap v4 pin (musl AAAA-first + no IPv6 route in container)\n87.98.162.88 router.bittorrent.com router.utorrent.com dht.libtorrent.org dht.transmissionbt.com\n212.129.33.59 router.bittorrent.com router.utorrent.com dht.libtorrent.org dht.transmissionbt.com\n' >> /etc/hosts
 COPY image/entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
@@ -260,14 +273,14 @@ EXPOSE 7777
 #   7805 draw / 7806 music / 7807 disks（127.0.0.1）/ 7808 shell 门户
 #   4416 bgutil PO-Token Provider
 EXPOSE 7801 7802 7803 7804 7805 7806 7807 7808 4416
-# 下载引擎控制面（宿主/第三方客户端经 compose 映射接入）：
-#   6800 aria2 RPC 对外引擎（映射 127.0.0.1:7778）
-#   8080 qBittorrent WebUI（映射 127.0.0.1:7779）
-EXPOSE 6800 8080
+# 下载引擎控制面（FluxDown 单引擎：REST/官方 UI/aria2 兼容 JSON-RPC/MCP 共用
+# 17800 一口；容器内 127.0.0.1 绑定，宿主/第三方客户端经 compose 映射接入）：
+#   17800 FluxDown（映射 127.0.0.1:7778 aria2 兼容 RPC / 7779 引擎控制台）
+EXPOSE 17800
 # BT 数据面（TCP 传输 + UDP DHT/LSD；对等节点连接，公网映射后可提升连通性）：
-#   6881 qBittorrent BT（conf 固定） / 6891 aria2 BT+DHT（spawn 参数固定）
-EXPOSE 6881 6891
-EXPOSE 6881/udp 6891/udp
+#   6881-6891 FluxDown BT 端口区间（config bt_port_start/end 固定）
+EXPOSE 6881-6891
+EXPOSE 6881-6891/udp
 
 ENTRYPOINT ["/entrypoint.sh"]
 CMD ["supervisord", "-n", "-c", "/etc/supervisor/conf.d/mei-portal.conf"]

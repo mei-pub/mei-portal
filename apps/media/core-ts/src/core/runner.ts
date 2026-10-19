@@ -1,7 +1,8 @@
 // core/runner —— Go internal/core/runner/exec.go 的复刻：spawn 外部二进制，stdout/stderr 并发逐行读
 // （PTY 模式弃用，见任务说明；Go 生产环境也曾可用 exec 模式）
 
-import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
+import { spawn, type ChildProcessByStdio } from 'node:child_process';
+import type { Readable } from 'node:stream';
 
 /** 对应 Go 的 context.Canceled —— 任务被取消时的哨兵错误 */
 export class CanceledError extends Error {
@@ -100,9 +101,11 @@ export function execRun(
   signal: AbortSignal,
 ): Promise<void> {
   return new Promise((resolve, reject) => {
-    let child: ChildProcessWithoutNullStreams;
+    let child: ChildProcessByStdio<null, Readable, Readable>;
     try {
-      child = spawn(binPath, args, { stdio: ['ignore', 'pipe', 'pipe'] }) as ChildProcessWithoutNullStreams;
+      // stdio ['ignore','pipe','pipe'] 的重载返回 ChildProcessByStdio
+      //（stdin=null，stdout/stderr=Readable——与下方流读取用法一致）
+      child = spawn(binPath, args, { stdio: ['ignore', 'pipe', 'pipe'] });
     } catch (err) {
       reject(err);
       return;

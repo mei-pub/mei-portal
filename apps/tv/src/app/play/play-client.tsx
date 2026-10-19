@@ -2466,10 +2466,12 @@ export function PlayPageClient({ pathSource, pathId }: { pathSource?: string; pa
                         <path d='M7 10l5 5 5-5' />
                         <path d='M12 15V3' />
                       </svg>
-                      服务器下载中
-                      {currentLocalRecord?.progress
-                        ? ` ${Math.round(currentLocalRecord.progress)}%`
-                        : ''}
+                      {/* percent≥100 仍在下载 = m3u8 ffmpeg 合并阶段，显示「合并中」 */}
+                      {(currentLocalRecord?.progress ?? 0) >= 100
+                        ? '服务器合并中…'
+                        : currentLocalRecord?.progress
+                          ? `服务器下载中 ${Math.round(currentLocalRecord.progress)}%`
+                          : '服务器下载中'}
                     </span>
                   ) : (
                     <span className='inline-flex items-center gap-1.5'>
