@@ -83,38 +83,10 @@ export function defaultSchemas(): SchemaList {
           isLive: "检测到直播流",
         },
       },
-      {
-        // direct 下载走 aria2c。连接数/分片/限速/重试不再写死（原 -x 16 -s 16 -k 1M），
-        // 由 aria2Common 动态注入（下载中心设置页「下载引擎」，conf.aria2）
-        type: "direct",
-        args: {
-          localDir: { argsName: ["-d"] },
-          name: { argsName: ["-o"], postfix: "@@AUTO@@" },
-          url: { argsName: [] },
-          // 标记：buildArgs 从运行时配置拼装通用引擎参数（连接数/分片/限速/重试）
-          aria2Common: { argsName: [] },
-          __common__: {
-            argsName: [
-              "--console-log-level=notice",
-              "--summary-interval=1",
-              "--allow-overwrite=true",
-              "--auto-file-renaming=false",
-              "--check-certificate=false",
-            ],
-          },
-        },
-        consoleReg: {
-          percent: "\\((\\d+)%\\)",
-          // summary 行尾部带 ']'（DL:3MiB]），排除括号避免速度值带尾巴
-          speed: "DL:([^\\]\\s]+)",
-          error: "errorCode=\\d+|exception",
-          start: "Download (started|Results:)",
-          isLive: "",
-        },
-      },
-      // bt（磁力）不再走 spawn aria2c —— BT 全链路切到 qBittorrent Web API
-      //（core/downloader.ts downloadBtViaQbit：磁力秒级解析/选文件/改名/.!qB
-      // 未完成保护/完成停种）。aria2 保留 direct 普通文件下载与对外 RPC 引擎。
+      // direct / bt 不再有 spawn schema —— direct（http/ftp/ed2k）与 BT/磁力
+      // 全部走 FluxDown 引擎（service/engine 桥接：动态分段加速 + librqbit），
+      // 队列只保留视频站流媒体类型（外部工具 N_m3u8DL-RE / BBDown / yt-dlp /
+      // mediago）。历史 DB 记录的 direct/bt 恢复时同样路由到引擎。
       {
         type: "youtube",
         args: {

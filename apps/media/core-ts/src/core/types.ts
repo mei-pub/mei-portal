@@ -15,53 +15,19 @@ export type TaskStatus =
   | "failed"
   | "stopped";
 
-/** 各下载类型对应的外部二进制名（不含扩展名；Windows 下调用方补 .exe） */
-export const BinaryNames: Record<DownloadType, string> = {
+/**
+ * 队列执行类型对应的外部二进制名（不含扩展名；Windows 下调用方补 .exe）。
+ * direct/bt 不在表内——它们由 FluxDown 引擎执行（service/engine 桥接），
+ * 不再 spawn 本地二进制（aria2 已随引擎统一退役）。
+ */
+export const BinaryNames: Record<string, string> = {
   m3u8: "N_m3u8DL-RE",
   bilibili: "BBDown",
-  direct: "aria2c",
   mediago: "mediago",
   youtube: "yt-dlp",
-  // 磁力（BT）复用 aria2c（DHT 发现 peer；seed-time=0 下载完成即退出）
-  bt: "aria2c",
 };
 
 export const FFmpegBinaryName = "ffmpeg";
-
-/** aria2 下载引擎设置（下载中心设置页「下载引擎」tab，direct/bt 共用）
- *  —— 与 apps/ui 侧 shared/common types 的 Aria2Options 结构对齐（双侧平行定义） */
-export interface Aria2BtOptions {
-  /** DHT 网络（磁力找 peer 的主要途径；关闭后纯靠 tracker） */
-  enableDht: boolean;
-  /** 本地对等发现（LPD，局域网组播） */
-  enableLpd: boolean;
-  /** Peer 交换（PEX） */
-  enablePex: boolean;
-  /** BT 监听端口（形如 6881-6999 或 6881；空 = aria2 默认 6881-6999，TCP/UDP 同源） */
-  listenPort: string;
-  /** 上传限速（如 2M；空 = 不限） */
-  uploadLimit: string;
-  /** 最大 Peer 连接数 */
-  maxPeers: number;
-  /** 补充 tracker 列表（逗号/换行分隔；拼 --bt-tracker，磁力自带 tr 之外的全局注入） */
-  trackers: string;
-}
-
-export interface Aria2Options {
-  /** 单服务器并发连接数（--max-connection-per-server，aria2 上限 16） */
-  connections: number;
-  /** 分下载数（--split） */
-  splits: number;
-  /** 最小分片大小（--min-split-size，如 1M / 512K） */
-  minSplitSize: string;
-  /** 全局下载限速（--max-overall-download-limit，如 10M；空 = 不限） */
-  speedLimit: string;
-  /** 重试次数（--max-tries） */
-  maxTries: number;
-  /** 重试间隔秒（--retry-wait） */
-  retryWait: number;
-  bt: Aria2BtOptions;
-}
 
 /** 下载任务参数（DB 任务用数字 ID 字符串，内存任务可用任意字符串） */
 export interface DownloadParams {
@@ -71,7 +37,7 @@ export interface DownloadParams {
   name: string;
   folder: string;
   headers: string[];
-  /** BT 种子文件任务的下载文件索引（--select-file，如 "1,3-5"；空/缺省 = 全部） */
+  /** BT 种子文件任务的下载文件索引（"1,3-5"；空/缺省 = 全部） */
   selectFile?: string;
 }
 
@@ -98,6 +64,25 @@ export interface TaskInfo {
   speed: string;
   isLive: boolean;
   error?: string;
+  /** 引擎（FluxDown）任务的实时数据：上传/做种/字节等，列表与详情 UI 消费 */
+  engine?: EngineTaskExtras;
+}
+
+/** 引擎任务附加实时数据（/api/tasks 附加字段；由桥接层从引擎事件派生） */
+export interface EngineTaskExtras {
+  /** 引擎任务 ID */
+  taskId: string;
+  /** 上传速度（展示串，如 "1.2MiB/s"） */
+  uploadSpeed: string;
+  /** 累计上传字节（BT 做种） */
+  uploadedBytes: number;
+  downloadedBytes: number;
+  totalBytes: number;
+  /** 做种状态（0 无 / 1 做种中 / 2-7 停止原因 / 8 排队做种） */
+  seeding: number;
+  seedingMessage: string;
+  /** 累计做种秒数 */
+  seedingTimeSecs: number;
 }
 
 export interface Callbacks {
@@ -111,24 +96,7 @@ export interface DownloaderConfig {
   getDeleteSegments(): boolean;
   getProxy(): string;
   getUseProxy(): boolean;
-  /** aria2 引擎设置（direct/bt；热更新经闭包读最新值） */
-  getAria2Options(): Aria2Options;
-  /** DHT 路由表持久化文件（IPv4；空 = 不持久化）。aria2 启动加载 / 正常退出
-   *  保存 —— 磁力解析与 BT 下载跨进程复用路由表，冷启动从 ~30s 降到秒级 */
-  getDhtFile?(): string;
-  /** 配置目录（torrents 缓存 / 解析暂存所在根；缺省 /data/media） */
+  /** 配置目录（torrents 缓存：磁力网关种子 / 上传种子文件所在根） */
   getConfigDir?(): string;
-  /** aria2 RPC 对外引擎设置（端口/secret 可配，第三方客户端接入控制） */
-  getAria2Rpc(): Aria2RpcOptions;
-}
-
-/** aria2 RPC 对外引擎设置（conf.aria2Rpc；与 apps/ui 侧 shared/common 平行定义） */
-export interface Aria2RpcOptions {
-  /** 是否启用对外 RPC 守护 */
-  enabled: boolean;
-  /** RPC 监听端口（容器内；compose 映射到宿主） */
-  port: number;
-  /** RPC secret（第三方客户端接入凭证） */
-  secret: string;
 }
 

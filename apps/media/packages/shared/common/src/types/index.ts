@@ -11,9 +11,15 @@ export interface DownloadTask {
   status?: DownloadStatus;
   folder?: string;
   isLive?: boolean;
-  /** BT 种子文件任务的下载文件索引（aria2 --select-file，如 "1,3"；缺省=全部） */
+  /** BT 种子文件任务的下载文件索引（"1,3"；缺省=全部） */
   selectFile?: string;
   createdDate?: Date;
+  /** 引擎任务关联（FluxDown；direct/bt 行携带——详情抽屉入口判定） */
+  engineTaskId?: string | null;
+  /** 直链任务分段数（FluxDown 动态分段；0/null = 按大小自动推荐） */
+  segments?: number | null;
+  /** 归属命名队列（FluxDown daemon.queue；null = 引擎默认 Main Queue） */
+  queueId?: string | null;
 }
 
 export enum DownloadFilter {
@@ -69,6 +75,12 @@ export interface DownloadProgress {
   speed: string;
   isLive: boolean;
   status: DownloadStatus;
+  /** 引擎任务（FluxDown）附加：BT 上传速率（下载回馈 swarm / 完成后做种） */
+  uploadSpeed?: string;
+  /** 引擎任务附加：做种状态（FluxDown seedingStatus：1=做种中） */
+  seeding?: number;
+  /** 引擎任务附加：已连接节点数 */
+  peers?: number | null;
 }
 
 export enum DownloadType {
@@ -78,41 +90,6 @@ export enum DownloadType {
   mediago = "mediago",
   youtube = "youtube",
   bt = "bt",
-}
-
-/** aria2 引擎 BT 设置 —— 与 core-ts core/types.ts 的 Aria2BtOptions 结构对齐（双侧平行定义） */
-export interface Aria2BtOptions {
-  /** DHT 网络（磁力找 peer 的主要途径；关闭后纯靠 tracker） */
-  enableDht: boolean;
-  /** 本地对等发现（LPD，局域网组播） */
-  enableLpd: boolean;
-  /** Peer 交换（PEX） */
-  enablePex: boolean;
-  /** BT 监听端口（形如 6881-6999 或 6881；空 = aria2 默认） */
-  listenPort: string;
-  /** 上传限速（如 2M；空 = 不限） */
-  uploadLimit: string;
-  /** 最大 Peer 连接数 */
-  maxPeers: number;
-  /** 补充 tracker 列表（逗号/换行分隔，磁力自带 tr 之外的全局注入） */
-  trackers: string;
-}
-
-/** aria2 引擎设置（下载中心设置页「下载引擎」，direct/bt 共用） */
-export interface Aria2Options {
-  /** 单服务器并发连接数（aria2 上限 16） */
-  connections: number;
-  /** 分下载数 */
-  splits: number;
-  /** 最小分片大小（如 1M / 512K） */
-  minSplitSize: string;
-  /** 全局下载限速（如 10M；空 = 不限） */
-  speedLimit: string;
-  /** 重试次数 */
-  maxTries: number;
-  /** 重试间隔秒 */
-  retryWait: number;
-  bt: Aria2BtOptions;
 }
 
 export interface DownloadParams {
@@ -132,6 +109,33 @@ export interface DownloadParams {
 export interface DownloadTaskWithFile extends DownloadTask {
   exists?: boolean;
   file?: string;
+  /** 引擎任务（FluxDown，direct/bt）实时态：做种/上传/节点数（任务列表
+   *  行携带；下载中数据也经 /api/tasks 轮询事件通道更新） */
+  engine?: DownloadEngineInfo;
+}
+
+/** 引擎任务实时信息（列表行 / 详情抽屉共用字段子集） */
+export interface DownloadEngineInfo {
+  /** BT 上传速率（已格式化，如 "1.5MiB/s"） */
+  uploadSpeed: string;
+  /** 累计上传字节 */
+  uploadedBytes: number;
+  /** 做种状态（FluxDown seedingStatus：0=无 1=做种中 2-8=停止原因） */
+  seeding: number;
+  /** 做种状态别名（同 seeding；保留字段名兼容引擎事件口径） */
+  seedingStatus: number;
+  /** 做种说明（停止原因的人类可读文案） */
+  seedingMessage: string;
+  /** 累计做种秒数 */
+  seedingTimeSecs: number;
+  /** 已连接 peer 数（BT；null=未知） */
+  peers: number | null;
+  /** 活跃传输数（分段/连接；null=未知） */
+  activeTransfers: number | null;
+  /** 已下载字节 */
+  downloadedBytes: number;
+  /** 总字节 */
+  totalBytes: number;
 }
 
 export interface ListPagination {
@@ -287,8 +291,7 @@ export interface AppStore {
   enableMobilePlayer: boolean;
   // server apikey
   apiKey: string;
-  // aria2 引擎设置（下载中心「下载引擎」；服务端 direct/bt 注入 aria2c 参数）
-  aria2: Aria2Options;
+
 }
 
 export interface WebSource {

@@ -170,6 +170,11 @@ async function pollProgressOnce() {
         speed: string;
         isLive: boolean;
         status: string;
+        engine?: {
+          uploadSpeed?: string;
+          seeding?: number;
+          peers?: number | null;
+        };
       }>;
       total: number;
     };
@@ -185,6 +190,10 @@ async function pollProgressOnce() {
         speed: t.speed || "",
         isLive: t.isLive || false,
         status: t.status,
+        // 引擎任务（FluxDown）实时态：BT 上传速率（回馈 swarm）
+        uploadSpeed: t.engine?.uploadSpeed,
+        seeding: t.engine?.seeding,
+        peers: t.engine?.peers ?? null,
       }));
       dispatchDownload({ type: "progress", data: progress });
     }

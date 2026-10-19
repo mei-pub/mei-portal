@@ -64,45 +64,23 @@ fi
 # 一直靠 server.ts 的「RPC 端口与 core HTTP 端口同值回落 6800」防御掩盖。
 # media 的 HTTP 端口由 supervisord --port=7801 固定，不再需要入口修正。
 
-# ---- qBittorrent（BT/磁力引擎）配置生成 ----
-# 首启只写非凭据项（端口/保存路径/登录失败放宽——容器内 core 与 qB 同机，
-# 127.0.0.1 的失败重试不能把自己 ban 死）。**密码不写 conf**：qB 的
-# PBKDF2 序列化格式易错（实测手写 @ByteArray 值会被当纯字符串忽略、
-# 回退出厂凭据并连累重试触发 IP ban）——由 core 首启用出厂凭据登录后
-# 经 API 改强密码（qB 自己写格式），存 /data/media/qbit-credentials.json
-# 供 core 连接与设置页展示。
-# HOME=/data/qbittorrent 由 supervisord [program:qbittorrent] 指定 → 配置随卷持久。
-# 端口约定（镜像 EXPOSE 全量声明）：WebUI 8080 / BT 传输+DHT 6881（TCP+UDP，
-# 显式固定——缺省时 qB 首启随机分配，不可预知）。
-QB_CONF_DIR="/data/qbittorrent/.config/qBittorrent"
-QB_CONF="$QB_CONF_DIR/qBittorrent.conf"
-mkdir -p "$QB_CONF_DIR"
-if [ ! -f "$QB_CONF" ]; then
-  cat > "$QB_CONF" <<EOF
-[LegalNotice]
-Accepted=true
-
-[Preferences]
-WebUI\Address=0.0.0.0
-WebUI\Port=8080
-WebUI\MaxAuthenticationFailCount=100
-WebUI\BanDuration=60000
-
-[BitTorrent]
-Session\DefaultSavePath=/downloads/qbittorrent
-Session\Port=6881
-EOF
-  echo "[mei-portal] qBittorrent 首次初始化（凭据由下载中心 core 接管生成）"
+# ---- FluxDown 下载引擎（下载中心统一执行器）初始化 ----
+# 数据目录 /data/fluxdown（SQLite 任务库 + DHT 路由表 + 日志，卷持久）。
+# 访问密钥首启生成并持久（/data/fluxdown/token）：core 连接、宿主 aria2 兼容
+# RPC 接入与引擎控制台共用同一 token；export 给 supervisord 的
+# [program:fluxdown]（%(ENV_FLUXDOWN_TOKEN)s）。
+FD_DATA="/data/fluxdown"
+mkdir -p "$FD_DATA"
+if [ ! -s "$FD_DATA/token" ]; then
+  # 8-128 位 ASCII 可见字符且同时含字母与数字（FluxDown 密钥规则）
+  FD_TOKEN="$(head -c 24 /dev/urandom | base64 | tr -d '/+=' | head -c 20)0a"
+  echo -n "$FD_TOKEN" > "$FD_DATA/token"
+  chmod 600 "$FD_DATA/token"
+  echo "[mei-portal] FluxDown 引擎访问密钥已生成（/data/fluxdown/token）"
 else
-  # 存量 conf 迁移：早期部署 qB 首启随机分配过 BT 端口（Session\Port 非约定值）
-  # → 统一收敛到 6881（未显式配置过的默认值除外——qB 默认行为本身也是随机的）
-  QB_BT_PORT=$(grep -a "^Session.Port=" "$QB_CONF" | tail -1 | cut -d= -f2)
-  if [ -n "$QB_BT_PORT" ] && [ "$QB_BT_PORT" != "6881" ]; then
-    sed -i "s/^Session\\\\Port=.*/Session\\\\Port=6881/" "$QB_CONF"
-    echo "[mei-portal] qBittorrent BT 端口收敛: $QB_BT_PORT -> 6881（重启后生效）"
-  fi
+  FD_TOKEN="$(cat "$FD_DATA/token")"
 fi
-mkdir -p /downloads/qbittorrent
+export FLUXDOWN_TOKEN="$FD_TOKEN"
 
 # ---- 启动 ----
 echo "[mei-portal] 启动 supervisord（nginx + shell + 各应用）"

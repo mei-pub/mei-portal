@@ -136,29 +136,183 @@ export function createServer(opts: RouterOptions): Server {
     },
 
     // 磁力链接内容解析（创建任务前的强制内容识别：名称/大小/文件清单）——
-    // qBittorrent 引擎（专门 BT 栈，秒级 metadata）
+    // FluxDown 引擎解析会话（网关种子直供秒出 / DHT 兜底）
     {
       method: "POST",
       parts: ["api", "downloads", "resolve-magnet"],
       handler: (c) => h.resolveMagnet(c),
     },
-    // 弃置解析暂存种子（表单取消/关闭时清理，不留引擎半成品）
+    // 弃置解析会话（表单取消/关闭时清理，不留引擎半成品）
     {
       method: "POST",
       parts: ["api", "downloads", "discard-magnet"],
       handler: (c) => h.discardMagnet(c),
     },
-    // 下载引擎接入信息（aria2 RPC / qBittorrent：第三方客户端接入用）
+    // 下载引擎接入信息（FluxDown：aria2 兼容 RPC 接入 + 引擎控制台）
     {
       method: "GET",
       parts: ["api", "downloads", "engines"],
       handler: (c) => h.getEngines(c),
     },
-    // aria2 RPC 对外引擎配置（启用/端口/secret 重置）
+    // 引擎配置（BT/DHT/UPnP/MSE/tracker/做种/限速/并发/文件冲突——引擎为事实源）
+    {
+      method: "GET",
+      parts: ["api", "downloads", "engine-config"],
+      handler: (c) => h.engineConfigGet(c),
+    },
+    {
+      method: "PATCH",
+      parts: ["api", "downloads", "engine-config"],
+      handler: (c) => h.engineConfigPatch(c),
+    },
+    // tracker 订阅立即刷新（订阅源拉最新公共 tracker 清单）
     {
       method: "POST",
-      parts: ["api", "downloads", "aria2-rpc"],
-      handler: (c) => h.setAria2Rpc(c),
+      parts: ["api", "downloads", "engine-trackers", "refresh"],
+      handler: (c) => h.engineTrackerRefresh(c),
+    },
+    // eD2K 服务器列表订阅刷新（server.met 找源网络维护）
+    {
+      method: "POST",
+      parts: ["api", "downloads", "engine-ed2k", "refresh"],
+      handler: (c) => h.engineEd2kRefresh(c),
+    },
+    // 引擎产物文件跟踪重扫（fileMissing 全量盘点）
+    {
+      method: "POST",
+      parts: ["api", "downloads", "engine-rescan"],
+      handler: (c) => h.engineRescan(c),
+    },
+    // 引擎任务批量操作（全部暂停/开始；action: pause|resume + ids 或 all）
+    {
+      method: "POST",
+      parts: ["api", "downloads", "engine-batch"],
+      handler: (c) => h.engineBatch(c),
+    },
+    // 目录浏览（新建下载保存目录选择；限 /downloads 子树）
+    {
+      method: "GET",
+      parts: ["api", "downloads", "fs"],
+      handler: (c) => h.engineFsList(c),
+    },
+    // 目录浏览内新建目录（core 直写；限 /downloads 子树）
+    {
+      method: "POST",
+      parts: ["api", "downloads", "fs", "mkdir"],
+      handler: (c) => h.engineFsMkdir(c),
+    },
+    // 引擎全局运行统计（下载页头部速度/活跃/磁盘）
+    {
+      method: "GET",
+      parts: ["api", "downloads", "engine-stats"],
+      handler: (c) => h.engineStats(c),
+    },
+    // 每任务做种限制覆盖（详情抽屉）
+    {
+      method: "POST",
+      parts: ["api", "downloads", ":id", "seed-limits"],
+      handler: (c) => h.engineSeedLimits(c),
+    },
+    // ---- 命名队列（daemon.queue.* 代理）----
+    {
+      method: "GET",
+      parts: ["api", "downloads", "engine-queues"],
+      handler: (c) => h.engineQueuesList(c),
+    },
+    {
+      method: "POST",
+      parts: ["api", "downloads", "engine-queues"],
+      handler: (c) => h.engineQueueCreate(c),
+    },
+    {
+      method: "PUT",
+      parts: ["api", "downloads", "engine-queues"],
+      handler: (c) => h.engineQueueUpdate(c),
+    },
+    {
+      method: "DELETE",
+      parts: ["api", "downloads", "engine-queues", ":queueId"],
+      handler: (c) => h.engineQueueDelete(c),
+    },
+    {
+      method: "POST",
+      parts: ["api", "downloads", "engine-queues", ":queueId", "start"],
+      handler: (c) => h.engineQueueStart(c),
+    },
+    {
+      method: "POST",
+      parts: ["api", "downloads", "engine-queues", ":queueId", "stop"],
+      handler: (c) => h.engineQueueStop(c),
+    },
+    // 任务挪队列 / 插队（任务行操作：详情抽屉）
+    {
+      method: "POST",
+      parts: ["api", "downloads", ":id", "queue"],
+      handler: (c) => h.engineTaskQueueMove(c),
+    },
+    {
+      method: "POST",
+      parts: ["api", "downloads", ":id", "boost"],
+      handler: (c) => h.engineTaskQueueBoost(c),
+    },
+    // ---- RSS 订阅（daemon.rss.* 代理）----
+    // 源 CRUD / 条目 / 校验 / 刷新
+    {
+      method: "GET",
+      parts: ["api", "downloads", "rss", "sources"],
+      handler: (c) => h.rssSourcesList(c),
+    },
+    {
+      method: "POST",
+      parts: ["api", "downloads", "rss", "sources"],
+      handler: (c) => h.rssSourceCreate(c),
+    },
+    {
+      method: "PUT",
+      parts: ["api", "downloads", "rss", "sources"],
+      handler: (c) => h.rssSourceUpdate(c),
+    },
+    {
+      method: "DELETE",
+      parts: ["api", "downloads", "rss", "sources", ":sourceId"],
+      handler: (c) => h.rssSourceDelete(c),
+    },
+    {
+      method: "POST",
+      parts: ["api", "downloads", "rss", "sources", ":sourceId", "refresh"],
+      handler: (c) => h.rssSourceRefresh(c),
+    },
+    {
+      method: "GET",
+      parts: ["api", "downloads", "rss", "sources", ":sourceId", "items"],
+      handler: (c) => h.rssSourceItems(c),
+    },
+    {
+      method: "POST",
+      parts: ["api", "downloads", "rss", "sources", ":sourceId", "action"],
+      handler: (c) => h.rssItemAction(c),
+    },
+    {
+      method: "POST",
+      parts: ["api", "downloads", "rss", "validate"],
+      handler: (c) => h.rssValidate(c),
+    },
+    // 引擎任务操作（任务行操作：改名 / 换源）
+    {
+      method: "POST",
+      parts: ["api", "downloads", ":id", "rename"],
+      handler: (c) => h.taskRename(c),
+    },
+    {
+      method: "POST",
+      parts: ["api", "downloads", ":id", "change-url"],
+      handler: (c) => h.taskChangeUrl(c),
+    },
+    // 引擎任务详情（任务详情抽屉：任务快照 + 活动日志 + 实时数据）
+    {
+      method: "GET",
+      parts: ["api", "downloads", ":id", "engine-detail"],
+      handler: (c) => h.engineTaskDetail(c),
     },
 
     // downloads（静态段在前，:id 在后）
@@ -399,22 +553,6 @@ async function handleRequest(
     return;
   }
 
-  // /ariang/* → AriaNg 控制台（aria2 RPC 第三方客户端标准面板，纯静态 SPA；
-  // 设置页「下载引擎」提供入口，浏览器内直接连 aria2 RPC 对外引擎）
-  if (pathname === "/ariang" || pathname.startsWith("/ariang/")) {
-    if (opts.staticDir === "") {
-      jsonError(res, 404, "404 page not found");
-      return;
-    }
-    serveSPA(
-      req,
-      res,
-      path.join(opts.staticDir, "ariang"),
-      pathname.slice("/ariang".length) || "/",
-    );
-    return;
-  }
-
   // /videos/:id → HTTP Range 流式播放
   const videosMatch = /^\/videos\/([^/]+)$/.exec(pathname);
   if (videosMatch) {
@@ -467,6 +605,7 @@ async function handleRequest(
     if (
       req.method === "POST" ||
       req.method === "PUT" ||
+      req.method === "PATCH" ||
       req.method === "DELETE"
     ) {
       ctx.body = await readBody(req);
@@ -617,10 +756,21 @@ function serveSPA(
     return;
   }
   const type = MIME[path.extname(resolved).toLowerCase()];
-  const headers = {
+  const headers: Record<string, string> = {
     "Content-Type": type ?? "text/html; charset=utf-8",
     "Content-Length": String(data.length),
   };
+  // 缓存策略：HTML 入口 no-cache（每次协商，热部署即时生效——否则浏览器
+  // 启发式缓存住旧 index，继续引用旧 hash 包，UI 更新对用户不可见）；
+  // 带内容 hash 的静态产物（Vite assets/*）永久缓存。
+  const ext = path.extname(resolved).toLowerCase();
+  const isHashedAsset =
+    !["", ".html"].includes(ext) && /-[A-Za-z0-9_-]{6,}\.(js|css|mjs)$/i.test(path.basename(resolved));
+  if (ext === ".html" || ext === "") {
+    headers["Cache-Control"] = "no-cache";
+  } else if (isHashedAsset) {
+    headers["Cache-Control"] = "public, max-age=31536000, immutable";
+  }
   if (req.method === "HEAD") {
     res.writeHead(200, headers);
     res.end();

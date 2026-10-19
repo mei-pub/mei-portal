@@ -28,6 +28,7 @@ const createProxyRouter     = require('./routes/proxy');
 const createPaletteRouter   = require('./routes/palette');
 const createServerDownloadRouter = require('./routes/server-download');
 const createDownloadLibraryRouter = require('./routes/download-library');
+const libraryBackfill = require('./library-backfill');
 
 const PORT     = parseInt(process.env.PORT  || '8787', 10);
 const HOST     = process.env.HOST || '0.0.0.0';
@@ -61,8 +62,14 @@ app.use('/palette',     createPaletteRouter());
 // 已下载资源管理（同受保护）：GET/DELETE /api/download/library + GET /api/download/serve
 // 两个路由共享同一份任务表，library 的 tasks 才能看到 server 的进行中任务
 const downloadTasks = require('./routes/server-download').createTaskManager();
+// 曲库历史文件源回填：启动 5s 后全扫一次 + GET /library 托底触发
+// （异步后台串行，按文件名+源搜索音源并写 .library-index.json，历史文件的
+// 「复制链接」得以构造出音源站歌曲页地址）
+const backfill = libraryBackfill.createLibraryBackfill();
+const backfillKickTimer = setTimeout(() => backfill.kick(), 5000);
+if (typeof backfillKickTimer.unref === 'function') backfillKickTimer.unref();
 app.use('/api/download', createServerDownloadRouter({ taskManager: downloadTasks }));
-app.use('/api/download', createDownloadLibraryRouter({ taskManager: downloadTasks }));
+app.use('/api/download', createDownloadLibraryRouter({ taskManager: downloadTasks, onListed: () => backfill.kick() }));
 
 // ─── 静态文件服务（css/, js/, favicon.png 等）──────────────────────────────────
 app.use(express.static(ROOT_DIR, {

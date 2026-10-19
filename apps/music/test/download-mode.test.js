@@ -11,7 +11,8 @@ test('getDownloadMode 默认 local，合法值可读写，非法值拒绝并兜�
   };
   try {
     const api = await import('../js/mei/api.js');
-    assert.equal(api.getDownloadMode(), 'local');
+    // 默认 ask（2026-10-12 起）：避免默认 local 把「服务器下载」入口藏死
+    assert.equal(api.getDownloadMode(), 'ask');
     assert.equal(api.setDownloadMode('server'), true);
     assert.equal(api.getDownloadMode(), 'server');
     assert.equal(api.setDownloadMode('bogus'), false);
@@ -19,7 +20,7 @@ test('getDownloadMode 默认 local，合法值可读写，非法值拒绝并兜�
     store['mei-download-mode'] = 'ask';
     assert.equal(api.getDownloadMode(), 'ask');
     store['mei-download-mode'] = 'garbage';
-    assert.equal(api.getDownloadMode(), 'local'); // 脏值兜底回默认
+    assert.equal(api.getDownloadMode(), 'ask'); // 脏值兜底回默认（ask）
     assert.deepEqual([...api.DOWNLOAD_MODES], ['local', 'server', 'both', 'ask']);
   } finally {
     delete globalThis.localStorage;

@@ -7,10 +7,11 @@ import { setAppStoreSelector, useAppStore } from "@/store/app";
 import { tdApp } from "@/utils";
 import { getConfig } from "@/api/config";
 import { InlineVideoPlayer } from "@/pages/downloads-page/components/inline-player";
-import MediagoSidebar from "./mediago-sidebar";
+import MediagoSidebar, { useRailOpen } from "./mediago-sidebar";
 
 const App: FC = () => {
   const location = useLocation();
+  const railOpen = useRailOpen((s) => s.open);
   const { setAppStore } = useAppStore(useShallow(setAppStoreSelector));
 
   useAsyncEffect(async () => {
@@ -38,8 +39,14 @@ const App: FC = () => {
         maxHeight: 'calc(100dvh - var(--mei-topbar-space, 0px))',
       }}
     >
-      <div className="flex flex-1 min-h-0 overflow-hidden">
-        {/* 左侧浮动面板（fixed 定位，不占布局空间，与 AI 绘图面板一致） */}
+      {/* 左侧浮动面板（fixed 定位，不占布局空间，与 AI 绘图面板一致）；
+          开启时内容区左避让 62px（胶囊右缘 ~52px + 10px 间距），避免胶囊盖住
+          贴左缘的文本与控件；收起只余 20px 拉手，避让随之取消） */}
+      <div
+        className={`flex flex-1 min-h-0 overflow-hidden transition-[padding] duration-300 ease-out ${
+          railOpen ? "pl-[62px]" : ""
+        }`}
+      >
         <MediagoSidebar />
         <div className="flex-1 min-h-0 overflow-hidden mx-auto w-full max-w-[1200px]">
           <Outlet />

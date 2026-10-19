@@ -149,6 +149,16 @@ export default function AppFrame() {
     function onMsg(ev: MessageEvent) {
       if (ev.origin !== window.location.origin) return;
       const d = ev.data || {};
+      // 同源子应用的内部导航即时回写：history hook 在 pushState/replaceState/
+      // popstate 时上报，只有「当前应用」的 frame 消息才生效（后台保活应用
+      // 的内部导航不写地址栏）。
+      if (d.source === 'mei-iframe' && d.type === 'inner-path') {
+        const frame = document.querySelector<HTMLIFrameElement>(`iframe[data-mei-app="${appId}"]`);
+        if (frame && ev.source === frame.contentWindow) {
+          writebackRef.current(String(d.path || ''));
+        }
+        return;
+      }
       // 子应用请求外壳导航（如内网穿透引导弹层跳设置中心的隧道服务器设置页）
       if (d.source === 'mei-iframe' && d.type === 'navigate') {
         const path = String(d.path || '');
@@ -227,7 +237,29 @@ export default function AppFrame() {
     }
   }, [carrierPath, pathname]);
 
-  // 子应用内部导航回写到顶层资源 URL，保证刷新/分享可复原
+  // 子应用内部导航回写到顶层资源 URL，保证刷新/分享可复原。
+  // 主路径：同源子应用注入了 history hook，pushState/replaceState/popstate
+  // 当拍上报（IframeHost ready 后注入）——地址栏与跳转同一拍，无二次跳变；
+  // 1200ms 轮询保留，兜底跨域应用与注入未生效的场景。
+  const writebackRef = useRef<(innerRaw: string) => void>(() => {});
+  writebackRef.current = (innerRaw: string) => {
+    // 只回写真实的应用内路径。iframe 加载失败/被中断时停留在 about:blank，
+    // 其 location.pathname 是 'blank'（无前导斜杠的特殊 URL），不加守卫会被
+    // 当相对路径 replaceState 成 /blank——地址跳到无人认领的路径，页面显示
+    // 「未指定应用」。任何非绝对路径状态一律跳过，等应用真正就绪后再跟随。
+    if (!innerRaw || !innerRaw.startsWith('/')) return;
+    const [beforeHash = '', hash = ''] = innerRaw.split('#');
+    const [innerPathname = '', innerSearch = ''] = beforeHash.split('?');
+    const params = new URLSearchParams(innerSearch || '');
+    params.delete('meiEmbed');
+    const canonicalSearch = params.toString();
+    const next = `${innerPathname}${canonicalSearch ? `?${canonicalSearch}` : ''}${hash ? `#${hash}` : ''}`;
+    if (!sameAppPath(next, activePath)) setActivePath(next);
+    if (window.location.pathname + window.location.search + window.location.hash !== next) {
+      window.history.replaceState(window.history.state, '', next);
+    }
+  };
+
   useEffect(() => {
     if (!appId) return;
     const timer = setInterval(() => {
@@ -243,23 +275,7 @@ export default function AppFrame() {
       } catch {
         return; // 跨域应用：忽略
       }
-      if (!inner || !appId) return;
-      // 只回写真实的应用内路径。iframe 加载失败/被中断时停留在 about:blank，
-      // 其 location.pathname 是 'blank'（无前导斜杠的特殊 URL），不加守卫会被
-      // 当相对路径 replaceState 成 /blank——地址跳到无人认领的路径，页面显示
-      // 「未指定应用」。任何非绝对路径状态一律跳过，等应用真正就绪后再跟随。
-      if (!inner.startsWith('/')) return;
-      const [beforeHash = '', hash = ''] = inner.split('#');
-      const [innerPathname = '', innerSearch = ''] = beforeHash.split('?');
-      const params = new URLSearchParams(innerSearch || '');
-      params.delete('meiEmbed');
-      const canonicalSearch = params.toString();
-      const next = `${innerPathname}${canonicalSearch ? `?${canonicalSearch}` : ''}${hash ? `#${hash}` : ''}`;
-      if (!sameAppPath(next, activePath)) setActivePath(next);
-      if (window.location.pathname + window.location.search + window.location.hash !== next) {
-        // 保留 Next 的 history.state（同上：置 null 会破坏 App Router 历史键）
-        window.history.replaceState(window.history.state, '', next);
-      }
+      writebackRef.current(inner);
     }, 1200);
     return () => clearInterval(timer);
   }, [activePath, appId]);

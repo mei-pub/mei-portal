@@ -360,8 +360,10 @@ export async function fetchLyric(song) {
 
 // ── 下载（四模式）────────────────────────────────────────────────────────────
 // 设置项「下载方式」：local 本地电脑 / server 本地服务器 / both 两者 / ask 每次询问。
-// 存 localStorage（与设置后台「音乐播放设置」共用），默认 local：保持既有下载行为，
-// 服务器下载需在设置后台主动开启，避免老用户下载去向悄然改变。
+// 存 localStorage（与设置后台「音乐播放设置」共用）。默认 ask：每次下载弹层
+// 询问「本地电脑 / 本地服务器 / 两者」——默认 local 曾让服务器下载入口对用户
+// 完全不可见（2026-10-12「音乐与下载中心对接丢失」反馈的根因）；要固定去向的
+// 用户在设置后台改即可，设置值仍优先生效。
 const DOWNLOAD_MODE_KEY = "mei-download-mode";
 export const DOWNLOAD_MODES = ["local", "server", "both", "ask"];
 
@@ -370,7 +372,7 @@ export function getDownloadMode() {
     const v = localStorage.getItem(DOWNLOAD_MODE_KEY);
     if (DOWNLOAD_MODES.includes(v)) return v;
   } catch { /* ignore */ }
-  return "local";
+  return "ask";
 }
 
 export function setDownloadMode(mode) {
@@ -509,6 +511,7 @@ async function chooseDownloadTarget(song) {
     options: [
       { value: "local", label: "本地电脑", primary: true },
       { value: "server", label: "本地服务器" },
+      { value: "both", label: "两者都要" },
     ],
   });
 }

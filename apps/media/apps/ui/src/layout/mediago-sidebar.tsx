@@ -1,8 +1,10 @@
 // mei-portal 标准左侧面板（数据驱动）：应用信息（Logo + 纵向名称）+ 行动入口
 // 组件契约见仓库根 AGENTS.md「顶栏与左侧面板组件化强约束」
-// 行动入口：下载中心（应用根 /）/ 新建（弹层）；下载列表/下载完成已整合进四 tab
-import { type FC, useEffect, useRef, useState } from "react";
+// 行动入口分两组：任务域（任务/队列/订阅，?type= 深链）+ 下载库（影视/音乐）
+// + 新建（弹层）；与下载中心页面内导航完全同源
+import { type FC, useEffect, useRef } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
+import { create } from "zustand";
 import { useShallow } from "zustand/react/shallow";
 import DownloadForm, {
   type DownloadFormItem,
@@ -12,6 +14,13 @@ import { downloadFormSelector, useConfigStore } from "@/store/config";
 import { DownloadType } from "@mediago/shared-common";
 
 const STORE_KEY = "mei-float-mediago";
+
+// 面板开合共享到布局层：开启时内容区左避让（胶囊宽 ~52px + 间距），避免
+// 覆盖贴左缘的文本/控件（工具条全选框、表格行复选框、组标题、段标题）
+export const useRailOpen = create<{
+  open: boolean;
+  setOpen: (next: boolean) => void;
+}>((set) => ({ open: true, setOpen: (next) => set({ open: next }) }));
 
 interface PanelAction {
   label: string;
@@ -24,7 +33,7 @@ interface PanelAction {
 const MediagoSidebar: FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const [open, setOpen] = useState(true);
+  const { open, setOpen } = useRailOpen();
   // DownloadForm 自带 Modal，通过 ref.openModal 驱动（外包一层 Modal 会导致弹层空白）
   const newFormRef = useRef<DownloadFormRef>(null);
   const { lastIsBatch, lastDownloadTypes } = useConfigStore(
@@ -74,13 +83,28 @@ const MediagoSidebar: FC = () => {
     } catch {}
   };
 
-  const isActive = (path: string) => {
-    // 根路由（下载中心）：覆盖带 /downloads basename 与根路径两种部署形态
+  const isActive = (path: string, viewType?: string) => {
+    // 当前视图：深链 ?type= 与页面内导航共用同一映射（media/file/magnet/无 → 任务）
+    const search = new URLSearchParams(location.search);
+    const raw = search.get("type") || "";
+    const view =
+      raw === "queues"
+        ? "queues"
+        : raw === "rss"
+          ? "rss"
+          : raw === "movie"
+            ? "movie"
+            : raw === "music"
+              ? "music"
+              : "tasks";
+    if (viewType) return viewType === view;
+    // 根路由（下载中心任务视图）：覆盖带 /downloads basename 与根路径两种部署形态
     if (path === "/")
       return (
-        location.pathname === "/downloads/" ||
-        location.pathname === "/downloads" ||
-        location.pathname === "/"
+        view === "tasks" &&
+        (location.pathname === "/downloads/" ||
+          location.pathname === "/downloads" ||
+          location.pathname === "/")
       );
     return location.pathname === path;
   };
@@ -93,34 +117,108 @@ const MediagoSidebar: FC = () => {
     strokeLinejoin: "round" as const,
   };
 
-  // 面板数据：行动入口（图标 + 激活态 + 响应事件）；「下载中心」是应用根，放首位
-  const actions: PanelAction[] = [
-    // 统一下载中心（应用根 /，四 tab：全部为默认，深链 ?type=media|movie|music）
+  // 面板数据：行动入口按「任务域 / 下载库」两组组织（组间分隔线）；
+  // 任务 = 应用根（深链 ?type=media|file|magnet 均映射任务视图），
+  // 队列/订阅/下载库走 ?type= 深链，与页面内导航完全同源。
+  const taskActions: PanelAction[] = [
     {
-      label: "下载中心",
-      title: "下载中心（媒体 / 影视 / 音乐）",
-      active: isActive("/"),
+      label: "任务",
+      title: "任务（全部类型任务表）",
+      active: isActive("/", "tasks"),
+      // 列表图形：不能与 Logo 的下载托盘同款（应用标识优先占用）
       icon: (
         <svg className="h-[15px] w-[15px]" viewBox="0 0 24 24" {...stroke}>
-          <polygon points="12 2 2 7 12 12 22 7 12 2" />
-          <polyline points="2 17 12 22 22 17" />
-          <polyline points="2 12 12 17 22 12" />
+          <line x1="8" y1="6" x2="21" y2="6" />
+          <line x1="8" y1="12" x2="21" y2="12" />
+          <line x1="8" y1="18" x2="21" y2="18" />
+          <line x1="3" y1="6" x2="3.01" y2="6" />
+          <line x1="3" y1="12" x2="3.01" y2="12" />
+          <line x1="3" y1="18" x2="3.01" y2="18" />
         </svg>
       ),
       onClick: () => navigate("/"),
     },
     {
-      label: "新建",
-      title: "新建下载",
-      active: false,
+      label: "队列",
+      title: "队列（命名队列整队起停）",
+      active: isActive("", "queues"),
+      // 有序列表：队列 = 排队顺序语义
       icon: (
         <svg className="h-[15px] w-[15px]" viewBox="0 0 24 24" {...stroke}>
-          <path d="M12 5v14M5 12h14" />
+          <line x1="10" y1="6" x2="21" y2="6" />
+          <line x1="10" y1="12" x2="21" y2="12" />
+          <line x1="10" y1="18" x2="21" y2="18" />
+          <path d="M4 6h1v4" />
+          <path d="M4 10h2" />
+          <path d="M6 18H4c0-1 2-2 2-3s-1-1.5-2-1" />
         </svg>
       ),
-      onClick: openNewForm,
+      onClick: () => navigate("/?type=queues"),
+    },
+    {
+      label: "订阅",
+      title: "订阅（RSS 自动抓取下载）",
+      active: isActive("", "rss"),
+      icon: (
+        <svg className="h-[15px] w-[15px]" viewBox="0 0 24 24" {...stroke}>
+          <path d="M4 11a9 9 0 0 1 9 9" />
+          <path d="M4 4a16 16 0 0 1 16 16" />
+          <circle cx="5" cy="19" r="1" />
+        </svg>
+      ),
+      onClick: () => navigate("/?type=rss"),
     },
   ];
+
+  const libraryActions: PanelAction[] = [
+    {
+      label: "影视下载库",
+      title: "影视下载库（影视产物管理）",
+      active: isActive("", "movie"),
+      // 电影胶片图形：影视语义（folder 是目录语义，用在这里没有常识）
+      icon: (
+        <svg className="h-[15px] w-[15px]" viewBox="0 0 24 24" {...stroke}>
+          <rect x="2" y="2" width="20" height="20" rx="2.18" />
+          <line x1="7" y1="2" x2="7" y2="22" />
+          <line x1="17" y1="2" x2="17" y2="22" />
+          <line x1="2" y1="12" x2="22" y2="12" />
+          <line x1="2" y1="7" x2="7" y2="7" />
+          <line x1="2" y1="17" x2="7" y2="17" />
+          <line x1="17" y1="17" x2="22" y2="17" />
+          <line x1="17" y1="7" x2="22" y2="7" />
+        </svg>
+      ),
+      onClick: () => navigate("/?type=movie"),
+    },
+    {
+      label: "音乐下载库",
+      title: "音乐下载库（音乐产物管理）",
+      active: isActive("", "music"),
+      icon: (
+        <svg className="h-[15px] w-[15px]" viewBox="0 0 24 24" {...stroke}>
+          <path d="M9 18V5l12-2v13" />
+          <circle cx="6" cy="18" r="3" />
+          <circle cx="18" cy="16" r="3" />
+        </svg>
+      ),
+      onClick: () => navigate("/?type=music"),
+    },
+  ];
+
+  const actionButton = (a: PanelAction) => (
+    <button
+      key={a.label}
+      onClick={a.onClick}
+      title={a.title}
+      className={`h-[34px] w-[34px] rounded-xl flex items-center justify-center transition-colors ${
+        a.active
+          ? "bg-indigo-600/10 text-indigo-600"
+          : "text-gray-500 hover:bg-gray-900/5 hover:text-indigo-600 dark:text-gray-400 dark:hover:bg-white/10"
+      }`}
+    >
+      {a.icon}
+    </button>
+  );
 
   if (!open) {
     return (
@@ -165,20 +263,24 @@ const MediagoSidebar: FC = () => {
           </span>
         </button>
         <div className="h-px w-6 bg-black/10 dark:bg-white/10" />
-        {actions.map((a) => (
-          <button
-            key={a.label}
-            onClick={a.onClick}
-            title={a.title}
-            className={`h-[34px] w-[34px] rounded-xl flex items-center justify-center transition-colors ${
-              a.active
-                ? "bg-indigo-600/10 text-indigo-600"
-                : "text-gray-500 hover:bg-gray-900/5 hover:text-indigo-600 dark:text-gray-400 dark:hover:bg-white/10"
-            }`}
-          >
-            {a.icon}
-          </button>
-        ))}
+        {/* 任务域视图组 */}
+        {taskActions.map(actionButton)}
+        <div className="h-px w-6 bg-black/10 dark:bg-white/10" />
+        {/* 下载库组（影视/音乐产物管理平铺） */}
+        {libraryActions.map(actionButton)}
+        <div className="h-px w-6 bg-black/10 dark:bg-white/10" />
+        {/* 新建下载（主操作） */}
+        {actionButton({
+          label: "新建",
+          title: "新建下载",
+          active: false,
+          icon: (
+            <svg className="h-[15px] w-[15px]" viewBox="0 0 24 24" {...stroke}>
+              <path d="M12 5v14M5 12h14" />
+            </svg>
+          ),
+          onClick: openNewForm,
+        })}
         <button
           onClick={() => toggle(false)}
           title="收起面板"

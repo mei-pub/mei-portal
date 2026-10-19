@@ -45,7 +45,8 @@ export class TaskLogManager {
     fs.mkdirSync(this.baseDir, { recursive: true });
   }
 
-  private serialize<T>(fn: () => T): Promise<T> {
+  /** 串行化执行（fn 可同步或异步——PromiseLike 返回值由 then 语义解包） */
+  private serialize<T>(fn: () => T | PromiseLike<T>): Promise<T> {
     const run = this.chain.then(fn, fn);
     this.chain = run.then(
       () => undefined,

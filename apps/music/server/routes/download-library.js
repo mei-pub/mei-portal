@@ -25,6 +25,7 @@ const path = require('node:path');
 const { pipeline } = require('node:stream/promises');
 
 const { publicView } = require('./server-download');
+const libraryIndex = require('../library-index');
 
 const DEFAULT_DOWNLOAD_ROOT = '/downloads/music';
 const MAX_LIBRARY_TASKS = 50;
@@ -227,12 +228,43 @@ module.exports = function createDownloadLibraryRouter(deps = {}) {
 
   // GET /api/download/library —— 任务表（进行中 + 近期）+ 磁盘文件
   router.get('/library', async (req, res) => {
+    // 曲库源回填托底触发（library-backfill 自带 60s 节流 + in-flight 去重；
+    // 历史文件源 id 在后台逐步补齐，本接口响应不等它）
+    if (typeof deps.onListed === 'function') {
+      try { deps.onListed(); } catch { /* 回填调度断裂不阻塞列表 */ }
+    }
     try {
-      const files = await scanLibrary(downloadRoot());
-      const tasks = taskManager && typeof taskManager.list === 'function'
-        ? taskManager.list().slice(0, MAX_LIBRARY_TASKS).map(taskView)
+      // 主键索引先加载（一次性；进程内常驻）
+      await libraryIndex.load(downloadRoot());
+      const allTasks = taskManager && typeof taskManager.list === 'function'
+        ? taskManager.list()
         : [];
-      return res.set(JSON_HEADERS).json({ tasks, files });
+      const tasks = allTasks.slice(0, MAX_LIBRARY_TASKS).map(taskView);
+      const files = await scanLibrary(downloadRoot());
+      // 曲库文件补源信息：文件扫描元数据只有「歌名 - 源」解析结果、没有
+      // song.id，前端「复制链接」（音源站页页地址）构造不出来，只能回退
+      // 「复制路径」。按落盘相对路径 <歌手>/<文件> 回任务表 join，把任务的
+      // song.id/source 带上（Round-B 反馈：下载完成行由曲库文件行代表，
+      // 必须始终能复制链接）。
+      const pathToSong = new Map();
+      for (const task of allTasks) {
+        const song = task && task.song;
+        if (!song || song.id === undefined || song.id === null || `${song.id}` === '') continue;
+        if (typeof task.path !== 'string' || task.path === '') continue;
+        const parts = task.path.split(/[\\/]+/).filter(Boolean);
+        if (parts.length < 2) continue;
+        pathToSong.set(parts.slice(-2).join('/'), song);
+      }
+      const enrichedFiles = files.map((f) => {
+        const song = f && pathToSong.get(f.path);
+        if (song) return { ...f, songId: song.id, songSource: song.source || '' };
+        // 任务表（内存态）join 不到 → 回落持久源索引（重启前完成的老文件）
+        const fromIndex = f && libraryIndex.lookup(f.path);
+        return fromIndex
+          ? { ...f, songId: fromIndex.id, songSource: fromIndex.source }
+          : f;
+      });
+      return res.set(JSON_HEADERS).json({ tasks, files: enrichedFiles });
     } catch (err) {
       console.error('[DownloadLibrary]', err.message || err);
       return res.status(500).set(JSON_HEADERS).json({ error: '扫描下载目录失败' });
@@ -252,6 +284,7 @@ module.exports = function createDownloadLibraryRouter(deps = {}) {
     if (!safe.exists) return res.status(404).set(JSON_HEADERS).json({ error: '文件不存在' });
     try {
       await fsp.unlink(safe.abs);
+      void libraryIndex.forget(downloadRoot(), rel); // 曲库源索引同步移除（静默）
     } catch (err) {
       return res.status(500).set(JSON_HEADERS).json({ error: `删除失败：${err.message || err}` });
     }

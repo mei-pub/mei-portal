@@ -14,6 +14,12 @@ export interface Video {
   status: string;
   /** BT 种子文件任务的下载文件索引（--select-file，如 "1,3-5"；null = 全部） */
   selectFile: string | null;
+  /** FluxDown 引擎任务 ID（direct/bt/ed2k 引擎执行的任务；null = 队列/历史任务） */
+  engineTaskId: string | null;
+  /** 直链任务分段数（FluxDown 动态分段；null/0 = 按大小自动推荐） */
+  segments: number | null;
+  /** 归属命名队列（FluxDown daemon.queue；null = 引擎默认 main） */
+  queueId: string | null;
   createdDate: string;
   updatedDate: string;
 }
@@ -50,6 +56,9 @@ interface VideoRow {
   headers: string | null;
   isLive: number;
   selectFile: string | null;
+  engineTaskId: string | null;
+  segments: number | null;
+  queueId: string | null;
   status: string;
   createdDate: string;
   updatedDate: string;
@@ -97,6 +106,9 @@ export function openDatabase(dbPath: string): Database.Database {
       headers TEXT,
       isLive INTEGER NOT NULL DEFAULT 0,
       selectFile TEXT,
+      engineTaskId TEXT,
+      segments INTEGER,
+      queueId TEXT,
       status TEXT NOT NULL DEFAULT 'ready',
       createdDate TEXT NOT NULL,
       updatedDate TEXT NOT NULL
@@ -132,6 +144,24 @@ export function openDatabase(dbPath: string): Database.Database {
   } catch {
     // 列已存在（新库建表已含）
   }
+  // 老库补列（幂等）：engineTaskId —— FluxDown 引擎任务关联（引擎执行的任务）
+  try {
+    db.exec("ALTER TABLE video ADD COLUMN engineTaskId TEXT");
+  } catch {
+    // 列已存在（新库建表已含）
+  }
+  // 老库补列（幂等）：segments —— 直链任务分段数（0 = 引擎自动推荐）
+  try {
+    db.exec("ALTER TABLE video ADD COLUMN segments INTEGER");
+  } catch {
+    // 列已存在（新库建表已含）
+  }
+  // 老库补列（幂等）：queueId —— 归属命名队列（FluxDown daemon.queue）
+  try {
+    db.exec("ALTER TABLE video ADD COLUMN queueId TEXT");
+  } catch {
+    // 列已存在（新库建表已含）
+  }
   return db;
 }
 
@@ -143,14 +173,37 @@ export class VideoRepository {
     this.db = db;
   }
 
+  /** 引擎任务关联唯一性：engineTaskId 写入行 X 前清除其它行上的同值关联
+   *（一个引擎任务至多镜像到一个 DB 行，事件回写才不会串行） */
+  private claimEngineLink(engineTaskId: unknown, selfId: number | null): void {
+    if (typeof engineTaskId !== "string" || engineTaskId === "") return;
+    if (selfId === null) {
+      this.db
+        .prepare(
+          `UPDATE video SET engineTaskId = NULL WHERE engineTaskId = ?`,
+        )
+        .run(engineTaskId);
+    } else {
+      this.db
+        .prepare(
+          `UPDATE video SET engineTaskId = NULL WHERE engineTaskId = ? AND id != ?`,
+        )
+        .run(engineTaskId, selfId);
+    }
+  }
+
   create(video: Omit<Video, "id" | "createdDate" | "updatedDate">): Video {
     const ts = now();
+    this.claimEngineLink(video.engineTaskId, null);
     const info = this.db
-      .prepare(`INSERT INTO video (name, type, url, folder, headers, isLive, selectFile, status, createdDate, updatedDate)
-                VALUES (@name, @type, @url, @folder, @headers, @isLive, @selectFile, @status, @createdDate, @updatedDate)`)
+      .prepare(`INSERT INTO video (name, type, url, folder, headers, isLive, selectFile, engineTaskId, segments, queueId, status, createdDate, updatedDate)
+                VALUES (@name, @type, @url, @folder, @headers, @isLive, @selectFile, @engineTaskId, @segments, @queueId, @status, @createdDate, @updatedDate)`)
       .run({
         ...video,
         isLive: video.isLive ? 1 : 0,
+        engineTaskId: video.engineTaskId ?? null,
+        segments: video.segments ?? null,
+        queueId: video.queueId ?? null,
         createdDate: ts,
         updatedDate: ts,
       });
@@ -163,14 +216,17 @@ export class VideoRepository {
     if (videos.length === 0) return [];
     const created: Video[] = [];
     const insert = this.db
-      .prepare(`INSERT INTO video (name, type, url, folder, headers, isLive, selectFile, status, createdDate, updatedDate)
-                VALUES (@name, @type, @url, @folder, @headers, @isLive, @selectFile, @status, @createdDate, @updatedDate)`);
+      .prepare(`INSERT INTO video (name, type, url, folder, headers, isLive, selectFile, engineTaskId, segments, queueId, status, createdDate, updatedDate)
+                VALUES (@name, @type, @url, @folder, @headers, @isLive, @selectFile, @engineTaskId, @segments, @queueId, @status, @createdDate, @updatedDate)`);
     const run = this.db.transaction((items: typeof videos) => {
       for (const v of items) {
         const ts = now();
         const info = insert.run({
           ...v,
           isLive: v.isLive ? 1 : 0,
+          engineTaskId: v.engineTaskId ?? null,
+          segments: v.segments ?? null,
+          queueId: v.queueId ?? null,
           createdDate: ts,
           updatedDate: ts,
         });
@@ -208,6 +264,22 @@ export class VideoRepository {
       .prepare(`${this.baseSelect} WHERE url = ? LIMIT 1`)
       .get(url) as VideoRow | undefined;
     return row ? toVideo(row) : null;
+  }
+
+  /** 引擎任务关联查询（事件回写定位 DB 行） */
+  findByEngineTaskId(engineTaskId: string): Video | null {
+    const row = this.db
+      .prepare(`${this.baseSelect} WHERE engineTaskId = ? LIMIT 1`)
+      .get(engineTaskId) as VideoRow | undefined;
+    return row ? toVideo(row) : null;
+  }
+
+  /** 全部带引擎关联的行（重连对账用） */
+  findEngineLinked(): Video[] {
+    const rows = this.db
+      .prepare(`${this.baseSelect} WHERE engineTaskId IS NOT NULL AND engineTaskId != ''`)
+      .all() as VideoRow[];
+    return rows.map(toVideo);
   }
 
   findAll(order: "ASC" | "DESC"): Video[] {
@@ -291,6 +363,9 @@ export class VideoRepository {
       "isLive",
       "status",
       "selectFile",
+      "engineTaskId",
+      "segments",
+      "queueId",
     ];
     // TS6：index-signature 对象的 Object.keys 返回 (string|number)[]，显式收窄
     const keys = (Object.keys(data) as string[]).filter((k) =>
@@ -298,6 +373,9 @@ export class VideoRepository {
     );
     const sets = keys.map((k) => `${k} = @${k}`).join(", ");
     if (keys.length > 0) {
+      if ("engineTaskId" in data && keys.includes("engineTaskId")) {
+        this.claimEngineLink(data.engineTaskId, id);
+      }
       const params: Record<string, unknown> = {
         ...data,
         id,

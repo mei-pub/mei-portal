@@ -4,7 +4,6 @@ import fs from "node:fs";
 import path from "node:path";
 import { extractTorrentMeta } from "../core/bencode.ts";
 import {
-  btHashFor,
   resolveTaskDir,
   sanitizeFilename,
   sanitizeFolder,
@@ -15,6 +14,7 @@ import type { TaskQueue } from "../core/queue.ts";
 import type { DownloadParams } from "../core/types.ts";
 import type { TaskLogManager } from "../tasklog.ts";
 import type { Video, VideoRepository } from "../db.ts";
+import { ENGINE_TYPES, type EngineBridge } from "./engine.ts";
 import {
   checkFileExists,
   getPageTitle,
@@ -30,11 +30,30 @@ export interface AddDownloadTaskInput {
   folder?: string | null;
   /** BT 种子文件任务的下载文件索引（"1,3-5"；空 = 全部） */
   selectFile?: string | null;
+  /** 直链任务分段数（FluxDown 动态分段；0/null = 按大小自动推荐） */
+  segments?: number | null;
+  /** 归属命名队列（FluxDown daemon.queue；null = 引擎默认 main） */
+  queueId?: string | null;
+}
+
+/** 引擎任务（FluxDown，direct/bt）实时态（列表行携带；做种/上传/节点数） */
+export interface EngineRowInfo {
+  uploadSpeed: string;
+  uploadedBytes: number;
+  seeding: number;
+  seedingStatus: number;
+  seedingMessage: string;
+  seedingTimeSecs: number;
+  peers: number | null;
+  activeTransfers: number | null;
+  downloadedBytes: number;
+  totalBytes: number;
 }
 
 export interface DownloadTaskWithFile extends Video {
   exists: boolean;
   file?: string;
+  engine?: EngineRowInfo;
 }
 
 /**
@@ -77,15 +96,23 @@ export class DownloadTaskService {
   private readonly repo: VideoRepository;
   private readonly queue: TaskQueue;
   private readonly logs: TaskLogManager | null;
+  private readonly engine: EngineBridge | null;
 
   constructor(
     repo: VideoRepository,
     queue: TaskQueue,
     logs: TaskLogManager | null,
+    engine?: EngineBridge | null,
   ) {
     this.repo = repo;
     this.queue = queue;
     this.logs = logs;
+    this.engine = engine ?? null;
+  }
+
+  /** 引擎（FluxDown）可用性（设置页/报错提示用） */
+  engineBridge(): EngineBridge | null {
+    return this.engine;
   }
 
   /** 创建下载任务：自动标题 + sanitize 后查重重名（重名加随机后缀） */
@@ -135,6 +162,12 @@ export class DownloadTaskService {
         isLive: false,
         status: "ready",
         selectFile: input.selectFile ?? null,
+        // 引擎任务 ID：提交到 FluxDown 后回写（service/startDownload → bridge）
+        engineTaskId: null,
+        // 直链分段数（0/null = 引擎按文件大小自动推荐）
+        segments: input.segments ?? null,
+        // 归属命名队列（null = 引擎默认 main；引擎为事实源，此处仅建队时透传）
+        queueId: input.queueId ?? null,
       });
     }
     return this.repo.createMany(videos);
@@ -145,6 +178,15 @@ export class DownloadTaskService {
     data: { [key: string]: unknown },
   ): Promise<Video> {
     return Promise.resolve(this.repo.update(id, data));
+  }
+
+  /** 「创建后未启动」死行回滚删除（无引擎关联才删；级联清理不适用——
+   *  尚无产物无关联，仅去掉提交失败留下的失败态噪音行） */
+  deleteUnstartedRow(id: number): boolean {
+    const row = this.repo.findById(id);
+    if (!row || row.engineTaskId) return false;
+    this.repo.delete(id);
+    return true;
   }
 
   /** 分页列表（success 任务附带本地文件存在检查） */
@@ -170,18 +212,86 @@ export class DownloadTaskService {
         withFile.exists = exists;
         if (file !== "") withFile.file = file;
       }
+      // 引擎任务（direct/bt）实时态：做种/上传速率/节点数（列表行直接
+      // 携带——完成态行不经 /api/tasks 轮询，做种徽标数据从这里来）
+      if (ENGINE_TYPES.has(item.type) && this.engine) {
+        const rt = this.engine.runtimeOf(item.id);
+        if (rt) {
+          withFile.engine = {
+            uploadSpeed: rt.uploadSpeed,
+            uploadedBytes: rt.uploadedBytes,
+            seeding: rt.seeding,
+            seedingStatus: rt.seeding,
+            seedingMessage: rt.seedingMessage,
+            seedingTimeSecs: rt.seedingTimeSecs,
+            peers: rt.peers ?? null,
+            activeTransfers: rt.activeTransfers ?? null,
+            downloadedBytes: rt.downloadedBytes,
+            totalBytes: rt.totalBytes,
+          };
+        }
+      }
       return withFile;
     });
     return { total: result.total, list };
   }
 
-  /** 启动下载：状态置 pending → 入队（入队结果回写状态） */
+  /**
+   * 启动下载：
+   * - 引擎类型（direct/bt）→ FluxDown 引擎：已关联任务恢复（引擎任务
+   *   消失则重建），未关联任务按类型提交；状态由引擎事件镜像（首个
+   *   taskChanged 落 downloading）
+   * - 其余类型（m3u8/bilibili/youtube/mediago）→ 队列 + 外部工具（原路径）
+   */
   async startDownload(
     taskID: number,
     _localPath: string,
     _deleteSegments: boolean,
   ): Promise<void> {
     const video = this.repo.findByIdOrFail(taskID);
+
+    if (ENGINE_TYPES.has(video.type) && this.engine) {
+      const engine = this.engine;
+      this.repo.updateStatus([taskID], "downloading");
+      try {
+        if (video.engineTaskId) {
+          // 已关联引擎：恢复（引擎任务被外部删除时回退重建）
+          try {
+            await engine.resume(taskID);
+            return;
+          } catch (err: any) {
+            logger.warn(
+              `engine resume failed id=${taskID} (${err?.message ?? err}), re-submitting`,
+            );
+          }
+        }
+        if (video.type === "bt") {
+          await engine.submitBt(
+            taskID,
+            video.url,
+            video.name,
+            video.folder,
+            video.selectFile,
+            video.queueId,
+          );
+        } else {
+          await engine.submitDirect(
+            taskID,
+            video.url,
+            video.name,
+            video.folder,
+            video.headers,
+            video.segments,
+            video.queueId,
+          );
+        }
+      } catch (err: any) {
+        this.repo.updateStatus([taskID], "failed");
+        throw err;
+      }
+      return;
+    }
+
     this.repo.updateStatus([taskID], "pending");
 
     let headers: string[] = [];
@@ -202,8 +312,6 @@ export class DownloadTaskService {
       // 旧记录可能带未清洗的 folder —— 入队前再洗一次（buildArgs 亦有防御）
       folder: video.folder ? sanitizeFolder(video.folder) : "",
       headers,
-      // BT 种子文件任务的内容勾选（--select-file）
-      selectFile: video.selectFile ?? "",
     };
 
     const status = this.queue.enqueue(params);
@@ -216,7 +324,16 @@ export class DownloadTaskService {
     }
   }
 
+  /** 停止任务：引擎类型 = 暂停引擎任务；队列类型 = abort 子进程 */
   stopDownload(id: number): void {
+    const task = this.repo.findById(id);
+    if (task && ENGINE_TYPES.has(task.type) && this.engine) {
+      this.repo.updateStatus([id], "stopped");
+      void this.engine.pause(id).catch((err) =>
+        logger.warn(`engine pause failed id=${id}: ${err?.message ?? err}`),
+      );
+      return;
+    }
     this.queue.stop(String(id));
   }
 
@@ -321,9 +438,9 @@ export class DownloadTaskService {
 
   /**
    * 删除下载任务：
-   * - 总是先停队列（删记录后不允许下载继续进行/文件再落盘）
-   * - deleteFiles=true 时尽力清理落盘产物（成功任务的媒体文件/下载器输出目录，
-   *   以及未完成任务的分片临时目录），文件缺失不阻断记录删除
+   * - 总是先停队列/暂停引擎（删记录后不允许下载继续进行/文件再落盘）
+   * - deleteFiles=true 时尽力清理落盘产物；文件由引擎管理时引擎删除比本地
+   *   按名猜测删除更准（含引擎临时/分段文件）
    * - localPath 由调用方（handlers）从运行时配置取，服务层不持有 conf
    */
   deleteDownloadTask(
@@ -331,16 +448,22 @@ export class DownloadTaskService {
     opts?: { deleteFiles?: boolean; localPath?: string },
   ): void {
     const task = this.repo.findById(id);
-    // queue.stop 只对活动任务有效，非活动（已完成/排队中/不存在）抛 ErrTaskNotFound：
-    // 删除记录时静默忽略（排队中的任务由 repo.delete 消失，队列补位时按 404 跳过）
-    try {
-      this.queue.stop(String(id));
-    } catch {
-      // 非活动任务无需停止
+    if (!task) return;
+    const isEngineTask = ENGINE_TYPES.has(task.type);
+    // 队列任务：queue.stop 只对活动任务有效（非活动抛 ErrTaskNotFound 静默）；
+    // 引擎任务：暂停引擎任务（引擎删除前先停，避免删除瞬间的继续写入）
+    if (isEngineTask && this.engine) {
+      void this.engine.pause(id).catch(() => {});
+    } else {
+      try {
+        this.queue.stop(String(id));
+      } catch {
+        // 非活动任务无需停止
+      }
     }
-    // 半成品临时目录（.meipart-<id>）：无保留价值，删除任务时总是清理
+    // 半成品临时目录（.meipart-<id>，队列/aria2 时代产物）：删除任务时总是清理
     // （deleteFiles=false 用户只是不想删成品文件，不代表保留半成品）
-    if (task) {
+    {
       const localPathForTmp = opts?.localPath || "";
       if (localPathForTmp !== "") {
         try {
@@ -352,27 +475,24 @@ export class DownloadTaskService {
           // 临时目录不存在：无事
         }
       }
-      // BT 任务（qBittorrent 引擎）：删除任务记录时同步清引擎里的种子；
-      // deleteFiles 控制引擎是否连落盘文件一起删（文件由引擎管理，
-      // 引擎删除比本地按名猜测删除更准 —— 含 .!qB 半成品）
-      if (task.type === "bt") {
-        try {
-          const hash = btHashFor(task.url);
-          this.queue
-            .getDownloader()
-            .qbit()
-            .deleteTorrent(hash, opts?.deleteFiles === true)
-            .catch((err) =>
-              logger.warn(
-                `bt task ${id} engine cleanup failed: ${err?.message ?? err}`,
-              ),
-            );
-        } catch {
-          // 种子文件已被清理/磁力 hash 解析失败：引擎记录随下次同 hash 添加自然复用
-        }
-      }
     }
-    if (task && opts?.deleteFiles) {
+    // 引擎任务：引擎删除是权威清理（含半成品/分段/做种句柄），deleteFiles
+    // 控制是否连成品一起删；engineTaskId 在 repo.delete 前捕获（防竞态）。
+    // 引擎对成品文件的删除按其 DB fileName 定位——撞名改名/历史数据可能
+    // 让引擎 fileName 与 DB 行名错位而漏删，故删后按引擎字段兜底再扫一遍
+    if (isEngineTask && this.engine && task.engineTaskId) {
+      const engineTaskId = task.engineTaskId;
+      const deleteFiles = opts?.deleteFiles === true;
+      const localPathForEngine = opts?.localPath || "";
+      void this.engineDeleteCascade(
+        id,
+        engineTaskId,
+        deleteFiles,
+        localPathForEngine,
+        task,
+      );
+    }
+    if (opts?.deleteFiles) {
       const localPath = opts.localPath || "";
       if (localPath !== "") {
         try {
@@ -387,6 +507,41 @@ export class DownloadTaskService {
       }
     }
     this.repo.delete(id);
+  }
+
+  /**
+   * 引擎任务删除级联：先取引擎权威字段（saveDir/fileName）→ 引擎删除
+   * （权威清理）→ deleteFiles 时按引擎字段兜底扫成品（引擎 fileName 与
+   * DB 行名错位时引擎侧会漏删）。只扫「引擎 saveDir 与本行任务目录一致」
+   * 的产物路径（引擎控制台自定目录的任务只依赖引擎自身删除）；其它行
+   * 占用同名产物时跳过（不带走别人的文件）。
+   */
+  private async engineDeleteCascade(
+    dbId: number,
+    engineTaskId: string,
+    deleteFiles: boolean,
+    localPath: string,
+    task: Video,
+  ): Promise<void> {
+    const info = await this.engine!.taskInfo(dbId).catch(() => null);
+    await this.engine!.delete(engineTaskId, deleteFiles).catch((err) =>
+      logger.warn(`engine task ${dbId} cleanup failed: ${err?.message ?? err}`),
+    );
+    if (!deleteFiles || !info || localPath === "") return;
+    const expectedDir = resolveTaskDir(task.folder, localPath);
+    if (info.saveDir !== expectedDir || info.fileName === "") return;
+    const product = path.join(info.saveDir, info.fileName);
+    // 同名守卫：其它行登记同名（种子内文件撞名/历史重复）时不删
+    const base = path.basename(product);
+    const other = this.repo.findByName(base);
+    if (other && other.id !== dbId && other.type === task.type) return;
+    try {
+      fs.rmSync(product, { recursive: true, force: true });
+    } catch (err: any) {
+      logger.warn(
+        `engine task ${dbId} product sweep failed: ${err?.message ?? err}`,
+      );
+    }
   }
 
   async getDownloadLog(id: number): Promise<string> {

@@ -1,94 +1,100 @@
-// 下载中心 —— 应用根路由 /（默认全部）或 /?type=media|movie|music|file|magnet
-// （应用部署在 /downloads 子路径下，下载中心即应用首页）
-// 六个 tab：全部 / 媒体 / 影视 / 音乐 / 文件 / 磁力；「全部」为统一时间混排列表
-// （媒体任务 + 影视记录 + 音乐库按添加时间倒序合成一个列表，进行中置前，
-// 实现在 components/all-view.tsx）。单类型面板统一风格（复用 DownloadTag /
-// Progress / IconButton 视觉语言）：
-//   media：媒体任务·视频类（type=media，排除 direct/bt）
-//   movie：影视服务器下载（/tv/api/local-sources，契约 1/2）
-//   music：音乐下载库（/music/api/download/library，契约 3/4）
-//   file：普通文件下载（media core type=direct）
-//   magnet：磁力下载（media core type=bt，含磁力链接与 BT 种子文件）
-// URL 规范：默认 tab（全部）清空 query——应用根是无 query 的规范地址；
-// `?type=all` 也接受并归一为全部。深链契约保持不变：影视/音乐应用经
-// ?type=movie|music 直达对应面板。
-import { Segmented } from "antd";
-import { type FC, useCallback, useMemo } from "react";
+// 下载中心 —— 复刻 FluxDown 控制台的功能布局,视觉与主应用统一
+// (应用仍部署在 /downloads 子路径,路由与插件 id 不变)。
+// 布局形态:
+//   左侧导航 = mei-portal 标准左侧面板(layout/mediago-sidebar,数据驱动
+//   行动入口):应用标识 + 任务组(任务/队列/订阅) + 下载库组(影视/音乐) + 新建。
+//   本页只承载右侧工作区:顶栏(标识 + 全局速度/活跃/磁盘) + 活动面板。
+//   视图切换走 ?type= 深链(parseView),与左侧面板、外部深链完全同源。
+// Flux 管理配置不走独立 web 口:引擎设置收进主应用设置中心(/settings/mediago)。
+// 深链契约(保持不变):/downloads?type=media|movie|music|file|magnet|rss|queues
+//   media/file/magnet → 任务视图(全类型任务表)
+//   movie/music → 下载库对应面板
+//   rss/queues → 对应视图
+import { PlusOutlined } from "@ant-design/icons";
+import { Button } from "antd";
+import { type FC, useCallback, useMemo, useRef } from "react";
 import { useSearchParams } from "react-router-dom";
 import PageContainer from "@/components/page-container";
-import AllView from "./components/all-view";
-import FilePanel from "./components/file-panel";
-import MagnetPanel from "./components/magnet-panel";
-import MediaPanel from "./components/media-panel";
+import DownloadForm, {
+  type DownloadFormItem,
+  type DownloadFormRef,
+} from "@/components/download-form";
+import { useConfigStore, downloadFormSelector } from "@/store/config";
+import { useShallow } from "zustand/react/shallow";
+import { EngineStatsBar } from "./components/engine-stats-bar";
 import MoviePanel from "./components/movie-panel";
 import MusicPanel from "./components/music-panel";
+import QueuesPanel from "./components/queues-panel";
+import RssPanel from "./components/rss-panel";
+import { TasksView } from "./components/tasks-view";
 
-export type DownloadCenterTab =
-  | "all"
-  | "media"
-  | "movie"
-  | "music"
-  | "file"
-  | "magnet";
+export type DownloadCenterView = "tasks" | "queues" | "rss" | "movie" | "music";
 
-const TYPE_OPTIONS: Array<{ label: string; value: DownloadCenterTab }> = [
-  { label: "全部", value: "all" },
-  { label: "媒体", value: "media" },
-  { label: "影视", value: "movie" },
-  { label: "音乐", value: "music" },
-  { label: "文件", value: "file" },
-  { label: "磁力", value: "magnet" },
-];
+/** 各子功能视图页头标题/副标题（区分面板，不再统一叫「下载中心」） */
+const VIEW_META: Record<DownloadCenterView, { title: string; sub: string }> = {
+  tasks: { title: "任务队列", sub: "全部类型下载任务 · FluxDown 引擎" },
+  queues: { title: "队列管理", sub: "命名队列起停 / 限速 / 分组调度" },
+  rss: { title: "订阅管理", sub: "RSS 自动抓取下载" },
+  movie: { title: "影视下载库", sub: "剧集与影片产物管理" },
+  music: { title: "音乐下载库", sub: "音乐任务与曲库文件" },
+};
 
-const VALID_TABS: readonly DownloadCenterTab[] = TYPE_OPTIONS.map(
-  (o) => o.value,
-);
-
-// 无 query / type=all / 无效值 → 全部（默认 tab）；其余值深链保持原语义
-const parseType = (raw: string | null): DownloadCenterTab => {
-  return (VALID_TABS as readonly string[]).includes(raw ?? "")
-    ? (raw as DownloadCenterTab)
-    : "all";
+/** 深链 type → 视图映射(旧 tab 语义全保留) */
+const parseView = (raw: string | null): DownloadCenterView => {
+  switch (raw) {
+    case "queues":
+      return "queues";
+    case "rss":
+      return "rss";
+    case "movie":
+      return "movie";
+    case "music":
+      return "music";
+    default:
+      // all/media/file/magnet → 任务视图(FluxDown 任务表涵盖全部类型)
+      return "tasks";
+  }
 };
 
 const DownloadsPage: FC = () => {
-  const [searchParams, setSearchParams] = useSearchParams();
-  const type = parseType(searchParams.get("type"));
-
-  // 切 tab / 混排行点击统一出口：全部 → 清空 query（规范 URL），
-  // 其余 → ?type=<tab>，浏览器前进后退与深链分享都可用
-  const goTo = useCallback(
-    (next: DownloadCenterTab) => {
-      setSearchParams(next === "all" ? {} : { type: next });
-    },
-    [setSearchParams],
+  const [searchParams] = useSearchParams();
+  const view = parseView(searchParams.get("type"));
+  const newFormRef = useRef<DownloadFormRef>(null);
+  const { lastIsBatch, lastDownloadTypes } = useConfigStore(
+    useShallow(downloadFormSelector),
   );
 
+  const openNewForm = useCallback(() => {
+    const item: DownloadFormItem = {
+      batch: lastIsBatch,
+      type: lastDownloadTypes,
+    };
+    newFormRef.current?.openModal(item);
+  }, [lastIsBatch, lastDownloadTypes]);
+
   const panel = useMemo(() => {
-    switch (type) {
-      case "media":
-        return <MediaPanel />;
+    switch (view) {
+      case "queues":
+        return <QueuesPanel />;
+      case "rss":
+        return <RssPanel />;
       case "movie":
         return <MoviePanel />;
       case "music":
         return <MusicPanel />;
-      case "file":
-        return <FilePanel />;
-      case "magnet":
-        return <MagnetPanel />;
       default:
-        return <AllView onEnter={goTo} />;
+        return <TasksView onOpenNew={openNewForm} />;
     }
-  }, [type, goTo]);
+  }, [view, openNewForm]);
 
   return (
     <PageContainer className="bg-white/85 dark:bg-[#1F2024] flex flex-col flex-1 min-h-0 h-full rounded-xl border border-black/5 shadow-sm p-3 gap-3 overflow-hidden">
-      {/* 应用信息横幅（对齐 home-page Hero） */}
-      <div className="flex shrink-0 items-center gap-3 px-1 pt-1">
-        <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500 text-white shadow-[0_6px_20px_rgba(99,102,241,0.4)]">
+      {/* 顶栏:标识 + 全局速度/活跃/磁盘 + 主操作(导航在标准左侧面板) */}
+      <div className="flex shrink-0 items-center gap-4 px-1 pt-1">
+        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-[#6366F1] to-[#8B5CF6] text-white shadow-[0_4px_14px_rgba(99,102,241,0.35)]">
           <svg
-            width="20"
-            height="20"
+            width="19"
+            height="19"
             viewBox="0 0 24 24"
             fill="none"
             stroke="currentColor"
@@ -96,29 +102,41 @@ const DownloadsPage: FC = () => {
             strokeLinecap="round"
             strokeLinejoin="round"
           >
-            <path d="m22 8-6 4 6 4V8Z" />
-            <rect x="2" y="6" width="14" height="12" rx="2" />
+            <path d="M12 3v12" />
+            <path d="m7 10 5 5 5-5" />
+            <path d="M5 21h14" />
           </svg>
         </span>
-        <div className="min-w-0 flex-1">
-          <div className="bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500 bg-clip-text text-[22px] font-extrabold leading-tight tracking-tight text-transparent">
-            下载中心
+        <div className="min-w-0">
+          <div className="text-[20px] font-bold leading-tight tracking-tight text-gray-900 dark:text-gray-100">
+            {VIEW_META[view].title}
           </div>
           <div className="truncate text-xs text-gray-500 dark:text-gray-400">
-            媒体 / 影视 / 音乐 / 文件 / 磁力下载统一管理
+            {VIEW_META[view].sub}
           </div>
         </div>
-        <Segmented
-          value={type}
-          options={TYPE_OPTIONS}
-          onChange={(value) => {
-            goTo(parseType(value as string));
-          }}
-        />
+
+        <div className="min-w-0 flex-1" />
+
+        {/* 全局速度/活跃/磁盘(控制台 header 速度区) */}
+        <EngineStatsBar compact />
+
+        {/* 主操作:新建下载(左侧面板也有同款入口) */}
+        <Button
+          type="primary"
+          size="small"
+          icon={<PlusOutlined />}
+          onClick={openNewForm}
+        >
+          新建下载
+        </Button>
       </div>
 
-      {/* 面板区：占满剩余高度并在面板内部滚动 */}
+      {/* 面板区:占满剩余高度并在面板内部滚动 */}
       <div className="flex min-h-0 flex-1 flex-col">{panel}</div>
+
+      {/* 新建下载(全局挂载,顶栏/任务空态共用) */}
+      <DownloadForm ref={newFormRef} id="downloads-new-form" />
     </PageContainer>
   );
 };
