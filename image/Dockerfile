@@ -250,13 +250,11 @@ RUN rm -rf /etc/nginx/sites-enabled
 COPY image/plugins.json /etc/mei-plugins.json
 COPY image/supervisord.conf /etc/supervisor/conf.d/mei-portal.conf
 RUN mkdir -p /etc/supervisor && ln -sf /etc/supervisor/conf.d/mei-portal.conf /etc/supervisor/supervisord.conf
-# DHT bootstrap 域名 v4 固定（2026-10-10 容器实证）：FluxDown 引擎是 musl 静态
-# 二进制，getaddrinfo 忽略 gai.conf 且永远 AAAA 优先——容器无 IPv6 路由时 DHT
-# 发送即失败（"no successful lookups" 持续重试），磁力解析永远超时。musl 先查
-# /etc/hosts 且其中只有 v4 记录，据此把 bootstrap 域名固定到实测应答的
-# transmission 路由器 IP（双栈生产环境无害：只影响这四个域名的解析顺序）。
-# Docker 会把镜像 /etc/hosts 内容并进容器生成的 hosts 文件，故写进镜像即持久。
-RUN printf '\n# DHT bootstrap v4 pin (musl AAAA-first + no IPv6 route in container)\n87.98.162.88 router.bittorrent.com router.utorrent.com dht.libtorrent.org dht.transmissionbt.com\n212.129.33.59 router.bittorrent.com router.utorrent.com dht.libtorrent.org dht.transmissionbt.com\n' >> /etc/hosts
+# DHT bootstrap 域名 v4 固定不再写进镜像：buildx 构建容器里 /etc/hosts 只读
+#（v0.0.10 构建实证 `cannot create /etc/hosts: Read-only file system`），且运行时
+# Docker 用容器自有 hosts 文件（镜像内的 /etc/hosts 内容不会被继承），镜像期
+# 写入既不可行也无意义——改由 entrypoint.sh 启动时幂等追加，见该文件
+# 「DHT bootstrap v4 hosts 固定」段
 COPY image/entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 

@@ -6,6 +6,24 @@ set -e
 export DATA_DIR="${DATA_DIR:-/data}"
 mkdir -p "$DATA_DIR"
 
+# ---- DHT bootstrap v4 hosts 固定（musl AAAA 优先问题的运行时补丁）----
+# FluxDown 引擎是 musl 静态二进制，getaddrinfo 忽略 gai.conf 且永远 AAAA 优先
+# ——容器无 IPv6 路由时 DHT 发送即失败（"no successful lookups" 持续重试），
+# 磁力解析永远超时。musl 先查 /etc/hosts 且其中只有 v4 记录，据此把 bootstrap
+# 域名固定到实测应答的 transmission 路由器 IP（双栈生产环境无害：只影响这
+# 四个域名的解析顺序）。必须写在这里而非镜像构建期：buildx 构建容器里
+# /etc/hosts 只读（v0.0.10 构建实证），且运行时 Docker 用容器自有的 hosts
+# 文件、镜像内的 /etc/hosts 内容不会被继承。幂等：容器重启时 Docker 会重新
+# 生成 hosts，追加不叠加。
+if ! grep -q "router.bittorrent.com" /etc/hosts 2>/dev/null; then
+  cat >> /etc/hosts <<'HOSTS' || echo "[mei-portal] /etc/hosts 追加跳过（本运行时 hosts 不可写，磁力引导可能退化为 AAAA 优先）"
+
+# DHT bootstrap v4 pin (musl AAAA-first + no IPv6 route in container)
+87.98.162.88 router.bittorrent.com router.utorrent.com dht.libtorrent.org dht.transmissionbt.com
+212.129.33.59 router.bittorrent.com router.utorrent.com dht.libtorrent.org dht.transmissionbt.com
+HOSTS
+fi
+
 # 统一管理员凭据（各应用共用，单用户模式）
 # 首次启动用默认值，可通过环境变量覆盖
 export MEI_ADMIN_USER="${MEI_ADMIN_USER:-admin}"
