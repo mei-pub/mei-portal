@@ -8,7 +8,10 @@
 FROM node:22-bookworm-slim AS shell-builder
 WORKDIR /build
 COPY packages/shall/package.json packages/shall/package-lock.json* ./
-RUN npm install --no-audit --no-fund
+RUN n=0; while ! npm install --no-audit --no-fund; do \
+      n=$((n+1)); [ "$n" -ge 3 ] && exit 1; \
+      echo "[build-retry $n] npm install 失败（大概率 runner 网络抖动），20s 后重试"; sleep 20; \
+    done
 COPY packages/shall/ ./
 RUN npm run build
 
@@ -20,7 +23,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends python3 make g+
 COPY apps/novels/ ./
 # 字体下载脚本首次启动会跑，构建时跳过（npm build 阶段）
 ENV SKIP_FONT_DOWNLOAD=1
-RUN npm ci --no-audit --no-fund || npm install --no-audit --no-fund
+RUN n=0; while ! (npm ci --no-audit --no-fund || npm install --no-audit --no-fund); do \
+      n=$((n+1)); [ "$n" -ge 3 ] && exit 1; \
+      echo "[build-retry $n] npm 安装失败（大概率 runner 网络抖动），20s 后重试"; sleep 20; \
+    done
 RUN npm run build
 # 字体种子：构建机有网络，10 个中文 Noto/LXGW 家族一次性下载烙进镜像，
 # 运行时首启只做本地拷贝（零外网，全新部署/新卷秒就绪）。
@@ -41,7 +47,7 @@ RUN set -eux; \
       arm64) SHA=9dd282fd8d1b90a8ee760702ac5b876748b519c6bdfac7c68418f62a05d805c6 ;; \
     esac; \
     apk add --no-cache curl tar; \
-    curl -fsSL -o /tmp/frp.tgz "https://github.com/fatedier/frp/releases/download/v${FRP_VERSION}/frp_${FRP_VERSION}_linux_${TARGETARCH}.tar.gz"; \
+    curl -fsSL --retry 3 --retry-delay 15 --connect-timeout 30 --retry-all-errors -o /tmp/frp.tgz "https://github.com/fatedier/frp/releases/download/v${FRP_VERSION}/frp_${FRP_VERSION}_linux_${TARGETARCH}.tar.gz"; \
     echo "${SHA}  /tmp/frp.tgz" | sha256sum -c -; \
     tar -xzf /tmp/frp.tgz --strip-components=1 -C /usr/local/bin "frp_${FRP_VERSION}_linux_${TARGETARCH}/frpc"; \
     rm /tmp/frp.tgz; \
@@ -61,7 +67,7 @@ RUN set -eux; \
     esac; \
     apt-get update && apt-get install -y --no-install-recommends ca-certificates curl \
     && rm -rf /var/lib/apt/lists/*; \
-    curl -fsSL -o /tmp/fd.tgz "https://github.com/zerx-lab/FluxDown/releases/download/v${FLUXDOWN_VERSION}/FluxDown-Server-${FLUXDOWN_VERSION}-${FNAME}.tar.gz"; \
+    curl -fsSL --retry 3 --retry-delay 15 --connect-timeout 30 --retry-all-errors -o /tmp/fd.tgz "https://github.com/zerx-lab/FluxDown/releases/download/v${FLUXDOWN_VERSION}/FluxDown-Server-${FLUXDOWN_VERSION}-${FNAME}.tar.gz"; \
     echo "${SHA}  /tmp/fd.tgz" | sha256sum -c -; \
     mkdir -p /opt/fluxdown; \
     tar -xzf /tmp/fd.tgz --strip-components=1 -C /opt/fluxdown "fluxdown-server-${FLUXDOWN_VERSION}-${FNAME}/fluxdown-agent" "fluxdown-server-${FLUXDOWN_VERSION}-${FNAME}/fluxdownd"; \
@@ -77,14 +83,20 @@ COPY apps/tv/ ./
 # localstorage 单密码模式（零外部依赖），密码由运行时 env 设
 ENV NEXT_PUBLIC_STORAGE_TYPE=localstorage
 RUN corepack enable && corepack prepare pnpm@10.14.0 --activate
-RUN pnpm install --no-frozen-lockfile
+RUN n=0; while ! pnpm install --no-frozen-lockfile; do \
+      n=$((n+1)); [ "$n" -ge 3 ] && exit 1; \
+      echo "[build-retry $n] pnpm install 失败（大概率 runner 网络抖动），20s 后重试"; sleep 20; \
+    done
 RUN pnpm run build
 
 # ---- tools 工具箱（Vite + React + MUI，纯静态，basePath=/tools）----
 FROM node:22-bookworm-slim AS tools-builder
 WORKDIR /build
 COPY apps/tools/ ./
-RUN npm ci --no-audit --no-fund || npm install --no-audit --no-fund
+RUN n=0; while ! (npm ci --no-audit --no-fund || npm install --no-audit --no-fund); do \
+      n=$((n+1)); [ "$n" -ge 3 ] && exit 1; \
+      echo "[build-retry $n] npm 安装失败（大概率 runner 网络抖动），20s 后重试"; sleep 20; \
+    done
 RUN npm run build
 # 生成真实工具路径清单（locale 键是 camelCase，与 kebab-case 路由不一致，不能直接当 href 用）
 RUN node scripts/generate-tool-manifest.mjs
@@ -95,7 +107,10 @@ WORKDIR /build
 RUN apt-get update && apt-get install -y --no-install-recommends python3 make g++ \
     && rm -rf /var/lib/apt/lists/*
 COPY apps/draw/ ./
-RUN npm ci --no-audit --no-fund || npm install --no-audit --no-fund
+RUN n=0; while ! (npm ci --no-audit --no-fund || npm install --no-audit --no-fund); do \
+      n=$((n+1)); [ "$n" -ge 3 ] && exit 1; \
+      echo "[build-retry $n] npm 安装失败（大概率 runner 网络抖动），20s 后重试"; sleep 20; \
+    done
 RUN npm run build
 
 # ---- music 音乐播放（Node + 原生 JS）----
@@ -104,7 +119,10 @@ WORKDIR /build
 COPY apps/music/ ./
 # solara 的 package.json 在 server/ 子目录
 WORKDIR /build/server
-RUN npm install --no-audit --no-fund --legacy-peer-deps
+RUN n=0; while ! npm install --no-audit --no-fund --legacy-peer-deps; do \
+      n=$((n+1)); [ "$n" -ge 3 ] && exit 1; \
+      echo "[build-retry $n] npm install 失败（大概率 runner 网络抖动），20s 后重试"; sleep 20; \
+    done
 WORKDIR /build
 
 # ---- YouTube PO Token Provider（实验性音乐源）----
@@ -115,7 +133,8 @@ RUN echo "3545ac7ffc0869498755cb3b4760a72fa2f176689d0890a6f5b898d163012ba2  /tmp
       | sha256sum -c - \
     && tar -xzf /tmp/bgutil.tar.gz --strip-components=2 \
       -C /build bgutil-ytdlp-pot-provider-1.3.2/server \
-    && npm ci --no-audit --no-fund \
+    && { n=0; while ! npm ci --no-audit --no-fund; do n=$((n+1)); [ "$n" -ge 3 ] && exit 1; \
+         echo "[build-retry $n] npm ci 失败（大概率 runner 网络抖动），20s 后重试"; sleep 20; done; } \
     && npx tsc \
     && npm prune --omit=dev
 
@@ -123,12 +142,18 @@ RUN echo "3545ac7ffc0869498755cb3b4760a72fa2f176689d0890a6f5b898d163012ba2  /tmp
 FROM node:22-bookworm-slim AS disks-engine-builder
 WORKDIR /build
 COPY apps/disks/engine/package.json apps/disks/engine/package-lock.json* ./
-RUN npm ci --no-audit --no-fund || npm install --no-audit --no-fund
+RUN n=0; while ! (npm ci --no-audit --no-fund || npm install --no-audit --no-fund); do \
+      n=$((n+1)); [ "$n" -ge 3 ] && exit 1; \
+      echo "[build-retry $n] npm 安装失败（大概率 runner 网络抖动），20s 后重试"; sleep 20; \
+    done
 COPY apps/disks/engine/ ./
 FROM node:22-bookworm-slim AS disks-web-builder
 WORKDIR /build
 COPY apps/disks/web/ ./
-RUN npm ci --no-audit --no-fund || npm install --no-audit --no-fund
+RUN n=0; while ! (npm ci --no-audit --no-fund || npm install --no-audit --no-fund); do \
+      n=$((n+1)); [ "$n" -ge 3 ] && exit 1; \
+      echo "[build-retry $n] npm 安装失败（大概率 runner 网络抖动），20s 后重试"; sleep 20; \
+    done
 RUN npm run build
 
 # ---- media 下载中心（core-ts Node 引擎 + React UI + 外部下载工具；Go core 已退役）----
@@ -146,7 +171,10 @@ RUN if [ "$TARGETARCH" = "amd64" ]; then \
     fi
 COPY apps/media/ ./
 RUN rm -rf core-ts
-RUN pnpm install --frozen-lockfile || pnpm install
+RUN n=0; while ! { pnpm install --frozen-lockfile || { echo "[pnpm] frozen 安装失败，回退 no-frozen"; pnpm install --no-frozen-lockfile; }; }; do \
+      n=$((n+1)); [ "$n" -ge 3 ] && exit 1; \
+      echo "[build-retry $n] pnpm 安装失败（大概率 runner 网络抖动），20s 后重试"; sleep 20; \
+    done
 # 构建 player-ui（播放页，目录形式部署到 /app/apps/media/player）
 RUN pnpm --filter @mediago/player-ui run build
 # 构建 web UI（server 模式静态产物）
@@ -154,7 +182,10 @@ ENV APP_TARGET=server
 ENV NODE_ENV=production
 RUN pnpm build:web
 # 下载第三方下载工具（yt-dlp/ffmpeg/N_m3u8DL-RE/BBDown/aria2 等，GitHub Release + in-tree 本地源）
-RUN pnpm deps:download --platform $(cat /tmp/deps-platform)
+RUN n=0; while ! pnpm deps:download --platform $(cat /tmp/deps-platform); do \
+      n=$((n+1)); [ "$n" -ge 3 ] && exit 1; \
+      echo "[build-retry $n] deps:download 失败（大概率 runner 网络抖动），20s 后重试"; sleep 20; \
+    done
 
 # ---- media core（Node/TS 复刻版，Go core 已退役；better-sqlite3 原生依赖）----
 FROM node:22-bookworm-slim AS media-engine-builder
@@ -162,7 +193,10 @@ WORKDIR /build
 RUN apt-get update && apt-get install -y --no-install-recommends python3 make g++ \
     && rm -rf /var/lib/apt/lists/*
 COPY apps/media/core-ts/package.json apps/media/core-ts/package-lock.json* ./
-RUN npm ci --no-audit --no-fund || npm install --no-audit --no-fund
+RUN n=0; while ! (npm ci --no-audit --no-fund || npm install --no-audit --no-fund); do \
+      n=$((n+1)); [ "$n" -ge 3 ] && exit 1; \
+      echo "[build-retry $n] npm 安装失败（大概率 runner 网络抖动），20s 后重试"; sleep 20; \
+    done
 COPY apps/media/core-ts/ ./
 
 # ---- 运行时（必须最后一个 FROM）----
